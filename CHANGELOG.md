@@ -15,6 +15,9 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 - Retention cleanup for terminal jobs, artifacts, unpinned sources, abandoned workspaces, and old unregistered files after crashes.
 - Russian and English documentation, OpenAPI contract, Docker deployment example, and automated Go/media/PostgreSQL integration checks.
 
+### Security
+- Updated pgx to 5.9.2 and golang.org/x/text to 0.39.0 after reachable vulnerability scanning; CI repeats the scan.
+
 ### Scope
 - First release supports one API and one worker with local disk storage.
 - AI, MCP, Telegram, Mini Apps, HLS/DASH manifest processing, DRM, authenticated sources, distributed quotas, and S3 are outside this MVP.
