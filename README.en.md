@@ -42,6 +42,8 @@ Hosted interfaces are developed separately. This repository contains a working i
 
 Platform streams must be public, require no cookies, and support seeking. A platform can reject requests or stop exposing a suitable stream. yt-dlp's own platform support does not guarantee support by this engine.
 
+YouTube accepts `watch?v=…`, `youtu.be/…`, `shorts/…`, `live/…` links to **completed recordings**, and `embed/…`, including mobile, music, and `youtube-nocookie.com` domains. Ordinary HTTP or schemeless pasted links are upgraded to `https://www.youtube.com/watch?v=…` only for allowed YouTube hosts. Playlist, tracking, and timestamp parameters are removed; export ranges are specified separately. Unknown subdomains, spoofed hosts, malformed video IDs, credentials, and nonstandard ports are rejected before network access. Other sources still require explicit HTTPS URLs.
+
 Selective reads may transfer more bytes than the final clip. Each platform job has a total transfer budget; exceeding it stops processing. The engine does not silently download an unlimited long video as a fallback.
 
 **Stream copy:** the start moves to a nearby preceding keyframe; the end depends on packet boundaries. Actual bounds are returned with the artifact. Input codecs must fit MP4; otherwise use accurate mode. A local file keeps its source resolution in copy mode; reducing resolution requires re-encoding.

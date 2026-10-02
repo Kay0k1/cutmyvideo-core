@@ -22,6 +22,8 @@ Health routes `/healthz` and `/readyz` are outside the prefix; readiness checks 
 
 `kind`: `upload`, `direct`, `youtube`, or `platform`. `preview_url` is present for staged files. `embed_url` may be present for YouTube; `thumbnail_url` is optional. These nullable fields are always included. `width` and `height` are optional. A source describes the current media snapshot; platform streams are resolved again for processing and their provider ID/duration are checked for changes.
 
+YouTube inputs support watch, short-link, Shorts, recorded-live, and embed forms on the explicitly allowed YouTube hosts, including mobile/music and nocookie embeds. HTTP and schemeless YouTube pastes are canonicalized to an HTTPS watch URL before fetching. Playlist, timestamp, tracking, and fragment parameters do not affect the source or export intervals. Malformed YouTube links return HTTP 400 with `invalid_youtube_url`; other media retain the explicit public HTTPS policy. Actual live broadcasts remain unsupported.
+
 ## Jobs
 
 Request:
@@ -44,6 +46,6 @@ A download capability stays protected by the cookie; artifact IDs alone do not g
 {"error":{"code":"invalid_export","message":"range must be within the source and end after its start"}}
 ```
 
-Common codes: `session_required`, `invalid_request`, `invalid_url`, `source_unavailable`, `source_timeout`, `unsupported_source`, `unsupported_media`, `source_too_large`, `source_limit`, `invalid_export`, `job_limit`, `rate_limit`, `origin_rejected`, `not_found`, `expired`, `internal`.
+Common codes: `session_required`, `invalid_request`, `invalid_url`, `invalid_youtube_url`, `source_unavailable`, `source_timeout`, `unsupported_source`, `unsupported_media`, `source_too_large`, `source_limit`, `invalid_export`, `job_limit`, `rate_limit`, `origin_rejected`, `not_found`, `expired`, `internal`.
 
 Mutation requests are same-origin. Browser requests from another origin are rejected; non-browser clients without Origin can use the cookie API. There are no wildcard CORS grants. Polling, source admission, export creation, and per-IP mutation limits are enforced independently.

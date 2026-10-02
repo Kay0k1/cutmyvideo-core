@@ -44,7 +44,11 @@ paths:
               required: [url]
               additionalProperties: false
               properties:
-                url: {type: string, format: uri, maxLength: 8192}
+                url:
+                  type: string
+                  maxLength: 8192
+                  description: Public HTTPS media URL or allowed YouTube video link. YouTube watch, short-link, Shorts, recorded-live, and embed forms accept HTTP/schemeless pastes and normalize to an HTTPS watch URL without playlist, tracking, or timestamp parameters.
+                  examples: ['https://www.youtube.com/watch?v=aqz-KE-bpKQ', 'youtu.be/aqz-KE-bpKQ', 'https://cdn.example.com/interview.mp4']
       responses:
         '201': {$ref: '#/components/responses/Source'}
         default: {$ref: '#/components/responses/Error'}

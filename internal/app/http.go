@@ -235,8 +235,16 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 	if err := decodeJSON(w, r, &body); err != nil {
 		return
 	}
-	u, err := validateURL(strings.TrimSpace(body.URL))
+	if len(body.URL) > 8192 {
+		writeError(w, 400, "invalid_url", "The link is too long")
+		return
+	}
+	u, err := normalizeSourceURL(body.URL)
 	if err != nil {
+		if errors.Is(err, errInvalidYouTubeURL) {
+			writeError(w, 400, "invalid_youtube_url", "Paste a valid YouTube video link without credentials or a custom port")
+			return
+		}
 		writeError(w, 400, "invalid_url", "Use a public HTTPS link without credentials or a custom port")
 		return
 	}
@@ -368,7 +376,10 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 
 func isPlatformHost(host string) bool {
 	host = strings.ToLower(host)
-	for _, suffix := range []string{"youtube.com", "youtu.be", "vimeo.com", "rutube.ru", "tiktok.com", "vk.com", "dailymotion.com"} {
+	if isYouTubeHost(host) {
+		return true
+	}
+	for _, suffix := range []string{"vimeo.com", "rutube.ru", "tiktok.com", "vk.com", "dailymotion.com"} {
 		if host == suffix || strings.HasSuffix(host, "."+suffix) {
 			return true
 		}
