@@ -268,6 +268,58 @@ func cleanupFiles(ctx context.Context, c Config, s *Store) {
 	for _, path := range paths {
 		_ = os.Remove(path)
 	}
+	// Reconcile old files that survived a crash before database registration.
+	// A generous floor avoids racing an active upload or artifact publication.
+	for _, kind := range []string{"sources", "artifacts"} {
+		ttl := c.ArtifactTTL
+		query := `SELECT path FROM artifacts`
+		if kind == "sources" {
+			ttl = c.SourceTTL
+			query = `SELECT path FROM sources WHERE path<>''`
+		}
+		floor := c.JobTimeout + c.SourceTimeout + time.Hour
+		if ttl < floor {
+			ttl = floor
+		}
+		rows, e := s.DB.Query(ctx, query)
+		if e != nil {
+			continue
+		}
+		known := map[string]bool{}
+		valid := true
+		for rows.Next() {
+			var path string
+			if e = rows.Scan(&path); e != nil {
+				valid = false
+				break
+			}
+			known[path] = true
+		}
+		if rows.Err() != nil {
+			valid = false
+		}
+		rows.Close()
+		if !valid {
+			continue
+		}
+		entries, e := os.ReadDir(filepath.Join(c.DataDir, kind))
+		if e != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if !entry.Type().IsRegular() {
+				continue
+			}
+			path := filepath.Join(c.DataDir, kind, entry.Name())
+			if known[path] {
+				continue
+			}
+			info, e := entry.Info()
+			if e == nil && info.ModTime().Before(time.Now().Add(-ttl)) {
+				_ = os.Remove(path)
+			}
+		}
+	}
 	// Remove abandoned temporary directories left by killed workers.
 	entries, err := os.ReadDir(filepath.Join(c.DataDir, "work"))
 	if err != nil {

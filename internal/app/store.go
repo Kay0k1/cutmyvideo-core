@@ -9,10 +9,16 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Store struct{ DB *pgxpool.Pool }
+
+type dbExecutor interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
 
 var ErrBusy = errors.New("too many active jobs")
 
@@ -32,7 +38,7 @@ func (s *Store) CreateJobLimited(ctx context.Context, owner string, r ExportRequ
 		var id string
 		err = tx.QueryRow(ctx, `SELECT id FROM jobs WHERE owner=$1 AND idempotency_key=$2`, owner, key).Scan(&id)
 		if err == nil {
-			return s.Job(ctx, id, owner)
+			return readJob(ctx, tx, id, owner)
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return Job{}, err
@@ -51,7 +57,7 @@ func (s *Store) CreateJobLimited(ctx context.Context, owner string, r ExportRequ
 	if count >= globalLimit {
 		return Job{}, ErrBusy
 	}
-	j, err := s.CreateJob(ctx, owner, r, key)
+	j, err := insertJob(ctx, tx, owner, r, key)
 	if err != nil {
 		return j, err
 	}
@@ -144,6 +150,10 @@ func (s *Store) Source(ctx context.Context, id, owner string) (Source, error) {
 }
 
 func (s *Store) CreateJob(ctx context.Context, owner string, r ExportRequest, key string) (Job, error) {
+	return insertJob(ctx, s.DB, owner, r, key)
+}
+
+func insertJob(ctx context.Context, db dbExecutor, owner string, r ExportRequest, key string) (Job, error) {
 	j := Job{ID: newID("job"), Owner: owner, Status: "queued", Stage: "queued", Message: "Waiting for a worker", Request: r, Items: make([]JobItem, len(r.Ranges))}
 	for i, v := range r.Ranges {
 		j.Items[i] = JobItem{ID: newID("item"), Label: v.Label, StartMS: v.StartMS, EndMS: v.EndMS, Status: "queued"}
@@ -154,24 +164,28 @@ func (s *Store) CreateJob(ctx context.Context, owner string, r ExportRequest, ke
 	if key != "" {
 		idem = &key
 	}
-	_, err := s.DB.Exec(ctx, `INSERT INTO jobs(id,owner,source_id,request,items,idempotency_key) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(owner,idempotency_key) DO NOTHING`, j.ID, owner, r.SourceID, request, items, idem)
+	_, err := db.Exec(ctx, `INSERT INTO jobs(id,owner,source_id,request,items,idempotency_key) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(owner,idempotency_key) DO NOTHING`, j.ID, owner, r.SourceID, request, items, idem)
 	if err != nil {
 		return j, err
 	}
 	if key != "" {
 		var existing string
-		if err = s.DB.QueryRow(ctx, `SELECT id FROM jobs WHERE owner=$1 AND idempotency_key=$2`, owner, key).Scan(&existing); err != nil {
+		if err = db.QueryRow(ctx, `SELECT id FROM jobs WHERE owner=$1 AND idempotency_key=$2`, owner, key).Scan(&existing); err != nil {
 			return j, err
 		}
-		return s.Job(ctx, existing, owner)
+		return readJob(ctx, db, existing, owner)
 	}
 	return j, nil
 }
 
 func (s *Store) Job(ctx context.Context, id, owner string) (Job, error) {
+	return readJob(ctx, s.DB, id, owner)
+}
+
+func readJob(ctx context.Context, db dbExecutor, id, owner string) (Job, error) {
 	var j Job
 	var req, items []byte
-	err := s.DB.QueryRow(ctx, `SELECT id,owner,status,stage,message,request,items,cancel_requested FROM jobs WHERE id=$1 AND owner=$2`, id, owner).Scan(&j.ID, &j.Owner, &j.Status, &j.Stage, &j.Message, &req, &items, &j.Cancelled)
+	err := db.QueryRow(ctx, `SELECT id,owner,status,stage,message,request,items,cancel_requested FROM jobs WHERE id=$1 AND owner=$2`, id, owner).Scan(&j.ID, &j.Owner, &j.Status, &j.Stage, &j.Message, &req, &items, &j.Cancelled)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return j, ErrNotFound
 	}

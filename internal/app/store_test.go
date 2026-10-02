@@ -2,11 +2,14 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -37,6 +40,7 @@ func testStore(t *testing.T) *Store {
 	}
 	q := u.Query()
 	q.Set("search_path", schema)
+	q.Set("pool_max_conns", "2")
 	u.RawQuery = q.Encode()
 	s, err := OpenStore(ctx, u.String())
 	if err != nil {
@@ -204,32 +208,142 @@ func TestStoreCleanupExpiresTerminalDataAndPinsActiveSources(t *testing.T) {
 func TestHTTPResourcesAreSessionIsolated(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	source := storedSource(t, s, "owner")
-	j, err := s.CreateJob(ctx, "owner", requestFor(source), "")
+	cookieA := &http.Cookie{Name: "cutmy_session", Value: base64.RawURLEncoding.EncodeToString(make([]byte, 32))}
+	otherBytes := make([]byte, 32)
+	otherBytes[0] = 1
+	cookieB := &http.Cookie{Name: "cutmy_session", Value: base64.RawURLEncoding.EncodeToString(otherBytes)}
+	request := httptest.NewRequest("GET", "/", nil)
+	request.AddCookie(cookieA)
+	owner, _ := ownerFromRequest(request)
+	source := storedSource(t, s, owner)
+	path := filepath.Join(t.TempDir(), "source.mp4")
+	if err := os.WriteFile(path, []byte("0123456789"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB.Exec(ctx, `UPDATE sources SET path=$1 WHERE id=$2`, path, source.ID); err != nil {
+		t.Fatal(err)
+	}
+	j, err := s.CreateJob(ctx, owner, requestFor(source), "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := NewServer(Config{MutationsPerMinute: 200}, s)
-	for _, path := range []string{"/api/v1/sources/" + source.ID, "/api/v1/sources/" + source.ID + "/media", "/api/v1/jobs/" + j.ID, "/api/v1/artifacts/art_missing/download"} {
-		w := httptest.NewRecorder()
-		r := httptest.NewRequest("GET", path, nil)
-		server.withSession(func(w http.ResponseWriter, r *http.Request, _ string) {
-			if strings.Contains(path, "/jobs/") {
-				server.job(w, r, "other")
-			} else if strings.Contains(path, "/artifacts/") {
-				server.download(w, r, "other")
-			} else {
-				server.source(w, r, "other")
+	artifactID := newID("art")
+	_, err = s.DB.Exec(ctx, `INSERT INTO artifacts(id,owner,job_id,path,filename,size_bytes,actual_start_ms,actual_end_ms) VALUES($1,$2,$3,$4,'test.mp4',10,0,1000)`, artifactID, owner, j.ID, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewServer(Config{MutationsPerMinute: 200}, s).Handler()
+	for _, route := range []string{"/api/v1/sources/" + source.ID, "/api/v1/sources/" + source.ID + "/media", "/api/v1/jobs/" + j.ID, "/api/v1/artifacts/" + artifactID + "/download"} {
+		for _, tc := range []struct {
+			cookie *http.Cookie
+			status int
+		}{{nil, 401}, {cookieA, 200}, {cookieB, 404}} {
+			r := httptest.NewRequest("GET", route, nil)
+			if tc.cookie != nil {
+				r.AddCookie(tc.cookie)
 			}
-		})(w, r)
-		if w.Code != 401 {
-			t.Fatalf("missing session: %d", w.Code)
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != tc.status {
+				t.Fatalf("%s got %d wanted %d", route, w.Code, tc.status)
+			}
+		}
+		if strings.HasSuffix(route, "/media") || strings.HasSuffix(route, "/download") {
+			r := httptest.NewRequest("GET", route, nil)
+			r.AddCookie(cookieA)
+			r.Header.Set("Range", "bytes=0-3")
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != 206 || w.Body.String() != "0123" {
+				t.Fatalf("authorized range response: %d %s", w.Code, w.Body.String())
+			}
 		}
 	}
-	if _, err = s.Source(ctx, source.ID, "other"); !errors.Is(err, ErrNotFound) {
-		t.Fatal("source ownership bypass")
+}
+
+func TestStoreConcurrentAdmissionUsesOneConnectionPerTransaction(t *testing.T) {
+	s := testStore(t)
+	source := storedSource(t, s, "owner")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	results := make(chan error, 10)
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, err := s.CreateJobLimited(ctx, "owner", requestFor(source), "req-"+strconv.Itoa(i), 12, 32)
+			results <- err
+		}(i)
 	}
-	if _, err = s.Job(ctx, j.ID, "other"); !errors.Is(err, ErrNotFound) {
-		t.Fatal("job ownership bypass")
+	wg.Wait()
+	close(results)
+	for err := range results {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	var count int
+	if err := s.DB.QueryRow(ctx, `SELECT count(*) FROM jobs`).Scan(&count); err != nil || count != 10 {
+		t.Fatalf("concurrent admission count %d: %v", count, err)
+	}
+}
+
+func TestRunningCancellationAndExhaustedRecoveryHaveConsistentItems(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	source := storedSource(t, s, "owner")
+	_, err := s.CreateJob(ctx, "owner", requestFor(source), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	j, token, err := s.Claim(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j.Items[0].Status = "running"
+	if err = s.SaveJob(ctx, j, token); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Cancel(ctx, j.ID, "owner"); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.SaveJob(ctx, j, token); err != nil {
+		t.Fatal(err)
+	}
+	current, err := s.Job(ctx, j.ID, "owner")
+	if err != nil || current.Status != "running" {
+		t.Fatal("cancellation became terminal before worker completion")
+	}
+	j.Status = "cancelled"
+	j.Items[0].Status = "cancelled"
+	if err = s.SaveJob(ctx, j, token); err != nil {
+		t.Fatal(err)
+	}
+	current, err = s.Job(ctx, j.ID, "owner")
+	if err != nil || current.Status != "cancelled" || current.Items[0].Status != "cancelled" {
+		t.Fatal("inconsistent running cancellation")
+	}
+	if err = s.SaveJob(ctx, j, token); !errors.Is(err, ErrNotFound) {
+		t.Fatal("terminal job accepted another worker write")
+	}
+	_, err = s.CreateJob(ctx, "owner", requestFor(source), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	j, token, err = s.Claim(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.DB.Exec(ctx, `UPDATE jobs SET attempts=3,lease_until=now()-interval '1 second' WHERE id=$1`, j.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Recover(ctx); err != nil {
+		t.Fatal(err)
+	}
+	current, err = s.Job(ctx, j.ID, "owner")
+	if err != nil || current.Status != "failed" || current.Items[0].Status != "failed" {
+		t.Fatalf("inconsistent recovery: %+v %v", current, err)
 	}
 }

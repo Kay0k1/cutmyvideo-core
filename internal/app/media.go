@@ -231,13 +231,14 @@ func exportMedia(ctx context.Context, c Config, inputs []string, remote bool, r 
 			return 0, 0, err
 		}
 	}
-	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-y"}
+	threads := env("FFMPEG_THREADS", "2")
+	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-filter_threads", threads, "-filter_complex_threads", threads}
 	protocols := "file"
 	if remote {
 		protocols = "http,tcp"
 	}
 	for _, input := range inputs {
-		args = append(args, "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats, "-ss", seconds(start), "-i", input)
+		args = append(args, "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats, "-threads", threads, "-ss", seconds(start), "-i", input)
 	}
 	args = append(args, "-t", seconds(r.EndMS-start))
 	if request.Format == "mp3" {
@@ -258,7 +259,9 @@ func exportMedia(ctx context.Context, c Config, inputs []string, remote bool, r 
 				if request.Quality == "720p" {
 					height = 720
 				}
-				args = append(args, "-vf", fmt.Sprintf("scale=-2:'min(%d,ih)'", height))
+				args = append(args, "-vf", fmt.Sprintf("scale=-2:'trunc(min(%d,ih)/2)*2'", height))
+			} else {
+				args = append(args, "-vf", "scale='trunc(iw/2)*2':'trunc(ih/2)*2'")
 			}
 		}
 		args = append(args, "-movflags", "+faststart")
