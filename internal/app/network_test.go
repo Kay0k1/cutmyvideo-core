@@ -5,6 +5,9 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"strings"
 	"testing"
 	"time"
 )
@@ -68,11 +71,52 @@ func TestGuardBlocksProxyAndRelayInternalConnections(t *testing.T) {
 	if w.Code != 407 {
 		t.Fatalf("unauthenticated proxy: %d", w.Code)
 	}
-	r.SetBasicAuth(g.token, "")
+	r.SetBasicAuth(g.token, g.token)
 	r.Header.Set("Proxy-Authorization", r.Header.Get("Authorization"))
 	w = httptest.NewRecorder()
 	g.ServeHTTP(w, r)
 	if w.Code != 403 {
 		t.Fatalf("private CONNECT: %d", w.Code)
+	}
+}
+
+func TestPythonUrllibAuthenticatesWithoutBypassingDestinationGuard(t *testing.T) {
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("Python3 is not installed")
+	}
+	g, err := newNetworkGuard(1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer g.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	script := `import sys,urllib.request
+opener=urllib.request.build_opener(urllib.request.ProxyHandler({'https':sys.argv[1]}))
+try:
+    opener.open('https://127.0.0.1/',timeout=3)
+except Exception as exc:
+    print(str(exc))
+else:
+    raise RuntimeError('private destination was accessed')
+`
+	cmd := exec.CommandContext(ctx, python, "-c", script, g.ProxyURL())
+	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=/nonexistent", "LANG=C.UTF-8"}
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(output), "403") || strings.Contains(string(output), "407") {
+		t.Fatalf("urllib must authenticate and then have private destination blocked: %s", output)
+	}
+	r := httptest.NewRequest("CONNECT", "http://127.0.0.1:443", nil)
+	r.Host = "127.0.0.1:443"
+	r.SetBasicAuth(g.token, "")
+	r.Header.Set("Proxy-Authorization", r.Header.Get("Authorization"))
+	w := httptest.NewRecorder()
+	g.ServeHTTP(w, r)
+	if w.Code != 407 {
+		t.Fatalf("empty password accepted: %d", w.Code)
 	}
 }

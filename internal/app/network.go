@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -120,7 +121,8 @@ func newNetworkGuard(limit int64) (*networkGuard, error) {
 
 func (g *networkGuard) Close() { _ = g.server.Close(); g.client.CloseIdleConnections() }
 func (g *networkGuard) ProxyURL() string {
-	return "http://" + g.token + ":@" + g.listener.Addr().String()
+	// urllib omits Proxy-Authorization when either credential is empty.
+	return "http://" + g.token + ":" + g.token + "@" + g.listener.Addr().String()
 }
 func (g *networkGuard) Relay(raw string) (string, error) {
 	if _, err := validateURL(raw); err != nil {
@@ -155,8 +157,8 @@ func (g *networkGuard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		g.forward(w, r, u, false)
 		return
 	}
-	user, _, ok := proxyCredentials(r.Header.Get("Proxy-Authorization"))
-	if !ok || user != g.token {
+	user, password, ok := proxyCredentials(r.Header.Get("Proxy-Authorization"))
+	if !ok || subtle.ConstantTimeCompare([]byte(user), []byte(g.token)) != 1 || subtle.ConstantTimeCompare([]byte(password), []byte(g.token)) != 1 {
 		w.WriteHeader(http.StatusProxyAuthRequired)
 		return
 	}

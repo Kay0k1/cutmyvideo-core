@@ -17,6 +17,7 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 
 ### Security
 - Updated pgx to 5.9.2 and golang.org/x/text to 0.39.0 after reachable vulnerability scanning; CI repeats the scan.
+- Require nonempty authenticated proxy credentials for Python urllib compatibility; regression verifies that private destinations remain blocked after authentication.
 
 ### Scope
 - First release supports one API and one worker with local disk storage.
