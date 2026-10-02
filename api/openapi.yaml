@@ -1,0 +1,222 @@
+openapi: 3.1.0
+info:
+  title: cutmyvideo-core HTTP API
+  version: 0.1.0
+  description: Manual media selection and asynchronous separate-fragment export.
+servers:
+  - url: /
+security:
+  - SessionCookie: []
+paths:
+  /healthz:
+    get:
+      security: []
+      responses:
+        '200': {description: Process is alive}
+  /readyz:
+    get:
+      security: []
+      responses:
+        '200': {description: Database is reachable}
+        '503': {$ref: '#/components/responses/Error'}
+  /api/v1/session:
+    get:
+      security: []
+      description: Creates an anonymous HttpOnly capability cookie if absent.
+      responses:
+        '200':
+          description: Session initialized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: {type: boolean, const: true}
+        '429': {$ref: '#/components/responses/Error'}
+  /api/v1/sources:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              additionalProperties: false
+              properties:
+                url: {type: string, format: uri, maxLength: 8192}
+      responses:
+        '201': {$ref: '#/components/responses/Source'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/uploads:
+    post:
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: {type: string, format: binary}
+      responses:
+        '201': {$ref: '#/components/responses/Source'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/sources/{id}:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    get:
+      responses:
+        '200': {$ref: '#/components/responses/Source'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/sources/{id}/media:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    get:
+      description: Original staged bytes; requires owner session. Range supported.
+      responses:
+        '200': {description: Media bytes}
+        '206': {description: Requested byte range}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/jobs:
+    post:
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema: {type: string, maxLength: 128}
+          description: Reusing the key for this session returns the original job.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ExportRequest'}
+      responses:
+        '202': {$ref: '#/components/responses/Job'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/jobs/{id}:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    get:
+      responses:
+        '200': {$ref: '#/components/responses/Job'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/jobs/{id}/cancel:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    post:
+      description: Queued cancellation is immediate; running cancellation settles asynchronously.
+      responses:
+        '200': {$ref: '#/components/responses/Job'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/artifacts/{id}/download:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    get:
+      description: Owner-authorized attachment. Range supported.
+      responses:
+        '200': {description: Exported file}
+        '206': {description: Requested byte range}
+        default: {$ref: '#/components/responses/Error'}
+components:
+  securitySchemes:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: cutmy_session
+  parameters:
+    ID:
+      in: path
+      name: id
+      required: true
+      schema: {type: string}
+  responses:
+    Error:
+      description: Structured error
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Source:
+      description: Prepared source
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Source'}
+    Job:
+      description: Export job
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Job'}
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: {type: string}
+            message: {type: string}
+    Source:
+      type: object
+      required: [id, title, duration_ms, kind, preview_url, embed_url, thumbnail_url]
+      properties:
+        id: {type: string}
+        title: {type: string}
+        duration_ms: {type: integer, minimum: 1}
+        kind: {type: string, enum: [upload, direct, youtube, platform]}
+        preview_url: {type: [string, 'null']}
+        embed_url: {type: [string, 'null']}
+        thumbnail_url: {type: [string, 'null']}
+        width: {type: integer}
+        height: {type: integer}
+    Range:
+      type: object
+      additionalProperties: false
+      required: [start_ms, end_ms]
+      properties:
+        start_ms: {type: integer, minimum: 0}
+        end_ms: {type: integer, minimum: 1}
+        label: {type: string, description: Optional label; maximum 200 UTF-8 bytes}
+    ExportRequest:
+      type: object
+      additionalProperties: false
+      required: [source_id, ranges, format, quality, cut_mode]
+      properties:
+        source_id: {type: string}
+        ranges:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/Range'}
+        format: {type: string, enum: [mp4, mp3]}
+        quality: {type: string, enum: [1080p, 720p, best]}
+        cut_mode: {type: string, enum: [accurate, copy], description: MP3 requires accurate. Copy does not resize local input.}
+    Artifact:
+      type: object
+      required: [id, filename, size_bytes, download_url, actual_start_ms, actual_end_ms]
+      properties:
+        id: {type: string}
+        filename: {type: string}
+        size_bytes: {type: integer}
+        download_url: {type: string}
+        actual_start_ms: {type: integer}
+        actual_end_ms: {type: integer}
+    JobItem:
+      type: object
+      required: [id, label, start_ms, end_ms, status, artifact]
+      properties:
+        id: {type: string}
+        label: {type: string}
+        start_ms: {type: integer}
+        end_ms: {type: integer}
+        status: {type: string, enum: [queued, running, succeeded, failed, cancelled]}
+        message: {type: string}
+        artifact:
+          oneOf:
+            - {$ref: '#/components/schemas/Artifact'}
+            - {type: 'null'}
+    Job:
+      type: object
+      required: [id, status, stage, message, items]
+      properties:
+        id: {type: string}
+        status: {type: string, enum: [queued, running, succeeded, failed, cancelled]}
+        stage: {type: string}
+        message: {type: string}
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/JobItem'}

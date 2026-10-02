@@ -1,0 +1,75 @@
+services:
+  postgres:
+    image: postgres:17.11-bookworm
+    environment:
+      POSTGRES_DB: cutmy
+      POSTGRES_USER: cutmy
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cutmy -d cutmy"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ..
+    image: cutmyvideo-core:local
+    command: ["server"]
+    environment: &core-env
+      DATABASE_URL: postgres://cutmy:${POSTGRES_PASSWORD}@postgres:5432/cutmy?sslmode=disable
+      DATA_DIR: /data
+      COOKIE_SECURE: "false"
+      PUBLIC_ORIGIN: http://localhost:8080
+      MAX_SOURCE_BYTES: "1073741824"
+      MAX_OUTPUT_BYTES: "1073741824"
+      MAX_STORAGE_BYTES: "10737418240"
+      MAX_OWNER_BYTES: "2147483648"
+      MAX_ACTIVE_JOBS: "32"
+      MAX_RANGES: "12"
+      MAX_RANGE_MS: "600000"
+      MAX_JOB_MS: "3600000"
+      SOURCE_TTL: 24h
+      ARTIFACT_TTL: 24h
+      FFMPEG_THREADS: "2"
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - media:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "cutmy", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    mem_limit: 1g
+    cpus: 1
+    pids_limit: 128
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+
+  worker:
+    image: cutmyvideo-core:local
+    command: ["worker"]
+    environment: *core-env
+    volumes:
+      - media:/data
+    depends_on:
+      api:
+        condition: service_healthy
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 128
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+
+volumes:
+  postgres:
+  media:

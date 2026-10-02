@@ -1,0 +1,43 @@
+name: Core checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17.11-bookworm
+        env:
+          POSTGRES_USER: cutmy
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: cutmy_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cutmy -d cutmy_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      TEST_DATABASE_URL: postgres://cutmy:test-only-password@localhost:5432/cutmy_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.1'
+          cache: true
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Formatting
+        run: test -z "$(gofmt -l cmd internal pkg)"
+      - name: Static checks
+        run: go vet ./...
+      - name: Unit, media, and PostgreSQL integration tests
+        run: go test -race -count=1 ./...
+      - name: Build
+        run: go build -trimpath ./cmd/cutmy
