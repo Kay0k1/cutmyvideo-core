@@ -2,13 +2,69 @@ package app
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestMediaFailureCategoriesAreDiagnosticOnly(t *testing.T) {
+	for _, v := range []struct {
+		stderr, category string
+	}{
+		{"[tcp] Connection timed out", "network_timeout"},
+		{"[tcp] Connection reset by peer", "network_reset"},
+		{"[http] HTTP error 503 Service Unavailable", "upstream_unavailable"},
+		{"[http] Server returned 429 Too Many Requests", "upstream_unavailable"},
+		{"[http] HTTP error 403 Forbidden", "upstream_denied"},
+		{"[http] Server returned 404 Not Found", "upstream_denied"},
+		{"Invalid data found when processing input", "unsupported_media"},
+		{"Protocol 'file' not on whitelist 'http,tcp'", "unsupported_media"},
+		{"Error initializing output stream 0:0", "unknown"},
+		{"", "unknown"},
+	} {
+		t.Run(v.category+v.stderr, func(t *testing.T) {
+			if got := mediaFailureCategory(v.stderr); got != v.category {
+				t.Fatalf("got %q; want %q", got, v.category)
+			}
+		})
+	}
+}
+
+func TestMediaSubprocessDiagnosticsAreRedacted(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = runCommand(context.Background(), executable, "-test.run=^TestMediaSubprocessDiagnosticFixture$", "--", "cutmy-private-stderr-fixture")
+	var failure *mediaProcessFailure
+	if !errors.As(err, &failure) || failure.category != "network_timeout" {
+		t.Fatalf("unexpected process failure: %v", err)
+	}
+	for _, secret := range []string{"signed-secret", "proxy-secret", "video.example", "127.0.0.1"} {
+		if strings.Contains(err.Error(), secret) {
+			t.Fatalf("private subprocess diagnostic escaped: %v", err)
+		}
+	}
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 1 {
+		t.Fatal("process exit cause was lost")
+	}
+}
+
+func TestMediaSubprocessDiagnosticFixture(t *testing.T) {
+	for _, arg := range os.Args {
+		if arg == "cutmy-private-stderr-fixture" {
+			fmt.Fprintln(os.Stderr, "https://video.example/clip?token=signed-secret via http://proxy-secret:proxy-secret@127.0.0.1/ Connection timed out")
+			os.Exit(1)
+		}
+	}
+}
 
 func mediaConfig(t *testing.T) Config {
 	t.Helper()

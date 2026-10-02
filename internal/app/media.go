@@ -23,6 +23,43 @@ type limitedBuffer struct {
 	limit int
 }
 
+type mediaProcessFailure struct {
+	cause    error
+	category string
+}
+
+func (e *mediaProcessFailure) Error() string {
+	return fmt.Sprintf("media process failed [%s]: %v", e.category, e.cause)
+}
+func (e *mediaProcessFailure) Unwrap() error { return e.cause }
+
+// Only fixed categories leave the subprocess boundary. Raw diagnostics may
+// contain signed CDN URLs, proxy credentials, or user-controlled file names.
+// A category is diagnostic evidence, never permission to retry an export.
+func mediaFailureCategory(stderr string) string {
+	text := strings.ToLower(stderr)
+	for _, status := range []string{"401", "403", "404", "410"} {
+		if strings.Contains(text, "http error "+status) || strings.Contains(text, "server returned "+status) {
+			return "upstream_denied"
+		}
+	}
+	for _, status := range []string{"408", "429", "500", "502", "503", "504"} {
+		if strings.Contains(text, "http error "+status) || strings.Contains(text, "server returned "+status) {
+			return "upstream_unavailable"
+		}
+	}
+	if strings.Contains(text, "connection timed out") || strings.Contains(text, "operation timed out") {
+		return "network_timeout"
+	}
+	if strings.Contains(text, "connection reset by peer") {
+		return "network_reset"
+	}
+	if strings.Contains(text, "invalid data found when processing input") || strings.Contains(text, "unknown decoder") || strings.Contains(text, "unknown encoder") || strings.Contains(text, "not on whitelist") {
+		return "unsupported_media"
+	}
+	return "unknown"
+}
+
 func (b *limitedBuffer) Write(p []byte) (int, error) {
 	n := len(p)
 	if b.Len() < b.limit {
@@ -48,7 +85,7 @@ func runCommand(ctx context.Context, path string, args ...string) ([]byte, error
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		return nil, fmt.Errorf("media process failed: %w", err)
+		return nil, &mediaProcessFailure{cause: err, category: mediaFailureCategory(stderr.String())}
 	}
 	if stdout.Len() >= stdout.limit {
 		return nil, errors.New("process response is too large")
