@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Kay0k1/cutmy-core/internal/app"
+	"github.com/Kay0k1/cutmyvideo-core/internal/app"
 )
 
 func main() {
@@ -24,7 +24,10 @@ func main() {
 
 func run() error {
 	if len(os.Args) < 2 {
-		return errors.New("usage: cutmy server | worker | healthcheck")
+		return errors.New("usage: cutmy server | worker | clip | healthcheck")
+	}
+	if os.Args[1] == "clip" {
+		return clip(os.Args[2:])
 	}
 	if os.Args[1] == "healthcheck" {
 		client := http.Client{Timeout: 3 * time.Second}

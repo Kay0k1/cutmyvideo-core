@@ -166,7 +166,7 @@ func (s *Server) withSession(next ownerHandler) http.HandlerFunc {
 			writeError(w, 429, "rate_limit", "Too many requests; wait a minute")
 			return
 		}
-		if r.Method == "POST" && !s.allow("mutations:"+s.clientIP(r), 20) {
+		if r.Method == "POST" && !s.allow("mutations:"+s.clientIP(r), s.Config.MutationsPerMinute) {
 			writeError(w, 429, "rate_limit", "Too many changes; wait a minute")
 			return
 		}
@@ -338,6 +338,7 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 		}
 		v.Kind = "platform"
 		v.Title = info.Title
+		v.ProviderID = info.ID
 		v.DurationMS = int64(info.Duration * 1000)
 		if strings.EqualFold(info.Extractor, "Youtube") && validVideoID(info.ID) {
 			v.Kind = "youtube"

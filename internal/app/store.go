@@ -69,7 +69,19 @@ func OpenStore(ctx context.Context, url string) (*Store, error) {
 		return nil, err
 	}
 	s := &Store{DB: db}
-	_, err = db.Exec(ctx, schema)
+	tx, e := db.Begin(ctx)
+	if e != nil {
+		db.Close()
+		return nil, e
+	}
+	defer tx.Rollback(ctx)
+	_, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('cutmy:migrations'))`)
+	if err == nil {
+		_, err = tx.Exec(ctx, schema)
+	}
+	if err == nil {
+		err = tx.Commit(ctx)
+	}
 	if err != nil {
 		db.Close()
 		return nil, err
@@ -85,6 +97,7 @@ CREATE TABLE IF NOT EXISTS sources (
  embed_url text, thumbnail_url text, created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS sources_owner_idx ON sources(owner);
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS provider_id text NOT NULL DEFAULT '';
 CREATE TABLE IF NOT EXISTS jobs (
  id text PRIMARY KEY, owner text NOT NULL, source_id text NOT NULL REFERENCES sources(id),
  request jsonb NOT NULL, items jsonb NOT NULL, status text NOT NULL DEFAULT 'queued',
@@ -113,13 +126,13 @@ func newID(prefix string) string {
 }
 
 func (s *Store) AddSource(ctx context.Context, v Source) error {
-	_, err := s.DB.Exec(ctx, `INSERT INTO sources(id,owner,title,duration_ms,kind,path,url,width,height,embed_url,thumbnail_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, v.ID, v.Owner, v.Title, v.DurationMS, v.Kind, v.Path, v.URL, v.Width, v.Height, v.EmbedURL, v.ThumbnailURL)
+	_, err := s.DB.Exec(ctx, `INSERT INTO sources(id,owner,title,duration_ms,kind,path,url,width,height,embed_url,thumbnail_url,provider_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, v.ID, v.Owner, v.Title, v.DurationMS, v.Kind, v.Path, v.URL, v.Width, v.Height, v.EmbedURL, v.ThumbnailURL, v.ProviderID)
 	return err
 }
 
 func (s *Store) Source(ctx context.Context, id, owner string) (Source, error) {
 	var v Source
-	err := s.DB.QueryRow(ctx, `SELECT id,owner,title,duration_ms,kind,path,url,width,height,embed_url,thumbnail_url FROM sources WHERE id=$1 AND owner=$2`, id, owner).Scan(&v.ID, &v.Owner, &v.Title, &v.DurationMS, &v.Kind, &v.Path, &v.URL, &v.Width, &v.Height, &v.EmbedURL, &v.ThumbnailURL)
+	err := s.DB.QueryRow(ctx, `SELECT id,owner,title,duration_ms,kind,path,url,width,height,embed_url,thumbnail_url,provider_id FROM sources WHERE id=$1 AND owner=$2`, id, owner).Scan(&v.ID, &v.Owner, &v.Title, &v.DurationMS, &v.Kind, &v.Path, &v.URL, &v.Width, &v.Height, &v.EmbedURL, &v.ThumbnailURL, &v.ProviderID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return v, ErrNotFound
 	}
@@ -202,7 +215,7 @@ func (s *Store) Heartbeat(ctx context.Context, id, token string) (bool, error) {
 
 func (s *Store) SaveJob(ctx context.Context, j Job, token string) error {
 	items, _ := json.Marshal(j.Items)
-	tag, err := s.DB.Exec(ctx, `UPDATE jobs SET status=CASE WHEN cancel_requested AND $3 IN ('succeeded','failed','cancelled') THEN 'cancelled' ELSE $3 END,stage=$4,message=CASE WHEN cancel_requested AND $3 IN ('succeeded','failed','cancelled') THEN 'Cancelled' ELSE $5 END,items=CASE WHEN cancel_requested AND $3 IN ('succeeded','failed','cancelled') THEN (SELECT jsonb_agg(CASE WHEN item->>'status' IN ('queued','running') THEN jsonb_set(item,'{status}','"cancelled"') ELSE item END) FROM jsonb_array_elements($6::jsonb) item) ELSE $6::jsonb END,updated_at=now() WHERE id=$1 AND lease_token=$2`, j.ID, token, j.Status, j.Stage, j.Message, items)
+	tag, err := s.DB.Exec(ctx, `UPDATE jobs SET status=CASE WHEN cancel_requested AND $3 IN ('succeeded','failed','cancelled') THEN 'cancelled' ELSE $3 END,stage=$4,message=CASE WHEN cancel_requested AND $3 IN ('succeeded','failed','cancelled') THEN 'Cancelled' ELSE $5 END,items=CASE WHEN cancel_requested AND $3 IN ('succeeded','failed','cancelled') THEN (SELECT jsonb_agg(CASE WHEN item->>'status' IN ('queued','running') THEN jsonb_set(item,'{status}','"cancelled"') ELSE item END) FROM jsonb_array_elements($6::jsonb) item) ELSE $6::jsonb END,updated_at=now() WHERE id=$1 AND lease_token=$2 AND status='running' AND lease_until>now()`, j.ID, token, j.Status, j.Stage, j.Message, items)
 	if err == nil && tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
@@ -239,7 +252,7 @@ func (s *Store) ArtifactPath(ctx context.Context, id, owner string) (string, str
 
 func (s *Store) Cleanup(ctx context.Context, artifactTTL, sourceTTL time.Duration) ([]string, error) {
 	// Delete only completed resources: active jobs pin their source and results.
-	rows, err := s.DB.Query(ctx, `DELETE FROM artifacts WHERE created_at<now()-$1::interval AND NOT EXISTS(SELECT 1 FROM jobs WHERE jobs.id=artifacts.job_id AND status IN ('queued','running')) RETURNING path`, artifactTTL.String())
+	rows, err := s.DB.Query(ctx, `DELETE FROM artifacts WHERE created_at<now()-($1 * interval '1 second') AND NOT EXISTS(SELECT 1 FROM jobs WHERE jobs.id=artifacts.job_id AND status IN ('queued','running')) RETURNING path`, artifactTTL.Seconds())
 	if err != nil {
 		return nil, err
 	}
@@ -256,11 +269,11 @@ func (s *Store) Cleanup(ctx context.Context, artifactTTL, sourceTTL time.Duratio
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
-	_, err = s.DB.Exec(ctx, `DELETE FROM jobs WHERE status NOT IN ('queued','running') AND updated_at<now()-$1::interval AND NOT EXISTS(SELECT 1 FROM artifacts WHERE job_id=jobs.id)`, artifactTTL.String())
+	_, err = s.DB.Exec(ctx, `DELETE FROM jobs WHERE status NOT IN ('queued','running') AND updated_at<now()-($1 * interval '1 second') AND NOT EXISTS(SELECT 1 FROM artifacts WHERE job_id=jobs.id)`, artifactTTL.Seconds())
 	if err != nil {
 		return paths, err
 	}
-	rows, err = s.DB.Query(ctx, `DELETE FROM sources WHERE created_at<now()-$1::interval AND NOT EXISTS(SELECT 1 FROM jobs WHERE source_id=sources.id) RETURNING path`, sourceTTL.String())
+	rows, err = s.DB.Query(ctx, `DELETE FROM sources WHERE created_at<now()-($1 * interval '1 second') AND NOT EXISTS(SELECT 1 FROM jobs WHERE source_id=sources.id) RETURNING path`, sourceTTL.Seconds())
 	if err != nil {
 		return paths, err
 	}
@@ -278,6 +291,6 @@ func (s *Store) Cleanup(ctx context.Context, artifactTTL, sourceTTL time.Duratio
 }
 
 func (s *Store) Recover(ctx context.Context) error {
-	_, err := s.DB.Exec(ctx, `UPDATE jobs SET status=CASE WHEN cancel_requested THEN 'cancelled' ELSE 'failed' END,stage='finished',message=CASE WHEN cancel_requested THEN 'Cancelled' ELSE 'Worker recovery limit reached' END WHERE status='running' AND lease_until<now() AND (attempts>=3 OR cancel_requested)`)
+	_, err := s.DB.Exec(ctx, `UPDATE jobs SET status=CASE WHEN cancel_requested THEN 'cancelled' ELSE 'failed' END,stage='finished',lease_token=NULL,message=CASE WHEN cancel_requested THEN 'Cancelled' ELSE 'Worker recovery limit reached' END,items=(SELECT jsonb_agg(CASE WHEN item->>'status' IN ('queued','running') THEN jsonb_set(item,'{status}',CASE WHEN cancel_requested THEN '"cancelled"'::jsonb ELSE '"failed"'::jsonb END) ELSE item END) FROM jsonb_array_elements(items) item) WHERE status='running' AND lease_until<now() AND (attempts>=3 OR cancel_requested)`)
 	return err
 }

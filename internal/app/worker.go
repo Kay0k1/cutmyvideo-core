@@ -136,7 +136,7 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 			finishFailure("Source streams are unavailable, require login, or timed out")
 			return
 		}
-		if math.Abs(info.Duration*1000-float64(source.DurationMS)) > 1000 {
+		if info.ID != source.ProviderID || math.Abs(info.Duration*1000-float64(source.DurationMS)) > 1000 {
 			finishFailure("The source has changed; open it again before exporting")
 			return
 		}

@@ -14,6 +14,7 @@ type Config struct {
 	DatabaseURL, DataDir, ListenAddr, FFmpeg, FFprobe, YTDLP, PublicOrigin string
 	MaxSourceBytes, MaxOutputBytes, MaxStorageBytes, MaxOwnerBytes         int64
 	MaxRanges, MaxActiveJobs                                               int
+	MutationsPerMinute                                                     int
 	MaxRangeMS, MaxJobMS                                                   int64
 	JobTimeout, SourceTimeout, SourceTTL, ArtifactTTL                      time.Duration
 	SecureCookie, TrustProxy                                               bool
@@ -26,6 +27,7 @@ func ConfigFromEnv() (Config, error) {
 	c.MaxStorageBytes = 10 << 30
 	c.MaxOwnerBytes = 2 << 30
 	c.MaxActiveJobs = 32
+	c.MutationsPerMinute = 20
 	c.TrustProxy = os.Getenv("TRUST_PROXY") == "true"
 	var err error
 	for key, ptr := range map[string]*int64{"MAX_SOURCE_BYTES": &c.MaxSourceBytes, "MAX_OUTPUT_BYTES": &c.MaxOutputBytes, "MAX_STORAGE_BYTES": &c.MaxStorageBytes, "MAX_OWNER_BYTES": &c.MaxOwnerBytes, "MAX_RANGE_MS": &c.MaxRangeMS, "MAX_JOB_MS": &c.MaxJobMS} {
@@ -46,6 +48,12 @@ func ConfigFromEnv() (Config, error) {
 		c.MaxActiveJobs, err = strconv.Atoi(value)
 		if err != nil || c.MaxActiveJobs <= 0 {
 			return c, errors.New("invalid MAX_ACTIVE_JOBS")
+		}
+	}
+	if value := os.Getenv("MUTATIONS_PER_MINUTE"); value != "" {
+		c.MutationsPerMinute, err = strconv.Atoi(value)
+		if err != nil || c.MutationsPerMinute <= 0 {
+			return c, errors.New("invalid MUTATIONS_PER_MINUTE")
 		}
 	}
 	for key, ptr := range map[string]*time.Duration{"JOB_TIMEOUT": &c.JobTimeout, "SOURCE_TIMEOUT": &c.SourceTimeout, "SOURCE_TTL": &c.SourceTTL, "ARTIFACT_TTL": &c.ArtifactTTL} {
@@ -83,6 +91,7 @@ type Source struct {
 	Path         string  `json:"-"`
 	URL          string  `json:"-"`
 	Owner        string  `json:"-"`
+	ProviderID   string  `json:"-"`
 }
 
 type Range struct {

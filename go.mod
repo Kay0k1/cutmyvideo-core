@@ -1,4 +1,4 @@
-module github.com/Kay0k1/cutmy-core
+module github.com/Kay0k1/cutmyvideo-core
 
 go 1.26.0
 
