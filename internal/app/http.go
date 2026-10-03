@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"mime"
 	"net"
 	"net/http"
@@ -56,6 +57,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/uploads", s.withSession(s.upload))
 	mux.HandleFunc("GET /api/v1/sources/{id}", s.withSession(s.source))
 	mux.HandleFunc("GET /api/v1/sources/{id}/media", s.withSession(s.sourceMedia))
+	mux.HandleFunc("GET /api/v1/sources/{id}/thumbnail", s.withSession(s.sourceThumbnail))
 	mux.HandleFunc("POST /api/v1/jobs", s.withSession(s.createJob))
 	mux.HandleFunc("GET /api/v1/jobs/{id}", s.withSession(s.job))
 	mux.HandleFunc("POST /api/v1/jobs/{id}/cancel", s.withSession(s.cancelJob))
@@ -183,7 +185,7 @@ func (s *Server) beginSource(ctx context.Context, owner string) error {
 	if count >= 20 {
 		return errors.New("source_limit")
 	}
-	rows, err := s.Store.DB.Query(ctx, `SELECT path FROM sources WHERE owner=$1 AND path<>''`, owner)
+	rows, err := s.Store.DB.Query(ctx, `SELECT path FROM sources WHERE owner=$1 AND path<>'' UNION ALL SELECT thumbnail_path FROM sources WHERE owner=$1 AND thumbnail_path<>''`, owner)
 	if err != nil {
 		return err
 	}
@@ -243,6 +245,14 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 	if err != nil {
 		if errors.Is(err, errInvalidYouTubeURL) {
 			writeError(w, 400, "invalid_youtube_url", "Paste a valid YouTube video link without credentials or a custom port")
+			return
+		}
+		if p := problemFromError(err); p != nil {
+			status := 400
+			if p.code == "live_not_supported" {
+				status = 422
+			}
+			writeError(w, status, p.code, p.message)
 			return
 		}
 		writeError(w, 400, "invalid_url", "Use a public HTTPS link without credentials or a custom port")
@@ -333,28 +343,52 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 		if e != nil {
 			if errors.Is(e, context.DeadlineExceeded) {
 				writeError(w, 504, "source_timeout", "Source inspection timed out; try a direct file or upload")
+			} else if p := problemFromError(e); p != nil {
+				writeError(w, 422, p.code, p.message)
 			} else {
-				writeError(w, 422, "source_unavailable", "This platform link is unavailable, requires login, or is not supported")
+				writeError(w, 422, "platform_unavailable", errPlatformUnavailable.message)
 			}
 			return
 		}
-		if _, e = pickStreams(info, "best", "mp4"); e != nil {
-			if _, audioErr := pickStreams(info, "best", "mp3"); audioErr != nil {
-				writeError(w, 422, "unsupported_source", "No supported seekable streams are available; upload the file instead")
+		durationMS := int64(math.Round(info.Duration * 1000))
+		selected, e := pickStreams(info, "best", "mp4")
+		if e != nil {
+			selected, e = pickStreams(info, "best", "mp3")
+			if e != nil {
+				writeError(w, 422, "unsupported_stream", errUnsupportedStream.message)
 				return
 			}
+		}
+		for _, f := range selected {
+			if !isHLS(f) {
+				continue
+			}
+			p, e := loadHLS(ctx, g, f, "best", 0)
+			if e != nil {
+				if errors.Is(e, context.DeadlineExceeded) {
+					writeError(w, 504, "source_timeout", "Source inspection timed out; try a direct file or upload")
+				} else if problem := problemFromError(e); problem != nil {
+					writeError(w, 422, problem.code, problem.message)
+				} else {
+					writeError(w, 422, "platform_unavailable", errPlatformUnavailable.message)
+				}
+				return
+			}
+			if math.Abs(float64(p.DurationMS)-info.Duration*1000) > 1000 {
+				writeError(w, 422, "platform_unavailable", "The recording is incomplete or its timeline is unavailable. Use a completed recording")
+				return
+			}
+			durationMS = p.DurationMS
 		}
 		v.Kind = "platform"
 		v.Title = info.Title
 		v.ProviderID = info.ID
-		v.DurationMS = int64(info.Duration * 1000)
+		v.Provider = providerForExtractor(info.Extractor)
+		v.DurationMS = durationMS
 		if strings.EqualFold(info.Extractor, "Youtube") && validVideoID(info.ID) {
 			v.Kind = "youtube"
 			embed := "https://www.youtube-nocookie.com/embed/" + info.ID
 			v.EmbedURL = &embed
-		}
-		if _, e = validateURL(info.Thumbnail); e == nil {
-			v.ThumbnailURL = &info.Thumbnail
 		}
 		for _, f := range info.Formats {
 			if f.Height > v.Height {
@@ -362,7 +396,12 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 				v.Width = f.Width
 			}
 		}
+		v.ThumbnailPath, _ = fetchThumbnail(ctx, s.Config, v.ID, info.Thumbnail)
+		completeSourcePresentation(&v)
 		if e = s.Store.AddSource(ctx, v); e != nil {
+			if v.ThumbnailPath != "" {
+				_ = os.Remove(v.ThumbnailPath)
+			}
 			internalError(w, e)
 			return
 		}
@@ -371,21 +410,10 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 		preview := "/api/v1/sources/" + v.ID + "/media"
 		v.PreviewURL = &preview
 	}
+	completeSourcePresentation(&v)
 	writeJSON(w, 201, v)
 }
 
-func isPlatformHost(host string) bool {
-	host = strings.ToLower(host)
-	if isYouTubeHost(host) {
-		return true
-	}
-	for _, suffix := range []string{"vimeo.com", "rutube.ru", "tiktok.com", "vk.com", "dailymotion.com"} {
-		if host == suffix || strings.HasSuffix(host, "."+suffix) {
-			return true
-		}
-	}
-	return false
-}
 func validVideoID(id string) bool {
 	if len(id) != 11 {
 		return false
@@ -476,6 +504,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request, owner string) {
 	keep = true
 	preview := "/api/v1/sources/" + v.ID + "/media"
 	v.PreviewURL = &preview
+	completeSourcePresentation(&v)
 	writeJSON(w, 201, v)
 }
 

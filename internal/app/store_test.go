@@ -1,9 +1,12 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
+	"image"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -166,6 +169,9 @@ func TestStoreCleanupExpiresTerminalDataAndPinsActiveSources(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	old := storedSource(t, s, "old-owner")
+	if _, err := s.DB.Exec(ctx, `UPDATE sources SET thumbnail_path='/test/expired-thumbnail' WHERE id=$1`, old.ID); err != nil {
+		t.Fatal(err)
+	}
 	active := storedSource(t, s, "active-owner")
 	oldJob, err := s.CreateJob(ctx, old.Owner, requestFor(old), "")
 	if err != nil {
@@ -191,8 +197,8 @@ func TestStoreCleanupExpiresTerminalDataAndPinsActiveSources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(paths) != 2 {
-		t.Fatalf("expected source and artifact cleanup, got %v", paths)
+	if len(paths) != 3 {
+		t.Fatalf("expected source, thumbnail, and artifact cleanup, got %v", paths)
 	}
 	if _, err = s.Source(ctx, old.ID, old.Owner); !errors.Is(err, ErrNotFound) {
 		t.Fatal("expired source remains")
@@ -345,5 +351,59 @@ func TestRunningCancellationAndExhaustedRecoveryHaveConsistentItems(t *testing.T
 	current, err = s.Job(ctx, j.ID, "owner")
 	if err != nil || current.Status != "failed" || current.Items[0].Status != "failed" {
 		t.Fatalf("inconsistent recovery: %+v %v", current, err)
+	}
+}
+
+func TestHTTPThumbnailPresentationAndIsolation(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	cookie := &http.Cookie{Name: "cutmy_session", Value: base64.RawURLEncoding.EncodeToString(make([]byte, 32))}
+	request := httptest.NewRequest("GET", "/", nil)
+	request.AddCookie(cookie)
+	owner, _ := ownerFromRequest(request)
+	path := filepath.Join(t.TempDir(), "source.thumbnail")
+	thumb := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	var content bytes.Buffer
+	if err := png.Encode(&content, thumb); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, content.Bytes(), 0600); err != nil {
+		t.Fatal(err)
+	}
+	v := Source{ID: newID("src"), Owner: owner, Title: "Public recording", Kind: "platform", Provider: "twitch", ProviderID: "v123", URL: "https://www.twitch.tv/videos/123", DurationMS: 10000, ThumbnailPath: path}
+	if err := s.AddSource(ctx, v); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := s.Source(ctx, v.ID, owner)
+	if err != nil || loaded.Provider != "twitch" || loaded.PreviewKind != "none" || loaded.ProviderVideoID == nil || *loaded.ProviderVideoID != "v123" || loaded.SourceURL == nil || *loaded.SourceURL != v.URL || loaded.ThumbnailURL == nil {
+		t.Fatalf("metadata was not persisted/presented: %+v %v", loaded, err)
+	}
+	other := make([]byte, 32)
+	other[0] = 1
+	foreign := &http.Cookie{Name: "cutmy_session", Value: base64.RawURLEncoding.EncodeToString(other)}
+	handler := NewServer(Config{}, s).Handler()
+	for _, tt := range []struct {
+		cookie *http.Cookie
+		code   int
+	}{{nil, 401}, {foreign, 404}, {cookie, 200}} {
+		req := httptest.NewRequest("GET", *loaded.ThumbnailURL, nil)
+		if tt.cookie != nil {
+			req.AddCookie(tt.cookie)
+		}
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != tt.code {
+			t.Fatalf("thumbnail status%d want%d", w.Code, tt.code)
+		}
+		if tt.code == 200 && (w.Header().Get("Content-Type") != "image/png" || !bytes.Equal(w.Body.Bytes(), content.Bytes())) {
+			t.Fatal("thumbnail MIME/content changed")
+		}
+	}
+	if _, err := s.DB.Exec(ctx, `UPDATE sources SET created_at=now()-interval '2 days' WHERE id=$1`, v.ID); err != nil {
+		t.Fatal(err)
+	}
+	paths, err := s.Cleanup(ctx, time.Hour, time.Hour)
+	if err != nil || len(paths) != 1 || paths[0] != path {
+		t.Fatalf("thumbnail retention failed:%v %v", paths, err)
 	}
 }

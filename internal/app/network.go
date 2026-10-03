@@ -98,7 +98,7 @@ type networkGuard struct {
 	client      *http.Client
 	base, token string
 	mu          sync.RWMutex
-	streams     map[string]string
+	streams     map[string]relaySource
 	bytes       atomic.Int64
 	limit       int64
 }
@@ -113,7 +113,7 @@ func newNetworkGuard(limit int64) (*networkGuard, error) {
 		l.Close()
 		return nil, err
 	}
-	g := &networkGuard{listener: l, client: safeClient(), base: "http://" + l.Addr().String(), token: hex.EncodeToString(b), streams: map[string]string{}, limit: limit}
+	g := &networkGuard{listener: l, client: safeClient(), base: "http://" + l.Addr().String(), token: hex.EncodeToString(b), streams: map[string]relaySource{}, limit: limit}
 	g.server = &http.Server{Handler: g, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second}
 	go func() { _ = g.server.Serve(l) }()
 	return g, nil
@@ -124,13 +124,20 @@ func (g *networkGuard) ProxyURL() string {
 	// urllib omits Proxy-Authorization when either credential is empty.
 	return "http://" + g.token + ":" + g.token + "@" + g.listener.Addr().String()
 }
-func (g *networkGuard) Relay(raw string) (string, error) {
+
+type relaySource struct {
+	URL     string
+	Headers map[string]string
+}
+
+func (g *networkGuard) Relay(raw string) (string, error) { return g.RelayWithHeaders(raw, nil) }
+func (g *networkGuard) RelayWithHeaders(raw string, headers map[string]string) (string, error) {
 	if _, err := validateURL(raw); err != nil {
 		return "", err
 	}
 	id := newID("stream")
 	g.mu.Lock()
-	g.streams[id] = raw
+	g.streams[id] = relaySource{URL: raw, Headers: headers}
 	g.mu.Unlock()
 	return g.base + "/relay/" + g.token + "/" + id, nil
 }
@@ -143,7 +150,7 @@ func (g *networkGuard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		g.mu.RLock()
-		raw, ok := g.streams[parts[3]]
+		source, ok := g.streams[parts[3]]
 		g.mu.RUnlock()
 		if !ok {
 			http.NotFound(w, r)
@@ -153,8 +160,8 @@ func (g *networkGuard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(405)
 			return
 		}
-		u, _ := url.Parse(raw)
-		g.forward(w, r, u, false)
+		u, _ := url.Parse(source.URL)
+		g.forward(w, r, u, false, source.Headers)
 		return
 	}
 	user, password, ok := proxyCredentials(r.Header.Get("Proxy-Authorization"))
@@ -174,7 +181,7 @@ func (g *networkGuard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "blocked proxy destination", 400)
 		return
 	}
-	g.forward(w, r, r.URL, true)
+	g.forward(w, r, r.URL, true, nil)
 }
 
 func proxyCredentials(value string) (string, string, bool) {
@@ -183,7 +190,7 @@ func proxyCredentials(value string) (string, string, bool) {
 	return r.BasicAuth()
 }
 
-func (g *networkGuard) forward(w http.ResponseWriter, r *http.Request, u *url.URL, proxy bool) {
+func (g *networkGuard) forward(w http.ResponseWriter, r *http.Request, u *url.URL, proxy bool, headers map[string]string) {
 	if g.bytes.Load() >= g.limit {
 		http.Error(w, "transfer limit reached", 413)
 		return
@@ -209,6 +216,11 @@ func (g *networkGuard) forward(w http.ResponseWriter, r *http.Request, u *url.UR
 	}
 	if req.Header.Get("User-Agent") == "" {
 		req.Header.Set("User-Agent", "cutmy-core/0.1")
+	}
+	if !proxy {
+		req.Header.Del("Cookie")
+		req.Header.Del("Authorization")
+		mediaHeaders(req, headers)
 	}
 	resp, err := g.client.Do(req)
 	if err != nil {

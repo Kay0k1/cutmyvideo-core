@@ -114,8 +114,9 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 		finishFailure("Source is unavailable or has expired")
 		return
 	}
-	inputs := []string{source.Path}
-	remote := false
+	inputs := []mediaInput{{Path: source.Path}}
+	var streams []platformFormat
+	var playlists []hlsPlaylist
 	var guard *networkGuard
 	if source.Path == "" {
 		j.Stage = "resolving"
@@ -133,29 +134,43 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 		info, e := platformMetadata(resolveCtx, c, source.URL, guard)
 		resolveCancel()
 		if e != nil {
-			finishFailure("Source streams are unavailable, require login, or timed out")
+			finishFailure(sourceFailureMessage(e))
 			return
 		}
 		if info.ID != source.ProviderID || math.Abs(info.Duration*1000-float64(source.DurationMS)) > 1000 {
 			finishFailure("The source has changed; open it again before exporting")
 			return
 		}
-		streams, e := pickStreams(info, j.Request.Quality, j.Request.Format)
+		streams, e = pickStreams(info, j.Request.Quality, j.Request.Format)
 		if e != nil {
 			finishFailure("No supported seekable streams match these settings; upload the source instead")
 			return
 		}
 		inputs = nil
-		for _, f := range streams {
-			u, e := guard.Relay(f.URL)
-			if e != nil {
-				finishFailure("A source stream uses an unsupported address")
-				return
+		playlists = make([]hlsPlaylist, len(streams))
+		for i, f := range streams {
+			if isHLS(f) {
+				playlists[i], e = loadHLS(ctx, guard, f, j.Request.Quality, 0)
+				if e != nil {
+					finishFailure(sourceFailureMessage(e))
+					return
+				}
+				if math.Abs(float64(playlists[i].DurationMS-source.DurationMS)) > 2000 {
+					finishFailure("The recording is incomplete or its timeline changed; open a completed recording instead")
+					return
+				}
+				inputs = append(inputs, mediaInput{})
+			} else {
+				u, e := guard.RelayWithHeaders(f.URL, f.Headers)
+				if e != nil {
+					finishFailure("A source stream uses an unsupported address")
+					return
+				}
+				inputs = append(inputs, mediaInput{Path: u, Remote: true})
 			}
-			inputs = append(inputs, u)
 		}
-		remote = true
 	}
+
 	work := filepath.Join(c.DataDir, "work", j.ID+"-"+token)
 	if err = os.MkdirAll(work, 0700); err != nil {
 		finishFailure("Could not create a temporary workspace")
@@ -183,19 +198,49 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 		if !persist() {
 			return
 		}
-		if !storageAvailable(c, c.MaxOutputBytes) {
+		reserve := c.MaxOutputBytes
+		for _, f := range streams {
+			if isHLS(f) {
+				reserve += 2 * c.MaxSourceBytes
+				break
+			}
+		}
+		if !storageAvailable(c, reserve) {
 			finishFailure("Server storage is full; try again after older files expire")
 			return
 		}
 		out := filepath.Join(work, item.ID+"."+j.Request.Format)
-		start, end, e := exportMedia(ctx, c, inputs, remote, j.Request.Ranges[i], j.Request, out)
+		itemInputs := append([]mediaInput(nil), inputs...)
+		fragmentDir := filepath.Join(work, item.ID)
+		var prepareErr error
+		for k, f := range streams {
+			if !isHLS(f) {
+				continue
+			}
+			if prepareErr = os.MkdirAll(fragmentDir, 0700); prepareErr != nil {
+				break
+			}
+			var path string
+			var offset int64
+			path, offset, prepareErr = stageHLS(ctx, c, guard, f, playlists[k], j.Request.Ranges[i], fragmentDir, k)
+			if prepareErr != nil {
+				break
+			}
+			itemInputs[k] = mediaInput{Path: path, OffsetMS: offset}
+		}
+		var start, end int64
+		e := prepareErr
+		if e == nil {
+			start, end, e = exportInputs(ctx, c, itemInputs, j.Request.Ranges[i], j.Request, out)
+		}
+		_ = os.RemoveAll(fragmentDir)
 		if e != nil {
 			if ctx.Err() != nil {
 				finishFailure("Processing stopped or exceeded the time limit")
 				return
 			}
 			item.Status = "failed"
-			item.Message = "Could not export this fragment; try accurate mode, another quality, or an uploaded file"
+			item.Message = sourceFailureMessage(e)
 			slog.Warn("fragment failed", "job_id", j.ID, "item_id", item.ID, "error", e)
 			_ = os.Remove(out)
 			if !persist() {
@@ -275,7 +320,7 @@ func cleanupFiles(ctx context.Context, c Config, s *Store) {
 		query := `SELECT path FROM artifacts`
 		if kind == "sources" {
 			ttl = c.SourceTTL
-			query = `SELECT path FROM sources WHERE path<>''`
+			query = `SELECT path FROM sources WHERE path<>'' UNION ALL SELECT thumbnail_path FROM sources WHERE thumbnail_path<>''`
 		}
 		floor := c.JobTimeout + c.SourceTimeout + time.Hour
 		if ttl < floor {
@@ -352,4 +397,11 @@ func storageAvailable(c Config, reserve int64) bool {
 		return nil
 	})
 	return (err == nil || os.IsNotExist(err)) && total+reserve <= c.MaxStorageBytes
+}
+
+func sourceFailureMessage(err error) string {
+	if p := problemFromError(err); p != nil {
+		return p.message
+	}
+	return "Could not export this fragment; try accurate mode, another quality, or an uploaded file"
 }

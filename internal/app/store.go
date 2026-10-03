@@ -104,6 +104,8 @@ CREATE TABLE IF NOT EXISTS sources (
 );
 CREATE INDEX IF NOT EXISTS sources_owner_idx ON sources(owner);
 ALTER TABLE sources ADD COLUMN IF NOT EXISTS provider_id text NOT NULL DEFAULT '';
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT '';
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS thumbnail_path text NOT NULL DEFAULT '';
 CREATE TABLE IF NOT EXISTS jobs (
  id text PRIMARY KEY, owner text NOT NULL, source_id text NOT NULL REFERENCES sources(id),
  request jsonb NOT NULL, items jsonb NOT NULL, status text NOT NULL DEFAULT 'queued',
@@ -132,20 +134,17 @@ func newID(prefix string) string {
 }
 
 func (s *Store) AddSource(ctx context.Context, v Source) error {
-	_, err := s.DB.Exec(ctx, `INSERT INTO sources(id,owner,title,duration_ms,kind,path,url,width,height,embed_url,thumbnail_url,provider_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, v.ID, v.Owner, v.Title, v.DurationMS, v.Kind, v.Path, v.URL, v.Width, v.Height, v.EmbedURL, v.ThumbnailURL, v.ProviderID)
+	_, err := s.DB.Exec(ctx, `INSERT INTO sources(id,owner,title,duration_ms,kind,path,url,width,height,embed_url,thumbnail_url,provider_id,provider,thumbnail_path) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, v.ID, v.Owner, v.Title, v.DurationMS, v.Kind, v.Path, v.URL, v.Width, v.Height, v.EmbedURL, v.ThumbnailURL, v.ProviderID, v.Provider, v.ThumbnailPath)
 	return err
 }
 
 func (s *Store) Source(ctx context.Context, id, owner string) (Source, error) {
 	var v Source
-	err := s.DB.QueryRow(ctx, `SELECT id,owner,title,duration_ms,kind,path,url,width,height,embed_url,thumbnail_url,provider_id FROM sources WHERE id=$1 AND owner=$2`, id, owner).Scan(&v.ID, &v.Owner, &v.Title, &v.DurationMS, &v.Kind, &v.Path, &v.URL, &v.Width, &v.Height, &v.EmbedURL, &v.ThumbnailURL, &v.ProviderID)
+	err := s.DB.QueryRow(ctx, `SELECT id,owner,title,duration_ms,kind,path,url,width,height,embed_url,thumbnail_url,provider_id,provider,thumbnail_path FROM sources WHERE id=$1 AND owner=$2`, id, owner).Scan(&v.ID, &v.Owner, &v.Title, &v.DurationMS, &v.Kind, &v.Path, &v.URL, &v.Width, &v.Height, &v.EmbedURL, &v.ThumbnailURL, &v.ProviderID, &v.Provider, &v.ThumbnailPath)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return v, ErrNotFound
 	}
-	if v.Path != "" {
-		u := "/api/v1/sources/" + v.ID + "/media"
-		v.PreviewURL = &u
-	}
+	completeSourcePresentation(&v)
 	return v, err
 }
 
@@ -287,18 +286,20 @@ func (s *Store) Cleanup(ctx context.Context, artifactTTL, sourceTTL time.Duratio
 	if err != nil {
 		return paths, err
 	}
-	rows, err = s.DB.Query(ctx, `DELETE FROM sources WHERE created_at<now()-($1 * interval '1 second') AND NOT EXISTS(SELECT 1 FROM jobs WHERE source_id=sources.id) RETURNING path`, sourceTTL.Seconds())
+	rows, err = s.DB.Query(ctx, `DELETE FROM sources WHERE created_at<now()-($1 * interval '1 second') AND NOT EXISTS(SELECT 1 FROM jobs WHERE source_id=sources.id) RETURNING path,thumbnail_path`, sourceTTL.Seconds())
 	if err != nil {
 		return paths, err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var p string
-		if err = rows.Scan(&p); err != nil {
+		var p, thumb string
+		if err = rows.Scan(&p, &thumb); err != nil {
 			return paths, err
 		}
-		if p != "" {
-			paths = append(paths, p)
+		for _, path := range []string{p, thumb} {
+			if path != "" {
+				paths = append(paths, path)
+			}
 		}
 	}
 	return paths, rows.Err()

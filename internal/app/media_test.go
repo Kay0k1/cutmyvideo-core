@@ -153,14 +153,35 @@ func TestRangeValidation(t *testing.T) {
 	}
 }
 
-func TestStreamSelectionRejectsSegmentedAndPrivateProtocols(t *testing.T) {
+func TestStreamSelectionAllowsBoundedHLSAndRejectsUnsupportedProtocols(t *testing.T) {
 	info := platformInfo{Formats: []platformFormat{{ID: "hls", URL: "https://example.com/list.m3u8", Protocol: "m3u8_native", VCodec: "h264", ACodec: "aac", Height: 720, Ext: "mp4"}}}
-	if _, err := pickStreams(info, "720p", "mp4"); err == nil {
-		t.Fatal("selected HLS playlist")
+	if streams, err := pickStreams(info, "720p", "mp4"); err != nil || len(streams) != 1 || !isHLS(streams[0]) {
+		t.Fatalf("finite HLS candidate unavailable: %v", err)
+	}
+	for _, protocol := range []string{"http", "ftp", "file", "http_dash_segments", "mhtml"} {
+		bad := info
+		bad.Formats = []platformFormat{{URL: "https://example.com/video", Protocol: protocol, Ext: "mp4", VCodec: "h264", ACodec: "aac"}}
+		if _, err := pickStreams(bad, "best", "mp4"); err == nil {
+			t.Fatalf("accepted protocol %s", protocol)
+		}
 	}
 	info.Formats = append(info.Formats, platformFormat{ID: "public", URL: "https://example.com/video.mp4", Protocol: "https", VCodec: "h264", ACodec: "aac", Height: 720, Ext: "mp4"})
 	streams, err := pickStreams(info, "720p", "mp4")
-	if err != nil || len(streams) != 1 || streams[0].ID != "public" {
+	if err != nil || len(streams) != 1 || streams[0].ID != "hls" {
 		t.Fatalf("unexpected streams %+v %v", streams, err)
+	}
+}
+
+func TestProgressiveClipsWithUnknownCodecsRemainImportable(t *testing.T) {
+	info := platformInfo{Formats: []platformFormat{{ID: "1080", URL: "https://media.example/clip.mp4", Protocol: "https", Ext: "mp4", Height: 1080}}}
+	for _, format := range []string{"mp4", "mp3"} {
+		streams, e := pickStreams(info, "720p", format)
+		if e != nil || len(streams) != 1 || streams[0].ID != "1080" {
+			t.Fatalf("unknown codecs mistaken for absent streams: %v", e)
+		}
+	}
+	info.Formats[0].HasDRM = true
+	if _, e := pickStreams(info, "best", "mp4"); !errors.Is(e, errUnsupportedStream) {
+		t.Fatal("selected DRM clip")
 	}
 }

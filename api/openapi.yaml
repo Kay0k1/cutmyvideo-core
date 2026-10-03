@@ -80,6 +80,14 @@ paths:
         '200': {description: Media bytes}
         '206': {description: Requested byte range}
         default: {$ref: '#/components/responses/Error'}
+  /api/v1/sources/{id}/thumbnail:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    get:
+      description: Owner-protected, bounded and inspected PNG/JPEG thumbnail. Raw CDN URLs are never returned to clients.
+      responses:
+        '200': {description: Thumbnail image}
+        '206': {description: Requested byte range}
+        default: {$ref: '#/components/responses/Error'}
   /api/v1/jobs:
     post:
       parameters:
@@ -157,15 +165,26 @@ components:
             message: {type: string}
     Source:
       type: object
-      required: [id, title, duration_ms, kind, preview_url, embed_url, thumbnail_url]
+      required: [id, title, duration_ms, kind, provider, provider_video_id, source_url, preview_kind, preview_url, embed_url, thumbnail_url]
       properties:
         id: {type: string}
         title: {type: string}
         duration_ms: {type: integer, minimum: 1}
         kind: {type: string, enum: [upload, direct, youtube, platform]}
+        provider:
+          type: string
+          enum: [upload, direct, generic, youtube, twitch, rutube, tiktok, instagram, vimeo, dailymotion, vk, facebook, x, reddit, ok, bilibili, streamable, rumble]
+          description: Recognized extractor family; a provider name is not a guarantee of link availability.
+        provider_video_id: {type: [string, 'null']}
+        source_url:
+          type: [string, 'null']
+          description: HTTPS platform page URL; null for uploads and direct files. Never an extracted CDN media address.
+        preview_kind: {type: string, enum: [native, youtube, none]}
         preview_url: {type: [string, 'null']}
         embed_url: {type: [string, 'null']}
-        thumbnail_url: {type: [string, 'null']}
+        thumbnail_url:
+          type: [string, 'null']
+          description: Relative owner-protected thumbnail endpoint, or null. Never a raw external image URL.
         width: {type: integer}
         height: {type: integer}
     Range:

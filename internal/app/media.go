@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const mediaFormats = "mov,matroska,webm,mp3,wav,flac,ogg,aac,avi"
+const mediaFormats = "mov,matroska,webm,mp3,wav,flac,ogg,aac,avi,mpegts"
 
 type limitedBuffer struct {
 	bytes.Buffer
@@ -38,6 +38,11 @@ func (e *mediaProcessFailure) Unwrap() error { return e.cause }
 // A category is diagnostic evidence, never permission to retry an export.
 func mediaFailureCategory(stderr string) string {
 	text := strings.ToLower(stderr)
+	for _, phrase := range []string{"login required", "login_required", "sign in to", "log in to", "only available for registered", "subscriber-only", "subscribers only", "private video", "password protected"} {
+		if strings.Contains(text, phrase) {
+			return "platform_access"
+		}
+	}
 	for _, status := range []string{"401", "403", "404", "410"} {
 		if strings.Contains(text, "http error "+status) || strings.Contains(text, "server returned "+status) {
 			return "upstream_denied"
@@ -101,6 +106,7 @@ type probeInfo struct {
 	Streams []struct {
 		CodecType string `json:"codec_type"`
 		CodecName string `json:"codec_name"`
+		StartTime string `json:"start_time"`
 		Width     int    `json:"width"`
 		Height    int    `json:"height"`
 	} `json:"streams"`
@@ -130,43 +136,68 @@ func probe(ctx context.Context, c Config, path string, remote bool) (probeInfo, 
 }
 
 type platformInfo struct {
-	ID        string           `json:"id"`
-	Title     string           `json:"title"`
-	Duration  float64          `json:"duration"`
-	Extractor string           `json:"extractor_key"`
-	Thumbnail string           `json:"thumbnail"`
-	IsLive    bool             `json:"is_live"`
-	Formats   []platformFormat `json:"formats"`
+	ID         string           `json:"id"`
+	Title      string           `json:"title"`
+	Duration   float64          `json:"duration"`
+	Extractor  string           `json:"extractor_key"`
+	Thumbnail  string           `json:"thumbnail"`
+	IsLive     bool             `json:"is_live"`
+	LiveStatus string           `json:"live_status"`
+	Type       string           `json:"_type"`
+	Entries    json.RawMessage  `json:"entries"`
+	HasDRM     bool             `json:"has_drm"`
+	Formats    []platformFormat `json:"formats"`
 }
 type platformFormat struct {
-	ID       string  `json:"format_id"`
-	URL      string  `json:"url"`
-	Protocol string  `json:"protocol"`
-	VCodec   string  `json:"vcodec"`
-	ACodec   string  `json:"acodec"`
-	Height   int     `json:"height"`
-	Width    int     `json:"width"`
-	ABR      float64 `json:"abr"`
-	TBR      float64 `json:"tbr"`
-	Ext      string  `json:"ext"`
+	ID       string            `json:"format_id"`
+	URL      string            `json:"url"`
+	Protocol string            `json:"protocol"`
+	VCodec   string            `json:"vcodec"`
+	ACodec   string            `json:"acodec"`
+	Height   int               `json:"height"`
+	Width    int               `json:"width"`
+	ABR      float64           `json:"abr"`
+	TBR      float64           `json:"tbr"`
+	Ext      string            `json:"ext"`
+	HasDRM   bool              `json:"has_drm"`
+	Headers  map[string]string `json:"http_headers"`
 }
 
 func platformMetadata(ctx context.Context, c Config, raw string, g *networkGuard) (platformInfo, error) {
 	if _, err := validateURL(raw); err != nil {
 		return platformInfo{}, err
 	}
-	b, err := runCommand(ctx, c.YTDLP, "--ignore-config", "--no-plugin-dirs", "--no-remote-components", "--no-js-runtimes", "--js-runtimes", "node", "--no-playlist", "--no-warnings", "--socket-timeout", "15", "--retries", "1", "--extractor-retries", "1", "--proxy", g.ProxyURL(), "--skip-download", "--dump-single-json", "--", raw)
+	b, err := runCommand(ctx, c.YTDLP, "--ignore-config", "--no-plugin-dirs", "--no-remote-components", "--no-js-runtimes", "--js-runtimes", "node", "--no-playlist", "--playlist-end", "1", "--no-warnings", "--socket-timeout", "15", "--retries", "1", "--extractor-retries", "1", "--proxy", g.ProxyURL(), "--skip-download", "--dump-single-json", "--", raw)
 	var info platformInfo
 	if err != nil {
+		var failure *mediaProcessFailure
+		if errors.As(err, &failure) {
+			if failure.category == "platform_access" {
+				return info, errPlatformAccess
+			}
+			return info, errPlatformUnavailable
+		}
 		return info, err
 	}
 	if err = json.Unmarshal(b, &info); err != nil {
 		return info, err
 	}
-	if info.IsLive || info.Duration <= 0 || math.IsNaN(info.Duration) || math.IsInf(info.Duration, 0) || info.Duration > 30*24*3600 {
-		return info, errors.New("live streams and sources without duration are not supported")
+	return info, validatePlatformInfo(info)
+}
+func validatePlatformInfo(info platformInfo) error {
+	if info.Type == "playlist" || info.Type == "multi_video" || len(info.Entries) > 0 && string(info.Entries) != "null" {
+		return errCollection
 	}
-	return info, nil
+	if info.IsLive || info.LiveStatus == "is_live" || info.LiveStatus == "is_upcoming" || info.LiveStatus == "post_live" {
+		return errLiveSource
+	}
+	if info.HasDRM {
+		return errUnsupportedStream
+	}
+	if info.ID == "" || info.Title == "" || info.Duration <= 0 || math.IsNaN(info.Duration) || math.IsInf(info.Duration, 0) || info.Duration > 30*24*3600 {
+		return errPlatformUnavailable
+	}
+	return nil
 }
 
 func pickStreams(info platformInfo, quality, format string) ([]platformFormat, error) {
@@ -177,39 +208,51 @@ func pickStreams(info platformInfo, quality, format string) ([]platformFormat, e
 	if quality == "720p" {
 		capHeight = 720
 	}
-	var video, audio *platformFormat
+	var video, audio, fallbackVideo *platformFormat
 	for i := range info.Formats {
 		f := &info.Formats[i]
-		if f.Protocol != "https" || (f.Ext != "mp4" && f.Ext != "webm" && f.Ext != "m4a" && f.Ext != "mp3") {
+		if f.HasDRM || (f.Protocol != "https" && !isHLS(*f)) || (f.Ext != "mp4" && f.Ext != "webm" && f.Ext != "m4a" && f.Ext != "mp3" && f.Ext != "ts") {
 			continue
 		}
 		if _, err := validateURL(f.URL); err != nil {
 			continue
 		}
-		if f.VCodec != "none" && f.VCodec != "" && f.Height <= capHeight && (video == nil || f.Height > video.Height || (f.Height == video.Height && f.TBR > video.TBR)) {
+		// An omitted codec is unknown, not the extractor's explicit "none".
+		// Public progressive clips (notably Twitch) often omit both codec fields.
+		hasVideo := f.VCodec != "none" && (f.VCodec != "" || f.Height > 0 || f.Ext == "mp4" || f.Ext == "webm")
+		if hasVideo && f.Height <= capHeight && (video == nil || f.Height > video.Height || (f.Height == video.Height && f.TBR > video.TBR)) {
 			video = f
 		}
-		if f.ACodec != "none" && f.ACodec != "" && (f.VCodec == "none" || f.VCodec == "") && (audio == nil || f.ABR > audio.ABR) {
+		if hasVideo && f.Height > capHeight && (fallbackVideo == nil || f.Height < fallbackVideo.Height || f.Height == fallbackVideo.Height && f.TBR < fallbackVideo.TBR) {
+			fallbackVideo = f
+		}
+		if f.ACodec != "none" && (f.VCodec == "none" || !hasVideo) && (audio == nil || f.ABR > audio.ABR) {
 			audio = f
 		}
+	}
+	if video == nil {
+		video = fallbackVideo
 	}
 	if format == "mp3" {
 		if audio != nil {
 			return []platformFormat{*audio}, nil
 		}
-		if video != nil && video.ACodec != "none" && video.ACodec != "" {
+		if video != nil && video.ACodec != "none" {
 			return []platformFormat{*video}, nil
 		}
 	}
 	if format == "mp4" && video != nil {
-		if video.ACodec != "none" && video.ACodec != "" {
+		if video.ACodec != "none" {
 			return []platformFormat{*video}, nil
 		}
 		if audio != nil {
+			if isHLS(*video) || isHLS(*audio) {
+				return nil, errUnsupportedStream
+			}
 			return []platformFormat{*video, *audio}, nil
 		}
 	}
-	return nil, errors.New("no supported seekable HTTPS streams; this source requires an unsupported segmented or authenticated format")
+	return nil, errUnsupportedStream
 }
 
 func seconds(ms int64) string { return strconv.FormatFloat(float64(ms)/1000, 'f', 3, 64) }
@@ -259,23 +302,44 @@ func nearestKeyframe(ctx context.Context, c Config, path string, start int64, re
 	return found, nil
 }
 
-func exportMedia(ctx context.Context, c Config, inputs []string, remote bool, r Range, request ExportRequest, out string) (int64, int64, error) {
+type mediaInput struct {
+	Path     string
+	Remote   bool
+	OffsetMS int64
+}
+
+func exportMedia(ctx context.Context, c Config, paths []string, remote bool, r Range, request ExportRequest, out string) (int64, int64, error) {
+	inputs := make([]mediaInput, len(paths))
+	for i, path := range paths {
+		inputs[i] = mediaInput{Path: path, Remote: remote}
+	}
+	return exportInputs(ctx, c, inputs, r, request, out)
+}
+func exportInputs(ctx context.Context, c Config, inputs []mediaInput, r Range, request ExportRequest, out string) (int64, int64, error) {
+	if len(inputs) == 0 {
+		return 0, 0, errUnsupportedStream
+	}
 	start := r.StartMS
 	if request.CutMode == "copy" {
-		var err error
-		start, err = nearestKeyframe(ctx, c, inputs[0], start, remote)
+		local, err := nearestKeyframe(ctx, c, inputs[0].Path, start-inputs[0].OffsetMS, inputs[0].Remote)
 		if err != nil {
 			return 0, 0, err
 		}
+		start = local + inputs[0].OffsetMS
 	}
+
 	threads := env("FFMPEG_THREADS", "2")
 	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-filter_threads", threads, "-filter_complex_threads", threads}
-	protocols := "file"
-	if remote {
-		protocols = "http,tcp"
-	}
 	for _, input := range inputs {
-		args = append(args, "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats, "-threads", threads, "-ss", seconds(start), "-i", input)
+		protocols := "file"
+		if input.Remote {
+			protocols = "http,tcp"
+		}
+		localStart := start - input.OffsetMS
+		if localStart < 0 {
+			return 0, 0, errUnsupportedStream
+		}
+		args = append(args, "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats, "-threads", threads, "-ss", seconds(localStart), "-i", input.Path)
 	}
 	args = append(args, "-t", seconds(r.EndMS-start))
 	if request.Format == "mp3" {

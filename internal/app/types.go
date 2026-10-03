@@ -79,19 +79,24 @@ func env(key, fallback string) string {
 }
 
 type Source struct {
-	ID           string  `json:"id"`
-	Title        string  `json:"title"`
-	DurationMS   int64   `json:"duration_ms"`
-	Kind         string  `json:"kind"`
-	PreviewURL   *string `json:"preview_url"`
-	EmbedURL     *string `json:"embed_url"`
-	ThumbnailURL *string `json:"thumbnail_url"`
-	Width        int     `json:"width,omitempty"`
-	Height       int     `json:"height,omitempty"`
-	Path         string  `json:"-"`
-	URL          string  `json:"-"`
-	Owner        string  `json:"-"`
-	ProviderID   string  `json:"-"`
+	ID              string  `json:"id"`
+	Title           string  `json:"title"`
+	DurationMS      int64   `json:"duration_ms"`
+	Kind            string  `json:"kind"`
+	Provider        string  `json:"provider"`
+	ProviderVideoID *string `json:"provider_video_id"`
+	SourceURL       *string `json:"source_url"`
+	PreviewKind     string  `json:"preview_kind"`
+	ThumbnailPath   string  `json:"-"`
+	PreviewURL      *string `json:"preview_url"`
+	EmbedURL        *string `json:"embed_url"`
+	ThumbnailURL    *string `json:"thumbnail_url"`
+	Width           int     `json:"width,omitempty"`
+	Height          int     `json:"height,omitempty"`
+	Path            string  `json:"-"`
+	URL             string  `json:"-"`
+	Owner           string  `json:"-"`
+	ProviderID      string  `json:"-"`
 }
 
 type Range struct {

@@ -85,8 +85,8 @@ func parsePastedURL(raw string) (*url.URL, error) {
 	return url.Parse(raw)
 }
 
-// Ordinary HTTP/schemeless pastes are accepted only for genuine YouTube links.
-// The general core retains its existing explicit HTTPS policy for other media.
+// Schemeless/HTTP pastes are upgraded only for recognized platform hosts.
+// Unknown media addresses retain the explicit HTTPS policy and signed query.
 func normalizeSourceURL(raw string) (*url.URL, error) {
 	trimmed := strings.TrimSpace(raw)
 	u, err := parsePastedURL(trimmed)
@@ -95,6 +95,9 @@ func normalizeSourceURL(raw string) (*url.URL, error) {
 	}
 	if isYouTubeHost(u.Hostname()) || resemblesYouTubeHost(u.Hostname()) {
 		return normalizeYouTubeURL(trimmed)
+	}
+	if provider := providerForHost(u.Hostname()); provider != "" {
+		return normalizePlatformURL(u, provider)
 	}
 	return validateURL(trimmed)
 }
