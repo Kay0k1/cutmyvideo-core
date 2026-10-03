@@ -37,20 +37,25 @@ Hosted interfaces are developed separately. This repository contains a working i
 | Local file | Processed locally without PostgreSQL |
 | API upload | Staged on the server within the configured size limit |
 | Direct HTTPS media link | **The entire file is downloaded first**, then cut |
-| Platform page | yt-dlp resolves metadata; supported seekable MP4/WebM streams are read through a guarded HTTP Range relay |
-| HLS/DASH manifests, DRM, login-required videos, live streams | Unsupported in this release |
+| Public recorded platform video/clip | yt-dlp verifies metadata; accessible MP4/WebM streams use a guarded HTTP Range relay |
+| Completed HLS recording, including Twitch/Rutube | Only selected segments and preceding decoder context are staged; the original timeline is preserved |
+| DRM, login-required videos, live streams, DASH, separate HLS A/V | Explicitly unsupported |
 
-Platform streams must be public, require no cookies, and support seeking. A platform can reject requests or stop exposing a suitable stream. yt-dlp's own platform support does not guarantee support by this engine.
+The catalogue recognizes **15 providers**: YouTube, Twitch, Rutube, TikTok, Instagram, Vimeo, Dailymotion, VK, Facebook, X, Reddit, OK, Bilibili, Streamable and Rumble. Recognition is not a guarantee that every video is accessible. Import verifies the individual recording, duration and available media formats. Region restrictions, platform changes and anti-bot challenges may block a public link; account cookies, DRM and restricted videos are not bypassed.
 
-YouTube accepts `watch?v=…`, `youtu.be/…`, `shorts/…`, `live/…` links to **completed recordings**, and `embed/…`, including mobile, music, and `youtube-nocookie.com` domains. Ordinary HTTP or schemeless pasted links are upgraded to `https://www.youtube.com/watch?v=…` only for allowed YouTube hosts. Playlist, tracking, and timestamp parameters are removed; export ranges are specified separately. Unknown subdomains, spoofed hosts, malformed video IDs, credentials, and nonstandard ports are rejected before network access. Other sources still require explicit HTTPS URLs.
+**Real import/export verified:** YouTube, a completed Twitch VOD, a Twitch clip and a Rutube recording. Streamable metadata was verified. The other adapters have URL/yt-dlp contract coverage, not a universal live-availability claim. Public Vimeo and TikTok examples were unavailable in the test environment. See the [provider catalogue](docs/providers.md) for accepted links, evidence and limitations.
 
-Selective reads may transfer more bytes than the final clip. Each platform job has a total transfer budget; exceeding it stops processing. The engine does not silently download an unlimited long video as a fallback.
+YouTube accepts watch, short-link, Shorts, recorded-live and embed forms, including mobile/music/nocookie domains. Twitch accepts `/videos/ID` and clip links; channel/live links are rejected with a recording suggestion. Rutube accepts ordinary video, Shorts and embed links. HTTP/schemeless pastes on recognized platform hosts are upgraded to HTTPS before fetching. YouTube playlist/time/tracking parameters are removed; access-essential parameters on other platform pages are preserved. Unknown/direct inputs require explicit HTTPS and keep their original signed query.
+
+HLS processing requires a finite `ENDLIST` recording without encryption. Selected MPEG-TS or fMP4 media bytes are staged locally; FFmpeg never opens an untrusted playlist. Changed init maps or discontinuities inside a fragment, byte ranges, low-latency segments and separate HLS renditions are refused. Separate renditions cannot safely be assumed to share the same audio/video clock.
+
+Selective reads can transfer more bytes than the final clip. A shared byte budget covers the entire job and all its ranges, alongside time/storage limits. No unlimited long-video or live download is started as a fallback. Direct file links still stage the entire file within the source limit.
 
 **Stream copy:** the start moves to a nearby preceding keyframe; the end depends on packet boundaries. Actual bounds are returned with the artifact. Input codecs must fit MP4; otherwise use accurate mode. A local file keeps its source resolution in copy mode; reducing resolution requires re-encoding.
 
 **Accurate mode:** video is encoded to H.264/AAC. MP3 export also re-encodes audio; arbitrary source audio cannot be preserved as MP3.
 
-Uploaded and direct-file previews serve source bytes. Playback depends on browser codec support. YouTube sources expose an embed URL; other platforms may require manual timecode entry without a player.
+Uploaded and direct-file previews serve source bytes. Playback depends on browser codec support. YouTube sources expose an embed. Other platforms expose a source card with title, provider, full duration, original page and an optional protected thumbnail; their ranges are entered manually in this release. The source duration never becomes the length of an arbitrary preview fragment.
 
 ## Quick start: local clip
 
@@ -123,7 +128,7 @@ The response contains the job ID in `id`. Poll `GET /api/v1/jobs/{id}` and downl
 | `FFMPEG_THREADS` | 2 |
 | `FFMPEG_PATH` / `FFPROBE_PATH` / `YTDLP_PATH` | Corresponding executable names |
 
-`MAX_OWNER_BYTES` applies to staged source files; results count toward the global storage limit. A session allows 20 source records and one concurrent source preparation. The API allows four concurrent source preparations globally. Admission reserves the configured maximum source size. Cleanup runs in the worker every five minutes; active jobs pin their required files.
+`MAX_OWNER_BYTES` applies to staged source files and thumbnails; results count toward the global storage limit. A session allows 20 source records and one concurrent source preparation. The API allows four concurrent source preparations globally. Admission reserves the configured maximum source size. Cleanup runs in the worker every five minutes; active jobs pin their required files.
 
 The MVP supports **one API instance and one worker**. Durable leases and write fencing protect job recovery, but rate and disk admission limits are not distributed across API instances. Scale-out requires shared resource reservations. PostgreSQL stores durable state; source files and artifacts use disk. An S3 adapter is not yet implemented.
 
@@ -158,7 +163,7 @@ TEST_DATABASE_URL=postgres://user:password@localhost:5432/test_db?sslmode=disabl
 
 Media tests skip without FFmpeg; database integration tests skip without `TEST_DATABASE_URL`. CI installs both and runs all checks. Database tests create an isolated temporary schema.
 
-Tests cover real MP4/MP3 outputs, keyframe shifts, blocked network addresses and playlists, ownership, idempotency, cancellation, concurrent claiming, fencing, and retention.
+Tests cover real MP4/MP3, keyframe shifts, first-frame accuracy of MPEG-TS/fMP4 HLS fragments, original audio delay, global timestamps, blocked addresses/tags, limits and cleanup. PostgreSQL tests cover owners, thumbnails, idempotency, cancellation, claims, leases and retention. Ordinary tests make no requests to public platforms.
 
 [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Security reports](SECURITY.md)
 

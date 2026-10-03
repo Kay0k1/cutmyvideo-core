@@ -5,6 +5,11 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 ## Unreleased
 
 ### Added
+- Recognized page adapters for15 platforms, including Twitch VODs/clips, Rutube, TikTok, Instagram Reels and YouTube Shorts, with secure HTTP/schemeless normalization on known hosts and preserved access-essential parameters.
+- Additive provider identity, source-page and preview-kind metadata, plus bounded owner-protected JPEG/PNG thumbnails with source retention.
+- Finite unencrypted HLS range staging for combined MPEG-TS/fMP4 streams and audio-only export. Every manifest/variant/map/segment uses guarded HTTPS/public-IP checks, a shared byte budget and bounded parsing.
+- Original-timeline HLS exports account for presentation timestamps after local remux; tests verify first decoded frames, nonzero keyframe-copy bounds and an intentional audio delay against original source samples.
+- Explicit live/collection/access/unavailability/unsupported-stream errors; separate HLS renditions and unsupported tags fail without a long-download fallback.
 - Initial cutmyvideo-core Go engine, local `cutmy clip` CLI, HTTP API, and independent media worker.
 - Uploaded media, bounded full staging of direct HTTPS media, and supported progressive platform streams via yt-dlp and a guarded range relay.
 - Multiple manual intervals with separate H.264/AAC MP4 or MP3 outputs.
@@ -24,4 +29,4 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 
 ### Scope
 - First release supports one API and one worker with local disk storage.
-- AI, MCP, Telegram, Mini Apps, HLS/DASH manifest processing, DRM, authenticated sources, distributed quotas, and S3 are outside this MVP.
+- AI, MCP, Telegram, Mini Apps, live capture, DASH fragments, encrypted/separate-rendition HLS, DRM, authenticated sources, distributed quotas, and S3 are outside this MVP.

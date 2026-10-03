@@ -47,7 +47,7 @@ paths:
                 url:
                   type: string
                   maxLength: 8192
-                  description: Public HTTPS media URL or allowed YouTube video link. YouTube watch, short-link, Shorts, recorded-live, and embed forms accept HTTP/schemeless pastes and normalize to an HTTPS watch URL without playlist, tracking, or timestamp parameters.
+                  description: Public HTTPS media URL or recognized platform recording/clip link. Known platform hosts accept HTTP/schemeless pastes and normalize to HTTPS before fetching. YouTube watch, short-link, Shorts, recorded-live and embed URLs become a canonical watch link; access-essential parameters for other platforms are preserved. Actual live and collection links are rejected.
                   examples: ['https://www.youtube.com/watch?v=aqz-KE-bpKQ', 'youtu.be/aqz-KE-bpKQ', 'https://cdn.example.com/interview.mp4']
       responses:
         '201': {$ref: '#/components/responses/Source'}
