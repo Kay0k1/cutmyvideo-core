@@ -63,6 +63,8 @@ Failed/cancelled items have an additive optional `error_code`, stored with the i
 
 Worker shutdown and lost lease/database access keep unfinished work recoverable through the existing bounded lease attempts. A job's own processing timeout remains terminal. Explicit cancellation wins a concurrent failure for pending items while already finished items keep their results and diagnostics. Final worker database reads/writes are bounded to five seconds.
 
+Job saves, heartbeats and artifact registration acquire the job row lock before checking the current lease against wall-clock time. A worker that waited past lease expiry cannot save or renew its old lease; unfinished work remains available for recovery.
+
 Optional `items[].progress_ms` measures encoded media time within the requested
 range. Legacy or not-yet-measured items omit it; a refreshed input can reset it.
 It is not elapsed wall time or an ETA. Even full encoding progress still needs

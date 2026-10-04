@@ -221,7 +221,12 @@ WHERE id=(SELECT id FROM candidate) RETURNING id,owner`, token).Scan(&id, &owner
 
 func (s *Store) Heartbeat(ctx context.Context, id, token string) (bool, error) {
 	var cancelled bool
-	err := s.DB.QueryRow(ctx, `UPDATE jobs SET lease_until=now()+interval '45 seconds' WHERE id=$1 AND lease_token=$2 AND status='running' RETURNING cancel_requested`, id, token).Scan(&cancelled)
+	// Lock first, then check wall-clock expiry on the materialized row. Even a
+	// volatile WHERE predicate can otherwise be evaluated before a row-lock wait.
+	err := s.DB.QueryRow(ctx, `WITH leased AS MATERIALIZED (
+ SELECT id,lease_until FROM jobs WHERE id=$1 AND lease_token=$2 AND status='running' FOR UPDATE
+) UPDATE jobs SET lease_until=clock_timestamp()+interval '45 seconds'
+WHERE id IN (SELECT id FROM leased WHERE lease_until>clock_timestamp()) RETURNING cancel_requested`, id, token).Scan(&cancelled)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return true, ErrNotFound
 	}
@@ -230,7 +235,9 @@ func (s *Store) Heartbeat(ctx context.Context, id, token string) (bool, error) {
 
 func (s *Store) SaveJob(ctx context.Context, j Job, token string) error {
 	items, _ := json.Marshal(j.Items)
-	tag, err := s.DB.Exec(ctx, `UPDATE jobs SET
+	tag, err := s.DB.Exec(ctx, `WITH leased AS MATERIALIZED (
+ SELECT id,lease_until FROM jobs WHERE id=$1 AND lease_token=$2 AND status='running' FOR UPDATE
+) UPDATE jobs SET
 status=CASE WHEN cancel_requested AND $3 IN ('succeeded','failed','cancelled') THEN 'cancelled' ELSE $3 END,
 stage=$4,message=CASE WHEN cancel_requested AND $3 IN ('succeeded','failed','cancelled') THEN 'Cancelled' ELSE $5 END,
 items=CASE WHEN cancel_requested AND $3 IN ('succeeded','failed','cancelled') THEN (
@@ -240,7 +247,7 @@ items=CASE WHEN cancel_requested AND $3 IN ('succeeded','failed','cancelled') TH
  ) THEN item || '{"status":"cancelled","message":"Cancelled","error_code":"cancelled"}'::jsonb ELSE item END)
  FROM jsonb_array_elements($6::jsonb) item
 ) ELSE $6::jsonb END,updated_at=now()
-WHERE id=$1 AND lease_token=$2 AND status='running' AND lease_until>now()`, j.ID, token, j.Status, j.Stage, j.Message, items)
+WHERE id IN (SELECT id FROM leased WHERE lease_until>clock_timestamp())`, j.ID, token, j.Status, j.Stage, j.Message, items)
 	if err == nil && tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
@@ -259,7 +266,11 @@ func (s *Store) Cancel(ctx context.Context, id, owner string) error {
 }
 
 func (s *Store) AddArtifact(ctx context.Context, owner, job, path, token string, a Artifact) error {
-	tag, err := s.DB.Exec(ctx, `INSERT INTO artifacts(id,owner,job_id,path,filename,size_bytes,actual_start_ms,actual_end_ms) SELECT $1,$2,$3,$4,$5,$6,$7,$8 WHERE EXISTS(SELECT 1 FROM jobs WHERE id=$3 AND owner=$2 AND lease_token=$9 AND lease_until>now() AND status='running' AND cancel_requested=false) ON CONFLICT(id) DO NOTHING`, a.ID, owner, job, path, a.Filename, a.SizeBytes, a.ActualStartMS, a.ActualEndMS, token)
+	tag, err := s.DB.Exec(ctx, `WITH leased AS MATERIALIZED (
+ SELECT id,lease_until FROM jobs WHERE id=$3 AND owner=$2 AND lease_token=$9 AND status='running' AND cancel_requested=false FOR UPDATE
+) INSERT INTO artifacts(id,owner,job_id,path,filename,size_bytes,actual_start_ms,actual_end_ms)
+SELECT $1,$2,$3,$4,$5,$6,$7,$8 FROM leased WHERE lease_until>clock_timestamp()
+ON CONFLICT(id) DO NOTHING`, a.ID, owner, job, path, a.Filename, a.SizeBytes, a.ActualStartMS, a.ActualEndMS, token)
 	if err == nil && tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
