@@ -487,13 +487,15 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 	return start, start + duration, nil
 }
 
+var errSourceTooLarge = errors.New("source exceeds size limit")
+
 func copyBounded(dst io.Writer, src io.Reader, limit int64) error {
 	n, err := io.Copy(dst, io.LimitReader(src, limit+1))
 	if err != nil {
 		return err
 	}
 	if n > limit {
-		return errors.New("source exceeds size limit")
+		return errSourceTooLarge
 	}
 	return nil
 }

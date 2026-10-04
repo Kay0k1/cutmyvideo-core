@@ -54,6 +54,7 @@ paths:
         default: {$ref: '#/components/responses/Error'}
   /api/v1/uploads:
     post:
+      description: Uploads one file within the configured SOURCE_TIMEOUT, including quota admission, multipart body transfer and media inspection. Timeout returns 504 source_timeout; interrupted uploads return 400 invalid_upload; oversize uploads return 413 source_too_large.
       requestBody:
         required: true
         content:

@@ -36,6 +36,13 @@ type rateEntry struct {
 	reset time.Time
 }
 
+var (
+	errSourceLimit      = &sourceProblem{"source_limit", "This session has reached its source limit; wait for older sources to expire"}
+	errSourceBusy       = &sourceProblem{"source_busy", "Wait for the current source preparation or cancel it before opening another"}
+	errSourceStorage    = &sourceProblem{"storage_limit", "Source storage is full; use a smaller file or wait for older files to expire"}
+	errSourceServerBusy = &sourceProblem{"server_busy", "The server is preparing other sources; try again shortly"}
+)
+
 func NewServer(c Config, s *Store) *Server {
 	return &Server{Config: c, Store: s, preparing: map[string]bool{}, rate: map[string]*rateEntry{}, slots: make(chan struct{}, 4)}
 }
@@ -177,13 +184,38 @@ func (s *Server) withSession(next ownerHandler) http.HandlerFunc {
 }
 
 func (s *Server) beginSource(ctx context.Context, owner string) error {
+	// Reserve the owner's preparation slot before reading quota state. A second
+	// request must not carry an old count/size past the first request's completion.
+	s.mu.Lock()
+	if s.preparing[owner] {
+		s.mu.Unlock()
+		return errSourceBusy
+	}
+	if !storageAvailableContext(ctx, s.Config, int64(len(s.preparing)+1)*s.Config.MaxSourceBytes) {
+		s.mu.Unlock()
+		return errSourceStorage
+	}
+	select {
+	case s.slots <- struct{}{}:
+		s.preparing[owner] = true
+		s.mu.Unlock()
+	default:
+		s.mu.Unlock()
+		return errSourceServerBusy
+	}
+	accepted := false
+	defer func() {
+		if !accepted {
+			s.endSource(owner)
+		}
+	}()
 	var count int
 	err := s.Store.DB.QueryRow(ctx, `SELECT count(*) FROM sources WHERE owner=$1`, owner).Scan(&count)
 	if err != nil {
 		return err
 	}
 	if count >= 20 {
-		return errors.New("source_limit")
+		return errSourceLimit
 	}
 	rows, err := s.Store.DB.Query(ctx, `SELECT path FROM sources WHERE owner=$1 AND path<>'' UNION ALL SELECT thumbnail_path FROM sources WHERE owner=$1 AND thumbnail_path<>''`, owner)
 	if err != nil {
@@ -205,22 +237,24 @@ func (s *Server) beginSource(ctx context.Context, owner string) error {
 		return err
 	}
 	if ownedBytes+s.Config.MaxSourceBytes > s.Config.MaxOwnerBytes {
-		return errors.New("storage_limit")
+		return errSourceStorage
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.preparing[owner] {
-		return errors.New("source_busy")
-	}
-	if !storageAvailableContext(ctx, s.Config, int64(len(s.preparing)+1)*s.Config.MaxSourceBytes) {
-		return errors.New("storage_limit")
-	}
-	select {
-	case s.slots <- struct{}{}:
-		s.preparing[owner] = true
-		return nil
-	default:
-		return errors.New("server_busy")
+	accepted = true
+	return nil
+}
+
+func sourceTimedOut(ctx context.Context, err error) bool {
+	var networkError net.Error
+	return errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) || errors.As(err, &networkError) && networkError.Timeout()
+}
+
+func writeSourceAdmissionError(w http.ResponseWriter, ctx context.Context, err error) {
+	if sourceTimedOut(ctx, err) {
+		writeError(w, 504, "source_timeout", "Source preparation timed out; try again")
+	} else if problem := problemFromError(err); problem != nil {
+		writeError(w, 429, problem.code, problem.message)
+	} else {
+		internalError(w, err)
 	}
 }
 func (s *Server) endSource(owner string) {
@@ -262,13 +296,13 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 		writeError(w, 400, "invalid_url", "The link is too long")
 		return
 	}
-	if err = s.beginSource(r.Context(), owner); err != nil {
-		writeError(w, 429, "source_limit", "Wait for the current source or use fewer sources")
+	ctx, cancel := context.WithTimeout(r.Context(), s.Config.SourceTimeout)
+	defer cancel()
+	if err = s.beginSource(ctx, owner); err != nil {
+		writeSourceAdmissionError(w, ctx, err)
 		return
 	}
 	defer s.endSource(owner)
-	ctx, cancel := context.WithTimeout(r.Context(), s.Config.SourceTimeout)
-	defer cancel()
 	v := Source{ID: newID("src"), Owner: owner, URL: u.String(), Kind: "direct"}
 	platform := isPlatformHost(u.Hostname())
 	if !platform {
@@ -278,7 +312,11 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 		defer client.CloseIdleConnections()
 		resp, e := client.Do(req)
 		if e != nil {
-			writeError(w, 422, "source_unavailable", "The source cannot be reached or its address is blocked")
+			if sourceTimedOut(ctx, e) {
+				writeError(w, 504, "source_timeout", "Source download timed out; try again or upload your file")
+			} else {
+				writeError(w, 422, "source_unavailable", "The source cannot be reached or its address is blocked")
+			}
 			return
 		}
 		if resp.StatusCode != 200 {
@@ -309,7 +347,13 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 				}
 			}()
 			if e = copyBounded(file, resp.Body, s.Config.MaxSourceBytes); e != nil {
-				writeError(w, 413, "source_limit", "Download failed or exceeded the source limit")
+				if sourceTimedOut(ctx, e) {
+					writeError(w, 504, "source_timeout", "Source download timed out; try again or upload your file")
+				} else if errors.Is(e, errSourceTooLarge) {
+					writeError(w, 413, "source_too_large", "The source exceeds the download limit")
+				} else {
+					writeError(w, 422, "source_unavailable", "Source download was interrupted; try again or upload your file")
+				}
 				return
 			}
 			if e = file.Close(); e != nil {
@@ -322,7 +366,11 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 				v.Title = "Video"
 			}
 			if e = s.completeLocalSource(ctx, &v); e != nil {
-				writeError(w, 422, "unsupported_media", "This file has no supported finite video or audio stream")
+				if sourceTimedOut(ctx, e) {
+					writeError(w, 504, "source_timeout", "Source inspection timed out; try again or upload your file")
+				} else {
+					writeError(w, 422, "unsupported_media", "This file has no supported finite video or audio stream")
+				}
 				return
 			}
 			if e = s.Store.AddSource(ctx, v); e != nil {
@@ -470,8 +518,20 @@ func inspectCachedPlatformSource(ctx context.Context, g *networkGuard, info plat
 }
 
 func (s *Server) upload(w http.ResponseWriter, r *http.Request, owner string) {
-	if err := s.beginSource(r.Context(), owner); err != nil {
-		writeError(w, 429, "source_limit", "Wait for the current source or use fewer sources")
+	ctx, cancel := context.WithTimeout(r.Context(), s.Config.SourceTimeout)
+	defer cancel()
+	r = r.WithContext(ctx)
+	// Request contexts do not interrupt a server-side Body.Read. Set a socket
+	// deadline as well so a stalled multipart body cannot occupy a slot forever.
+	controller := http.NewResponseController(w)
+	deadline, _ := ctx.Deadline()
+	if err := controller.SetReadDeadline(deadline); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		internalError(w, err)
+		return
+	}
+	defer controller.SetReadDeadline(time.Time{})
+	if err := s.beginSource(ctx, owner); err != nil {
+		writeSourceAdmissionError(w, ctx, err)
 		return
 	}
 	defer s.endSource(owner)
@@ -483,7 +543,11 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request, owner string) {
 	}
 	part, err := reader.NextPart()
 	if err != nil || part.FormName() != "file" || part.FileName() == "" {
-		writeError(w, 400, "invalid_upload", "Choose a file to upload")
+		if sourceTimedOut(ctx, err) {
+			writeError(w, 504, "source_timeout", "Upload timed out; try again with a smaller file")
+		} else {
+			writeError(w, 400, "invalid_upload", "Choose a file to upload")
+		}
 		return
 	}
 	v := Source{ID: newID("src"), Owner: owner, Kind: "upload", Title: filepath.Base(part.FileName())}
@@ -503,7 +567,14 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request, owner string) {
 		}
 	}()
 	if err = copyBounded(file, part, s.Config.MaxSourceBytes); err != nil {
-		writeError(w, 413, "source_too_large", "The upload failed or exceeds the file size limit")
+		var tooLarge *http.MaxBytesError
+		if sourceTimedOut(ctx, err) {
+			writeError(w, 504, "source_timeout", "Upload timed out; try again with a smaller file")
+		} else if errors.Is(err, errSourceTooLarge) || errors.As(err, &tooLarge) {
+			writeError(w, 413, "source_too_large", "The upload exceeds the file size limit")
+		} else {
+			writeError(w, 400, "invalid_upload", "The upload was interrupted; try uploading the file again")
+		}
 		return
 	}
 	if err = file.Close(); err != nil {
@@ -514,14 +585,20 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request, owner string) {
 		if extra != nil {
 			extra.Close()
 		}
-		writeError(w, 400, "invalid_upload", "Upload one file at a time")
+		if sourceTimedOut(ctx, e) {
+			writeError(w, 504, "source_timeout", "Upload timed out; try again with a smaller file")
+		} else {
+			writeError(w, 400, "invalid_upload", "Upload one file at a time")
+		}
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), s.Config.SourceTimeout)
-	defer cancel()
 	v.Path = path
 	if err = s.completeLocalSource(ctx, &v); err != nil {
-		writeError(w, 422, "unsupported_media", "This file has no supported finite video or audio stream")
+		if sourceTimedOut(ctx, err) {
+			writeError(w, 504, "source_timeout", "Source inspection timed out; try again with a smaller file")
+		} else {
+			writeError(w, 422, "unsupported_media", "This file has no supported finite video or audio stream")
+		}
 		return
 	}
 	if err = s.Store.AddSource(ctx, v); err != nil {

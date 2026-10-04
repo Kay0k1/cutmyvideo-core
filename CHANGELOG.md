@@ -28,6 +28,8 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 - Bounded private subprocess diagnostics classify failures into fixed categories without logging raw CDN URLs, credentials, or media paths; an unexplained nonzero exit is not automatically retried.
 
 ### Fixed
+- Reserve source preparation before quota reads and preserve distinct capacity, storage and database failures in API responses.
+- Bound source admission, multipart transfer and inspection with the configured source timeout; remove stalled partial uploads and distinguish interrupted transfers from oversized media.
 - Check worker lease expiry after acquiring the job row lock; reject stale saves, heartbeats and artifact registration even when database lock waits outlive the lease.
 - Share connection time among ordered address attempts so a slow IPv6 address leaves time for IPv4 within the original DNS/dial deadline.
 - Atomically register artifacts and completed job items under lease fencing; retain files on uncertain commit acknowledgements for database recovery.

@@ -4,6 +4,8 @@ Base path: `/api/v1`. Timestamps are integer milliseconds on the original source
 
 Initialize a session with `GET /session`. The HttpOnly cookie is a bearer capability: keep it private and send it with every subsequent request, including media and downloads. Each request checks ownership; foreign resources return the same 404 as absent ones. Source preparation currently blocks until metadata/staging completes, bounded by the source timeout. Export is asynchronous.
 
+`SOURCE_TIMEOUT` covers quota admission, the upload/download body, and media inspection together. A stalled upload returns `504 source_timeout` and removes its partial file. Increase this configured budget when allowing large uploads over slow connections. An interrupted upload returns `400 invalid_upload`; exceeding the byte limit returns `413 source_too_large`.
+
 | Method | Route | Response |
 |---|---|---|
 | GET | `/session` | `{ok:true}` and cookie |
@@ -83,6 +85,8 @@ A download capability stays protected by the cookie; artifact IDs alone do not g
 ```
 
 Common codes: `session_required`, `invalid_request`, `invalid_url`, `invalid_youtube_url`, `invalid_source_url`, `unsupported_collection`, `live_not_supported`, `platform_access_required`, `platform_unavailable`, `unsupported_stream`, `source_unavailable`, `source_timeout`, `unsupported_media`, `source_too_large`, `source_limit`, `invalid_export`, `job_limit`, `rate_limit`, `origin_rejected`, `not_found`, `expired`, `internal`.
+
+Source admission returns distinct `429` codes: `source_limit` for the session's source count, `source_busy` for another preparation by the same owner, `server_busy` for all preparation slots being occupied, and `storage_limit` for disk/session storage admission. Database failures remain `500 internal`. Owner preparation is reserved before reading quota state, and unsuccessful admission releases its reservation.
 
 Mutation requests are same-origin. Browser requests from another origin are rejected; non-browser clients without Origin can use the cookie API. There are no wildcard CORS grants. Polling, source admission, export creation, and per-IP mutation limits are enforced independently.
 
