@@ -13,6 +13,11 @@ Run `go test ./...`, `go vet ./...`, and the documented PostgreSQL integration
 tests. Media tests use synthetic fixtures generated with FFmpeg; do not commit
 large videos, user uploads, credentials, or downloaded third-party content.
 
+Offline metadata regressions use yt-dlp `2026.08.19`, matching the runtime pin.
+Set `CUTMY_TEST_YTDLP` to that executable or install it on `PATH`; these tests
+skip only when no extractor is installed and no path was configured. CI installs
+the checksum-verified version and runs them without requesting public videos.
+
 Changes to source fetching must test URL validation, redirects, bounded transfers,
 and session isolation. Changes to trimming must distinguish requested boundaries
 from actual boundaries and verify output streams and duration.

@@ -176,7 +176,7 @@ func platformMetadata(ctx context.Context, c Config, raw string, g *networkGuard
 	if _, err := validateURL(raw); err != nil {
 		return platformInfo{}, err
 	}
-	b, err := runCommand(ctx, c.YTDLP, "--ignore-config", "--no-plugin-dirs", "--no-remote-components", "--no-js-runtimes", "--js-runtimes", "node", "--no-playlist", "--playlist-end", "1", "--no-warnings", "--socket-timeout", "15", "--retries", "1", "--extractor-retries", "1", "--proxy", g.ProxyURL(), "--skip-download", "--dump-single-json", "--", raw)
+	b, err := runCommand(ctx, c.YTDLP, platformMetadataArgs(raw, g.ProxyURL())...)
 	var info platformInfo
 	if err != nil {
 		var failure *mediaProcessFailure
@@ -193,6 +193,13 @@ func platformMetadata(ctx context.Context, c Config, raw string, g *networkGuard
 	}
 	return info, validatePlatformInfo(info)
 }
+
+func platformMetadataArgs(raw, proxy string) []string {
+	// Caption URL matrices are unused and can exceed the subprocess JSON limit.
+	// Run before simulation; keep the complete root envelope and stream metadata.
+	return []string{"--ignore-config", "--no-plugin-dirs", "--no-remote-components", "--no-js-runtimes", "--js-runtimes", "node", "--no-playlist", "--playlist-end", "1", "--no-warnings", "--socket-timeout", "15", "--retries", "1", "--extractor-retries", "1", "--proxy", proxy, "--parse-metadata", "pre_process::(?P<automatic_captions>)(?P<subtitles>)", "--skip-download", "--dump-single-json", "--", raw}
+}
+
 func validatePlatformInfo(info platformInfo) error {
 	if info.Type == "playlist" || info.Type == "multi_video" || len(info.Entries) > 0 && string(info.Entries) != "null" {
 		return errCollection

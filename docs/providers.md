@@ -4,6 +4,8 @@ The catalogue contains 15 recognized platforms. Recognition selects a page adapt
 
 The runtime pins [yt-dlp 2026.08.19](https://github.com/yt-dlp/yt-dlp/releases/tag/2026.08.19). Its [extractor list](https://github.com/yt-dlp/yt-dlp/blob/2026.08.19/supportedsites.md) is a discovery reference, not a successful-import claim. Closed accounts, memberships, passwords, DRM, regional restrictions, anti-bot challenges and expired links can prevent import. No account cookies or authentication-bypass configuration is offered.
 
+Extractor JSON responses are bounded to 8 MiB. The fixed `pre_process` metadata step clears unused subtitle and automatic-caption URL matrices before `--dump-single-json`; videos with many translated caption variants can otherwise exceed that limit. Recording identity, duration, all stream formats/headers and playlist or multi-video envelopes remain intact. The same inspection runs during import and worker processing. Offline regressions use the pinned real extractor with generated oversized fixtures and no platform requests.
+
 ## Catalogue and accepted page forms
 
 Ordinary HTTP and schemeless pastes on recognized hosts are upgraded to HTTPS. URL credentials and nonstandard ports are refused. Genuine hostnames are explicitly recognized; a name containing a platform domain is not sufficient. Unsupported channels/collections are rejected before extraction. Tracking/player offsets are removed; access-essential page parameters are preserved. Exports use their separately supplied time ranges.
