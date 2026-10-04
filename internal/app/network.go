@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
@@ -17,7 +18,21 @@ import (
 	"time"
 )
 
-var forbiddenNetworks = []string{"0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24", "192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4", "::/128", "::1/128", "fc00::/7", "fe80::/10", "ff00::/8", "2001:db8::/32", "2001::/32", "2002::/16", "64:ff9b::/96", "64:ff9b:1::/48"}
+var forbiddenNetworks = func() []netip.Prefix {
+	values := [...]string{"0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24", "192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4", "::/128", "::1/128", "fc00::/7", "fe80::/10", "ff00::/8", "2001:db8::/32", "2001::/32", "2002::/16", "64:ff9b::/96", "64:ff9b:1::/48"}
+	prefixes := make([]netip.Prefix, len(values))
+	for i, value := range values {
+		prefixes[i] = netip.MustParsePrefix(value)
+	}
+	return prefixes
+}()
+
+const networkDialTimeout = 15 * time.Second
+const relayBufferSize = 32 << 10
+
+// Only fixed-size arrays enter the pool; upstream sizes never control retained
+// memory. Each active response owns its buffer until its copy has completed.
+var relayBuffers = sync.Pool{New: func() any { return new([relayBufferSize]byte) }}
 
 func publicIP(ip net.IP) bool {
 	a, ok := netip.AddrFromSlice(ip)
@@ -28,8 +43,8 @@ func publicIP(ip net.IP) bool {
 	if !a.IsGlobalUnicast() || a.IsPrivate() {
 		return false
 	}
-	for _, value := range forbiddenNetworks {
-		if netip.MustParsePrefix(value).Contains(a) {
+	for _, prefix := range forbiddenNetworks {
+		if prefix.Contains(a) {
 			return false
 		}
 	}
@@ -49,6 +64,11 @@ func validateURL(raw string) (*url.URL, error) {
 }
 
 func safeDial(ctx context.Context, network, address string) (net.Conn, error) {
+	d := net.Dialer{Timeout: networkDialTimeout, KeepAlive: 30 * time.Second}
+	return dialPublic(ctx, network, address, net.DefaultResolver.LookupIP, d.DialContext)
+}
+
+func dialPublic(ctx context.Context, network, address string, lookup func(context.Context, string, string) ([]net.IP, error), dial func(context.Context, string, string) (net.Conn, error)) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, err
@@ -56,7 +76,11 @@ func safeDial(ctx context.Context, network, address string) (net.Conn, error) {
 	if port != "443" && port != "80" {
 		return nil, errors.New("network port is not allowed")
 	}
-	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+	// This deadline covers DNS and all fallback addresses together. Canceling the
+	// dial context after success does not close the established connection.
+	ctx, cancel := context.WithTimeout(ctx, networkDialTimeout)
+	defer cancel()
+	ips, err := lookup(ctx, "ip", host)
 	if err != nil {
 		return nil, err
 	}
@@ -68,9 +92,11 @@ func safeDial(ctx context.Context, network, address string) (net.Conn, error) {
 			return nil, errors.New("private or reserved network addresses are not allowed")
 		}
 	}
-	d := net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}
 	for _, ip := range ips {
-		conn, dialErr := d.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		conn, dialErr := dial(ctx, network, net.JoinHostPort(ip.String(), port))
 		if dialErr == nil {
 			return conn, nil
 		}
@@ -101,6 +127,8 @@ type networkGuard struct {
 	streams     map[string]relaySource
 	bytes       atomic.Int64
 	limit       int64
+	ctx         context.Context
+	cancel      context.CancelFunc
 }
 
 func newNetworkGuard(limit int64) (*networkGuard, error) {
@@ -113,13 +141,18 @@ func newNetworkGuard(limit int64) (*networkGuard, error) {
 		l.Close()
 		return nil, err
 	}
-	g := &networkGuard{listener: l, client: safeClient(), base: "http://" + l.Addr().String(), token: hex.EncodeToString(b), streams: map[string]relaySource{}, limit: limit}
-	g.server = &http.Server{Handler: g, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second}
+	ctx, cancel := context.WithCancel(context.Background())
+	g := &networkGuard{listener: l, client: safeClient(), base: "http://" + l.Addr().String(), token: hex.EncodeToString(b), streams: map[string]relaySource{}, limit: limit, ctx: ctx, cancel: cancel}
+	g.server = &http.Server{Handler: g, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	go func() { _ = g.server.Serve(l) }()
 	return g, nil
 }
 
-func (g *networkGuard) Close() { _ = g.server.Close(); g.client.CloseIdleConnections() }
+func (g *networkGuard) Close() {
+	g.cancel()
+	_ = g.server.Close()
+	g.client.CloseIdleConnections()
+}
 func (g *networkGuard) ProxyURL() string {
 	// urllib omits Proxy-Authorization when either credential is empty.
 	return "http://" + g.token + ":" + g.token + "@" + g.listener.Addr().String()
@@ -237,7 +270,9 @@ func (g *networkGuard) forward(w http.ResponseWriter, r *http.Request, u *url.UR
 	if method == "HEAD" {
 		return
 	}
-	buf := make([]byte, 32<<10)
+	buffer := relayBuffers.Get().(*[relayBufferSize]byte)
+	defer relayBuffers.Put(buffer)
+	buf := buffer[:]
 	for {
 		n, readErr := resp.Body.Read(buf)
 		if n > 0 {
@@ -276,24 +311,34 @@ func (g *networkGuard) connect(w http.ResponseWriter, r *http.Request) {
 		conn.Close()
 		return
 	}
-	_, _ = rw.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n")
-	if err = rw.Flush(); err != nil {
-		client.Close()
-		conn.Close()
-		return
-	}
+	g.tunnel(r.Context(), client, conn, rw)
+}
+
+func (g *networkGuard) tunnel(ctx context.Context, client, conn net.Conn, rw *bufio.ReadWriter) {
+	closeConnections := func() { _ = client.Close(); _ = conn.Close() }
+	// http.Server.Close does not own hijacked sockets. The server's base context
+	// lets guard.Close interrupt both tunnel directions, including blocked reads.
+	stop := context.AfterFunc(ctx, closeConnections)
+	defer stop()
+	defer closeConnections()
 	_ = client.SetDeadline(time.Now().Add(60 * time.Second))
 	_ = conn.SetDeadline(time.Now().Add(60 * time.Second))
+	_, _ = rw.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n")
+	if err := rw.Flush(); err != nil {
+		return
+	}
 	done := make(chan struct{})
 	go func() { _, _ = io.Copy(conn, rw); _ = conn.Close(); close(done) }()
-	buf := make([]byte, 32<<10)
+	buffer := relayBuffers.Get().(*[relayBufferSize]byte)
+	defer relayBuffers.Put(buffer)
+	buf := buffer[:]
 	for {
 		n, e := conn.Read(buf)
 		if n > 0 {
 			if g.bytes.Add(int64(n)) > g.limit {
 				break
 			}
-			if _, err = client.Write(buf[:n]); err != nil {
+			if _, err := client.Write(buf[:n]); err != nil {
 				break
 			}
 		}
@@ -301,7 +346,6 @@ func (g *networkGuard) connect(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	_ = client.Close()
-	_ = conn.Close()
+	closeConnections()
 	<-done
 }

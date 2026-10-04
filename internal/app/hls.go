@@ -230,11 +230,16 @@ func (g *networkGuard) fetch(ctx context.Context, raw string, headers map[string
 		return errPlatformUnavailable
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
+		return &sourceProblem{"media_upstream_denied", "The video service refused the media request; reopen the source or upload a file"}
+	}
 	if resp.StatusCode != http.StatusOK || resp.ContentLength > limit {
 		return errPlatformUnavailable
 	}
 	reader := io.LimitReader(resp.Body, limit+1)
-	buffer := make([]byte, 32<<10)
+	pooled := relayBuffers.Get().(*[relayBufferSize]byte)
+	defer relayBuffers.Put(pooled)
+	buffer := pooled[:]
 	var total int64
 	for {
 		n, readErr := reader.Read(buffer)
