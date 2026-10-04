@@ -92,17 +92,43 @@ func dialPublic(ctx context.Context, network, address string, lookup func(contex
 			return nil, errors.New("private or reserved network addresses are not allowed")
 		}
 	}
-	for _, ip := range ips {
+	deadline, _ := ctx.Deadline()
+	for i, ip := range ips {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		conn, dialErr := dial(ctx, network, net.JoinHostPort(ip.String(), port))
+		attemptDeadline, deadlineErr := partialDialDeadline(time.Now(), deadline, len(ips)-i)
+		if deadlineErr != nil {
+			return nil, deadlineErr
+		}
+		attemptContext, attemptCancel := context.WithDeadline(ctx, attemptDeadline)
+		conn, dialErr := dial(attemptContext, network, net.JoinHostPort(ip.String(), port))
+		attemptCancel()
 		if dialErr == nil {
 			return conn, nil
 		}
 		err = dialErr
 	}
 	return nil, err
+}
+
+func partialDialDeadline(now, deadline time.Time, addressesRemaining int) (time.Time, error) {
+	remaining := deadline.Sub(now)
+	if remaining <= 0 {
+		return time.Time{}, context.DeadlineExceeded
+	}
+	if addressesRemaining == 1 {
+		return deadline, nil
+	}
+	timeout := remaining / time.Duration(addressesRemaining)
+	// Match net.Dialer's two-second minimum within the normal dial budget.
+	// Shorter caller budgets still share time, so one address cannot consume
+	// the entire request deadline before an ordered fallback is attempted.
+	const minimum = 2 * time.Second
+	if timeout < minimum && remaining >= minimum {
+		timeout = minimum
+	}
+	return now.Add(timeout), nil
 }
 
 func safeClient() *http.Client {

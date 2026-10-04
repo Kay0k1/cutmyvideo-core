@@ -106,15 +106,86 @@ func TestDialPublicBoundsDNSAndAllFallbacks(t *testing.T) {
 				<-ctx.Done()
 				return nil, ctx.Err()
 			})
-			if !errors.Is(err, context.DeadlineExceeded) || (stage == "dial" && calls != 1) || (stage == "dns" && calls != 0) {
+			if !errors.Is(err, context.DeadlineExceeded) || (stage == "dial" && (calls < 1 || calls > 2)) || (stage == "dns" && calls != 0) {
 				t.Fatalf("unbounded fallback after cancellation: calls=%d err=%v", calls, err)
 			}
 		})
 	}
 }
 
+func TestPartialDialDeadlineSharesAndBoundsRemainingBudget(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	for _, tc := range []struct {
+		name      string
+		remaining time.Duration
+		addresses int
+		want      time.Duration
+	}{
+		{"normal split", 15 * time.Second, 2, 7500 * time.Millisecond},
+		{"minimum normal attempt", 15 * time.Second, 20, 2 * time.Second},
+		{"short caller split", 120 * time.Millisecond, 2, 60 * time.Millisecond},
+		{"short remaining split", 1500 * time.Millisecond, 3, 500 * time.Millisecond},
+		{"last address", 120 * time.Millisecond, 1, 120 * time.Millisecond},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			overall := now.Add(tc.remaining)
+			got, err := partialDialDeadline(now, overall, tc.addresses)
+			if err != nil || got.Sub(now) != tc.want || got.After(overall) {
+				t.Fatalf("attempt deadline: remaining=%s got=%s want=%s err=%v", tc.remaining, got.Sub(now), tc.want, err)
+			}
+		})
+	}
+	if _, err := partialDialDeadline(now, now, 2); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("expired overall deadline was extended")
+	}
+}
+
+func TestDialPublicIPv6TimeoutLeavesTimeForIPv4(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Millisecond)
+	defer cancel()
+	overall, _ := ctx.Deadline()
+	client, peer := net.Pipe()
+	defer client.Close()
+	defer peer.Close()
+	var attempted []string
+	var attempts []context.Context
+	conn, err := dialPublic(ctx, "tcp", "media.example:443", func(context.Context, string, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("2606:4700:4700::1111"), net.ParseIP("1.1.1.1")}, nil
+	}, func(attempt context.Context, network, address string) (net.Conn, error) {
+		attempted = append(attempted, address)
+		attempts = append(attempts, attempt)
+		if network != "tcp" || attempt.Err() != nil {
+			t.Fatal("attempt started after cancellation or changed network")
+		}
+		deadline, ok := attempt.Deadline()
+		if !ok || deadline.After(overall) {
+			t.Fatal("attempt bypassed the overall deadline")
+		}
+		if len(attempted) == 1 {
+			if !deadline.Before(overall) {
+				t.Fatal("first address retained the entire fallback budget")
+			}
+			<-attempt.Done()
+			if ctx.Err() != nil {
+				t.Fatal("first address exhausted the entire request deadline")
+			}
+			return nil, attempt.Err()
+		}
+		return client, nil
+	})
+	if err != nil || conn != client || ctx.Err() != nil || strings.Join(attempted, ",") != "[2606:4700:4700::1111]:443,1.1.1.1:443" {
+		t.Fatalf("IPv4 fallback did not succeed within overall budget: attempts=%v err=%v parent=%v", attempted, err, ctx.Err())
+	}
+	for _, attempt := range attempts {
+		if attempt.Err() == nil {
+			t.Fatal("attempt context was not released")
+		}
+	}
+}
+
 func TestDialPublicOrderedFallbackFreshDNSAndConnectionOwnership(t *testing.T) {
 	var lookupContext context.Context
+	var attemptContexts []context.Context
 	var attempted []string
 	client, peer := net.Pipe()
 	defer peer.Close()
@@ -126,11 +197,17 @@ func TestDialPublicOrderedFallbackFreshDNSAndConnectionOwnership(t *testing.T) {
 		}
 		return []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("8.8.8.8")}, nil
 	}, func(ctx context.Context, network, address string) (net.Conn, error) {
-		if ctx != lookupContext || network != "tcp" {
-			t.Fatal("fallback did not retain the DNS deadline")
+		overall, _ := lookupContext.Deadline()
+		deadline, ok := ctx.Deadline()
+		if !ok || deadline.After(overall) || network != "tcp" {
+			t.Fatal("fallback exceeded the DNS deadline")
 		}
+		attemptContexts = append(attemptContexts, ctx)
 		attempted = append(attempted, address)
 		if len(attempted) == 1 {
+			if !deadline.Before(overall) {
+				t.Fatal("first address did not leave a share for fallback")
+			}
 			return nil, errors.New("fixture first address unavailable")
 		}
 		return client, nil
@@ -141,6 +218,11 @@ func TestDialPublicOrderedFallbackFreshDNSAndConnectionOwnership(t *testing.T) {
 	defer conn.Close()
 	if !errors.Is(lookupContext.Err(), context.Canceled) {
 		t.Fatal("dial deadline was not released after connection")
+	}
+	for _, attempt := range attemptContexts {
+		if !errors.Is(attempt.Err(), context.Canceled) {
+			t.Fatal("attempt deadline was not released after connection")
+		}
 	}
 	writeDone := make(chan error, 1)
 	go func() { _, e := peer.Write([]byte("ok")); writeDone <- e }()

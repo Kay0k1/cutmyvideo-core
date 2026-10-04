@@ -28,6 +28,7 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 - Bounded private subprocess diagnostics classify failures into fixed categories without logging raw CDN URLs, credentials, or media paths; an unexplained nonzero exit is not automatically retried.
 
 ### Fixed
+- Share connection time among ordered address attempts so a slow IPv6 address leaves time for IPv4 within the original DNS/dial deadline.
 - Atomically register artifacts and completed job items under lease fencing; retain files on uncertain commit acknowledgements for database recovery.
 - Refresh rejected cached media addresses once without reusing the cache, resetting transfer limits or repeating completed clips; preserve identity, timeline and inspection deadlines.
 - Reuse fixed relay/HLS buffers, preparse destination rules, share a bounded DNS/dial fallback deadline and close active tunnels on cancellation.
