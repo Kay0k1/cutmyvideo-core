@@ -38,6 +38,15 @@ func (e *mediaProcessFailure) Unwrap() error { return e.cause }
 // A category is diagnostic evidence, never permission to retry an export.
 func mediaFailureCategory(stderr string) string {
 	text := strings.ToLower(stderr)
+	if strings.Contains(text, "stream map") && strings.Contains(text, ":a:") && strings.Contains(text, "matches no streams") {
+		return "missing_audio"
+	}
+	if strings.Contains(text, "no space left on device") {
+		return "storage_full"
+	}
+	if strings.Contains(text, "not currently supported in container") || strings.Contains(text, "codec not supported in container") {
+		return "copy_incompatible"
+	}
 	for _, phrase := range []string{"login required", "login_required", "sign in to", "log in to", "only available for registered", "subscriber-only", "subscribers only", "private video", "password protected"} {
 		if strings.Contains(text, phrase) {
 			return "platform_access"
@@ -208,7 +217,8 @@ func pickStreams(info platformInfo, quality, format string) ([]platformFormat, e
 	if quality == "720p" {
 		capHeight = 720
 	}
-	var video, audio, fallbackVideo *platformFormat
+	var audio, progressiveAudio *platformFormat
+	var candidates []*platformFormat
 	for i := range info.Formats {
 		f := &info.Formats[i]
 		if f.HasDRM || (f.Protocol != "https" && !isHLS(*f)) || (f.Ext != "mp4" && f.Ext != "webm" && f.Ext != "m4a" && f.Ext != "mp3" && f.Ext != "ts") {
@@ -220,14 +230,31 @@ func pickStreams(info platformInfo, quality, format string) ([]platformFormat, e
 		// An omitted codec is unknown, not the extractor's explicit "none".
 		// Public progressive clips (notably Twitch) often omit both codec fields.
 		hasVideo := f.VCodec != "none" && (f.VCodec != "" || f.Height > 0 || f.Ext == "mp4" || f.Ext == "webm")
-		if hasVideo && f.Height <= capHeight && (video == nil || f.Height > video.Height || (f.Height == video.Height && f.TBR > video.TBR)) {
+		if hasVideo {
+			candidates = append(candidates, f)
+		}
+		if f.ACodec != "none" && (f.VCodec == "none" || !hasVideo) {
+			if audio == nil || f.ABR > audio.ABR {
+				audio = f
+			}
+			if !isHLS(*f) && (progressiveAudio == nil || f.ABR > progressiveAudio.ABR) {
+				progressiveAudio = f
+			}
+		}
+	}
+	// Rank complete, supported inputs. A high-bitrate HLS video-only rendition
+	// must not hide a progressive video/audio pair from the same recording.
+	// Separate HLS clocks remain unsupported; no rendition is silently merged.
+	var video, fallbackVideo *platformFormat
+	for _, f := range candidates {
+		if f.ACodec == "none" && (format == "mp3" || isHLS(*f) || progressiveAudio == nil) {
+			continue
+		}
+		if f.Height <= capHeight && (video == nil || f.Height > video.Height || f.Height == video.Height && f.TBR > video.TBR) {
 			video = f
 		}
-		if hasVideo && f.Height > capHeight && (fallbackVideo == nil || f.Height < fallbackVideo.Height || f.Height == fallbackVideo.Height && f.TBR < fallbackVideo.TBR) {
+		if f.Height > capHeight && (fallbackVideo == nil || f.Height < fallbackVideo.Height || f.Height == fallbackVideo.Height && f.TBR < fallbackVideo.TBR) {
 			fallbackVideo = f
-		}
-		if f.ACodec != "none" && (f.VCodec == "none" || !hasVideo) && (audio == nil || f.ABR > audio.ABR) {
-			audio = f
 		}
 	}
 	if video == nil {
@@ -240,16 +267,16 @@ func pickStreams(info platformInfo, quality, format string) ([]platformFormat, e
 		if video != nil && video.ACodec != "none" {
 			return []platformFormat{*video}, nil
 		}
+		if len(candidates) > 0 {
+			return nil, errNoAudio
+		}
 	}
 	if format == "mp4" && video != nil {
 		if video.ACodec != "none" {
 			return []platformFormat{*video}, nil
 		}
-		if audio != nil {
-			if isHLS(*video) || isHLS(*audio) {
-				return nil, errUnsupportedStream
-			}
-			return []platformFormat{*video, *audio}, nil
+		if progressiveAudio != nil && !isHLS(*video) {
+			return []platformFormat{*video, *progressiveAudio}, nil
 		}
 	}
 	return nil, errUnsupportedStream
@@ -321,6 +348,21 @@ func exportInputs(ctx context.Context, c Config, inputs []mediaInput, r Range, r
 	}
 	start := r.StartMS
 	if request.CutMode == "copy" {
+		if request.Quality != "best" {
+			info, _, err := probe(ctx, c, inputs[0].Path, inputs[0].Remote)
+			if err != nil {
+				return 0, 0, err
+			}
+			capHeight := 1080
+			if request.Quality == "720p" {
+				capHeight = 720
+			}
+			for _, stream := range info.Streams {
+				if stream.CodecType == "video" && stream.Height > capHeight {
+					return 0, 0, &sourceProblem{"copy_quality_unsupported", "Copy mode cannot reduce this video's resolution. Choose original quality or accurate mode"}
+				}
+			}
+		}
 		local, err := nearestKeyframe(ctx, c, inputs[0].Path, start-inputs[0].OffsetMS, inputs[0].Remote)
 		if err != nil {
 			return 0, 0, err
@@ -369,7 +411,17 @@ func exportInputs(ctx context.Context, c Config, inputs []mediaInput, r Range, r
 	}
 	args = append(args, "-threads", env("FFMPEG_THREADS", "2"), "-map_metadata", "-1", "-map_chapters", "-1", "-fs", strconv.FormatInt(c.MaxOutputBytes, 10), out)
 	if _, err := runCommand(ctx, c.FFmpeg, args...); err != nil {
+		if info, statErr := os.Stat(out); statErr == nil && info.Size() >= c.MaxOutputBytes {
+			return 0, 0, errOutputLimit
+		}
 		return 0, 0, err
+	}
+	info, err := os.Stat(out)
+	if err != nil {
+		return 0, 0, err
+	}
+	if info.Size() >= c.MaxOutputBytes {
+		return 0, 0, errOutputLimit
 	}
 	p, duration, err := probe(ctx, c, out, false)
 	if err != nil {
@@ -385,13 +437,6 @@ func exportInputs(ctx context.Context, c Config, inputs []mediaInput, r Range, r
 		if !video {
 			return 0, 0, errors.New("result has no video stream")
 		}
-	}
-	info, err := os.Stat(out)
-	if err != nil {
-		return 0, 0, err
-	}
-	if info.Size() >= c.MaxOutputBytes {
-		return 0, 0, errors.New("result exceeds output size limit")
 	}
 	// A duration mismatch also catches FFmpeg's graceful -fs truncation.
 	expected := r.EndMS - start

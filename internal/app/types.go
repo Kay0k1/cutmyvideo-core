@@ -160,13 +160,14 @@ type Artifact struct {
 }
 
 type JobItem struct {
-	ID       string    `json:"id"`
-	Label    string    `json:"label"`
-	StartMS  int64     `json:"start_ms"`
-	EndMS    int64     `json:"end_ms"`
-	Status   string    `json:"status"`
-	Artifact *Artifact `json:"artifact"`
-	Message  string    `json:"message,omitempty"`
+	ID        string    `json:"id"`
+	Label     string    `json:"label"`
+	StartMS   int64     `json:"start_ms"`
+	EndMS     int64     `json:"end_ms"`
+	Status    string    `json:"status"`
+	Artifact  *Artifact `json:"artifact"`
+	Message   string    `json:"message,omitempty"`
+	ErrorCode string    `json:"error_code,omitempty"`
 }
 
 type Job struct {

@@ -23,6 +23,9 @@ func TestMediaFailureCategoriesAreDiagnosticOnly(t *testing.T) {
 		{"[http] Server returned 429 Too Many Requests", "upstream_unavailable"},
 		{"[http] HTTP error 403 Forbidden", "upstream_denied"},
 		{"[http] Server returned 404 Not Found", "upstream_denied"},
+		{"Stream map '0:a:0' matches no streams.", "missing_audio"},
+		{"/data/out.mp4: No space left on device", "storage_full"},
+		{"Could not find tag for codec pcm_s16le, codec not currently supported in container", "copy_incompatible"},
 		{"Invalid data found when processing input", "unsupported_media"},
 		{"Protocol 'file' not on whitelist 'http,tcp'", "unsupported_media"},
 		{"Error initializing output stream 0:0", "unknown"},
@@ -33,6 +36,89 @@ func TestMediaFailureCategoriesAreDiagnosticOnly(t *testing.T) {
 				t.Fatalf("got %q; want %q", got, v.category)
 			}
 		})
+	}
+}
+
+func TestStreamSelectionRanksSupportedPairsBeforeQuality(t *testing.T) {
+	// The incident recording offered these families: 1080p HLS video-only 312
+	// had a greater bitrate than progressive 299, but only 299 can be paired
+	// with separately exposed progressive audio under the current HLS rules.
+	video := platformFormat{ID: "299", URL: "https://media.example/video.mp4", Protocol: "https", Ext: "mp4", VCodec: "avc1.64002a", ACodec: "none", Height: 1080, TBR: 3704.8}
+	audio := platformFormat{ID: "251", URL: "https://media.example/audio.webm", Protocol: "https", Ext: "webm", VCodec: "none", ACodec: "opus", ABR: 138.5}
+	hls := platformFormat{ID: "312", URL: "https://media.example/video.m3u8", Protocol: "m3u8_native", Ext: "mp4", VCodec: "avc1.64002a", ACodec: "none", Height: 1080, TBR: 6253.4}
+	combined := platformFormat{ID: "combined", URL: "https://media.example/combined.m3u8", Protocol: "m3u8_native", Ext: "mp4", VCodec: "h264", ACodec: "aac", Height: 720, TBR: 2000}
+	hlsAudio := platformFormat{ID: "hls-audio", URL: "https://media.example/audio.m3u8", Protocol: "m3u8_native", Ext: "mp4", VCodec: "none", ACodec: "aac", ABR: 200}
+	for _, tt := range []struct {
+		name    string
+		formats []platformFormat
+		quality string
+		want    []string
+	}{
+		{"incident", []platformFormat{audio, hls, video}, "1080p", []string{"299", "251"}},
+		{"lower-combined", []platformFormat{hls, hlsAudio, combined}, "1080p", []string{"combined"}},
+		{"pair-compatible-audio", []platformFormat{hlsAudio, video, audio}, "1080p", []string{"299", "251"}},
+		{"cap-prefers-combined", []platformFormat{hls, video, audio, combined}, "720p", []string{"combined"}},
+		{"above-cap-fallback", []platformFormat{hls, video, audio}, "720p", []string{"299", "251"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := pickStreams(platformInfo{Formats: tt.formats}, tt.quality, "mp4")
+			if err != nil || len(got) != len(tt.want) {
+				t.Fatalf("selected %+v: %v", got, err)
+			}
+			for i, f := range got {
+				if f.ID != tt.want[i] {
+					t.Fatalf("selected %s, want %s", f.ID, tt.want[i])
+				}
+			}
+		})
+	}
+	if _, err := pickStreams(platformInfo{Formats: []platformFormat{hls, audio}}, "1080p", "mp4"); !errors.Is(err, errUnsupportedStream) {
+		t.Fatal("combined unsupported HLS/progressive clocks")
+	}
+	if _, err := pickStreams(platformInfo{Formats: []platformFormat{video}}, "1080p", "mp3"); !errors.Is(err, errNoAudio) {
+		t.Fatal("video-only source did not explain missing audio")
+	}
+}
+
+func TestMediaCopyQualityAudioMissingAndOutputLimits(t *testing.T) {
+	c := mediaConfig(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	sample := filepath.Join(c.DataDir, "video-only.mp4")
+	if _, err := runCommand(ctx, c.FFmpeg, "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=160x722:rate=25", "-t", "3", "-c:v", "libx264", "-threads", "1", "-g", "25", "-an", "-movflags", "+faststart", sample); err != nil {
+		t.Fatal(err)
+	}
+	r := Range{StartMS: 0, EndMS: 2000}
+	request := ExportRequest{Format: "mp4", Quality: "720p", CutMode: "copy"}
+	if _, _, err := exportMedia(ctx, c, []string{sample}, false, r, request, filepath.Join(c.DataDir, "copy-capped.mp4")); exportProblem(err).code != "copy_quality_unsupported" {
+		t.Fatalf("copy silently exceeded cap: %v", err)
+	}
+	request.Quality = "best"
+	copyPath := filepath.Join(c.DataDir, "copy-original.mp4")
+	if _, _, err := exportMedia(ctx, c, []string{sample}, false, r, request, copyPath); err != nil {
+		t.Fatal(err)
+	}
+	p, _, err := probe(ctx, c, copyPath, false)
+	if err != nil || len(p.Streams) != 1 || p.Streams[0].Height != 722 {
+		t.Fatalf("copy did not preserve resolution: %+v %v", p, err)
+	}
+	request.Quality, request.CutMode = "720p", "accurate"
+	accuratePath := filepath.Join(c.DataDir, "accurate-capped.mp4")
+	if _, _, err := exportMedia(ctx, c, []string{sample}, false, r, request, accuratePath); err != nil {
+		t.Fatal(err)
+	}
+	p, _, err = probe(ctx, c, accuratePath, false)
+	if err != nil || p.Streams[0].Height != 720 {
+		t.Fatalf("accurate did not honor cap: %+v %v", p, err)
+	}
+	request.Format = "mp3"
+	if _, _, err := exportMedia(ctx, c, []string{sample}, false, r, request, filepath.Join(c.DataDir, "no-audio.mp3")); exportProblem(err).code != "audio_missing" {
+		t.Fatalf("missing audio lost its diagnostic: %v", err)
+	}
+	request.Format = "mp4"
+	c.MaxOutputBytes = 16 << 10
+	if _, _, err := exportMedia(ctx, c, []string{sample}, false, r, request, filepath.Join(c.DataDir, "size-limit.mp4")); exportProblem(err).code != "output_limit" {
+		t.Fatalf("output truncation lost its diagnostic: %v", err)
 	}
 }
 
