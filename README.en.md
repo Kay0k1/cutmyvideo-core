@@ -51,7 +51,9 @@ HLS processing requires a finite `ENDLIST` recording without encryption. Selecte
 
 Selective reads can transfer more bytes than the final clip. A shared byte budget covers the entire job and all its ranges, alongside time/storage limits. No unlimited long-video or live download is started as a fallback. Direct file links still stage the entire file within the source limit.
 
-**Stream copy:** the start moves to a nearby preceding keyframe; the end depends on packet boundaries. Actual bounds are returned with the artifact. Input codecs must fit MP4; otherwise use accurate mode. A local file keeps its source resolution in copy mode; reducing resolution requires re-encoding.
+Stream selection first checks complete video/audio compatibility, then ranks resolution and bitrate. A video-only HLS rendition does not hide an available progressive pair from the same recording; separate HLS clocks remain unsupported.
+
+**Stream copy:** the start moves to a nearby preceding keyframe; the end depends on packet boundaries. Actual bounds are returned with the artifact. Input codecs must fit MP4; otherwise use accurate mode. `quality=best` preserves source resolution. A source above an explicit 720p/1080p cap returns `copy_quality_unsupported`: copy mode never silently resizes or exceeds the requested cap.
 
 **Accurate mode:** video is encoded to H.264/AAC. MP3 export also re-encodes audio; arbitrary source audio cannot be preserved as MP3.
 
@@ -127,10 +129,13 @@ The response contains the job ID in `id`. Poll `GET /api/v1/jobs/{id}` and downl
 | `SOURCE_TTL` / `ARTIFACT_TTL` | `24h` / `24h` |
 | `FFMPEG_THREADS` | 2 |
 | `FFMPEG_PATH` / `FFPROBE_PATH` / `YTDLP_PATH` | Corresponding executable names |
+| `WORKER_HEALTH_PATH` | `/tmp/cutmy-worker-health`, container-local temporary file |
 
 `MAX_OWNER_BYTES` applies to staged source files and thumbnails; results count toward the global storage limit. A session allows 20 source records and one concurrent source preparation. The API allows four concurrent source preparations globally. Admission reserves the configured maximum source size. Cleanup runs in the worker every five minutes; active jobs pin their required files.
 
 The MVP supports **one API instance and one worker**. Durable leases and write fencing protect job recovery, but rate and disk admission limits are not distributed across API instances. Scale-out requires shared resource reservations. PostgreSQL stores durable state; source files and artifacts use disk. An S3 adapter is not yet implemented.
+
+`cutmy worker-healthcheck` verifies successful queue or lease access within the last 30 seconds. Its empty, private marker lives in container-local `/tmp`, resets at startup and is removed on shutdown. Keep it off shared media storage so another worker cannot mask a failure. The Docker Compose example checks API and worker health separately. Worker restarts keep unfinished jobs recoverable through their leases, including completed fragments; the job's own deadline and user cancellation remain terminal.
 
 ## Architecture
 
@@ -163,7 +168,7 @@ TEST_DATABASE_URL=postgres://user:password@localhost:5432/test_db?sslmode=disabl
 
 Media tests skip without FFmpeg; database integration tests skip without `TEST_DATABASE_URL`. CI installs both and runs all checks. Database tests create an isolated temporary schema.
 
-Tests cover real MP4/MP3, keyframe shifts, first-frame accuracy of MPEG-TS/fMP4 HLS fragments, original audio delay, global timestamps, blocked addresses/tags, limits and cleanup. PostgreSQL tests cover owners, thumbnails, idempotency, cancellation, claims, leases and retention. Ordinary tests make no requests to public platforms.
+Tests cover real MP4/MP3, supported stream pairs, missing audio, copy/output limits, keyframe shifts, first-frame accuracy of MPEG-TS/fMP4 HLS fragments, original audio delay, global timestamps, blocked addresses/tags, limits and cleanup. PostgreSQL tests cover owners, thumbnails, idempotency, cancellation races, claims, leases, retention and recovery during processing/publication. Worker health is checked while idle, busy and stopped. Ordinary tests make no requests to public platforms.
 
 [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Security reports](SECURITY.md)
 
