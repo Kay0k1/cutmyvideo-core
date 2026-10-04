@@ -63,6 +63,11 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "cutmy", "worker-healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
     mem_limit: 2g
     cpus: 2
     pids_limit: 128

@@ -228,7 +228,17 @@ func (s *Store) Heartbeat(ctx context.Context, id, token string) (bool, error) {
 
 func (s *Store) SaveJob(ctx context.Context, j Job, token string) error {
 	items, _ := json.Marshal(j.Items)
-	tag, err := s.DB.Exec(ctx, `UPDATE jobs SET status=CASE WHEN cancel_requested AND $3 IN ('succeeded','failed','cancelled') THEN 'cancelled' ELSE $3 END,stage=$4,message=CASE WHEN cancel_requested AND $3 IN ('succeeded','failed','cancelled') THEN 'Cancelled' ELSE $5 END,items=CASE WHEN cancel_requested AND $3 IN ('succeeded','failed','cancelled') THEN (SELECT jsonb_agg(CASE WHEN item->>'status' IN ('queued','running') THEN jsonb_set(item,'{status}','"cancelled"') ELSE item END) FROM jsonb_array_elements($6::jsonb) item) ELSE $6::jsonb END,updated_at=now() WHERE id=$1 AND lease_token=$2 AND status='running' AND lease_until>now()`, j.ID, token, j.Status, j.Stage, j.Message, items)
+	tag, err := s.DB.Exec(ctx, `UPDATE jobs SET
+status=CASE WHEN cancel_requested AND $3 IN ('succeeded','failed','cancelled') THEN 'cancelled' ELSE $3 END,
+stage=$4,message=CASE WHEN cancel_requested AND $3 IN ('succeeded','failed','cancelled') THEN 'Cancelled' ELSE $5 END,
+items=CASE WHEN cancel_requested AND $3 IN ('succeeded','failed','cancelled') THEN (
+ SELECT jsonb_agg(CASE WHEN item->>'status'<>'succeeded' AND EXISTS (
+  SELECT 1 FROM jsonb_array_elements(jobs.items) previous
+  WHERE previous->>'id'=item->>'id' AND previous->>'status' IN ('queued','running')
+ ) THEN item || '{"status":"cancelled","message":"Cancelled","error_code":"cancelled"}'::jsonb ELSE item END)
+ FROM jsonb_array_elements($6::jsonb) item
+) ELSE $6::jsonb END,updated_at=now()
+WHERE id=$1 AND lease_token=$2 AND status='running' AND lease_until>now()`, j.ID, token, j.Status, j.Stage, j.Message, items)
 	if err == nil && tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
@@ -236,7 +246,7 @@ func (s *Store) SaveJob(ctx context.Context, j Job, token string) error {
 }
 
 func (s *Store) Cancel(ctx context.Context, id, owner string) error {
-	tag, err := s.DB.Exec(ctx, `UPDATE jobs SET cancel_requested=true,status=CASE WHEN status='queued' THEN 'cancelled' ELSE status END,message=CASE WHEN status='queued' THEN 'Cancelled' ELSE message END,items=CASE WHEN status='queued' THEN (SELECT jsonb_agg(CASE WHEN item->>'status' IN ('queued','running') THEN jsonb_set(item,'{status}','"cancelled"') ELSE item END) FROM jsonb_array_elements(items) item) ELSE items END,updated_at=now() WHERE id=$1 AND owner=$2 AND status IN ('queued','running')`, id, owner)
+	tag, err := s.DB.Exec(ctx, `UPDATE jobs SET cancel_requested=true,status=CASE WHEN status='queued' THEN 'cancelled' ELSE status END,message=CASE WHEN status='queued' THEN 'Cancelled' ELSE message END,items=CASE WHEN status='queued' THEN (SELECT jsonb_agg(CASE WHEN item->>'status' IN ('queued','running') THEN item || '{"status":"cancelled","message":"Cancelled","error_code":"cancelled"}'::jsonb ELSE item END) FROM jsonb_array_elements(items) item) ELSE items END,updated_at=now() WHERE id=$1 AND owner=$2 AND status IN ('queued','running')`, id, owner)
 	if err != nil {
 		return err
 	}
@@ -306,6 +316,6 @@ func (s *Store) Cleanup(ctx context.Context, artifactTTL, sourceTTL time.Duratio
 }
 
 func (s *Store) Recover(ctx context.Context) error {
-	_, err := s.DB.Exec(ctx, `UPDATE jobs SET status=CASE WHEN cancel_requested THEN 'cancelled' ELSE 'failed' END,stage='finished',lease_token=NULL,message=CASE WHEN cancel_requested THEN 'Cancelled' ELSE 'Worker recovery limit reached' END,items=(SELECT jsonb_agg(CASE WHEN item->>'status' IN ('queued','running') THEN jsonb_set(item,'{status}',CASE WHEN cancel_requested THEN '"cancelled"'::jsonb ELSE '"failed"'::jsonb END) ELSE item END) FROM jsonb_array_elements(items) item) WHERE status='running' AND lease_until<now() AND (attempts>=3 OR cancel_requested)`)
+	_, err := s.DB.Exec(ctx, `UPDATE jobs SET status=CASE WHEN cancel_requested THEN 'cancelled' ELSE 'failed' END,stage='finished',lease_token=NULL,message=CASE WHEN cancel_requested THEN 'Cancelled' ELSE 'Worker recovery limit reached' END,items=(SELECT jsonb_agg(CASE WHEN item->>'status' IN ('queued','running') THEN item || CASE WHEN cancel_requested THEN '{"status":"cancelled","message":"Cancelled","error_code":"cancelled"}'::jsonb ELSE '{"status":"failed","message":"Worker recovery limit reached","error_code":"server_error"}'::jsonb END ELSE item END) FROM jsonb_array_elements(items) item) WHERE status='running' AND lease_until<now() AND (attempts>=3 OR cancel_requested)`)
 	return err
 }

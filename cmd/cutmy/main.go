@@ -24,10 +24,13 @@ func main() {
 
 func run() error {
 	if len(os.Args) < 2 {
-		return errors.New("usage: cutmy server | worker | clip | healthcheck")
+		return errors.New("usage: cutmy server | worker | clip | healthcheck | worker-healthcheck")
 	}
 	if os.Args[1] == "clip" {
 		return clip(os.Args[2:])
+	}
+	if os.Args[1] == "worker-healthcheck" {
+		return app.CheckWorkerHealth(os.Getenv("WORKER_HEALTH_PATH"))
 	}
 	if os.Args[1] == "healthcheck" {
 		client := http.Client{Timeout: 3 * time.Second}
@@ -74,6 +77,6 @@ func run() error {
 	case "worker":
 		return app.RunWorker(ctx, c, s)
 	default:
-		return errors.New("usage: cutmy server | worker | healthcheck")
+		return errors.New("usage: cutmy server | worker | healthcheck | worker-healthcheck")
 	}
 }

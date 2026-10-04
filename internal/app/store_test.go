@@ -70,6 +70,52 @@ func requestFor(v Source) ExportRequest {
 	return ExportRequest{SourceID: v.ID, Ranges: []Range{{StartMS: 1000, EndMS: 3000, Label: "Test"}}, Format: "mp4", Quality: "720p", CutMode: "accurate"}
 }
 
+func TestStoreCancellationSettlesNewFailureWithoutOverwritingFinishedItems(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	source := storedSource(t, s, "owner")
+	request := requestFor(source)
+	request.Ranges = append(request.Ranges, request.Ranges[0], request.Ranges[0])
+	job, err := s.CreateJob(ctx, "owner", request, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, token, err := s.Claim(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	job.Items[0].Status, job.Items[0].ErrorCode, job.Items[0].Message = "failed", "audio_missing", "This video has no audio track"
+	job.Items[1].Status = "succeeded"
+	job.Items[1].Artifact = &Artifact{ID: "already-completed", DownloadURL: "/download/already-completed"}
+	job.Items[2].Status = "running"
+	if err := s.SaveJob(ctx, job, token); err != nil {
+		t.Fatal(err)
+	}
+	// The worker has already chosen timeout locally when the user cancels.
+	// The database still knows which item was pending at cancellation time.
+	job.Status, job.Stage = "failed", "finished"
+	job.Items[2].Status, job.Items[2].ErrorCode, job.Items[2].Message = "failed", "job_timeout", "Processing timed out"
+	if err := s.Cancel(ctx, job.ID, "owner"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveJob(ctx, job, token); err != nil {
+		t.Fatal(err)
+	}
+	settled, err := s.Job(ctx, job.ID, "owner")
+	if err != nil || settled.Status != "cancelled" {
+		t.Fatalf("cancellation lost: %+v %v", settled, err)
+	}
+	if settled.Items[0].Status != "failed" || settled.Items[0].ErrorCode != "audio_missing" {
+		t.Fatal("earlier failure was overwritten")
+	}
+	if settled.Items[1].Status != "succeeded" || settled.Items[1].Artifact == nil || settled.Items[1].Artifact.ID != "already-completed" {
+		t.Fatal("completed output was overwritten")
+	}
+	if settled.Items[2].Status != "cancelled" || settled.Items[2].ErrorCode != "cancelled" || settled.Items[2].Message != "Cancelled" {
+		t.Fatalf("pending item kept the wrong terminal state: %+v", settled.Items[2])
+	}
+}
+
 func TestStoreConcurrentClaimsFencingAndRecovery(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
