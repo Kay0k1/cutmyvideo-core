@@ -83,7 +83,7 @@ func OpenStore(ctx context.Context, url string) (*Store, error) {
 	defer tx.Rollback(ctx)
 	_, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('cutmy:migrations'))`)
 	if err == nil {
-		_, err = tx.Exec(ctx, schema)
+		_, err = tx.Exec(ctx, schema+platformMetadataCacheSchema)
 	}
 	if err == nil {
 		err = tx.Commit(ctx)
@@ -116,6 +116,7 @@ CREATE TABLE IF NOT EXISTS jobs (
  UNIQUE(owner, idempotency_key)
 );
 CREATE INDEX IF NOT EXISTS jobs_claim_idx ON jobs(status, created_at);
+CREATE INDEX IF NOT EXISTS jobs_source_idx ON jobs(source_id);
 CREATE TABLE IF NOT EXISTS artifacts (
  id text PRIMARY KEY, owner text NOT NULL, job_id text NOT NULL REFERENCES jobs(id),
  path text NOT NULL, filename text NOT NULL, size_bytes bigint NOT NULL,
@@ -123,6 +124,7 @@ CREATE TABLE IF NOT EXISTS artifacts (
  created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS artifacts_owner_idx ON artifacts(owner);
+CREATE INDEX IF NOT EXISTS artifacts_job_idx ON artifacts(job_id);
 `
 
 func newID(prefix string) string {
@@ -274,6 +276,10 @@ func (s *Store) ArtifactPath(ctx context.Context, id, owner string) (string, str
 }
 
 func (s *Store) Cleanup(ctx context.Context, artifactTTL, sourceTTL time.Duration) ([]string, error) {
+	// Cache maintenance is optional; resource retention still runs if it fails.
+	cacheCtx, cancelCache := context.WithTimeout(ctx, platformMetadataDBTimeout)
+	_, _ = s.DB.Exec(cacheCtx, `DELETE FROM source_metadata_cache WHERE expires_at<=now()`)
+	cancelCache()
 	// Delete only completed resources: active jobs pin their source and results.
 	rows, err := s.DB.Query(ctx, `DELETE FROM artifacts WHERE created_at<now()-($1 * interval '1 second') AND NOT EXISTS(SELECT 1 FROM jobs WHERE jobs.id=artifacts.job_id AND status IN ('queued','running')) RETURNING path`, artifactTTL.Seconds())
 	if err != nil {

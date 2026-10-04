@@ -227,6 +227,10 @@ components:
         start_ms: {type: integer}
         end_ms: {type: integer}
         status: {type: string, enum: [queued, running, succeeded, failed, cancelled]}
+        progress_ms:
+          type: integer
+          minimum: 0
+          description: Optional processed media time from FFmpeg, in milliseconds. Omitted before progress is available and in legacy jobs. Encoding can finish before file validation/publication; only succeeded status makes an artifact ready. A cached-address refresh may reset progress.
         message: {type: string}
         error_code:
           type: string

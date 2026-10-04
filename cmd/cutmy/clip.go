@@ -22,11 +22,16 @@ func clip(args []string) error {
 	end := f.String("end", "", "end in seconds or HH:MM:SS.mmm")
 	quality := f.String("quality", "best", "best, 1080p, or 720p")
 	mode := f.String("mode", "accurate", "accurate or copy")
+	profile := f.String("profile", "fast", "fast (larger files) or compact")
+	threads := f.Int("threads", 2, "FFmpeg threads, 1 through 32")
 	if err := f.Parse(args); err != nil {
 		return err
 	}
 	if *input == "" || *output == "" || *end == "" {
 		return errors.New("clip requires --input, --output, and --end")
+	}
+	if (*profile != "fast" && *profile != "compact") || *threads < 1 || *threads > 32 {
+		return errors.New("use --profile fast|compact and --threads 1..32")
 	}
 	startMS, err := parseTime(*start)
 	if err != nil {
@@ -38,7 +43,7 @@ func clip(args []string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
-	result, err := engine.New(engine.Config{FFmpegPath: os.Getenv("FFMPEG_PATH"), FFprobePath: os.Getenv("FFPROBE_PATH")}).Export(ctx, *input, *output, engine.Range{StartMS: startMS, EndMS: endMS}, engine.Options{Quality: *quality, CutMode: *mode})
+	result, err := engine.New(engine.Config{FFmpegPath: os.Getenv("FFMPEG_PATH"), FFprobePath: os.Getenv("FFPROBE_PATH"), EncodeProfile: *profile, FFmpegThreads: *threads}).Export(ctx, *input, *output, engine.Range{StartMS: startMS, EndMS: endMS}, engine.Options{Quality: *quality, CutMode: *mode})
 	if err != nil {
 		return err
 	}

@@ -13,6 +13,8 @@ import (
 type Config struct {
 	DatabaseURL, DataDir, ListenAddr, FFmpeg, FFprobe, YTDLP, PublicOrigin string
 	WorkerHealthPath                                                       string
+	FFmpegProfile                                                          string
+	FFmpegThreads                                                          int
 	MaxSourceBytes, MaxOutputBytes, MaxStorageBytes, MaxOwnerBytes         int64
 	MaxRanges, MaxActiveJobs                                               int
 	MutationsPerMinute                                                     int
@@ -31,7 +33,17 @@ func ConfigFromEnv() (Config, error) {
 	c.MaxActiveJobs = 32
 	c.MutationsPerMinute = 20
 	c.TrustProxy = os.Getenv("TRUST_PROXY") == "true"
+	c.FFmpegProfile = env("FFMPEG_PROFILE", "fast")
+	if c.FFmpegProfile != "fast" && c.FFmpegProfile != "compact" {
+		return c, errors.New("invalid FFMPEG_PROFILE: use fast or compact")
+	}
 	var err error
+	c.FFmpegThreads, err = strconv.Atoi(env("FFMPEG_THREADS", "2"))
+	if err != nil || c.FFmpegThreads < 1 || c.FFmpegThreads > 32 {
+		return c, errors.New("invalid FFMPEG_THREADS: use 1 through 32")
+	}
+	// Parse process settings once, rather than reading shared environment during
+	// an export. FFmpeg's threads are separate from the Go runtime's CPU budget.
 	for key, ptr := range map[string]*int64{"MAX_SOURCE_BYTES": &c.MaxSourceBytes, "MAX_OUTPUT_BYTES": &c.MaxOutputBytes, "MAX_STORAGE_BYTES": &c.MaxStorageBytes, "MAX_OWNER_BYTES": &c.MaxOwnerBytes, "MAX_RANGE_MS": &c.MaxRangeMS, "MAX_JOB_MS": &c.MaxJobMS} {
 		if value := os.Getenv(key); value != "" {
 			*ptr, err = strconv.ParseInt(value, 10, 64)
@@ -162,14 +174,15 @@ type Artifact struct {
 }
 
 type JobItem struct {
-	ID        string    `json:"id"`
-	Label     string    `json:"label"`
-	StartMS   int64     `json:"start_ms"`
-	EndMS     int64     `json:"end_ms"`
-	Status    string    `json:"status"`
-	Artifact  *Artifact `json:"artifact"`
-	Message   string    `json:"message,omitempty"`
-	ErrorCode string    `json:"error_code,omitempty"`
+	ID         string    `json:"id"`
+	Label      string    `json:"label"`
+	StartMS    int64     `json:"start_ms"`
+	EndMS      int64     `json:"end_ms"`
+	Status     string    `json:"status"`
+	Artifact   *Artifact `json:"artifact"`
+	Message    string    `json:"message,omitempty"`
+	ErrorCode  string    `json:"error_code,omitempty"`
+	ProgressMS int64     `json:"progress_ms,omitempty"`
 }
 
 type Job struct {

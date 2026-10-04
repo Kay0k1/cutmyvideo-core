@@ -15,6 +15,11 @@ import (
 type Config struct {
 	FFmpegPath, FFprobePath string
 	MaxOutputBytes          int64
+	// EncodeProfile accepts "fast" (default) or "compact"; both preserve
+	// requested resolution/frame rate. Fast spends fewer CPU cycles and yields
+	// larger files. FFmpegThreads defaults to 2 and is limited to 32.
+	EncodeProfile string
+	FFmpegThreads int
 }
 type Engine struct{ config app.Config }
 type Range struct{ StartMS, EndMS int64 }
@@ -41,7 +46,7 @@ func New(c Config) *Engine {
 	if c.MaxOutputBytes <= 0 {
 		c.MaxOutputBytes = 10 << 30
 	}
-	return &Engine{config: app.Config{FFmpeg: c.FFmpegPath, FFprobe: c.FFprobePath, MaxOutputBytes: c.MaxOutputBytes, MaxRanges: 1, MaxRangeMS: 24 * 3600000, MaxJobMS: 24 * 3600000}}
+	return &Engine{config: app.Config{FFmpeg: c.FFmpegPath, FFprobe: c.FFprobePath, FFmpegProfile: c.EncodeProfile, FFmpegThreads: c.FFmpegThreads, MaxOutputBytes: c.MaxOutputBytes, MaxRanges: 1, MaxRangeMS: 24 * 3600000, MaxJobMS: 24 * 3600000}}
 }
 
 func (e *Engine) Inspect(ctx context.Context, path string) (SourceInfo, error) {

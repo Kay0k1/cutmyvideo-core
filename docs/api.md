@@ -21,6 +21,12 @@ Health routes `/healthz` and `/readyz` are outside the prefix; readiness checks 
 
 ## Sources
 
+Platform inspection may reuse an owner's verified private metadata for up to
+five minutes, bounded by known signing expiry. Reopening does not extend that
+deadline. Export verifies source identity/timeline and refreshes a rejected
+cached address at most once with the same network budget. Extracted addresses
+and headers are never returned to clients.
+
 `kind`: `upload`, `direct`, `youtube`, or `platform`. Additive source fields:
 
 | Field | Meaning |
@@ -56,6 +62,13 @@ Statuses: `queued`, `running`, `succeeded`, `failed`, `cancelled`. Stage and mes
 Failed/cancelled items have an additive optional `error_code`, stored with the item without a schema migration. Older jobs can omit this field. Codes are fixed public diagnostics, not signed media addresses or raw subprocess stderr. Clients should localize known codes and use a safe generic fallback for unknown or absent diagnostics. Codes include missing audio (`audio_missing`), unsupported stream/copy settings, platform access/availability, transfer errors, changed/expired sources, source/job timeouts, storage/output limits and server failure; the complete vocabulary is in [OpenAPI](../api/openapi.yaml). `audio_missing` permits an MP4 retry with the same video and time range.
 
 Worker shutdown and lost lease/database access keep unfinished work recoverable through the existing bounded lease attempts. A job's own processing timeout remains terminal. Explicit cancellation wins a concurrent failure for pending items while already finished items keep their results and diagnostics. Final worker database reads/writes are bounded to five seconds.
+
+Optional `items[].progress_ms` measures encoded media time within the requested
+range. Legacy or not-yet-measured items omit it; a refreshed input can reset it.
+It is not elapsed wall time or an ETA. Even full encoding progress still needs
+output verification and atomic artifact/job-item publication; only a succeeded
+item has a downloadable result. Duration-weighted clients should count succeeded
+items fully and exclude failed/cancelled/queued partial counters.
 
 Copy artifacts report the chosen preceding video keyframe as `actual_start_ms`. `actual_end_ms` is this start plus the measured output-container duration. Packet timing, audio priming, and frame granularity can add small differences. These values describe the output, not a promise of sample-exact audio boundaries. Accurate mode validates duration with a 350 ms tolerance to accommodate codecs/containers; normal video differences are much smaller.
 

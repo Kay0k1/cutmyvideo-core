@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -24,25 +23,16 @@ func RunWorker(ctx context.Context, c Config, s *Store) error {
 	if err := os.MkdirAll(filepath.Join(c.DataDir, "work"), 0700); err != nil {
 		return err
 	}
-	cleanup := time.NewTicker(5 * time.Minute)
-	defer cleanup.Stop()
-	if err := s.Recover(ctx); err != nil {
+	if err := recoverWorkerJobs(ctx, s); err != nil {
 		return err
 	}
-	cleanupFiles(ctx, c, s)
+	stopMaintenance := startWorkerMaintenance(ctx, c, s)
+	defer stopMaintenance()
 	for {
 		if ctx.Err() != nil {
 			return nil
 		}
-		select {
-		case <-cleanup.C:
-			if err := s.Recover(ctx); err != nil {
-				slog.Error("recovery failed", "error", err)
-			}
-			cleanupFiles(ctx, c, s)
-		default:
-		}
-		job, token, err := s.Claim(ctx)
+		job, token, err := claimWorkerJob(ctx, s)
 		if errors.Is(err, ErrNotFound) {
 			health.Touch()
 			select {
@@ -67,6 +57,10 @@ func RunWorker(ctx context.Context, c Config, s *Store) error {
 }
 
 func processJob(parent context.Context, c Config, s *Store, j Job, token string) {
+	started := time.Now()
+	defer func() {
+		slog.Info("job_processing_stopped", "job_id", j.ID, "status", j.Status, "stage", j.Stage, "elapsed_ms", time.Since(started).Milliseconds())
+	}()
 	ctx, cancel := context.WithTimeout(parent, c.JobTimeout)
 	defer cancel()
 	stopHeartbeat := make(chan struct{})
@@ -83,7 +77,7 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				cancelled, err := s.Heartbeat(ctx, j.ID, token)
+				cancelled, err := heartbeatWorkerJob(ctx, s, j.ID, token)
 				if cancelled || err != nil {
 					if err != nil && ctx.Err() == nil {
 						leaseUncertain.Store(true)
@@ -102,6 +96,7 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 		err := s.SaveJob(saveCtx, j, token)
 		if err != nil {
 			slog.Error("job save failed", "job_id", j.ID, "error", err)
+			leaseUncertain.Store(true)
 			cancel()
 			return false
 		}
@@ -148,6 +143,7 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 	var streams []platformFormat
 	var playlists []hlsPlaylist
 	var guard *networkGuard
+	cachedMetadata, cacheRefreshUsed := false, false
 	if source.Path == "" {
 		j.Stage = "resolving"
 		j.Message = "Resolving source streams"
@@ -160,52 +156,24 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 			return
 		}
 		defer guard.Close()
+		resolvedAt := time.Now()
 		resolveCtx, resolveCancel := context.WithTimeout(ctx, c.SourceTimeout)
-		info, e := platformMetadata(resolveCtx, c, source.URL, guard)
+		inputs, streams, playlists, cachedMetadata, err = platformInputs(resolveCtx, c, s, source, guard, j.Request, false)
+		if err != nil && cachedMetadata && cachedAddressDenied(err) && resolveCtx.Err() == nil {
+			cacheRefreshUsed = true
+			inputs, streams, playlists, cachedMetadata, err = platformInputs(resolveCtx, c, s, source, guard, j.Request, true)
+		}
 		resolveCancel()
-		if e != nil {
-			if errors.Is(e, context.DeadlineExceeded) && ctx.Err() == nil {
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
 				finishFailure("source_timeout", "Source inspection timed out; open the video again or upload your file")
-				return
-			}
-			problem := exportProblem(e)
-			finishFailure(problem.code, problem.message)
-			return
-		}
-		if info.ID != source.ProviderID || math.Abs(info.Duration*1000-float64(source.DurationMS)) > 1000 {
-			finishFailure("source_changed", "The source has changed; open it again before exporting")
-			return
-		}
-		streams, e = pickStreams(info, j.Request.Quality, j.Request.Format)
-		if e != nil {
-			problem := exportProblem(e)
-			finishFailure(problem.code, problem.message)
-			return
-		}
-		inputs = nil
-		playlists = make([]hlsPlaylist, len(streams))
-		for i, f := range streams {
-			if isHLS(f) {
-				playlists[i], e = loadHLS(ctx, guard, f, j.Request.Quality, 0)
-				if e != nil {
-					problem := exportProblem(e)
-					finishFailure(problem.code, problem.message)
-					return
-				}
-				if math.Abs(float64(playlists[i].DurationMS-source.DurationMS)) > 2000 {
-					finishFailure("source_timeline_changed", "The recording is incomplete or its timeline changed; open a completed recording instead")
-					return
-				}
-				inputs = append(inputs, mediaInput{})
 			} else {
-				u, e := guard.RelayWithHeaders(f.URL, f.Headers)
-				if e != nil {
-					finishFailure("unsupported_stream", "A source stream uses an unsupported address")
-					return
-				}
-				inputs = append(inputs, mediaInput{Path: u, Remote: true})
+				problem := exportProblem(err)
+				finishFailure(problem.code, problem.message)
 			}
+			return
 		}
+		slog.Info("source_streams_resolved", "job_id", j.ID, "cache_hit", cachedMetadata, "elapsed_ms", time.Since(resolvedAt).Milliseconds())
 	}
 
 	work := filepath.Join(c.DataDir, "work", j.ID+"-"+token)
@@ -231,47 +199,88 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 		item.Message = ""
 		item.ErrorCode = ""
 		item.Artifact = nil
+		item.ProgressMS = 0
 		j.Stage = "processing"
 		j.Message = fmt.Sprintf("Processing fragment %d of %d", i+1, len(j.Items))
 		if !persist() {
 			return
 		}
-		reserve := c.MaxOutputBytes
-		for _, f := range streams {
-			if isHLS(f) {
-				reserve += 2 * c.MaxSourceBytes
-				break
-			}
-		}
-		if !storageAvailable(c, reserve) {
-			finishFailure("storage_full", "Server storage is full; try again after older files expire")
-			return
-		}
 		out := filepath.Join(work, item.ID+"."+j.Request.Format)
-		itemInputs := append([]mediaInput(nil), inputs...)
-		fragmentDir := filepath.Join(work, item.ID)
-		var prepareErr error
-		for k, f := range streams {
-			if !isHLS(f) {
-				continue
-			}
-			if prepareErr = os.MkdirAll(fragmentDir, 0700); prepareErr != nil {
-				break
-			}
-			var path string
-			var offset int64
-			path, offset, prepareErr = stageHLS(ctx, c, guard, f, playlists[k], j.Request.Ranges[i], fragmentDir, k)
-			if prepareErr != nil {
-				break
-			}
-			itemInputs[k] = mediaInput{Path: path, OffsetMS: offset}
-		}
+		encodeStarted := time.Now()
 		var start, end int64
-		e := prepareErr
-		if e == nil {
-			start, end, e = exportInputs(ctx, c, itemInputs, j.Request.Ranges[i], j.Request, out)
+		var e error
+		var lastProgressSave time.Time
+		report := func(ms int64) {
+			if duration := item.EndMS - item.StartMS; ms > duration {
+				ms = duration
+			}
+			item.ProgressMS = ms
+			if time.Since(lastProgressSave) >= time.Second {
+				lastProgressSave = time.Now()
+				persist()
+			}
 		}
-		_ = os.RemoveAll(fragmentDir)
+		for {
+			reserve := c.MaxOutputBytes
+			for _, f := range streams {
+				if isHLS(f) {
+					reserve += 2 * c.MaxSourceBytes
+					break
+				}
+			}
+			if !storageAvailableContext(ctx, c, reserve) {
+				if ctx.Err() != nil {
+					finishFailure("job_timeout", "Processing stopped or exceeded the time limit")
+				} else {
+					finishFailure("storage_full", "Server storage is full; try again after older files expire")
+				}
+				return
+			}
+			itemInputs := append([]mediaInput(nil), inputs...)
+			fragmentDir := filepath.Join(work, item.ID)
+			e = nil
+			for k, f := range streams {
+				if !isHLS(f) {
+					continue
+				}
+				if e = os.MkdirAll(fragmentDir, 0700); e != nil {
+					break
+				}
+				var path string
+				var offset int64
+				path, offset, e = stageHLS(ctx, c, guard, f, playlists[k], j.Request.Ranges[i], fragmentDir, k)
+				if e != nil {
+					break
+				}
+				itemInputs[k] = mediaInput{Path: path, OffsetMS: offset}
+			}
+			if e == nil {
+				start, end, e = exportInputsProgress(ctx, c, itemInputs, j.Request.Ranges[i], j.Request, out, report)
+			}
+			_ = os.RemoveAll(fragmentDir)
+			if e == nil || !cachedMetadata || cacheRefreshUsed || !cachedAddressDenied(e) || ctx.Err() != nil {
+				break
+			}
+			cacheRefreshUsed = true
+			_ = os.Remove(out)
+			j.Stage = "resolving"
+			j.Message = "Refreshing source streams"
+			item.ProgressMS = 0
+			if !persist() {
+				return
+			}
+			inputs, streams, playlists, cachedMetadata, e = platformInputs(ctx, c, s, source, guard, j.Request, true)
+			if e != nil {
+				break
+			}
+			j.Stage = "processing"
+			j.Message = fmt.Sprintf("Processing fragment %d of %d", i+1, len(j.Items))
+			if !persist() {
+				return
+			}
+			slog.Info("cached_source_refreshed", "job_id", j.ID)
+		}
+		slog.Info("fragment_processed", "job_id", j.ID, "item_id", item.ID, "elapsed_ms", time.Since(encodeStarted).Milliseconds(), "media_ms", item.ProgressMS, "success", e == nil)
 		if e != nil {
 			if ctx.Err() != nil {
 				finishFailure("job_timeout", "Processing stopped or exceeded the time limit")
@@ -328,8 +337,27 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 			continue
 		}
 		a := Artifact{ID: id, Filename: fmt.Sprintf("cut-%02d-%s.%s", i+1, item.ID[5:13], j.Request.Format), SizeBytes: info.Size(), DownloadURL: "/api/v1/artifacts/" + id + "/download", ActualStartMS: start, ActualEndMS: end}
-		if e = s.AddArtifact(ctx, j.Owner, j.ID, path, token, a); e != nil {
+		previous := *item
+		item.Status = "succeeded"
+		item.ProgressMS = item.EndMS - item.StartMS
+		item.Artifact = &a
+		publishCtx, publishCancel := context.WithTimeout(ctx, workerDatabaseTimeout)
+		e = s.PublishArtifact(publishCtx, j, path, token, a)
+		publishCancel()
+		if e != nil {
+			var publication *ArtifactPublicationError
+			if errors.As(e, &publication) && publication.CommitUncertain {
+				// PostgreSQL may have committed both writes before the connection
+				// failed. Preserve the file and let lease recovery read its state.
+				slog.Warn("artifact publication acknowledgement lost", "job_id", j.ID, "item_id", item.ID)
+				return
+			}
+			*item = previous
 			_ = os.Remove(path)
+			if errors.Is(e, ErrNotFound) {
+				finishFailure("server_error", "Could not register the result")
+				return
+			}
 			if ctx.Err() != nil || leaseUncertain.Load() {
 				finishFailure("job_timeout", "Processing stopped or exceeded the time limit")
 				return
@@ -341,11 +369,6 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 				return
 			}
 			continue
-		}
-		item.Status = "succeeded"
-		item.Artifact = &a
-		if !persist() {
-			return
 		}
 	}
 	failed := 0
@@ -375,11 +398,17 @@ func cleanupFiles(ctx context.Context, c Config, s *Store) {
 		return
 	}
 	for _, path := range paths {
+		if ctx.Err() != nil {
+			return
+		}
 		_ = os.Remove(path)
 	}
 	// Reconcile old files that survived a crash before database registration.
 	// A generous floor avoids racing an active upload or artifact publication.
 	for _, kind := range []string{"sources", "artifacts"} {
+		if ctx.Err() != nil {
+			return
+		}
 		ttl := c.ArtifactTTL
 		query := `SELECT path FROM artifacts`
 		if kind == "sources" {
@@ -416,6 +445,9 @@ func cleanupFiles(ctx context.Context, c Config, s *Store) {
 			continue
 		}
 		for _, entry := range entries {
+			if ctx.Err() != nil {
+				return
+			}
 			if !entry.Type().IsRegular() {
 				continue
 			}
@@ -435,6 +467,9 @@ func cleanupFiles(ctx context.Context, c Config, s *Store) {
 		return
 	}
 	for _, entry := range entries {
+		if ctx.Err() != nil {
+			return
+		}
 		info, e := entry.Info()
 		if e == nil && info.ModTime().Before(time.Now().Add(-c.ArtifactTTL)) && info.ModTime().Before(time.Now().Add(-c.JobTimeout-time.Hour)) {
 			_ = os.RemoveAll(filepath.Join(c.DataDir, "work", entry.Name()))
@@ -443,8 +478,18 @@ func cleanupFiles(ctx context.Context, c Config, s *Store) {
 }
 
 func storageAvailable(c Config, reserve int64) bool {
-	var total int64
+	return storageAvailableContext(context.Background(), c, reserve)
+}
+
+func storageAvailableContext(ctx context.Context, c Config, reserve int64) bool {
+	if ctx.Err() != nil || reserve < 0 || reserve > c.MaxStorageBytes || !filesystemStorageAvailable(c.DataDir, reserve) {
+		return false
+	}
+	remaining := c.MaxStorageBytes - reserve
 	err := filepath.WalkDir(c.DataDir, func(path string, entry os.DirEntry, err error) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		if os.IsNotExist(err) {
 			return nil
 		}
@@ -456,9 +501,12 @@ func storageAvailable(c Config, reserve int64) bool {
 			if e != nil {
 				return e
 			}
-			total += info.Size()
+			if info.Size() < 0 || info.Size() > remaining {
+				return errStorageBudgetExceeded
+			}
+			remaining -= info.Size()
 		}
 		return nil
 	})
-	return (err == nil || os.IsNotExist(err)) && total+reserve <= c.MaxStorageBytes
+	return ctx.Err() == nil && (err == nil || os.IsNotExist(err))
 }

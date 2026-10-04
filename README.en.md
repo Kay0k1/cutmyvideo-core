@@ -128,6 +128,8 @@ The response contains the job ID in `id`. Poll `GET /api/v1/jobs/{id}` and downl
 | `SOURCE_TIMEOUT` / `JOB_TIMEOUT` | `2m` / `30m` |
 | `SOURCE_TTL` / `ARTIFACT_TTL` | `24h` / `24h` |
 | `FFMPEG_THREADS` | 2 |
+| `FFMPEG_PROFILE` | `fast`; `compact` produces smaller files using more CPU time |
+| `GOMEMLIMIT` | `128MiB` Docker soft Go runtime limit; FFmpeg memory is bounded separately |
 | `FFMPEG_PATH` / `FFPROBE_PATH` / `YTDLP_PATH` | Corresponding executable names |
 | `WORKER_HEALTH_PATH` | `/tmp/cutmy-worker-health`, container-local temporary file |
 
@@ -153,6 +155,8 @@ flowchart LR
 ```
 
 Go coordinates work; FFmpeg handles media. `pkg/engine` exposes local processing to other applications. Jobs retain an immutable snapshot of ranges and settings. A future MCP adapter can call the existing operations.
+
+A short private cache avoids repeated extraction when reopening or exporting a source. Fast encoding reduces CPU work but creates larger files; the previous profile remains available through `FFMPEG_PROFILE=compact`, CLI `--profile compact` and `engine.Config.EncodeProfile`. The CLI also accepts `--threads 1..32`. See [performance and recovery](docs/performance.md) for measurements, cache limits and memory/recovery behavior.
 
 See the [security model](docs/security-model.md). Public deployment should also apply CPU/RAM/disk limits and container network isolation. Do not mount application secrets or private host volumes into media containers.
 

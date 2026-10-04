@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && mkdir -p /data && chown node:node /data
 COPY --from=build /cutmy /usr/local/bin/cutmy
 USER node
-ENV DATA_DIR=/data LISTEN_ADDR=:8080 FFMPEG_THREADS=2
+ENV DATA_DIR=/data LISTEN_ADDR=:8080 FFMPEG_THREADS=2 FFMPEG_PROFILE=fast GOMEMLIMIT=128MiB
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/cutmy"]
 CMD ["server"]

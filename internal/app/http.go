@@ -212,7 +212,7 @@ func (s *Server) beginSource(ctx context.Context, owner string) error {
 	if s.preparing[owner] {
 		return errors.New("source_busy")
 	}
-	if !storageAvailable(s.Config, int64(len(s.preparing)+1)*s.Config.MaxSourceBytes) {
+	if !storageAvailableContext(ctx, s.Config, int64(len(s.preparing)+1)*s.Config.MaxSourceBytes) {
 		return errors.New("storage_limit")
 	}
 	select {
@@ -339,7 +339,10 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 			return
 		}
 		defer g.Close()
-		info, e := platformMetadata(ctx, s.Config, v.URL, g)
+		info, cached := s.Store.RecentPlatformMetadata(ctx, owner, v.URL)
+		if !cached {
+			info, e = platformMetadata(ctx, s.Config, v.URL, g)
+		}
 		if e != nil {
 			if errors.Is(e, context.DeadlineExceeded) {
 				writeError(w, 504, "source_timeout", "Source inspection timed out; try a direct file or upload")
@@ -350,35 +353,22 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 			}
 			return
 		}
-		durationMS := int64(math.Round(info.Duration * 1000))
-		selected, e := pickStreams(info, "best", "mp4")
+		info, durationMS, e := inspectCachedPlatformSource(ctx, g, info, cached, func() (platformInfo, error) {
+			s.Store.invalidateRecentPlatformMetadata(ctx, owner, v.URL)
+			expected := v
+			expected.ProviderID = info.ID
+			expected.DurationMS = int64(math.Round(info.Duration * 1000))
+			return forceFreshPlatformMetadata(ctx, s.Config, expected, g)
+		})
 		if e != nil {
-			selected, e = pickStreams(info, "best", "mp3")
-			if e != nil {
-				writeError(w, 422, "unsupported_stream", errUnsupportedStream.message)
-				return
+			if errors.Is(e, context.DeadlineExceeded) {
+				writeError(w, 504, "source_timeout", "Source inspection timed out; try a direct file or upload")
+			} else if problem := problemFromError(e); problem != nil {
+				writeError(w, 422, problem.code, problem.message)
+			} else {
+				writeError(w, 422, "platform_unavailable", errPlatformUnavailable.message)
 			}
-		}
-		for _, f := range selected {
-			if !isHLS(f) {
-				continue
-			}
-			p, e := loadHLS(ctx, g, f, "best", 0)
-			if e != nil {
-				if errors.Is(e, context.DeadlineExceeded) {
-					writeError(w, 504, "source_timeout", "Source inspection timed out; try a direct file or upload")
-				} else if problem := problemFromError(e); problem != nil {
-					writeError(w, 422, problem.code, problem.message)
-				} else {
-					writeError(w, 422, "platform_unavailable", errPlatformUnavailable.message)
-				}
-				return
-			}
-			if math.Abs(float64(p.DurationMS)-info.Duration*1000) > 1000 {
-				writeError(w, 422, "platform_unavailable", "The recording is incomplete or its timeline is unavailable. Use a completed recording")
-				return
-			}
-			durationMS = p.DurationMS
+			return
 		}
 		v.Kind = "platform"
 		v.Title = info.Title
@@ -405,6 +395,7 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 			internalError(w, e)
 			return
 		}
+		_ = s.Store.CachePlatformMetadata(ctx, v, info)
 	}
 	if v.Path != "" {
 		preview := "/api/v1/sources/" + v.ID + "/media"
@@ -440,6 +431,42 @@ func (s *Server) completeLocalSource(ctx context.Context, v *Source) error {
 		}
 	}
 	return nil
+}
+
+func inspectPlatformSource(ctx context.Context, g *networkGuard, info platformInfo) (int64, error) {
+	durationMS := int64(math.Round(info.Duration * 1000))
+	selected, err := pickStreams(info, "best", "mp4")
+	if err != nil {
+		selected, err = pickStreams(info, "best", "mp3")
+		if err != nil {
+			return 0, errUnsupportedStream
+		}
+	}
+	for _, format := range selected {
+		if !isHLS(format) {
+			continue
+		}
+		playlist, err := loadHLS(ctx, g, format, "best", 0)
+		if err != nil {
+			return 0, err
+		}
+		if math.Abs(float64(playlist.DurationMS)-info.Duration*1000) > 1000 {
+			return 0, &sourceProblem{"platform_unavailable", "The recording is incomplete or its timeline is unavailable. Use a completed recording"}
+		}
+		durationMS = playlist.DurationMS
+	}
+	return durationMS, nil
+}
+
+func inspectCachedPlatformSource(ctx context.Context, g *networkGuard, info platformInfo, cached bool, refresh func() (platformInfo, error)) (platformInfo, int64, error) {
+	durationMS, err := inspectPlatformSource(ctx, g, info)
+	if err != nil && cached && cachedAddressDenied(err) && ctx.Err() == nil {
+		info, err = refresh()
+		if err == nil {
+			durationMS, err = inspectPlatformSource(ctx, g, info)
+		}
+	}
+	return info, durationMS, err
 }
 
 func (s *Server) upload(w http.ResponseWriter, r *http.Request, owner string) {

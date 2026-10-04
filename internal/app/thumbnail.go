@@ -18,7 +18,7 @@ const maxThumbnailBytes int64 = 2 << 20
 // Only locally staged, inspected images are shown by clients. Signed extractor
 // addresses never become visible URLs; the source owner guards the endpoint.
 func fetchThumbnail(ctx context.Context, c Config, id, raw string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	u, err := validateURL(raw)
 	if err != nil {

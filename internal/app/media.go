@@ -87,24 +87,31 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 }
 
 func runCommand(ctx context.Context, path string, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, path, args...)
-	configureProcess(cmd)
-	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=/nonexistent", "LANG=C.UTF-8", "LC_ALL=C.UTF-8"}
-	cmd.WaitDelay = 2 * time.Second
 	stdout := &limitedBuffer{limit: 8 << 20}
-	stderr := &limitedBuffer{limit: 16 << 10}
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	if err := cmd.Run(); err != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		return nil, &mediaProcessFailure{cause: err, category: mediaFailureCategory(stderr.String())}
+	if err := runCommandOutput(ctx, path, args, stdout); err != nil {
+		return nil, err
 	}
 	if stdout.Len() >= stdout.limit {
 		return nil, errors.New("process response is too large")
 	}
 	return stdout.Bytes(), nil
+}
+
+func runCommandOutput(ctx context.Context, path string, args []string, stdout io.Writer) error {
+	cmd := exec.CommandContext(ctx, path, args...)
+	configureProcess(cmd)
+	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=/nonexistent", "LANG=C.UTF-8", "LC_ALL=C.UTF-8"}
+	cmd.WaitDelay = 2 * time.Second
+	stderr := &limitedBuffer{limit: 16 << 10}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return &mediaProcessFailure{cause: err, category: mediaFailureCategory(stderr.String())}
+	}
+	return nil
 }
 
 type probeInfo struct {
@@ -145,17 +152,18 @@ func probe(ctx context.Context, c Config, path string, remote bool) (probeInfo, 
 }
 
 type platformInfo struct {
-	ID         string           `json:"id"`
-	Title      string           `json:"title"`
-	Duration   float64          `json:"duration"`
-	Extractor  string           `json:"extractor_key"`
-	Thumbnail  string           `json:"thumbnail"`
-	IsLive     bool             `json:"is_live"`
-	LiveStatus string           `json:"live_status"`
-	Type       string           `json:"_type"`
-	Entries    json.RawMessage  `json:"entries"`
-	HasDRM     bool             `json:"has_drm"`
-	Formats    []platformFormat `json:"formats"`
+	cachedUntil time.Time
+	ID          string           `json:"id"`
+	Title       string           `json:"title"`
+	Duration    float64          `json:"duration"`
+	Extractor   string           `json:"extractor_key"`
+	Thumbnail   string           `json:"thumbnail"`
+	IsLive      bool             `json:"is_live"`
+	LiveStatus  string           `json:"live_status"`
+	Type        string           `json:"_type"`
+	Entries     json.RawMessage  `json:"entries"`
+	HasDRM      bool             `json:"has_drm"`
+	Formats     []platformFormat `json:"formats"`
 }
 type platformFormat struct {
 	ID       string            `json:"format_id"`
@@ -350,6 +358,10 @@ func exportMedia(ctx context.Context, c Config, paths []string, remote bool, r R
 	return exportInputs(ctx, c, inputs, r, request, out)
 }
 func exportInputs(ctx context.Context, c Config, inputs []mediaInput, r Range, request ExportRequest, out string) (int64, int64, error) {
+	return exportInputsProgress(ctx, c, inputs, r, request, out, nil)
+}
+
+func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r Range, request ExportRequest, out string, report func(int64)) (int64, int64, error) {
 	if len(inputs) == 0 {
 		return 0, 0, errUnsupportedStream
 	}
@@ -377,8 +389,15 @@ func exportInputs(ctx context.Context, c Config, inputs []mediaInput, r Range, r
 		start = local + inputs[0].OffsetMS
 	}
 
-	threads := env("FFMPEG_THREADS", "2")
+	threadCount := c.FFmpegThreads
+	if threadCount <= 0 || threadCount > 32 {
+		threadCount = 2
+	}
+	threads := strconv.Itoa(threadCount)
 	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-filter_threads", threads, "-filter_complex_threads", threads}
+	if report != nil {
+		args = append(args, "-nostats", "-stats_period", "0.5", "-progress", "pipe:1")
+	}
 	for _, input := range inputs {
 		protocols := "file"
 		if input.Remote {
@@ -403,7 +422,16 @@ func exportInputs(ctx context.Context, c Config, inputs []mediaInput, r Range, r
 		if request.CutMode == "copy" {
 			args = append(args, "-c", "copy", "-avoid_negative_ts", "make_zero")
 		} else {
-			args = append(args, "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k")
+			args = append(args, "-c:v", "libx264")
+			if c.FFmpegProfile == "compact" {
+				args = append(args, "-preset", "veryfast", "-crf", "20")
+			} else {
+				// CABAC recovers much of ultrafast's size overhead with little
+				// CPU cost on the measured server. CRF 18 retains visual quality
+				// while avoiding expensive motion analysis in the default profile.
+				args = append(args, "-preset", "ultrafast", "-crf", "18", "-coder", "1")
+			}
+			args = append(args, "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k")
 			if request.Quality != "best" {
 				height := 1080
 				if request.Quality == "720p" {
@@ -416,8 +444,14 @@ func exportInputs(ctx context.Context, c Config, inputs []mediaInput, r Range, r
 		}
 		args = append(args, "-movflags", "+faststart")
 	}
-	args = append(args, "-threads", env("FFMPEG_THREADS", "2"), "-map_metadata", "-1", "-map_chapters", "-1", "-fs", strconv.FormatInt(c.MaxOutputBytes, 10), out)
-	if _, err := runCommand(ctx, c.FFmpeg, args...); err != nil {
+	args = append(args, "-threads", threads, "-map_metadata", "-1", "-map_chapters", "-1", "-fs", strconv.FormatInt(c.MaxOutputBytes, 10), out)
+	var commandErr error
+	if report == nil {
+		_, commandErr = runCommand(ctx, c.FFmpeg, args...)
+	} else {
+		commandErr = runCommandOutput(ctx, c.FFmpeg, args, &mediaProgressWriter{totalMS: r.EndMS - start, report: report})
+	}
+	if err := commandErr; err != nil {
 		if info, statErr := os.Stat(out); statErr == nil && info.Size() >= c.MaxOutputBytes {
 			return 0, 0, errOutputLimit
 		}

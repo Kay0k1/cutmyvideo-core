@@ -1,0 +1,119 @@
+package app
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+)
+
+// ArtifactPublicationError distinguishes a rejected publication from a lost
+// commit acknowledgement. A possibly committed file must not be removed or its
+// job snapshot overwritten; recovery reads the authoritative database state.
+type ArtifactPublicationError struct {
+	CommitUncertain bool
+	cause           error
+}
+
+func (e *ArtifactPublicationError) Error() string {
+	if e.CommitUncertain {
+		return fmt.Sprintf("artifact publication commit outcome is unknown: %v", e.cause)
+	}
+	return fmt.Sprintf("artifact publication rejected: %v", e.cause)
+}
+
+func (e *ArtifactPublicationError) Unwrap() error { return e.cause }
+
+// PublishArtifact atomically registers the result and saves the job snapshot.
+// The caller supplies a running job with exactly one succeeded item referencing
+// a, and retains the file on an ArtifactPublicationError with CommitUncertain.
+func (s *Store) PublishArtifact(ctx context.Context, j Job, path, token string, a Artifact) error {
+	if err := validateArtifactPublication(j, path, a); err != nil {
+		return &ArtifactPublicationError{cause: err}
+	}
+	tx, err := s.DB.Begin(ctx)
+	if err != nil {
+		return &ArtifactPublicationError{cause: err}
+	}
+	return publishArtifactTransaction(ctx, tx, j, path, token, a)
+}
+
+func validateArtifactPublication(j Job, path string, a Artifact) error {
+	if j.ID == "" || j.Owner == "" || j.Status != "running" || path == "" || a.ID == "" {
+		return errors.New("invalid artifact publication snapshot")
+	}
+	matches := 0
+	for _, item := range j.Items {
+		if item.Artifact != nil && item.Artifact.ID == a.ID {
+			if item.Status != "succeeded" || *item.Artifact != a {
+				return errors.New("invalid artifact publication item")
+			}
+			matches++
+		}
+	}
+	if matches != 1 {
+		return errors.New("artifact publication must reference one completed item")
+	}
+	return nil
+}
+
+func publishArtifactTransaction(ctx context.Context, tx pgx.Tx, j Job, path, token string, a Artifact) error {
+	defer func() {
+		rollbackCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = tx.Rollback(rollbackCtx)
+	}()
+	items, err := json.Marshal(j.Items)
+	if err != nil {
+		return &ArtifactPublicationError{cause: err}
+	}
+	// The row lock serializes cancellation and replacement leases with both
+	// writes. Wall-clock checks also reject a lease that expires while waiting.
+	var id string
+	err = tx.QueryRow(ctx, `SELECT id FROM jobs WHERE id=$1 AND owner=$2 AND lease_token=$3 AND lease_until>clock_timestamp() AND status='running' AND cancel_requested=false FOR UPDATE`, j.ID, j.Owner, token).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = ErrNotFound
+	}
+	if err != nil {
+		return &ArtifactPublicationError{cause: err}
+	}
+	tag, err := tx.Exec(ctx, `INSERT INTO artifacts(id,owner,job_id,path,filename,size_bytes,actual_start_ms,actual_end_ms) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(id) DO NOTHING`, a.ID, j.Owner, j.ID, path, a.Filename, a.SizeBytes, a.ActualStartMS, a.ActualEndMS)
+	if err == nil && tag.RowsAffected() == 0 {
+		err = ErrNotFound
+	}
+	if err != nil {
+		return &ArtifactPublicationError{cause: err}
+	}
+	tag, err = tx.Exec(ctx, `UPDATE jobs SET status=$3,stage=$4,message=$5,items=$6::jsonb,updated_at=now() WHERE id=$1 AND owner=$7 AND lease_token=$2 AND lease_until>clock_timestamp() AND status='running' AND cancel_requested=false`, j.ID, token, j.Status, j.Stage, j.Message, items, j.Owner)
+	if err == nil && tag.RowsAffected() == 0 {
+		err = ErrNotFound
+	}
+	if err != nil {
+		return &ArtifactPublicationError{cause: err}
+	}
+	if err = ctx.Err(); err != nil {
+		return &ArtifactPublicationError{cause: err}
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return &ArtifactPublicationError{CommitUncertain: !publicationCommitRejected(err), cause: err}
+	}
+	return nil
+}
+
+func publicationCommitRejected(err error) bool {
+	if errors.Is(err, pgx.ErrTxCommitRollback) || pgconn.SafeToRetry(err) {
+		return true
+	}
+	var problem *pgconn.PgError
+	if errors.As(err, &problem) {
+		// Only explicit constraint/transaction rollback responses prove that
+		// COMMIT failed. Transport failures and unknown resolution stay uncertain.
+		return strings.HasPrefix(problem.Code, "23") || problem.Code == "40001" || problem.Code == "40P01" || problem.Code == "25P02"
+	}
+	return false
+}
