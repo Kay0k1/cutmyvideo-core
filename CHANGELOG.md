@@ -5,6 +5,7 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 ## Unreleased
 
 ### Added
+- Reproducible HLS parsing/window-selection, storage admission and saturated rate-limit benchmarks with measured CPU/allocation results.
 - Fast CPU encoding profile (ultrafast/CRF 18 with CABAC), configurable compact profile, bounded thread settings, CLI profile/thread options and a 128 MiB soft Go runtime memory limit in Docker; measured speed/file-size tradeoffs are documented.
 - Optional measured `items[].progress_ms` during encoding, bounded/redacted progress parsing and safe per-stage timing logs.
 - Private, owner-specific five-minute platform metadata cache with signed-expiry safety margins, database-backed miss coalescing and repeated-import reuse without extending the original deadline.
@@ -28,6 +29,11 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 - Bounded private subprocess diagnostics classify failures into fixed categories without logging raw CDN URLs, credentials, or media paths; an unexplained nonzero exit is not automatically retried.
 
 ### Fixed
+- Parse HLS playlists with one validated base URL and bounded preallocation; locate selected segments with binary search while preserving network and timeline validation.
+- Read storage directories in bounded unsorted batches; continue quota scans after individual files disappear.
+- Inspect only required FFprobe fields, avoiding large unused metadata and rejecting fewer otherwise valid media files.
+- Bound default PostgreSQL pools to four connections per process while preserving explicit maximum/minimum settings.
+- Cancel and reap CLI media processes on SIGINT/SIGTERM instead of leaving them running after the command exits.
 - Reserve source preparation before quota reads and preserve distinct capacity, storage and database failures in API responses.
 - Bound source admission, multipart transfer and inspection with the configured source timeout; remove stalled partial uploads and distinguish interrupted transfers from oversized media.
 - Check worker lease expiry after acquiring the job row lock; reject stale saves, heartbeats and artifact registration even when database lock waits outlive the lease.
@@ -45,6 +51,9 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 - Enforce explicit resolution caps for copy exports without silent re-encoding or oversized-resolution results; detect output-size truncation before reporting malformed media.
 
 ### Security
+- Bound rate-table growth and expiry-scan frequency; apply IP admission before owner allocation and preserve existing users at capacity.
+- Limit JSON reads to ten seconds and stop unread request-body draining after rejection, including stalled multipart and early authentication/origin/rate failures.
+- Limit upstream response headers to 64 KiB and exclude local environment variants/cookie files from build context.
 - Updated pgx to 5.9.2 and golang.org/x/text to 0.39.0 after reachable vulnerability scanning; CI repeats the scan.
 - Require nonempty authenticated proxy credentials for Python urllib compatibility; regression verifies that private destinations remain blocked after authentication.
 - Reject malformed YouTube IDs, spoofed or unsupported YouTube hosts, embedded credentials, and nonstandard ports before source preparation or network access.

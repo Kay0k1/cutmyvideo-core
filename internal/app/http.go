@@ -24,17 +24,22 @@ import (
 )
 
 type Server struct {
-	Config    Config
-	Store     *Store
-	mu        sync.Mutex
-	preparing map[string]bool
-	rate      map[string]*rateEntry
-	slots     chan struct{}
+	Config      Config
+	Store       *Store
+	mu          sync.Mutex
+	preparing   map[string]bool
+	rate        map[string]*rateEntry
+	rateCleanup time.Time
+	slots       chan struct{}
 }
 type rateEntry struct {
 	count int
 	reset time.Time
 }
+
+const maxRateEntries = 10000
+const requestsPerIPPerMinute = 1200
+const jsonReadTimeout = 10 * time.Second
 
 var (
 	errSourceLimit      = &sourceProblem{"source_limit", "This session has reached its source limit; wait for older sources to expire"}
@@ -44,7 +49,7 @@ var (
 )
 
 func NewServer(c Config, s *Store) *Server {
-	return &Server{Config: c, Store: s, preparing: map[string]bool{}, rate: map[string]*rateEntry{}, slots: make(chan struct{}, 4)}
+	return &Server{Config: c, Store: s, preparing: map[string]bool{}, rate: map[string]*rateEntry{}, rateCleanup: time.Now().Add(time.Minute), slots: make(chan struct{}, 4)}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -72,6 +77,19 @@ func (s *Server) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")
+		if r.Body != nil && r.Body != http.NoBody {
+			// End any unread-body drain when the handler exits, including early
+			// session/origin/rate rejection. net/http installs a fresh deadline
+			// for the next keep-alive request after a fully consumed body.
+			defer func() { _ = http.NewResponseController(w).SetReadDeadline(time.Now()) }()
+			if r.Method == http.MethodGet || r.Method == http.MethodHead {
+				if r.ProtoMajor == 1 {
+					w.Header().Set("Connection", "close")
+				}
+				writeError(w, 400, "invalid_request", "This endpoint does not accept a request body")
+				return
+			}
+		}
 		if r.Method == "POST" && !s.validOrigin(r) {
 			writeError(w, 403, "origin_rejected", "This request must come from the same site")
 			return
@@ -112,23 +130,30 @@ func (s *Server) allow(key string, limit int) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now()
-	if len(s.rate) > 10000 {
+	// Bound cleanup work under the shared mutex even when the table is full.
+	// Previously every denied request scanned all entries and a full table also
+	// rejected existing clients regardless of their own remaining allowance.
+	if !now.Before(s.rateCleanup) {
 		for k, v := range s.rate {
-			if v.reset.Before(now) {
+			if !now.Before(v.reset) {
 				delete(s.rate, k)
 			}
 		}
-		if len(s.rate) > 10000 {
-			return false
-		}
+		s.rateCleanup = now.Add(time.Second)
 	}
 	v := s.rate[key]
-	if v == nil || v.reset.Before(now) {
+	if v == nil || !now.Before(v.reset) {
+		if v == nil && len(s.rate) >= maxRateEntries {
+			return false
+		}
 		v = &rateEntry{reset: now.Add(time.Minute)}
 		s.rate[key] = v
 	}
+	if v.count >= limit {
+		return false
+	}
 	v.count++
-	return v.count <= limit
+	return true
 }
 
 func (s *Server) session(w http.ResponseWriter, r *http.Request) {
@@ -171,12 +196,19 @@ func (s *Server) withSession(next ownerHandler) http.HandlerFunc {
 			writeError(w, 401, "session_required", "Create a session before using this endpoint")
 			return
 		}
-		if !s.allow("requests:"+owner, 180) {
+		// Apply IP admission before allocating a per-owner entry: capability
+		// cookies are deliberately client-generatable and may be rotated freely.
+		ip := s.clientIP(r)
+		if !s.allow("requests-ip:"+ip, requestsPerIPPerMinute) {
 			writeError(w, 429, "rate_limit", "Too many requests; wait a minute")
 			return
 		}
-		if r.Method == "POST" && !s.allow("mutations:"+s.clientIP(r), s.Config.MutationsPerMinute) {
+		if r.Method == "POST" && !s.allow("mutations:"+ip, s.Config.MutationsPerMinute) {
 			writeError(w, 429, "rate_limit", "Too many changes; wait a minute")
+			return
+		}
+		if !s.allow("requests:"+owner, 180) {
+			writeError(w, 429, "rate_limit", "Too many requests; wait a minute")
 			return
 		}
 		next(w, r, owner)
@@ -529,7 +561,8 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request, owner string) {
 		internalError(w, err)
 		return
 	}
-	defer controller.SetReadDeadline(time.Time{})
+	// Handler ends any unread-body drain; clearing this deadline here would
+	// allow a rejected upload to keep a server connection occupied afterward.
 	if err := s.beginSource(ctx, owner); err != nil {
 		writeSourceAdmissionError(w, ctx, err)
 		return
@@ -719,17 +752,49 @@ func serveFile(w http.ResponseWriter, r *http.Request, path, name string, attach
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
+	// JSON metadata is small. Do not give stalled JSON bodies the server's
+	// much longer media-upload timeout, which retains a connection/goroutine.
+	deadline := time.Now().Add(jsonReadTimeout)
+	if parent, ok := r.Context().Deadline(); ok && parent.Before(deadline) {
+		deadline = parent
+	}
+	controller := http.NewResponseController(w)
+	if err := controller.SetReadDeadline(deadline); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		internalError(w, err)
+		return err
+	}
+	complete := false
+	defer func() {
+		if complete {
+			_ = controller.SetReadDeadline(time.Time{})
+		}
+	}()
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(target); err != nil {
-		writeError(w, 400, "invalid_request", "Send a valid JSON request with supported fields")
+		if r.ProtoMajor == 1 {
+			w.Header().Set("Connection", "close")
+		}
+		if sourceTimedOut(r.Context(), err) {
+			writeError(w, http.StatusRequestTimeout, "request_timeout", "The request timed out; try again")
+		} else {
+			writeError(w, 400, "invalid_request", "Send a valid JSON request with supported fields")
+		}
 		return err
 	}
 	if err := d.Decode(&struct{}{}); err != io.EOF {
-		writeError(w, 400, "invalid_request", "Send exactly one JSON object")
+		if r.ProtoMajor == 1 {
+			w.Header().Set("Connection", "close")
+		}
+		if sourceTimedOut(r.Context(), err) {
+			writeError(w, http.StatusRequestTimeout, "request_timeout", "The request timed out; try again")
+		} else {
+			writeError(w, 400, "invalid_request", "Send exactly one JSON object")
+		}
 		return errors.New("trailing JSON")
 	}
+	complete = true
 	return nil
 }
 func writeJSON(w http.ResponseWriter, status int, v any) {

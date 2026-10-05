@@ -7,8 +7,10 @@ import (
 	"flag"
 	"math"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Kay0k1/cutmyvideo-core/pkg/engine"
@@ -41,7 +43,11 @@ func clip(args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	// Media commands run in their own process group. Cancel their context before
+	// exiting on a terminal signal so neither the encoder nor its children leak.
+	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	ctx, cancel := context.WithTimeout(signalCtx, 30*time.Minute)
 	defer cancel()
 	result, err := engine.New(engine.Config{FFmpegPath: os.Getenv("FFMPEG_PATH"), FFprobePath: os.Getenv("FFPROBE_PATH"), EncodeProfile: *profile, FFmpegThreads: *threads}).Export(ctx, *input, *output, engine.Range{StartMS: startMS, EndMS: endMS}, engine.Options{Quality: *quality, CutMode: *mode})
 	if err != nil {

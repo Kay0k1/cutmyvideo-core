@@ -53,14 +53,24 @@ func publicIP(ip net.IP) bool {
 
 func validateURL(raw string) (*url.URL, error) {
 	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || (u.Port() != "" && u.Port() != "443") {
+	if err != nil {
 		return nil, errors.New("use a public HTTPS URL on the standard port")
 	}
+	if err := validateParsedURL(u); err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
+func validateParsedURL(u *url.URL) error {
+	if u.Scheme != "https" || u.Hostname() == "" || u.User != nil || (u.Port() != "" && u.Port() != "443") {
+		return errors.New("use a public HTTPS URL on the standard port")
+	}
 	if strings.ContainsAny(u.Hostname(), "%\\\x00") {
-		return nil, errors.New("invalid host")
+		return errors.New("invalid host")
 	}
 	u.Fragment = ""
-	return u, nil
+	return nil
 }
 
 func safeDial(ctx context.Context, network, address string) (net.Conn, error) {
@@ -132,7 +142,7 @@ func partialDialDeadline(now, deadline time.Time, addressesRemaining int) (time.
 }
 
 func safeClient() *http.Client {
-	t := &http.Transport{Proxy: nil, DialContext: safeDial, TLSHandshakeTimeout: 15 * time.Second, ResponseHeaderTimeout: 20 * time.Second, MaxIdleConns: 20, MaxIdleConnsPerHost: 2, IdleConnTimeout: 30 * time.Second}
+	t := &http.Transport{Proxy: nil, DialContext: safeDial, TLSHandshakeTimeout: 15 * time.Second, ResponseHeaderTimeout: 20 * time.Second, MaxResponseHeaderBytes: 64 << 10, MaxIdleConns: 20, MaxIdleConnsPerHost: 2, IdleConnTimeout: 30 * time.Second}
 	return &http.Client{Transport: t, CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 5 {
 			return errors.New("too many redirects")

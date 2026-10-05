@@ -66,7 +66,11 @@ func (s *Store) CreateJobLimited(ctx context.Context, owner string, r ExportRequ
 }
 
 func OpenStore(ctx context.Context, url string) (*Store, error) {
-	db, err := pgxpool.New(ctx, url)
+	config, err := storePoolConfig(url)
+	if err != nil {
+		return nil, err
+	}
+	db, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, err
 	}
@@ -93,6 +97,27 @@ func OpenStore(ctx context.Context, url string) (*Store, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+func storePoolConfig(raw string) (*pgxpool.Config, error) {
+	// Parse through pgx so URL and keyword connection strings both retain
+	// their explicit pool settings. pgxpool removes these runtime parameters
+	// while parsing, making an explicit maximum indistinguishable afterward.
+	connection, err := pgx.ParseConfig(raw)
+	if err != nil {
+		return nil, err
+	}
+	config, err := pgxpool.ParseConfig(raw)
+	if err != nil {
+		return nil, err
+	}
+	if _, explicit := connection.RuntimeParams["pool_max_conns"]; !explicit {
+		// pgx defaults to NumCPU(), which reports host CPUs even when a
+		// container has a small quota. Each API/worker needs a bounded pool;
+		// preserve larger operator-requested minimums and explicit maxima.
+		config.MaxConns = max(4, config.MinConns, config.MinIdleConns)
+	}
+	return config, nil
 }
 
 const schema = `

@@ -25,6 +25,33 @@ type networkTestTransport func(*http.Request) (*http.Response, error)
 
 func (f networkTestTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
+func TestSafeClientBoundsUpstreamResponseHeaders(t *testing.T) {
+	for _, size := range []int{4 << 10, 128 << 10} {
+		t.Run(strconv.Itoa(size), func(t *testing.T) {
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("X-Fixture", strings.Repeat("h", size))
+				_, _ = w.Write([]byte("video"))
+			}))
+			defer upstream.Close()
+			client := safeClient()
+			defer client.CloseIdleConnections()
+			// Only this fixture bypasses public-IP dialing, to exercise the real
+			// transport's header accounting without an external service.
+			client.Transport.(*http.Transport).DialContext = (&net.Dialer{}).DialContext
+			resp, err := client.Get(upstream.URL)
+			if resp != nil {
+				resp.Body.Close()
+			}
+			if size > 64<<10 && err == nil {
+				t.Fatal("oversized headers bypassed the upstream memory bound")
+			}
+			if size < 64<<10 && err != nil {
+				t.Fatal("ordinary upstream headers were rejected", err)
+			}
+		})
+	}
+}
+
 func TestPublicIPRetainsEveryForbiddenPrefix(t *testing.T) {
 	for _, value := range []string{"0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24", "192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4", "::/128", "::1/128", "fc00::/7", "fe80::/10", "ff00::/8", "2001:db8::/32", "2001::/32", "2002::/16", "64:ff9b::/96", "64:ff9b:1::/48"} {
 		prefix := netip.MustParsePrefix(value)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -440,41 +441,30 @@ func cleanupFiles(ctx context.Context, c Config, s *Store) {
 		if !valid {
 			continue
 		}
-		entries, e := os.ReadDir(filepath.Join(c.DataDir, kind))
-		if e != nil {
-			continue
-		}
-		for _, entry := range entries {
-			if ctx.Err() != nil {
-				return
-			}
+		cutoff := time.Now().Add(-ttl)
+		_ = scanStorageDirectory(ctx, filepath.Join(c.DataDir, kind), func(path string, entry os.DirEntry) error {
 			if !entry.Type().IsRegular() {
-				continue
+				return nil
 			}
-			path := filepath.Join(c.DataDir, kind, entry.Name())
 			if known[path] {
-				continue
+				return nil
 			}
 			info, e := entry.Info()
-			if e == nil && info.ModTime().Before(time.Now().Add(-ttl)) {
+			if e == nil && info.ModTime().Before(cutoff) {
 				_ = os.Remove(path)
 			}
-		}
+			return nil
+		})
 	}
 	// Remove abandoned temporary directories left by killed workers.
-	entries, err := os.ReadDir(filepath.Join(c.DataDir, "work"))
-	if err != nil {
-		return
-	}
-	for _, entry := range entries {
-		if ctx.Err() != nil {
-			return
-		}
+	artifactCutoff, jobCutoff := time.Now().Add(-c.ArtifactTTL), time.Now().Add(-c.JobTimeout-time.Hour)
+	_ = scanStorageDirectory(ctx, filepath.Join(c.DataDir, "work"), func(path string, entry os.DirEntry) error {
 		info, e := entry.Info()
-		if e == nil && info.ModTime().Before(time.Now().Add(-c.ArtifactTTL)) && info.ModTime().Before(time.Now().Add(-c.JobTimeout-time.Hour)) {
-			_ = os.RemoveAll(filepath.Join(c.DataDir, "work", entry.Name()))
+		if e == nil && info.ModTime().Before(artifactCutoff) && info.ModTime().Before(jobCutoff) {
+			_ = os.RemoveAll(path)
 		}
-	}
+		return nil
+	})
 }
 
 func storageAvailable(c Config, reserve int64) bool {
@@ -486,18 +476,23 @@ func storageAvailableContext(ctx context.Context, c Config, reserve int64) bool 
 		return false
 	}
 	remaining := c.MaxStorageBytes - reserve
-	err := filepath.WalkDir(c.DataDir, func(path string, entry os.DirEntry, err error) error {
+	var visit func(string, os.DirEntry) error
+	visit = func(path string, entry os.DirEntry) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if os.IsNotExist(err) {
-			return nil
-		}
-		if err != nil {
+		if entry.IsDir() {
+			err := scanStorageDirectory(ctx, path, visit)
+			if os.IsNotExist(err) {
+				return nil
+			}
 			return err
 		}
 		if entry.Type().IsRegular() {
 			info, e := entry.Info()
+			if os.IsNotExist(e) {
+				return nil
+			}
 			if e != nil {
 				return e
 			}
@@ -507,6 +502,12 @@ func storageAvailableContext(ctx context.Context, c Config, reserve int64) bool 
 			remaining -= info.Size()
 		}
 		return nil
-	})
+	}
+	// Lstat preserves WalkDir's rule that symbolic links, including a linked
+	// root, are not traversed. Files removed by concurrent cleanup are harmless.
+	info, err := os.Lstat(c.DataDir)
+	if err == nil {
+		err = visit(c.DataDir, fs.FileInfoToDirEntry(info))
+	}
 	return ctx.Err() == nil && (err == nil || os.IsNotExist(err))
 }

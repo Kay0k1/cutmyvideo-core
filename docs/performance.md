@@ -56,7 +56,69 @@ runtime memory limit**. It does not cap FFmpeg or replace container memory
 limits. Garbage collection remains enabled; arbitrary forced collections,
 unsafe memory reuse and unmeasured assembly optimizations are avoided.
 
+## HLS and storage audit, 2026-10-05
+
+HLS parsing now resolves relative addresses against one validated base URL and
+validates the resolved URL without serializing and parsing it again. HTTPS,
+credentials, port restrictions and guarded network requests remain enforced.
+The segment slice is sized once from duration tags, within the existing
+100,000-segment limit. Selecting a clip uses binary search on the parser's
+ordered timeline and still validates discontinuities and initialization maps
+throughout the selected window.
+
+The following are medians of three local `-benchmem` runs on Go 1.27.1,
+linux/amd64, AMD Ryzen 9 5950X, with four Go scheduler threads. They are isolated
+CPU/allocation fixtures, not whole-export or production latency measurements.
+
+| Fixture | Before | After | Allocated bytes before / after |
+|---|---:|---:|---:|
+| Parse 10,000 HLS segments | 24.838 ms | 11.354 ms | 10,418,306 / 4,809,579 |
+| Select a short window from 100,000 segments | 158.891 µs | 0.041 µs | 0 / 0 |
+| Scan 10,000 empty retained files | 41.067 ms | 39.412 ms | 5,473,432 / 5,149,999 |
+
+HLS parsing took about 54% less time and allocated 54% fewer bytes in this
+fixture. The storage timing difference is small and should not be treated as a
+speed guarantee. Storage admission and orphan-directory scanning now read at
+most 128 directory entries per batch, without sorting the whole directory.
+This bounds retained directory listings and lets quota/cancellation checks run
+before a large directory has been completely read. Removed files are skipped
+individually so concurrent cleanup cannot prematurely approve the rest of a
+quota scan.
+
+Inspection requests only the FFprobe duration, start times, codec types/names
+and dimensions consumed by the application, using its documented
+[`-show_entries` option](https://ffmpeg.org/ffprobe.html#Main-options).
+Unused user metadata no longer enters the subprocess JSON buffer. Existing
+codec, duration and output validation remain in place. A local one-second
+H.264 fixture carrying a 1 MiB comment produced 1,051,270 bytes with the old
+inspection options and 293 bytes with selected fields; duration, codec and
+dimensions were identical. A regression test also covers valid media whose
+unused tags exceed the 8 MiB subprocess response limit.
+
+Storage admission still stats retained regular files to obtain a fresh byte
+sum; it is O(number of files), not a distributed reservation system. Retention
+still holds the database's registered path set for orphan membership checks.
+Large deployments should measure these scans and enforce a filesystem quota
+before adding worker concurrency. The audit does not change encoding quality
+or claim reduced FFmpeg RSS; source decoding and encoding remain the main CPU
+and memory consumers for ordinary exports.
+
+Each API/worker PostgreSQL pool now defaults to four maximum connections.
+The pinned pgx default uses the host's `runtime.NumCPU()`, which does not honor
+a container CPU quota. Connections are opened on demand, so this is a limit on
+growth under concurrency, not a measured reduction in idle RSS. Explicit
+`pool_max_conns` in `DATABASE_URL` remains authoritative; larger explicit
+`pool_min_conns` or `pool_min_idle_conns` raise the default maximum accordingly.
+Tune these settings together with PostgreSQL's connection budget when scaling
+instances. No new queue/cache indexes were added without representative query
+plans: active jobs are already bounded, while large retention tables and the
+registered-path set remain candidates for load testing.
+
 ## Failure handling
+
+- CLI interrupt/termination signals cancel the inspection/encoding context before
+  exit, killing and reaping the isolated Unix media process group. Previously a
+  terminated CLI could leave FFmpeg or FFprobe running outside its parent group.
 
 - Cached addresses rejected with HTTP 401/403/404/410 receive at most one
   forced fresh resolution per job. Fresh refusals, encoding failures, limits
@@ -90,6 +152,7 @@ Ordinary tests and benchmarks use local fixtures, not public platform requests:
 ```sh
 go test -race -count=1 ./...
 go test ./internal/app -run '^$' -bench 'NetworkRelayRange|PublicIP' -benchmem -count=5
+go test ./internal/app -run '^$' -bench 'HLSParse|HLSSelect|StorageAdmission' -benchmem -count=3
 # In an isolated PostgreSQL test database with the pinned yt-dlp executable:
 go test ./internal/app -run '^$' -bench 'Metadata' -benchmem
 ```

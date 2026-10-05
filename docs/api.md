@@ -6,6 +6,8 @@ Initialize a session with `GET /session`. The HttpOnly cookie is a bearer capabi
 
 `SOURCE_TIMEOUT` covers quota admission, the upload/download body, and media inspection together. A stalled upload returns `504 source_timeout` and removes its partial file. Increase this configured budget when allowing large uploads over slow connections. An interrupted upload returns `400 invalid_upload`; exceeding the byte limit returns `413 source_too_large`.
 
+JSON request bodies have a separate ten-second read budget (or an earlier request deadline); stalled bodies return `408 request_timeout`. Rejected bodies are not drained indefinitely. GET/HEAD requests with bodies return `400 invalid_request`. Fully consumed requests retain normal connection reuse.
+
 | Method | Route | Response |
 |---|---|---|
 | GET | `/session` | `{ok:true}` and cookie |
@@ -84,10 +86,10 @@ A download capability stays protected by the cookie; artifact IDs alone do not g
 {"error":{"code":"invalid_export","message":"range must be within the source and end after its start"}}
 ```
 
-Common codes: `session_required`, `invalid_request`, `invalid_url`, `invalid_youtube_url`, `invalid_source_url`, `unsupported_collection`, `live_not_supported`, `platform_access_required`, `platform_unavailable`, `unsupported_stream`, `source_unavailable`, `source_timeout`, `unsupported_media`, `source_too_large`, `source_limit`, `invalid_export`, `job_limit`, `rate_limit`, `origin_rejected`, `not_found`, `expired`, `internal`.
+Common codes: `session_required`, `invalid_request`, `request_timeout`, `invalid_url`, `invalid_youtube_url`, `invalid_source_url`, `unsupported_collection`, `live_not_supported`, `platform_access_required`, `platform_unavailable`, `unsupported_stream`, `source_unavailable`, `source_timeout`, `unsupported_media`, `source_too_large`, `source_limit`, `invalid_export`, `job_limit`, `rate_limit`, `origin_rejected`, `not_found`, `expired`, `internal`.
 
 Source admission returns distinct `429` codes: `source_limit` for the session's source count, `source_busy` for another preparation by the same owner, `server_busy` for all preparation slots being occupied, and `storage_limit` for disk/session storage admission. Database failures remain `500 internal`. Owner preparation is reserved before reading quota state, and unsuccessful admission releases its reservation.
 
-Mutation requests are same-origin. Browser requests from another origin are rejected; non-browser clients without Origin can use the cookie API. There are no wildcard CORS grants. Polling, source admission, export creation, and per-IP mutation limits are enforced independently.
+Mutation requests are same-origin. Browser requests from another origin are rejected; non-browser clients without Origin can use the cookie API. There are no wildcard CORS grants. Polling, source admission, export creation, and per-IP mutation limits are enforced independently. Session-protected requests additionally share a ceiling of 1,200 requests per minute per IP, before owner state is allocated; clients behind one NAT share that ceiling. Per-owner request allowance remains 180 per minute.
 
 Known channel/collection URL rejections occur before source preparation: `400 unsupported_collection`. Twitch channel/player-channel URLs return `422 live_not_supported`; use `/videos/{id}` or a clip instead. Live, collection, access, availability and stream errors discovered during metadata/manifest inspection return 422 with their respective codes. Inspection deadlines return 504 `source_timeout`. Foreign or expired thumbnail/source resources return 404 without disclosing ownership.

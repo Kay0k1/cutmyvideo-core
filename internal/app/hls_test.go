@@ -323,3 +323,56 @@ func TestSeparateHLSRenditionsAreExplicitlyRejected(t *testing.T) {
 		t.Fatal("audio-only HLS must remain available")
 	}
 }
+
+func TestHLSResolvedReferencesKeepURLRestrictions(t *testing.T) {
+	base := "https://media.example/recording/index.m3u8?token=private"
+	for _, tt := range []struct {
+		reference string
+		want      string
+	}{
+		{"../part.ts#discard", "https://media.example/part.ts"},
+		{"//cdn.example/part.ts", "https://cdn.example/part.ts"},
+		{"?segment=1", "https://media.example/recording/index.m3u8?segment=1"},
+		{"https://cdn.example:8443/part.ts", ""},
+		{"//secret@cdn.example/part.ts", ""},
+		{"https:opaque", ""},
+		{"https://bad%25host.example/part.ts", ""},
+		{"http://cdn.example/part.ts", ""},
+	} {
+		t.Run(tt.reference, func(t *testing.T) {
+			got, err := resolveHLSURL(base, tt.reference)
+			if tt.want == "" {
+				if !errors.Is(err, errUnsupportedStream) {
+					t.Fatal("accepted unsupported reference", got, err)
+				}
+			} else if err != nil || got != tt.want {
+				t.Fatalf("got %q, %v; want %q", got, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestHLSSegmentSelectionExactBoundaries(t *testing.T) {
+	p := hlsPlaylist{DurationMS: 100000, Segments: make([]hlsSegment, 100)}
+	for i := range p.Segments {
+		p.Segments[i] = hlsSegment{StartMS: int64(i) * 1000, EndMS: int64(i+1) * 1000}
+	}
+	for _, tt := range []struct {
+		start, end, first, last int64
+	}{
+		{0, 1000, 0, 0},
+		{1000, 2000, 0, 1000},
+		{50500, 52000, 49000, 51000},
+		{50500, 52001, 49000, 52000},
+		{99000, 100000, 98000, 99000},
+		{99000, 100500, 98000, 99000},
+	} {
+		selected, err := selectHLSSegments(p, Range{StartMS: tt.start, EndMS: tt.end})
+		if err != nil || len(selected) == 0 || selected[0].StartMS != tt.first || selected[len(selected)-1].StartMS != tt.last {
+			t.Fatalf("window %d-%d selected %+v: %v", tt.start, tt.end, selected, err)
+		}
+	}
+	if _, err := selectHLSSegments(p, Range{StartMS: 100000, EndMS: 100500}); err == nil {
+		t.Fatal("accepted a window beyond the final segment")
+	}
+}

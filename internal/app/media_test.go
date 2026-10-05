@@ -39,6 +39,26 @@ func TestMediaFailureCategoriesAreDiagnosticOnly(t *testing.T) {
 	}
 }
 
+func TestProbeIgnoresOversizedUnusedMetadata(t *testing.T) {
+	c := mediaConfig(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	metadata := filepath.Join(c.DataDir, "tags.ffmetadata")
+	// Valid media may carry tags larger than the subprocess response limit.
+	// Those tags are neither needed nor returned by source inspection.
+	if err := os.WriteFile(metadata, []byte(";FFMETADATA1\ncomment="+strings.Repeat("x", 9<<20)+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(c.DataDir, "tagged.mp4")
+	if _, err := runCommand(ctx, c.FFmpeg, "-v", "error", "-f", "lavfi", "-i", "color=black:size=160x90:rate=1", "-f", "ffmetadata", "-i", metadata, "-map", "0:v:0", "-map_metadata", "1", "-t", "1", "-c:v", "libx264", "-threads", "1", path); err != nil {
+		t.Fatal(err)
+	}
+	info, duration, err := probe(ctx, c, path, false)
+	if err != nil || duration != 1000 || len(info.Streams) != 1 || info.Streams[0].Width != 160 || info.Streams[0].CodecName != "h264" {
+		t.Fatalf("unused tags interfered with inspection: %+v, %d, %v", info, duration, err)
+	}
+}
+
 func TestStreamSelectionRanksSupportedPairsBeforeQuality(t *testing.T) {
 	// The incident recording offered these families: 1080p HLS video-only 312
 	// had a greater bitrate than progressive 299, but only 299 can be paired

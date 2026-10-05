@@ -133,7 +133,9 @@ func probe(ctx context.Context, c Config, path string, remote bool) (probeInfo, 
 	if remote {
 		protocols = "http,tcp"
 	}
-	b, err := runCommand(ctx, c.FFprobe, "-v", "error", "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats, "-show_format", "-show_streams", "-of", "json", path)
+	// Large user-controlled tags, dispositions and side data are unused. Ask
+	// ffprobe only for the fields needed by inspection and output validation.
+	b, err := runCommand(ctx, c.FFprobe, "-v", "error", "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats, "-show_entries", "format=duration,start_time:stream=codec_type,codec_name,start_time,width,height", "-of", "json", path)
 	var p probeInfo
 	if err != nil {
 		return p, 0, err

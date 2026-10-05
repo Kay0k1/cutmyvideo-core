@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -46,12 +47,16 @@ func resolveHLSURL(base, reference string) (string, error) {
 	if e != nil {
 		return "", errUnsupportedStream
 	}
+	return resolveHLSReference(b, reference)
+}
+
+func resolveHLSReference(base *url.URL, reference string) (string, error) {
 	r, e := url.Parse(reference)
 	if e != nil || r.Opaque != "" {
 		return "", errUnsupportedStream
 	}
-	u, e := validateURL(b.ResolveReference(r).String())
-	if e != nil {
+	u := base.ResolveReference(r)
+	if e = validateParsedURL(u); e != nil {
 		return "", errUnsupportedStream
 	}
 	return u.String(), nil
@@ -94,6 +99,14 @@ func parseHLS(base string, data []byte) (hlsPlaylist, error) {
 	if len(data) > int(maxManifestBytes) || string(bytes.TrimSuffix(header, []byte("\r"))) != "#EXTM3U" {
 		return p, errUnsupportedStream
 	}
+	baseURL, err := validateURL(base)
+	if err != nil {
+		return p, errUnsupportedStream
+	}
+	// Size once from actual duration tags; repeated slice growth otherwise
+	// copies megabytes for long recordings. The existing segment bound remains.
+	capacity := min(bytes.Count(data, []byte("\n#EXTINF:")), maxHLSSegments)
+	p.Segments = make([]hlsSegment, 0, capacity)
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	scanner.Buffer(make([]byte, 4096), 64<<10)
 	var duration float64
@@ -125,7 +138,7 @@ func parseHLS(base string, data []byte) (hlsPlaylist, error) {
 			if e != nil || a["BYTERANGE"] != "" || a["URI"] == "" {
 				return p, errUnsupportedStream
 			}
-			mapURL, e = resolveHLSURL(base, a["URI"])
+			mapURL, e = resolveHLSReference(baseURL, a["URI"])
 			if e != nil {
 				return p, e
 			}
@@ -150,7 +163,7 @@ func parseHLS(base string, data []byte) (hlsPlaylist, error) {
 			}
 		case strings.HasPrefix(line, "#"):
 		default:
-			u, e := resolveHLSURL(base, line)
+			u, e := resolveHLSReference(baseURL, line)
 			if e != nil {
 				return p, e
 			}
@@ -315,16 +328,11 @@ func selectHLSSegments(p hlsPlaylist, r Range) ([]hlsSegment, error) {
 	if r.StartMS < 0 || r.EndMS <= r.StartMS || r.EndMS > p.DurationMS+1000 {
 		return nil, errUnsupportedStream
 	}
-	first, last := -1, -1
-	for i, s := range p.Segments {
-		if s.EndMS > r.StartMS && s.StartMS < r.EndMS {
-			if first < 0 {
-				first = i
-			}
-			last = i
-		}
-	}
-	if first < 0 {
+	// parseHLS constructs strictly increasing, contiguous intervals. Locate
+	// just the requested window, rather than scanning hours of other segments.
+	first := sort.Search(len(p.Segments), func(i int) bool { return p.Segments[i].EndMS > r.StartMS })
+	end := sort.Search(len(p.Segments), func(i int) bool { return p.Segments[i].StartMS >= r.EndMS })
+	if first >= end {
 		return nil, errUnsupportedStream
 	}
 	// One preceding segment provides decoder/keyframe context. It is excluded
@@ -332,7 +340,7 @@ func selectHLSSegments(p hlsPlaylist, r Range) ([]hlsSegment, error) {
 	if first > 0 && !p.Segments[first].Discontinuity {
 		first--
 	}
-	selected := p.Segments[first : last+1]
+	selected := p.Segments[first:end]
 	mapURL := selected[0].MapURL
 	for i, s := range selected {
 		if s.MapURL != mapURL || i > 0 && s.Discontinuity {
