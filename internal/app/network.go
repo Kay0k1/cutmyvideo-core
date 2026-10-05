@@ -19,7 +19,10 @@ import (
 )
 
 var forbiddenNetworks = func() []netip.Prefix {
-	values := [...]string{"0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24", "192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4", "::/128", "::1/128", "fc00::/7", "fe80::/10", "ff00::/8", "2001:db8::/32", "2001::/32", "2002::/16", "64:ff9b::/96", "64:ff9b:1::/48"}
+	// Keep transition, deprecated and non-global special-purpose destinations
+	// out of the fetch boundary too; IsGlobalUnicast alone includes several of
+	// these. Public IPv4-mapped addresses are unmapped before this check.
+	values := [...]string{"0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24", "192.88.99.0/24", "192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4", "::/96", "::1/128", "100::/64", "100:0:0:1::/64", "fc00::/7", "fe80::/10", "fec0::/10", "ff00::/8", "2001:db8::/32", "2001::/32", "2001:2::/48", "2001:10::/28", "2002::/16", "3fff::/20", "5f00::/16", "64:ff9b::/96", "64:ff9b:1::/48"}
 	prefixes := make([]netip.Prefix, len(values))
 	for i, value := range values {
 		prefixes[i] = netip.MustParsePrefix(value)
@@ -168,6 +171,9 @@ type networkGuard struct {
 }
 
 func newNetworkGuard(limit int64) (*networkGuard, error) {
+	if limit <= 0 {
+		return nil, errors.New("transfer limit must be positive")
+	}
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, err
@@ -179,7 +185,7 @@ func newNetworkGuard(limit int64) (*networkGuard, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	g := &networkGuard{listener: l, client: safeClient(), base: "http://" + l.Addr().String(), token: hex.EncodeToString(b), streams: map[string]relaySource{}, limit: limit, ctx: ctx, cancel: cancel}
-	g.server = &http.Server{Handler: g, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
+	g.server = &http.Server{Handler: g, MaxHeaderBytes: 32 << 10, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	go func() { _ = g.server.Serve(l) }()
 	return g, nil
 }
@@ -205,8 +211,12 @@ func (g *networkGuard) RelayWithHeaders(raw string, headers map[string]string) (
 		return "", err
 	}
 	id := newID("stream")
+	copyHeaders := make(map[string]string, len(headers))
+	for key, value := range headers {
+		copyHeaders[key] = value
+	}
 	g.mu.Lock()
-	g.streams[id] = relaySource{URL: raw, Headers: headers}
+	g.streams[id] = relaySource{URL: raw, Headers: copyHeaders}
 	g.mu.Unlock()
 	return g.base + "/relay/" + g.token + "/" + id, nil
 }
@@ -297,7 +307,7 @@ func (g *networkGuard) forward(w http.ResponseWriter, r *http.Request, u *url.UR
 		return
 	}
 	defer resp.Body.Close()
-	for _, name := range []string{"Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified"} {
+	for _, name := range []string{"Content-Type", "Content-Length", "Content-Encoding", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified", "Vary"} {
 		if v := resp.Header.Get(name); v != "" {
 			w.Header().Set(name, v)
 		}

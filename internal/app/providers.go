@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // This catalogue identifies page URLs, not CDN URLs. Actual import support is
@@ -191,6 +193,7 @@ func providerForExtractor(extractor string) string {
 }
 
 func completeSourcePresentation(v *Source) {
+	v.Title = normalizeSourceTitle(v.Title)
 	if v.Provider == "" {
 		v.Provider = providerForHostFromURL(v.URL)
 	}
@@ -224,6 +227,28 @@ func completeSourcePresentation(v *Source) {
 		u := "/api/v1/sources/" + v.ID + "/thumbnail"
 		v.ThumbnailURL = &u
 	}
+}
+
+// Extractor titles and URL basenames are untrusted. Keep persisted metadata and
+// owner-list responses bounded without slicing in the middle of a UTF-8 rune.
+func normalizeSourceTitle(raw string) string {
+	const maxTitleBytes = 512
+	var out strings.Builder
+	out.Grow(min(len(raw), maxTitleBytes))
+	for _, r := range raw {
+		if unicode.IsControl(r) {
+			continue
+		}
+		if out.Len()+utf8.RuneLen(r) > maxTitleBytes {
+			break
+		}
+		out.WriteRune(r)
+	}
+	title := strings.TrimSpace(out.String())
+	if title == "" {
+		return "Video"
+	}
+	return title
 }
 func providerForHostFromURL(raw string) string {
 	u, e := url.Parse(raw)

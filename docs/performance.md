@@ -95,11 +95,11 @@ inspection options and 293 bytes with selected fields; duration, codec and
 dimensions were identical. A regression test also covers valid media whose
 unused tags exceed the 8 MiB subprocess response limit.
 
-Storage admission still stats retained regular files to obtain a fresh byte
-sum; it is O(number of files), not a distributed reservation system. Retention
-still holds the database's registered path set for orphan membership checks.
-Large deployments should measure these scans and enforce a filesystem quota
-before adding worker concurrency. The audit does not change encoding quality
+The initial audit implementation still statted retained files on admission and
+held a registered-path set for orphan membership checks. The durable ledger
+implementation below supersedes both of these historical limitations.
+Large deployments should still measure maintenance scans and enforce a
+filesystem quota in addition to application admission. The audit does not change encoding quality
 or claim reduced FFmpeg RSS; source decoding and encoding remain the main CPU
 and memory consumers for ordinary exports.
 
@@ -110,9 +110,9 @@ growth under concurrency, not a measured reduction in idle RSS. Explicit
 `pool_max_conns` in `DATABASE_URL` remains authoritative; larger explicit
 `pool_min_conns` or `pool_min_idle_conns` raise the default maximum accordingly.
 Tune these settings together with PostgreSQL's connection budget when scaling
-instances. No new queue/cache indexes were added without representative query
-plans: active jobs are already bounded, while large retention tables and the
-registered-path set remain candidates for load testing.
+instances. Storage and fair-queue access now use indexes introduced with the
+durable ledger below. Metadata-cache indexes remain unchanged; measure their
+query plans before changing them for a larger retention window.
 
 ## Failure handling
 
@@ -122,7 +122,8 @@ registered-path set remain candidates for load testing.
 
 - Cached addresses rejected with HTTP 401/403/404/410 receive at most one
   forced fresh resolution per job. Fresh refusals, encoding failures, limits
-  and cancellation are terminal. Refresh preserves source identity/timeline
+  and cancellation are terminal, except recoverable filesystem exhaustion,
+  which enters the bounded storage wait. Refresh preserves source identity/timeline
   and the transfer budget; initial cached/fresh inspection shares one timeout.
 - Range/HEAD and guarded DNS checks remain intact. One 15-second deadline
   covers DNS and ordered connection attempts; all returned addresses are
@@ -130,9 +131,10 @@ registered-path set remain candidates for load testing.
 - Queue claims and lease heartbeats have five-second database budgets.
   Retention runs separately with a ten-second cycle budget and does not keep
   a stuck worker's health marker alive.
-- Linux admission checks actual available filesystem space as well as logical
-  retained bytes. Scans stop early when over quota and respect cancellation.
-  This remains single-API admission, not distributed reservation.
+- Linux admission checks actual available filesystem space as well as the
+  PostgreSQL ledger's stored and reserved bytes. Admission and publication
+  share transaction locks across processes; retained files are not scanned
+  during admission.
 - Artifact registration and completed job-item snapshots commit together
   under lease fencing and cancellation checks. Lost commit acknowledgements
   retain files for authoritative database recovery; definitely rejected
@@ -160,5 +162,105 @@ go test ./internal/app -run '^$' -bench 'Metadata' -benchmem
 See benchmark names and required environment in the `_bench_test.go` files.
 PostgreSQL tests create/remove their own schemas. Do not benchmark against a
 live application's schema or run competing encoders when comparing profiles.
-The single worker bounds CPU/memory use; parallel transcoding needs explicit
-resource admission rather than extra goroutines.
+The worker pool combines durable disk admission, bounded concurrency and a
+weighted local decoder semaphore. Container CPU/RAM quotas remain necessary.
+
+## Durable storage and fair queue, 2026-10-05
+
+API, worker and external maintenance share PostgreSQL `storage_files`,
+`storage_reservations` and transactional numeric `storage_counters`. The global
+admission calculation reads one counter row and checks filesystem free space;
+it does not walk or stat retained files. PostgreSQL trigger updates and media
+registration commit together. Fixed advisory lock `736021912360105` precedes
+resource row locks for every admission/publication/release/deletion. Initial
+migration is idempotent and versioned; routine maintenance does not repeat DDL.
+
+Uploads/direct files reserve their byte ceiling; platform metadata preparation
+reserves only 2 MiB for thumbnails (its inspection transfer budget is separate). Job admission reserves the maximum bytes of all
+unpublished results and two bounded HLS inputs for platform jobs. Each successful
+artifact publication atomically saves the item, registers actual bytes and
+releases one output ceiling from that job's reservation. Maximum reservation
+bounds are conservative and can reduce admitted concurrency for short clips.
+They provide a strict budget without bitrate predictions or self-blocking
+partially completed batches. Configuration/request arithmetic rejects overflow.
+
+`STORAGE_SAFETY_BYTES` defaults to 512 MiB of filesystem headroom;
+`STORAGE_WAIT_TIMEOUT` defaults to 30 minutes. Storage-pressure waiters remain
+active queue members, share a persisted deadline across restarts, and do not
+consume encoding slots or worker attempts. Actual ENOSPC/quota failures during
+staging/encoding also move accepted work to this wait after deleting its partial
+workspace. Impossible reservations are rejected before entering the queue.
+
+Claims rotate owners by least recent consideration/claim. Each claim considers
+at most 128 candidates; owners of storage-blocked jobs rotate out of the next
+window so smaller admissible jobs cannot be hidden indefinitely by a large
+backlog. Global active jobs are bounded by `MAX_ACTIVE_JOBS` (1–1024); per owner
+there are at most three. `MAX_RANGES` is bounded to 1–128. A job has a distinct
+reservation for every lease, so a recovered worker never uncharges an older
+lease's retained workspace. Stale workspace deletion is fenced and uses a
+one-minute grace; failures keep their reservations charged.
+
+Retention deletes at most 200 resources/tombstones per batch. PostgreSQL removes
+metadata and creates tombstones together; filesystem failures remain retryable
+and do not release byte counters. Orphan reconciliation reads directories in
+128-entry batches, looks up known paths in one SQL batch, stats only unknown or
+mutable orphan files and registers them in bounded transactions. It never builds
+a whole-disk membership map. Young unregistered files have a safety floor of the
+job timeout plus source timeout plus one hour (and at least the configured TTL).
+Temporary-tree deletion checks its deadline between entries and never follows
+symlinks. Initial bootstrap adopts old sources, thumbnails and results without
+removing them. External `cutmy maintenance` runs independently of the worker with
+a ten-second budget, enabling cleanup even when the worker is stopped.
+
+Job polling fetches all artifact expiry records with one aggregate SQL query,
+removing the previous potential twelve extra round trips. Source listing is
+owner-scoped, capped at twenty and exposes current retention conditions. The
+session response publishes only client validation limits. Clients can explicitly
+remove unused source trees after confirmation; active jobs pin their data.
+
+This is application admission rather than a filesystem hard quota. External
+processes, database/docker logs and backups need their own limits and monitoring.
+Concurrent open downloads can delay physical block reclamation after unlink;
+the free-space check and safety margin protect new admission in that interval.
+Higher worker concurrency still needs measured CPU/RAM limits and representative
+load tests, rather than a promise based solely on server specifications.
+
+A local PostgreSQL admission microbenchmark (Go 1.27.1, linux/amd64, Ryzen 9
+5950X, four Go scheduler threads, 200 ms runs) measured 0.274 ms with an empty
+ledger and 0.342 ms with 10,000 retained ledger rows. Both allocated 586 bytes
+and 16 allocations per call. This measures one transactional counter query and
+filesystem headroom check; it excludes uploads/encoding and is not a production
+throughput guarantee. Counter triggers aggregate each SQL statement, so bulk
+registration updates totals once rather than rewriting the total row per file.
+
+## Bounded processing pool and measured server load
+
+`WORKER_CONCURRENCY` defaults to one and is bounded to 1–8. Cancellation waits
+for every processing goroutine to stop and reap its subprocesses before closing
+the database or removing the health marker. Each job first reserves disk bytes.
+Known video inputs up to 8,388,608 pixels share processing slots; larger or
+unknown inputs acquire all slots of that worker process. Audio-only exports
+use one slot. This prevents several 8K decoders from competing in a small memory
+cgroup, while ordinary 1080p/UHD work can run concurrently. The existing job
+deadline includes time waiting for the local semaphore. This is a conservative
+schedule based on dimensions, not a measured prediction of decoder RAM.
+
+An isolated run on the new production host (6 vCPU, 12 GB RAM) used the
+production FFmpeg 5.1.9 image, an API capped at 1 CPU/512 MiB and a worker capped
+at 3 CPUs/4 GiB. Twelve jobs per run mixed accurate MP4, MP3 and keyframe-copy
+exports of six seconds from a synthetic 1080p/30 fps H.264/AAC source:
+
+| Worker concurrency | Jobs/minute | Queue wait p95 | Total latency p95 | Worker cgroup memory peak |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 48.275 | 11.461 s | 11.784 s | 171.35 MiB |
+| 2 | 58.077 | 8.687 s | 8.927 s | 265.67 MiB |
+| 3 | 64.301 | 7.600 s | 8.752 s | 349.18 MiB |
+
+A burst of 36 jobs at concurrency two admitted 32 and returned `job_limit` for
+four. All 32 admitted jobs completed; total latency p95 was 28.093 seconds and
+worker cgroup memory peaked at 378.11 MiB. These short synthetic exports measure
+this workload, not user capacity, platform extraction availability or sustained
+8K throughput. Cgroup memory includes more than process RSS. The measured
+snapshot predates the final dimension-based semaphore; these 1080p inputs use
+one slot in both versions. Reproduce with the web repository's
+`scripts/load-profile.py`; keep its input, limits and revision with the results.

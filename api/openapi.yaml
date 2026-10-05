@@ -32,8 +32,32 @@ paths:
                 type: object
                 properties:
                   ok: {type: boolean, const: true}
+                  limits:
+                    type: object
+                    description: Public admission policy; contains no private configuration.
+                    properties:
+                      max_source_bytes: {type: integer, minimum: 1}
+                      max_ranges: {type: integer, minimum: 1, maximum: 128}
+                      max_range_ms: {type: integer, minimum: 1}
+                      max_job_ms: {type: integer, minimum: 1}
         '429': {$ref: '#/components/responses/Error'}
   /api/v1/sources:
+    get:
+      description: The session owner's newest sources, at most 20. Empty sessions return an empty array.
+      responses:
+        '200':
+          description: Owner source list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sources]
+                properties:
+                  sources:
+                    type: array
+                    maxItems: 20
+                    items: {$ref: '#/components/schemas/Source'}
+        default: {$ref: '#/components/responses/Error'}
     post:
       description: JSON body reads are limited to ten seconds or an earlier request deadline; stalled requests return 408 request_timeout.
       requestBody:
@@ -71,6 +95,12 @@ paths:
         default: {$ref: '#/components/responses/Error'}
   /api/v1/sources/{id}:
     parameters: [{$ref: '#/components/parameters/ID'}]
+    delete:
+      description: Deletes the owner source, its terminal jobs and all outputs. Active queued/running/waiting_storage exports return 409 source_in_use. Physical deletion is retryable and remains charged until successful; clients must confirm destructive intent.
+      responses:
+        '204': {description: Source and associated terminal resources removed}
+        '409': {$ref: '#/components/responses/Error'}
+        default: {$ref: '#/components/responses/Error'}
     get:
       responses:
         '200': {$ref: '#/components/responses/Source'}
@@ -117,7 +147,7 @@ paths:
   /api/v1/jobs/{id}/cancel:
     parameters: [{$ref: '#/components/parameters/ID'}]
     post:
-      description: Queued cancellation is immediate; running cancellation settles asynchronously.
+      description: Queued and waiting_storage cancellation is immediate; running cancellation settles asynchronously.
       responses:
         '200': {$ref: '#/components/responses/Job'}
         default: {$ref: '#/components/responses/Error'}
@@ -170,9 +200,11 @@ components:
             message: {type: string}
     Source:
       type: object
-      required: [id, title, duration_ms, kind, provider, provider_video_id, source_url, preview_kind, preview_url, embed_url, thumbnail_url]
+      required: [id, title, duration_ms, kind, provider, provider_video_id, source_url, preview_kind, preview_url, embed_url, thumbnail_url, expires_at, retention_blocked]
       properties:
         id: {type: string}
+        expires_at: {type: [string, 'null'], format: date-time, description: RFC3339 source retention target, or null while linked jobs pin the source.}
+        retention_blocked: {type: boolean, description: A retained job currently pins this source.}
         title: {type: string}
         duration_ms: {type: integer, minimum: 1}
         kind: {type: string, enum: [upload, direct, youtube, platform]}
@@ -215,9 +247,10 @@ components:
         cut_mode: {type: string, enum: [accurate, copy], description: MP3 requires accurate. Copy preserves source resolution; select best for original quality. A lower explicit cap fails with copy_quality_unsupported instead of silently resizing or exceeding the cap.}
     Artifact:
       type: object
-      required: [id, filename, size_bytes, download_url, actual_start_ms, actual_end_ms]
+      required: [id, filename, size_bytes, download_url, actual_start_ms, actual_end_ms, expires_at]
       properties:
         id: {type: string}
+        expires_at: {type: [string, 'null'], format: date-time, description: Immutable result retention deadline, or null while an active job pins the result.}
         filename: {type: string}
         size_bytes: {type: integer}
         download_url: {type: string}
@@ -240,17 +273,18 @@ components:
         error_code:
           type: string
           description: Optional fixed public diagnostic on failed/cancelled items. Legacy items can omit it. Localize known codes and use a safe generic fallback for unknown ones; never display raw subprocess output.
-          enum: [audio_missing, output_limit, platform_access_required, platform_unavailable, unsupported_stream, live_not_supported, unsupported_collection, media_upstream_denied, media_upstream_unavailable, media_network_timeout, media_network_reset, copy_incompatible, copy_quality_unsupported, media_processing_failed, source_expired, source_changed, source_timeline_changed, source_timeout, job_timeout, storage_full, server_error, cancelled]
+          enum: [audio_missing, output_limit, platform_access_required, platform_unavailable, unsupported_stream, live_not_supported, unsupported_collection, media_upstream_denied, media_upstream_unavailable, media_network_timeout, media_network_reset, copy_incompatible, copy_quality_unsupported, media_processing_failed, source_expired, source_changed, source_timeline_changed, source_timeout, job_timeout, storage_full, storage_timeout, storage_limit, server_error, cancelled]
         artifact:
           oneOf:
             - {$ref: '#/components/schemas/Artifact'}
             - {type: 'null'}
     Job:
       type: object
-      required: [id, status, stage, message, items]
+      required: [id, status, stage, message, items, storage_wait_until]
       properties:
         id: {type: string}
-        status: {type: string, enum: [queued, running, succeeded, failed, cancelled]}
+        status: {type: string, enum: [queued, running, waiting_storage, succeeded, failed, cancelled]}
+        storage_wait_until: {type: [string, 'null'], format: date-time, description: Finite persisted storage wait deadline; null before the first storage wait.}
         stage: {type: string}
         message: {type: string}
         items:

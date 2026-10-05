@@ -15,11 +15,14 @@ type Config struct {
 	WorkerHealthPath                                                       string
 	FFmpegProfile                                                          string
 	FFmpegThreads                                                          int
+	WorkerConcurrency                                                      int
 	MaxSourceBytes, MaxOutputBytes, MaxStorageBytes, MaxOwnerBytes         int64
+	StorageSafetyBytes                                                     int64
 	MaxRanges, MaxActiveJobs                                               int
 	MutationsPerMinute                                                     int
 	MaxRangeMS, MaxJobMS                                                   int64
 	JobTimeout, SourceTimeout, SourceTTL, ArtifactTTL                      time.Duration
+	StorageWaitTimeout                                                     time.Duration
 	SecureCookie, TrustProxy                                               bool
 }
 
@@ -29,6 +32,8 @@ func ConfigFromEnv() (Config, error) {
 	c.WorkerHealthPath = workerHealthPath(os.Getenv("WORKER_HEALTH_PATH"))
 	c.SourceTTL = 24 * time.Hour
 	c.MaxStorageBytes = 10 << 30
+	c.StorageSafetyBytes = 512 << 20
+	c.StorageWaitTimeout = 30 * time.Minute
 	c.MaxOwnerBytes = 2 << 30
 	c.MaxActiveJobs = 32
 	c.MutationsPerMinute = 20
@@ -38,6 +43,10 @@ func ConfigFromEnv() (Config, error) {
 		return c, errors.New("invalid FFMPEG_PROFILE: use fast or compact")
 	}
 	var err error
+	c.WorkerConcurrency, err = strconv.Atoi(env("WORKER_CONCURRENCY", "1"))
+	if err != nil || c.WorkerConcurrency < 1 || c.WorkerConcurrency > 8 {
+		return c, errors.New("invalid WORKER_CONCURRENCY: use 1 through 8")
+	}
 	c.FFmpegThreads, err = strconv.Atoi(env("FFMPEG_THREADS", "2"))
 	if err != nil || c.FFmpegThreads < 1 || c.FFmpegThreads > 32 {
 		return c, errors.New("invalid FFMPEG_THREADS: use 1 through 32")
@@ -54,14 +63,14 @@ func ConfigFromEnv() (Config, error) {
 	}
 	if value := os.Getenv("MAX_RANGES"); value != "" {
 		c.MaxRanges, err = strconv.Atoi(value)
-		if err != nil || c.MaxRanges <= 0 {
-			return c, errors.New("invalid MAX_RANGES")
+		if err != nil || c.MaxRanges <= 0 || c.MaxRanges > 128 {
+			return c, errors.New("invalid MAX_RANGES: use 1 through 128")
 		}
 	}
 	if value := os.Getenv("MAX_ACTIVE_JOBS"); value != "" {
 		c.MaxActiveJobs, err = strconv.Atoi(value)
-		if err != nil || c.MaxActiveJobs <= 0 {
-			return c, errors.New("invalid MAX_ACTIVE_JOBS")
+		if err != nil || c.MaxActiveJobs <= 0 || c.MaxActiveJobs > 1024 {
+			return c, errors.New("invalid MAX_ACTIVE_JOBS: use 1 through 1024")
 		}
 	}
 	if value := os.Getenv("MUTATIONS_PER_MINUTE"); value != "" {
@@ -70,13 +79,22 @@ func ConfigFromEnv() (Config, error) {
 			return c, errors.New("invalid MUTATIONS_PER_MINUTE")
 		}
 	}
-	for key, ptr := range map[string]*time.Duration{"JOB_TIMEOUT": &c.JobTimeout, "SOURCE_TIMEOUT": &c.SourceTimeout, "SOURCE_TTL": &c.SourceTTL, "ARTIFACT_TTL": &c.ArtifactTTL} {
+	for key, ptr := range map[string]*time.Duration{"STORAGE_WAIT_TIMEOUT": &c.StorageWaitTimeout, "JOB_TIMEOUT": &c.JobTimeout, "SOURCE_TIMEOUT": &c.SourceTimeout, "SOURCE_TTL": &c.SourceTTL, "ARTIFACT_TTL": &c.ArtifactTTL} {
 		if value := os.Getenv(key); value != "" {
 			*ptr, err = time.ParseDuration(value)
-			if err != nil || *ptr <= 0 {
-				return c, fmt.Errorf("invalid %s", key)
+			if err != nil || *ptr <= 0 || *ptr > 30*24*time.Hour {
+				return c, fmt.Errorf("invalid %s: use a positive duration up to 30 days", key)
 			}
 		}
+	}
+	if value := os.Getenv("STORAGE_SAFETY_BYTES"); value != "" {
+		c.StorageSafetyBytes, err = strconv.ParseInt(value, 10, 64)
+		if err != nil || c.StorageSafetyBytes < 0 {
+			return c, errors.New("invalid STORAGE_SAFETY_BYTES")
+		}
+	}
+	if c.MaxSourceBytes > (1<<63-1)-(2<<20) || c.MaxOutputBytes > (1<<63-1)/int64(c.MaxRanges) || c.MaxSourceBytes > ((1<<63-1)-c.MaxOutputBytes*int64(c.MaxRanges))/2 {
+		return c, errors.New("storage limits overflow reservation budget")
 	}
 	if c.DatabaseURL == "" {
 		return c, errors.New("DATABASE_URL is required")
@@ -93,24 +111,27 @@ func env(key, fallback string) string {
 }
 
 type Source struct {
-	ID              string  `json:"id"`
-	Title           string  `json:"title"`
-	DurationMS      int64   `json:"duration_ms"`
-	Kind            string  `json:"kind"`
-	Provider        string  `json:"provider"`
-	ProviderVideoID *string `json:"provider_video_id"`
-	SourceURL       *string `json:"source_url"`
-	PreviewKind     string  `json:"preview_kind"`
-	ThumbnailPath   string  `json:"-"`
-	PreviewURL      *string `json:"preview_url"`
-	EmbedURL        *string `json:"embed_url"`
-	ThumbnailURL    *string `json:"thumbnail_url"`
-	Width           int     `json:"width,omitempty"`
-	Height          int     `json:"height,omitempty"`
-	Path            string  `json:"-"`
-	URL             string  `json:"-"`
-	Owner           string  `json:"-"`
-	ProviderID      string  `json:"-"`
+	ID               string     `json:"id"`
+	ExpiresAt        *time.Time `json:"expires_at"`
+	RetentionBlocked bool       `json:"retention_blocked"`
+	Title            string     `json:"title"`
+	DurationMS       int64      `json:"duration_ms"`
+	Kind             string     `json:"kind"`
+	Provider         string     `json:"provider"`
+	ProviderVideoID  *string    `json:"provider_video_id"`
+	SourceURL        *string    `json:"source_url"`
+	PreviewKind      string     `json:"preview_kind"`
+	ThumbnailPath    string     `json:"-"`
+	PreviewURL       *string    `json:"preview_url"`
+	EmbedURL         *string    `json:"embed_url"`
+	ThumbnailURL     *string    `json:"thumbnail_url"`
+	Width            int        `json:"width,omitempty"`
+	Height           int        `json:"height,omitempty"`
+	Path             string     `json:"-"`
+	URL              string     `json:"-"`
+	Owner            string     `json:"-"`
+	StorageToken     string     `json:"-"`
+	ProviderID       string     `json:"-"`
 }
 
 type Range struct {
@@ -156,21 +177,23 @@ func (r *ExportRequest) Validate(c Config, s Source) error {
 		if v.EndMS-v.StartMS > c.MaxRangeMS {
 			return errors.New("range exceeds the duration limit")
 		}
-		total += v.EndMS - v.StartMS
-		if total > c.MaxJobMS {
+		duration := v.EndMS - v.StartMS
+		if duration > c.MaxJobMS-total {
 			return errors.New("total selected duration exceeds the limit")
 		}
+		total += duration
 	}
 	return nil
 }
 
 type Artifact struct {
-	ID            string `json:"id"`
-	Filename      string `json:"filename"`
-	SizeBytes     int64  `json:"size_bytes"`
-	DownloadURL   string `json:"download_url"`
-	ActualStartMS int64  `json:"actual_start_ms"`
-	ActualEndMS   int64  `json:"actual_end_ms"`
+	ID            string     `json:"id"`
+	ExpiresAt     *time.Time `json:"expires_at"`
+	Filename      string     `json:"filename"`
+	SizeBytes     int64      `json:"size_bytes"`
+	DownloadURL   string     `json:"download_url"`
+	ActualStartMS int64      `json:"actual_start_ms"`
+	ActualEndMS   int64      `json:"actual_end_ms"`
 }
 
 type JobItem struct {
@@ -186,14 +209,15 @@ type JobItem struct {
 }
 
 type Job struct {
-	ID        string        `json:"id"`
-	Status    string        `json:"status"`
-	Stage     string        `json:"stage"`
-	Message   string        `json:"message"`
-	Items     []JobItem     `json:"items"`
-	Owner     string        `json:"-"`
-	Request   ExportRequest `json:"-"`
-	Cancelled bool          `json:"-"`
+	StorageWaitUntil *time.Time    `json:"storage_wait_until"`
+	ID               string        `json:"id"`
+	Status           string        `json:"status"`
+	Stage            string        `json:"stage"`
+	Message          string        `json:"message"`
+	Items            []JobItem     `json:"items"`
+	Owner            string        `json:"-"`
+	Request          ExportRequest `json:"-"`
+	Cancelled        bool          `json:"-"`
 }
 
 type APIError struct {

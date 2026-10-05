@@ -40,7 +40,7 @@ func (s *Store) PublishArtifact(ctx context.Context, j Job, path, token string, 
 	if err != nil {
 		return &ArtifactPublicationError{cause: err}
 	}
-	return publishArtifactTransaction(ctx, tx, j, path, token, a)
+	return publishArtifactTransaction(ctx, tx, j, path, token, a, s.storageConfig())
 }
 
 func validateArtifactPublication(j Job, path string, a Artifact) error {
@@ -62,12 +62,19 @@ func validateArtifactPublication(j Job, path string, a Artifact) error {
 	return nil
 }
 
-func publishArtifactTransaction(ctx context.Context, tx pgx.Tx, j Job, path, token string, a Artifact) error {
+func publishArtifactTransaction(ctx context.Context, tx pgx.Tx, j Job, path, token string, a Artifact, configs ...Config) error {
 	defer func() {
 		rollbackCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = tx.Rollback(rollbackCtx)
 	}()
+	var c Config
+	if len(configs) > 0 {
+		c = configs[0]
+	}
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", storageLock); err != nil {
+		return &ArtifactPublicationError{cause: err}
+	}
 	items, err := json.Marshal(j.Items)
 	if err != nil {
 		return &ArtifactPublicationError{cause: err}
@@ -82,12 +89,27 @@ func publishArtifactTransaction(ctx context.Context, tx pgx.Tx, j Job, path, tok
 	if err != nil {
 		return &ArtifactPublicationError{cause: err}
 	}
-	tag, err := tx.Exec(ctx, `INSERT INTO artifacts(id,owner,job_id,path,filename,size_bytes,actual_start_ms,actual_end_ms) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(id) DO NOTHING`, a.ID, j.Owner, j.ID, path, a.Filename, a.SizeBytes, a.ActualStartMS, a.ActualEndMS)
+	tag, err := tx.Exec(ctx, `INSERT INTO artifacts(id,owner,job_id,path,filename,size_bytes,actual_start_ms,actual_end_ms,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,CASE WHEN $9::double precision>0 THEN clock_timestamp()+($9*interval '1 second') ELSE NULL END) ON CONFLICT(id) DO NOTHING`, a.ID, j.Owner, j.ID, path, a.Filename, a.SizeBytes, a.ActualStartMS, a.ActualEndMS, c.ArtifactTTL.Seconds())
 	if err == nil && tag.RowsAffected() == 0 {
 		err = ErrNotFound
 	}
 	if err != nil {
 		return &ArtifactPublicationError{cause: err}
+	}
+	if err = registerStorageFile(ctx, tx, path, j.Owner, "artifact", a.ID, a.SizeBytes); err != nil {
+		return &ArtifactPublicationError{cause: err}
+	}
+	if c.MaxStorageBytes > 0 {
+		if a.SizeBytes < 0 || a.SizeBytes > c.MaxOutputBytes {
+			return &ArtifactPublicationError{cause: errStorageUnavailable}
+		}
+		changed, e := tx.Exec(ctx, "UPDATE storage_reservations SET size_bytes=size_bytes-$3 WHERE id=$1 AND token=$2 AND size_bytes>=$3", jobReservationID(j.ID, token), token, c.MaxOutputBytes)
+		if e != nil {
+			return &ArtifactPublicationError{cause: e}
+		}
+		if changed.RowsAffected() == 0 {
+			return &ArtifactPublicationError{cause: ErrNotFound}
+		}
 	}
 	tag, err = tx.Exec(ctx, `UPDATE jobs SET status=$3,stage=$4,message=$5,items=$6::jsonb,updated_at=now() WHERE id=$1 AND owner=$7 AND lease_token=$2 AND lease_until>clock_timestamp() AND status='running' AND cancel_requested=false`, j.ID, token, j.Status, j.Stage, j.Message, items, j.Owner)
 	if err == nil && tag.RowsAffected() == 0 {

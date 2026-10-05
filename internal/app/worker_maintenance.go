@@ -64,3 +64,27 @@ func startWorkerMaintenance(parent context.Context, c Config, s *Store) func() {
 	}()
 	return func() { cancel(); <-done }
 }
+
+// RunMaintenance is a worker-independent, one-shot cleanup entry point for an
+// external scheduler. Its database waits and filesystem traversal share a
+// bounded deadline, and concurrent invocations use the same storage lock.
+func RunMaintenance(parent context.Context, c Config, s *Store) error {
+	s.ConfigureStorage(c)
+	ctx, cancel := context.WithTimeout(parent, workerMaintenanceTimeout)
+	defer cancel()
+	tx, err := s.storageTx(ctx)
+	if err != nil {
+		return err
+	}
+	if err = s.bootstrapStorage(ctx, tx, c); err == nil {
+		err = tx.Commit(ctx)
+	}
+	rollbackStorage(tx)
+	if err != nil {
+		return err
+	}
+	if err = s.Recover(ctx); err != nil {
+		return err
+	}
+	return cleanupFiles(ctx, c, s)
+}

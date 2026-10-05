@@ -24,7 +24,7 @@ func main() {
 
 func run() error {
 	if len(os.Args) < 2 {
-		return errors.New("usage: cutmy server | worker | clip | healthcheck | worker-healthcheck")
+		return errors.New("usage: cutmy server | worker | maintenance | clip | healthcheck | worker-healthcheck")
 	}
 	if os.Args[1] == "clip" {
 		return clip(os.Args[2:])
@@ -44,6 +44,9 @@ func run() error {
 		}
 		return nil
 	}
+	if os.Args[1] != "server" && os.Args[1] != "worker" && os.Args[1] != "maintenance" {
+		return errors.New("usage: cutmy server | worker | maintenance | clip | healthcheck | worker-healthcheck")
+	}
 	flag.CommandLine = flag.NewFlagSet(os.Args[1], flag.ContinueOnError)
 	if err := flag.CommandLine.Parse(os.Args[2:]); err != nil {
 		return err
@@ -54,9 +57,12 @@ func run() error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	s, err := app.OpenStore(ctx, c.DatabaseURL)
+	openCtx, cancelOpen := context.WithTimeout(ctx, 30*time.Second)
+	s, err := app.OpenStore(openCtx, c.DatabaseURL)
+	cancelOpen()
 	if err != nil {
-		return err
+		// Parser/connection errors can include the full DSN and its password.
+		return errors.New("could not initialize the database; check private configuration and database availability")
 	}
 	defer s.DB.Close()
 	switch os.Args[1] {
@@ -76,6 +82,8 @@ func run() error {
 		return err
 	case "worker":
 		return app.RunWorker(ctx, c, s)
+	case "maintenance":
+		return app.RunMaintenance(ctx, c, s)
 	default:
 		return errors.New("usage: cutmy server | worker | healthcheck | worker-healthcheck")
 	}

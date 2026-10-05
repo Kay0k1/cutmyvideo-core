@@ -24,13 +24,16 @@ import (
 )
 
 type Server struct {
-	Config      Config
-	Store       *Store
-	mu          sync.Mutex
-	preparing   map[string]bool
-	rate        map[string]*rateEntry
-	rateCleanup time.Time
-	slots       chan struct{}
+	Config                Config
+	Store                 *Store
+	mu                    sync.Mutex
+	preparing             map[string]bool
+	preparationTokens     map[string]string
+	preparationSources    map[string]string
+	uncertainPreparations map[string]bool
+	rate                  map[string]*rateEntry
+	rateCleanup           time.Time
+	slots                 chan struct{}
 }
 type rateEntry struct {
 	count int
@@ -49,7 +52,10 @@ var (
 )
 
 func NewServer(c Config, s *Store) *Server {
-	return &Server{Config: c, Store: s, preparing: map[string]bool{}, rate: map[string]*rateEntry{}, rateCleanup: time.Now().Add(time.Minute), slots: make(chan struct{}, 4)}
+	if s != nil {
+		s.ConfigureStorage(c)
+	}
+	return &Server{Config: c, Store: s, preparing: map[string]bool{}, preparationTokens: map[string]string{}, preparationSources: map[string]string{}, uncertainPreparations: map[string]bool{}, rate: map[string]*rateEntry{}, rateCleanup: time.Now().Add(time.Minute), slots: make(chan struct{}, 4)}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -65,8 +71,10 @@ func (s *Server) Handler() http.Handler {
 		writeJSON(w, 200, map[string]bool{"ok": true})
 	})
 	mux.HandleFunc("GET /api/v1/session", s.session)
+	mux.HandleFunc("GET /api/v1/sources", s.withSession(s.listSources))
 	mux.HandleFunc("POST /api/v1/sources", s.withSession(s.addSource))
 	mux.HandleFunc("POST /api/v1/uploads", s.withSession(s.upload))
+	mux.HandleFunc("DELETE /api/v1/sources/{id}", s.withSession(s.deleteSource))
 	mux.HandleFunc("GET /api/v1/sources/{id}", s.withSession(s.source))
 	mux.HandleFunc("GET /api/v1/sources/{id}/media", s.withSession(s.sourceMedia))
 	mux.HandleFunc("GET /api/v1/sources/{id}/thumbnail", s.withSession(s.sourceThumbnail))
@@ -94,7 +102,7 @@ func (s *Server) Handler() http.Handler {
 				return
 			}
 		}
-		if r.Method == "POST" && !s.validOrigin(r) {
+		if (r.Method == "POST" || r.Method == "DELETE") && !s.validOrigin(r) {
 			writeError(w, 403, "origin_rejected", "This request must come from the same site")
 			return
 		}
@@ -174,7 +182,7 @@ func (s *Server) session(w http.ResponseWriter, r *http.Request) {
 		}
 		http.SetCookie(w, &http.Cookie{Name: "cutmy_session", Value: base64.RawURLEncoding.EncodeToString(b), Path: "/", MaxAge: 7 * 24 * 3600, HttpOnly: true, Secure: s.Config.SecureCookie, SameSite: http.SameSiteLaxMode})
 	}
-	writeJSON(w, 200, map[string]bool{"ok": true})
+	writeJSON(w, 200, map[string]any{"ok": true, "limits": map[string]any{"max_source_bytes": s.Config.MaxSourceBytes, "max_ranges": s.Config.MaxRanges, "max_range_ms": s.Config.MaxRangeMS, "max_job_ms": s.Config.MaxJobMS}})
 }
 
 type ownerHandler func(http.ResponseWriter, *http.Request, string)
@@ -207,7 +215,7 @@ func (s *Server) withSession(next ownerHandler) http.HandlerFunc {
 			writeError(w, 429, "rate_limit", "Too many requests; wait a minute")
 			return
 		}
-		if r.Method == "POST" && !s.allow("mutations:"+ip, s.Config.MutationsPerMinute) {
+		if (r.Method == "POST" || r.Method == "DELETE") && !s.allow("mutations:"+ip, s.Config.MutationsPerMinute) {
 			writeError(w, 429, "rate_limit", "Too many changes; wait a minute")
 			return
 		}
@@ -219,7 +227,7 @@ func (s *Server) withSession(next ownerHandler) http.HandlerFunc {
 	}
 }
 
-func (s *Server) beginSource(ctx context.Context, owner string) error {
+func (s *Server) beginSource(ctx context.Context, owner string, thumbnails ...bool) error {
 	// Reserve the owner's preparation slot before reading quota state. A second
 	// request must not carry an old count/size past the first request's completion.
 	s.mu.Lock()
@@ -227,13 +235,10 @@ func (s *Server) beginSource(ctx context.Context, owner string) error {
 		s.mu.Unlock()
 		return errSourceBusy
 	}
-	if !storageAvailableContext(ctx, s.Config, int64(len(s.preparing)+1)*s.Config.MaxSourceBytes) {
-		s.mu.Unlock()
-		return errSourceStorage
-	}
 	select {
 	case s.slots <- struct{}{}:
 		s.preparing[owner] = true
+		s.preparationTokens[owner] = newID("prep")
 		s.mu.Unlock()
 	default:
 		s.mu.Unlock()
@@ -245,35 +250,10 @@ func (s *Server) beginSource(ctx context.Context, owner string) error {
 			s.endSource(owner)
 		}
 	}()
-	var count int
-	err := s.Store.DB.QueryRow(ctx, `SELECT count(*) FROM sources WHERE owner=$1`, owner).Scan(&count)
-	if err != nil {
+	admitCtx, admitCancel := context.WithTimeout(ctx, workerDatabaseTimeout)
+	defer admitCancel()
+	if err := s.Store.reserveSource(admitCtx, s.Config, owner, s.sourceToken(owner), len(thumbnails) > 0 && thumbnails[0]); err != nil {
 		return err
-	}
-	if count >= 20 {
-		return errSourceLimit
-	}
-	rows, err := s.Store.DB.Query(ctx, `SELECT path FROM sources WHERE owner=$1 AND path<>'' UNION ALL SELECT thumbnail_path FROM sources WHERE owner=$1 AND thumbnail_path<>''`, owner)
-	if err != nil {
-		return err
-	}
-	var ownedBytes int64
-	for rows.Next() {
-		var p string
-		if err = rows.Scan(&p); err != nil {
-			rows.Close()
-			return err
-		}
-		if info, e := os.Stat(p); e == nil {
-			ownedBytes += info.Size()
-		}
-	}
-	rows.Close()
-	if err = rows.Err(); err != nil {
-		return err
-	}
-	if ownedBytes+s.Config.MaxSourceBytes > s.Config.MaxOwnerBytes {
-		return errSourceStorage
 	}
 	accepted = true
 	return nil
@@ -294,8 +274,24 @@ func writeSourceAdmissionError(w http.ResponseWriter, ctx context.Context, err e
 	}
 }
 func (s *Server) endSource(owner string) {
+	ctx, cancel := context.WithTimeout(context.Background(), workerDatabaseTimeout)
+	defer cancel()
+	s.mu.Lock()
+	held := s.uncertainPreparations[owner]
+	s.mu.Unlock()
+	if err := func() error {
+		if held {
+			return nil
+		}
+		return s.Store.FinishSource(ctx, s.Config, owner, s.sourceToken(owner), s.sourceIdentity(owner, ""))
+	}(); err != nil {
+		slog.Error("source reservation release failed", "error", err)
+	}
 	s.mu.Lock()
 	delete(s.preparing, owner)
+	delete(s.preparationTokens, owner)
+	delete(s.preparationSources, owner)
+	delete(s.uncertainPreparations, owner)
 	s.mu.Unlock()
 	<-s.slots
 }
@@ -334,12 +330,13 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), s.Config.SourceTimeout)
 	defer cancel()
-	if err = s.beginSource(ctx, owner); err != nil {
+	if err = s.beginSource(ctx, owner, isPlatformHost(u.Hostname())); err != nil {
 		writeSourceAdmissionError(w, ctx, err)
 		return
 	}
 	defer s.endSource(owner)
-	v := Source{ID: newID("src"), Owner: owner, URL: u.String(), Kind: "direct"}
+	v := Source{ID: newID("src"), Owner: owner, StorageToken: s.sourceToken(owner), URL: u.String(), Kind: "direct"}
+	s.sourceIdentity(owner, v.ID)
 	platform := isPlatformHost(u.Hostname())
 	if !platform {
 		req, _ := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
@@ -410,6 +407,10 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 				return
 			}
 			if e = s.Store.AddSource(ctx, v); e != nil {
+				keep = errors.Is(e, ErrSourceCommitUncertain)
+				if keep {
+					s.holdSourceReservation(owner)
+				}
 				internalError(w, e)
 				return
 			}
@@ -473,7 +474,10 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 		v.ThumbnailPath, _ = fetchThumbnail(ctx, s.Config, v.ID, info.Thumbnail)
 		completeSourcePresentation(&v)
 		if e = s.Store.AddSource(ctx, v); e != nil {
-			if v.ThumbnailPath != "" {
+			if errors.Is(e, ErrSourceCommitUncertain) {
+				s.holdSourceReservation(owner)
+			}
+			if v.ThumbnailPath != "" && !errors.Is(e, ErrSourceCommitUncertain) {
 				_ = os.Remove(v.ThumbnailPath)
 			}
 			internalError(w, e)
@@ -486,6 +490,9 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 		v.PreviewURL = &preview
 	}
 	completeSourcePresentation(&v)
+	if persisted, err := s.Store.Source(ctx, v.ID, owner); err == nil {
+		v = persisted
+	}
 	writeJSON(w, 201, v)
 }
 
@@ -587,7 +594,8 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request, owner string) {
 		}
 		return
 	}
-	v := Source{ID: newID("src"), Owner: owner, Kind: "upload", Title: filepath.Base(part.FileName())}
+	v := Source{ID: newID("src"), Owner: owner, StorageToken: s.sourceToken(owner), Kind: "upload", Title: filepath.Base(part.FileName())}
+	s.sourceIdentity(owner, v.ID)
 	if len(v.Title) > 200 {
 		v.Title = "Uploaded video"
 	}
@@ -639,6 +647,10 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request, owner string) {
 		return
 	}
 	if err = s.Store.AddSource(ctx, v); err != nil {
+		keep = errors.Is(err, ErrSourceCommitUncertain)
+		if keep {
+			s.holdSourceReservation(owner)
+		}
 		internalError(w, err)
 		return
 	}
@@ -646,6 +658,9 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request, owner string) {
 	preview := "/api/v1/sources/" + v.ID + "/media"
 	v.PreviewURL = &preview
 	completeSourcePresentation(&v)
+	if persisted, err := s.Store.Source(ctx, v.ID, owner); err == nil {
+		v = persisted
+	}
 	writeJSON(w, 201, v)
 }
 
@@ -694,12 +709,16 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request, owner string)
 		return
 	}
 	j, err := s.Store.CreateJobLimited(r.Context(), owner, request, key, 3, s.Config.MaxActiveJobs)
+	if errors.Is(err, ErrJobTooLarge) {
+		writeError(w, 413, "storage_limit", "This export exceeds the server storage budget; select fewer fragments")
+		return
+	}
 	if errors.Is(err, ErrBusy) {
 		writeError(w, 429, "job_limit", "Wait for an active export before creating another")
 		return
 	}
 	if err != nil {
-		internalError(w, err)
+		lookupError(w, err)
 		return
 	}
 	writeJSON(w, 202, j)
@@ -819,4 +838,54 @@ func lookupError(w http.ResponseWriter, err error) {
 func internalError(w http.ResponseWriter, err error) {
 	slog.Error("request failed", "error", fmt.Sprintf("%T", err))
 	writeError(w, 500, "internal", "The operation could not be completed; try again")
+}
+
+func (s *Server) deleteSource(w http.ResponseWriter, r *http.Request, owner string) {
+	ctx, cancel := context.WithTimeout(r.Context(), workerDatabaseTimeout)
+	defer cancel()
+	paths, err := s.Store.DeleteSource(ctx, r.PathValue("id"), owner)
+	if errors.Is(err, ErrSourceInUse) {
+		writeError(w, 409, "source_in_use", "Cancel or finish active exports before deleting this source")
+		return
+	}
+	if err != nil {
+		lookupError(w, err)
+		return
+	}
+	if err = s.Store.DrainStorageDeletes(ctx, s.Config, paths); err != nil {
+		slog.Warn("source files awaiting deletion", "error", err)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) sourceToken(owner string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.preparationTokens[owner]
+}
+
+func (s *Server) listSources(w http.ResponseWriter, r *http.Request, owner string) {
+	ctx, cancel := context.WithTimeout(r.Context(), workerDatabaseTimeout)
+	defer cancel()
+	sources, err := s.Store.Sources(ctx, owner)
+	if err != nil {
+		lookupError(w, err)
+		return
+	}
+	writeJSON(w, 200, map[string]any{"sources": sources})
+}
+
+func (s *Server) holdSourceReservation(owner string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.uncertainPreparations[owner] = true
+}
+
+func (s *Server) sourceIdentity(owner, id string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if id != "" {
+		s.preparationSources[owner] = id
+	}
+	return s.preparationSources[owner]
 }

@@ -127,15 +127,17 @@ The response contains the job ID in `id`. Poll `GET /api/v1/jobs/{id}` and downl
 | `MUTATIONS_PER_MINUTE` | 20 per IP, independent of session cookie |
 | `SOURCE_TIMEOUT` / `JOB_TIMEOUT` | `2m` / `30m` |
 | `SOURCE_TTL` / `ARTIFACT_TTL` | `24h` / `24h` |
+| `STORAGE_SAFETY_BYTES` / `STORAGE_WAIT_TIMEOUT` | 512 MiB free-space margin / `30m` |
+| `WORKER_CONCURRENCY` | 1; allowed 1–8, subject to container CPU/RAM limits |
 | `FFMPEG_THREADS` | 2 |
 | `FFMPEG_PROFILE` | `fast`; `compact` produces smaller files using more CPU time |
 | `GOMEMLIMIT` | `128MiB` Docker soft Go runtime limit; FFmpeg memory is bounded separately |
 | `FFMPEG_PATH` / `FFPROBE_PATH` / `YTDLP_PATH` | Corresponding executable names |
 | `WORKER_HEALTH_PATH` | `/tmp/cutmy-worker-health`, container-local temporary file |
 
-`MAX_OWNER_BYTES` applies to staged source files and thumbnails; results count toward the global storage limit. A session allows 20 source records and one concurrent source preparation. The API allows four concurrent source preparations globally. Admission reserves the configured maximum source size. Cleanup runs in the worker every five minutes; active jobs pin their required files.
+`MAX_OWNER_BYTES` applies to staged source files and thumbnails; results count toward the global storage limit. A session allows 20 source records and one concurrent source preparation; four globally. Uploads reserve their size ceiling, and exports reserve all unpublished outputs plus bounded temporary HLS inputs. Accepted work enters `waiting_storage` with a finite deadline when space is temporarily unavailable. Worker cleanup or the independent `cutmy maintenance` command expires unused data; active jobs pin their files. The API also supports explicit deletion of unused sources and results.
 
-The MVP supports **one API instance and one worker**. Durable leases and write fencing protect job recovery, but rate and disk admission limits are not distributed across API instances. Scale-out requires shared resource reservations. PostgreSQL stores durable state; source files and artifacts use disk. An S3 adapter is not yet implemented.
+The public deployment uses **one API instance** because its per-IP limiter is process-local. Disk reservations, byte counters and queue leases are shared through PostgreSQL. Each worker runs a bounded processing pool; large or unknown video inputs acquire that worker's entire local pool. Multiple API instances require a shared request limiter. PostgreSQL stores durable state; source files and artifacts use disk. An S3 adapter is not yet implemented.
 
 `cutmy worker-healthcheck` verifies successful queue or lease access within the last 30 seconds. Its empty, private marker lives in container-local `/tmp`, resets at startup and is removed on shutdown. Keep it off shared media storage so another worker cannot mask a failure. The Docker Compose example checks API and worker health separately. Worker restarts keep unfinished jobs recoverable through their leases, including completed fragments; the job's own deadline and user cancellation remain terminal.
 
@@ -157,6 +159,8 @@ flowchart LR
 Go coordinates work; FFmpeg handles media. `pkg/engine` exposes local processing to other applications. Jobs retain an immutable snapshot of ranges and settings. A future MCP adapter can call the existing operations.
 
 A short private cache avoids repeated extraction when reopening or exporting a source. Fast encoding reduces CPU work but creates larger files; the previous profile remains available through `FFMPEG_PROFILE=compact`, CLI `--profile compact` and `engine.Config.EncodeProfile`. The CLI also accepts `--threads 1..32`. See [performance and recovery](docs/performance.md) for measurements, cache limits and memory/recovery behavior.
+
+The local library defaults to two-minute inspection and 30-minute export deadlines, including with `context.Background()`. Positive `engine.Config.InspectTimeout` and `ExportTimeout` override them; earlier caller cancellation wins. Output publication is exclusive and never overwrites an existing file or symlink. Direct library calls do not use server quotas; a future Telegram adapter should use the shared admission layer and queue.
 
 See the [security model](docs/security-model.md). Public deployment should also apply CPU/RAM/disk limits and container network isolation. Do not mount application secrets or private host volumes into media containers.
 

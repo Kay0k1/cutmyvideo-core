@@ -17,10 +17,49 @@ import (
 )
 
 const mediaFormats = "mov,matroska,webm,mp3,wav,flac,ogg,aac,avi,mpegts"
+const maxMediaPixels = 33_554_432 // Includes 7680 x 4320 (8K).
+const maxMediaStreams = 32
+
+// These are per-tool input/decoder bounds, alongside container memory limits.
+// Limit stream discovery too: the service only uses one video/audio pair.
+func mediaInputBounds(c Config) []string {
+	threads := c.FFmpegThreads
+	if threads < 1 || threads > 32 {
+		threads = 2
+	}
+	return []string{"-threads", strconv.Itoa(threads), "-max_pixels", strconv.Itoa(maxMediaPixels), "-max_streams", strconv.Itoa(maxMediaStreams)}
+}
 
 type limitedBuffer struct {
-	bytes.Buffer
-	limit int
+	// Do not embed bytes.Buffer: its promoted ReadFrom method lets io.Copy
+	// bypass this type's bounded Write, including os/exec's output copier.
+	buffer bytes.Buffer
+	limit  int
+}
+
+func (b *limitedBuffer) String() string { return b.buffer.String() }
+
+var errProcessResponseTooLarge = errors.New("process response is too large")
+
+// Cancel the process as soon as its response crosses the bound. Merely
+// discarding excess stdout bounds RAM but lets a broken extractor consume CPU
+// until the whole inspection timeout, or forever for a local caller.
+type processResponseBuffer struct {
+	buffer   bytes.Buffer
+	limit    int
+	cancel   context.CancelFunc
+	overflow bool
+}
+
+func (b *processResponseBuffer) Write(p []byte) (int, error) {
+	remaining := b.limit - b.buffer.Len()
+	if len(p) <= remaining {
+		return b.buffer.Write(p)
+	}
+	_, _ = b.buffer.Write(p[:remaining])
+	b.overflow = true
+	b.cancel()
+	return remaining, errProcessResponseTooLarge
 }
 
 type mediaProcessFailure struct {
@@ -76,25 +115,31 @@ func mediaFailureCategory(stderr string) string {
 
 func (b *limitedBuffer) Write(p []byte) (int, error) {
 	n := len(p)
-	if b.Len() < b.limit {
-		keep := b.limit - b.Len()
+	if b.buffer.Len() < b.limit {
+		keep := b.limit - b.buffer.Len()
 		if keep > len(p) {
 			keep = len(p)
 		}
-		_, _ = b.Buffer.Write(p[:keep])
+		_, _ = b.buffer.Write(p[:keep])
 	}
 	return n, nil
 }
 
 func runCommand(ctx context.Context, path string, args ...string) ([]byte, error) {
-	stdout := &limitedBuffer{limit: 8 << 20}
-	if err := runCommandOutput(ctx, path, args, stdout); err != nil {
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stdout := &processResponseBuffer{limit: 8 << 20, cancel: cancel}
+	err := runCommandOutput(runCtx, path, args, stdout)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if stdout.overflow {
+		return nil, errProcessResponseTooLarge
+	}
+	if err != nil {
 		return nil, err
 	}
-	if stdout.Len() >= stdout.limit {
-		return nil, errors.New("process response is too large")
-	}
-	return stdout.Bytes(), nil
+	return stdout.buffer.Bytes(), nil
 }
 
 func runCommandOutput(ctx context.Context, path string, args []string, stdout io.Writer) error {
@@ -135,7 +180,10 @@ func probe(ctx context.Context, c Config, path string, remote bool) (probeInfo, 
 	}
 	// Large user-controlled tags, dispositions and side data are unused. Ask
 	// ffprobe only for the fields needed by inspection and output validation.
-	b, err := runCommand(ctx, c.FFprobe, "-v", "error", "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats, "-show_entries", "format=duration,start_time:stream=codec_type,codec_name,start_time,width,height", "-of", "json", path)
+	args := []string{"-v", "error", "-max_alloc", "268435456", "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats}
+	args = append(args, mediaInputBounds(c)...)
+	args = append(args, "-show_entries", "format=duration,start_time:stream=codec_type,codec_name,start_time,width,height", "-of", "json", path)
+	b, err := runCommand(ctx, c.FFprobe, args...)
 	var p probeInfo
 	if err != nil {
 		return p, 0, err
@@ -147,8 +195,13 @@ func probe(ctx context.Context, c Config, path string, remote bool) (probeInfo, 
 	if err != nil || math.IsNaN(duration) || math.IsInf(duration, 0) || duration <= 0 || duration > 30*24*3600 {
 		return p, 0, errors.New("source has no supported finite duration")
 	}
-	if len(p.Streams) == 0 {
+	if len(p.Streams) == 0 || len(p.Streams) > maxMediaStreams {
 		return p, 0, errors.New("source contains no supported streams")
+	}
+	for _, stream := range p.Streams {
+		if stream.CodecType == "video" && (stream.Width <= 0 || stream.Height <= 0 || stream.Width > maxMediaPixels/stream.Height) {
+			return p, 0, errors.New("source video dimensions exceed the decoder limit")
+		}
 	}
 	return p, int64(math.Round(duration * 1000)), nil
 }
@@ -313,7 +366,10 @@ func nearestKeyframe(ctx context.Context, c Config, path string, start int64, re
 	if remote {
 		protocols = "http,tcp"
 	}
-	b, err := runCommand(ctx, c.FFprobe, "-v", "error", "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats, "-select_streams", "v:0", "-read_intervals", seconds(from)+"%"+seconds(start+1), "-show_packets", "-show_entries", "packet=pts_time,flags", "-of", "json", path)
+	args := []string{"-v", "error", "-max_alloc", "268435456", "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats}
+	args = append(args, mediaInputBounds(c)...)
+	args = append(args, "-select_streams", "v:0", "-read_intervals", seconds(from)+"%"+seconds(start+1), "-show_packets", "-show_entries", "packet=pts_time,flags", "-of", "json", path)
+	b, err := runCommand(ctx, c.FFprobe, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -396,7 +452,7 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 		threadCount = 2
 	}
 	threads := strconv.Itoa(threadCount)
-	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-filter_threads", threads, "-filter_complex_threads", threads}
+	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-max_alloc", "268435456", "-filter_threads", threads, "-filter_complex_threads", threads}
 	if report != nil {
 		args = append(args, "-nostats", "-stats_period", "0.5", "-progress", "pipe:1")
 	}
@@ -409,7 +465,9 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 		if localStart < 0 {
 			return 0, 0, errUnsupportedStream
 		}
-		args = append(args, "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats, "-threads", threads, "-ss", seconds(localStart), "-i", input.Path)
+		args = append(args, "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats)
+		args = append(args, mediaInputBounds(c)...)
+		args = append(args, "-ss", seconds(localStart), "-i", input.Path)
 	}
 	args = append(args, "-t", seconds(r.EndMS-start))
 	if request.Format == "mp3" {
@@ -492,14 +550,27 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 var errSourceTooLarge = errors.New("source exceeds size limit")
 
 func copyBounded(dst io.Writer, src io.Reader, limit int64) error {
-	n, err := io.Copy(dst, io.LimitReader(src, limit+1))
+	if limit < 0 {
+		return errSourceTooLarge
+	}
+	// Do not add one to an operator-supplied limit: MaxInt64 + 1 wraps into a
+	// negative LimitReader budget and silently accepts an empty source.
+	n, err := io.Copy(dst, io.LimitReader(src, limit))
 	if err != nil {
 		return err
 	}
-	if n > limit {
+	if n < limit {
+		return nil
+	}
+	var extra [1]byte
+	read, err := io.ReadFull(src, extra[:])
+	if read > 0 {
 		return errSourceTooLarge
 	}
-	return nil
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	return err
 }
 
 func makeSourceFile(c Config, id string) (*os.File, string, error) {

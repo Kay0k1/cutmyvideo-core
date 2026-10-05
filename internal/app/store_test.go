@@ -87,6 +87,9 @@ func TestStoreCancellationSettlesNewFailureWithoutOverwritingFinishedItems(t *te
 	job.Items[0].Status, job.Items[0].ErrorCode, job.Items[0].Message = "failed", "audio_missing", "This video has no audio track"
 	job.Items[1].Status = "succeeded"
 	job.Items[1].Artifact = &Artifact{ID: "already-completed", DownloadURL: "/download/already-completed"}
+	if err := s.AddArtifact(ctx, job.Owner, job.ID, "/test/already-completed", token, *job.Items[1].Artifact); err != nil {
+		t.Fatal(err)
+	}
 	job.Items[2].Status = "running"
 	if err := s.SaveJob(ctx, job, token); err != nil {
 		t.Fatal(err)

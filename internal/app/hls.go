@@ -226,6 +226,9 @@ func mediaHeaders(req *http.Request, headers map[string]string) {
 	}
 }
 func (g *networkGuard) fetch(ctx context.Context, raw string, headers map[string]string, dst io.Writer, limit int64) error {
+	if limit < 0 {
+		return errors.New("invalid source transfer limit")
+	}
 	u, e := validateURL(raw)
 	if e != nil {
 		return errUnsupportedStream
@@ -249,7 +252,10 @@ func (g *networkGuard) fetch(ctx context.Context, raw string, headers map[string
 	if resp.StatusCode != http.StatusOK || resp.ContentLength > limit {
 		return errPlatformUnavailable
 	}
-	reader := io.LimitReader(resp.Body, limit+1)
+	var reader io.Reader = resp.Body
+	if limit < math.MaxInt64 {
+		reader = io.LimitReader(resp.Body, limit+1)
+	}
 	pooled := relayBuffers.Get().(*[relayBufferSize]byte)
 	defer relayBuffers.Put(pooled)
 	buffer := pooled[:]
@@ -388,7 +394,10 @@ func stageHLS(ctx context.Context, c Config, g *networkGuard, f platformFormat, 
 	}
 	// Restrict protocols/demuxers even after staging. HLS, concat and arbitrary
 	// network or file references are not accepted by FFmpeg.
-	_, e = runCommand(ctx, c.FFmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-protocol_whitelist", "file", "-format_whitelist", mediaFormats, "-fflags", "+genpts", "-i", raw, "-map", "0:v:0?", "-map", "0:a:0?", "-c", "copy", "-avoid_negative_ts", "make_zero", "-map_metadata", "-1", "-fs", strconv.FormatInt(c.MaxSourceBytes, 10), out)
+	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-max_alloc", "268435456", "-protocol_whitelist", "file", "-format_whitelist", mediaFormats}
+	args = append(args, mediaInputBounds(c)...)
+	args = append(args, "-fflags", "+genpts", "-i", raw, "-map", "0:v:0?", "-map", "0:a:0?", "-c", "copy", "-avoid_negative_ts", "make_zero", "-map_metadata", "-1", "-fs", strconv.FormatInt(c.MaxSourceBytes, 10), out)
+	_, e = runCommand(ctx, c.FFmpeg, args...)
 	if e != nil {
 		return "", 0, e
 	}

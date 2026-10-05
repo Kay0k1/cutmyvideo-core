@@ -4,15 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
 func RunWorker(ctx context.Context, c Config, s *Store) error {
+	s.ConfigureStorage(c)
+	ctx = withMediaBudget(ctx, c.WorkerConcurrency)
 	health, err := newWorkerHealth(c.WorkerHealthPath)
 	if err != nil {
 		return err
@@ -29,36 +33,53 @@ func RunWorker(ctx context.Context, c Config, s *Store) error {
 	}
 	stopMaintenance := startWorkerMaintenance(ctx, c, s)
 	defer stopMaintenance()
-	for {
-		if ctx.Err() != nil {
-			return nil
-		}
-		job, token, err := claimWorkerJob(ctx, s)
-		if errors.Is(err, ErrNotFound) {
+	runWorkerPool(ctx, c.WorkerConcurrency, func() {
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+			job, token, err := claimWorkerJob(ctx, s)
+			if errors.Is(err, ErrNotFound) {
+				health.Touch()
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(time.Second):
+				}
+				continue
+			}
+			if err != nil {
+				slog.Error("job claim failed", "error", err)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(3 * time.Second):
+				}
+				continue
+			}
 			health.Touch()
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-time.After(time.Second):
-			}
-			continue
+			processJob(ctx, c, s, job, token)
 		}
-		if err != nil {
-			slog.Error("job claim failed", "error", err)
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-time.After(3 * time.Second):
-			}
-			continue
-		}
-		health.Touch()
-		processJob(ctx, c, s, job, token)
-	}
+	})
+	return nil
 }
 
 func processJob(parent context.Context, c Config, s *Store, j Job, token string) {
 	started := time.Now()
+	work := filepath.Join(c.DataDir, "work", j.ID+"-"+token)
+	defer func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), workerDatabaseTimeout)
+		defer cleanupCancel()
+		if err := removeStorageTree(cleanupCtx, work); err != nil {
+			slog.Error("workspace cleanup failed", "job_id", j.ID, "error", err)
+			return
+		}
+		releaseCtx, cancel := context.WithTimeout(context.Background(), workerDatabaseTimeout)
+		defer cancel()
+		if err := s.ReleaseJobStorage(releaseCtx, j.ID, token); err != nil {
+			slog.Error("job storage release failed", "job_id", j.ID, "error", err)
+		}
+	}()
 	defer func() {
 		slog.Info("job_processing_stopped", "job_id", j.ID, "status", j.Status, "stage", j.Stage, "elapsed_ms", time.Since(started).Milliseconds())
 	}()
@@ -129,6 +150,29 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 		}
 		persist()
 	}
+	// An acknowledged/lost-ack publication may leave only the terminal
+	// snapshot unsaved. Existing completed results need no new media resolution.
+	completed := len(j.Items) > 0
+	for _, item := range j.Items {
+		if item.Status != "succeeded" || item.Artifact == nil {
+			completed = false
+			break
+		}
+		path, _, e := s.ArtifactPath(ctx, item.Artifact.ID, j.Owner)
+		if e != nil {
+			completed = false
+			break
+		}
+		if _, e = os.Stat(path); e != nil {
+			completed = false
+			break
+		}
+	}
+	if completed {
+		j.Status, j.Stage, j.Message = "succeeded", "finished", "All fragments are ready"
+		persist()
+		return
+	}
 	source, err := s.Source(ctx, j.Request.SourceID, j.Owner)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -177,12 +221,24 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 		slog.Info("source_streams_resolved", "job_id", j.ID, "cache_hit", cachedMetadata, "elapsed_ms", time.Since(resolvedAt).Milliseconds())
 	}
 
-	work := filepath.Join(c.DataDir, "work", j.ID+"-"+token)
+	releaseMedia, budgetErr := acquireMediaProcessing(ctx, source, streams, j.Request)
+	if budgetErr != nil {
+		finishFailure("job_timeout", "Processing stopped or exceeded the time limit")
+		return
+	}
+	defer releaseMedia()
+
+	work = filepath.Join(c.DataDir, "work", j.ID+"-"+token)
 	if err = os.MkdirAll(work, 0700); err != nil {
+		if storagePressureError(err) {
+			if !waitForJobStorage(parent, c, s, &j, token, work) {
+				finishFailure("server_error", "Could not wait for storage")
+			}
+			return
+		}
 		finishFailure("server_error", "Could not create a temporary workspace")
 		return
 	}
-	defer os.RemoveAll(work)
 	for i := range j.Items {
 		item := &j.Items[i]
 		if item.Status == "succeeded" && item.Artifact != nil {
@@ -222,19 +278,39 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 			}
 		}
 		for {
-			reserve := c.MaxOutputBytes
-			for _, f := range streams {
-				if isHLS(f) {
-					reserve += 2 * c.MaxSourceBytes
-					break
+			storageOK := true
+			if c.MaxStorageBytes > 0 && s.storageConfig().MaxStorageBytes > 0 {
+				var storageErr error
+				storageOK, storageErr = s.JobStorageAvailable(ctx, c, j.ID, token)
+				if storageErr != nil {
+					finishFailure("server_error", "Could not check storage reservation")
+					return
 				}
+			} else {
+				reserve := c.MaxOutputBytes
+				for _, f := range streams {
+					if isHLS(f) {
+						if c.MaxSourceBytes > ((1<<63-1)-reserve)/2 {
+							storageOK = false
+						} else {
+							reserve += 2 * c.MaxSourceBytes
+						}
+						break
+					}
+				}
+				storageOK = storageOK && storageAvailableContext(ctx, c, reserve)
 			}
-			if !storageAvailableContext(ctx, c, reserve) {
+			if !storageOK {
 				if ctx.Err() != nil {
-					finishFailure("job_timeout", "Processing stopped or exceeded the time limit")
-				} else {
-					finishFailure("storage_full", "Server storage is full; try again after older files expire")
+					finishFailure("job_timeout", "Processing exceeded the time limit")
+					return
 				}
+				// A later external disk fill leaves the accepted export waiting, rather
+				// than terminating it. Remove work before relinquishing its reservation.
+				if !waitForJobStorage(parent, c, s, &j, token, work) {
+					finishFailure("server_error", "Could not wait for storage")
+				}
+
 				return
 			}
 			itemInputs := append([]mediaInput(nil), inputs...)
@@ -287,6 +363,12 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 				finishFailure("job_timeout", "Processing stopped or exceeded the time limit")
 				return
 			}
+			if storagePressureError(e) {
+				if !waitForJobStorage(parent, c, s, &j, token, work) {
+					finishFailure("server_error", "Could not wait for storage")
+				}
+				return
+			}
 			item.Status = "failed"
 			problem := exportProblem(e)
 			item.Message = problem.message
@@ -310,6 +392,12 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 		id := newID("art")
 		path := filepath.Join(c.DataDir, "artifacts", id+"."+j.Request.Format)
 		if e = os.Rename(out, path); e != nil {
+			if storagePressureError(e) {
+				if !waitForJobStorage(parent, c, s, &j, token, work) {
+					finishFailure("server_error", "Could not wait for storage")
+				}
+				return
+			}
 			if ctx.Err() != nil || leaseUncertain.Load() {
 				finishFailure("job_timeout", "Processing stopped or exceeded the time limit")
 				return
@@ -392,79 +480,132 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 	persist()
 }
 
-func cleanupFiles(ctx context.Context, c Config, s *Store) {
+func cleanupFiles(ctx context.Context, c Config, s *Store) error {
+	var problems []error
 	paths, err := s.Cleanup(ctx, c.ArtifactTTL, c.SourceTTL)
 	if err != nil {
 		slog.Error("cleanup failed", "error", err)
-		return
+		return err
 	}
-	for _, path := range paths {
+	if err = s.DrainStorageDeletes(ctx, c, paths); err != nil {
+		slog.Warn("media deletion pending", "error", err)
+		problems = append(problems, err)
+	}
+	if err = s.ReconcileStorage(ctx, c); err != nil {
+		slog.Error("storage reconciliation failed", "error", err)
+		return errors.Join(append(problems, err)...)
+	}
+	// Pick up orphan tombstones created by reconciliation in the same cycle.
+	tx, err := s.storageTx(ctx)
+	if err == nil {
+		paths, err = pendingStoragePaths(ctx, tx)
+		rollbackStorage(tx)
+		if err == nil {
+			if deletionErr := s.DrainStorageDeletes(ctx, c, paths); deletionErr != nil {
+				problems = append(problems, deletionErr)
+			}
+		}
+	}
+	if err != nil {
+		problems = append(problems, err)
+	}
+	cutoff := time.Now().Add(-max(c.ArtifactTTL, c.JobTimeout+time.Hour))
+	scanErr := scanStorageDirectory(ctx, filepath.Join(c.DataDir, "work"), func(path string, entry os.DirEntry) error {
 		if ctx.Err() != nil {
-			return
+			return ctx.Err()
 		}
-		_ = os.Remove(path)
-	}
-	// Reconcile old files that survived a crash before database registration.
-	// A generous floor avoids racing an active upload or artifact publication.
-	for _, kind := range []string{"sources", "artifacts"} {
-		if ctx.Err() != nil {
-			return
-		}
-		ttl := c.ArtifactTTL
-		query := `SELECT path FROM artifacts`
-		if kind == "sources" {
-			ttl = c.SourceTTL
-			query = `SELECT path FROM sources WHERE path<>'' UNION ALL SELECT thumbnail_path FROM sources WHERE thumbnail_path<>''`
-		}
-		floor := c.JobTimeout + c.SourceTimeout + time.Hour
-		if ttl < floor {
-			ttl = floor
-		}
-		rows, e := s.DB.Query(ctx, query)
-		if e != nil {
-			continue
-		}
-		known := map[string]bool{}
-		valid := true
-		for rows.Next() {
-			var path string
-			if e = rows.Scan(&path); e != nil {
-				valid = false
-				break
-			}
-			known[path] = true
-		}
-		if rows.Err() != nil {
-			valid = false
-		}
-		rows.Close()
-		if !valid {
-			continue
-		}
-		cutoff := time.Now().Add(-ttl)
-		_ = scanStorageDirectory(ctx, filepath.Join(c.DataDir, kind), func(path string, entry os.DirEntry) error {
-			if !entry.Type().IsRegular() {
-				return nil
-			}
-			if known[path] {
-				return nil
-			}
-			info, e := entry.Info()
-			if e == nil && info.ModTime().Before(cutoff) {
-				_ = os.Remove(path)
-			}
-			return nil
-		})
-	}
-	// Remove abandoned temporary directories left by killed workers.
-	artifactCutoff, jobCutoff := time.Now().Add(-c.ArtifactTTL), time.Now().Add(-c.JobTimeout-time.Hour)
-	_ = scanStorageDirectory(ctx, filepath.Join(c.DataDir, "work"), func(path string, entry os.DirEntry) error {
 		info, e := entry.Info()
-		if e == nil && info.ModTime().Before(artifactCutoff) && info.ModTime().Before(jobCutoff) {
-			_ = os.RemoveAll(path)
+		if e != nil {
+			return nil
 		}
-		return nil
+		var active bool
+		if e = s.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM jobs WHERE status='running' AND lease_until>clock_timestamp() AND id||'-'||lease_token=$1)`, entry.Name()).Scan(&active); e != nil {
+			return e
+		}
+		if active {
+			return nil
+		}
+		var reservationID string
+		var abandoned *time.Time
+		leaseTx, txErr := s.storageTx(ctx)
+		if txErr != nil {
+			return txErr
+		}
+		e = leaseTx.QueryRow(ctx, `UPDATE storage_reservations SET abandoned_at=COALESCE(abandoned_at,clock_timestamp()) WHERE kind='job' AND job_id||'-'||token=$1 RETURNING id,abandoned_at`, entry.Name()).Scan(&reservationID, &abandoned)
+		if e == nil {
+			e = leaseTx.Commit(ctx)
+		}
+		rollbackStorage(leaseTx)
+		if e != nil && !errors.Is(e, pgx.ErrNoRows) {
+			return e
+		}
+		staleLease := abandoned != nil && time.Since(*abandoned) > time.Minute
+		if !staleLease && !info.ModTime().Before(cutoff) {
+			return nil
+		}
+		if e = removeStorageTree(ctx, path); e != nil {
+			return e
+		}
+		// Bootstrap-accounted legacy work bytes remain charged until this
+		// removal succeeds, including when no lease reservation exists.
+		orphanTx, orphanErr := s.storageTx(ctx)
+		if orphanErr != nil {
+			return orphanErr
+		}
+		_, orphanErr = orphanTx.Exec(ctx, "DELETE FROM storage_files WHERE kind='work_orphan' AND starts_with(path,$1)", path+string(os.PathSeparator))
+		if orphanErr == nil {
+			orphanErr = orphanTx.Commit(ctx)
+		}
+		rollbackStorage(orphanTx)
+		if orphanErr != nil {
+			return orphanErr
+		}
+		if reservationID != "" {
+			releaseTx, releaseErr := s.storageTx(ctx)
+			if releaseErr != nil {
+				return releaseErr
+			}
+			_, e = releaseTx.Exec(ctx, "DELETE FROM storage_reservations WHERE id=$1", reservationID)
+			if e == nil {
+				e = releaseTx.Commit(ctx)
+			}
+			rollbackStorage(releaseTx)
+		}
+		return e
 	})
+	if scanErr != nil && !os.IsNotExist(scanErr) {
+		problems = append(problems, scanErr)
+	}
+	// Missing workspaces prove that no retained temporary file needs its lease
+	// reservation. Keep reservations for failed removals and still-active leases.
+	rows, err := s.DB.Query(ctx, `SELECT r.job_id,r.token FROM storage_reservations r WHERE r.kind='job' AND NOT EXISTS(SELECT 1 FROM jobs j WHERE j.id=r.job_id AND j.status='running' AND j.lease_token=r.token AND j.lease_until>clock_timestamp()) LIMIT $1`, storageBatch)
+	if err != nil {
+		return errors.Join(append(problems, err)...)
+	}
+	type reservation struct{ id, token string }
+	var abandoned []reservation
+	for rows.Next() {
+		var r reservation
+		if err = rows.Scan(&r.id, &r.token); err != nil {
+			rows.Close()
+			return err
+		}
+		abandoned = append(abandoned, r)
+	}
+	rows.Close()
+	if err = rows.Err(); err != nil {
+		return err
+	}
+	for _, r := range abandoned {
+		path := filepath.Join(c.DataDir, "work", r.id+"-"+r.token)
+		if _, err = os.Lstat(path); os.IsNotExist(err) {
+			if releaseErr := s.ReleaseJobStorage(ctx, r.id, r.token); releaseErr != nil {
+				problems = append(problems, releaseErr)
+			}
+		}
+	}
+
+	return errors.Join(problems...)
 }
 
 func storageAvailable(c Config, reserve int64) bool {
@@ -510,4 +651,25 @@ func storageAvailableContext(ctx context.Context, c Config, reserve int64) bool 
 		err = visit(c.DataDir, fs.FileInfoToDirEntry(info))
 	}
 	return ctx.Err() == nil && (err == nil || os.IsNotExist(err))
+}
+
+func waitForJobStorage(parent context.Context, c Config, s *Store, j *Job, token, work string) bool {
+	if parent.Err() != nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), workerDatabaseTimeout)
+	defer cancel()
+	if err := removeStorageTree(ctx, work); err != nil {
+		return false
+	}
+	if err := s.WaitForStorage(ctx, j.ID, token, c); err != nil {
+		return false
+	}
+	j.Status, j.Stage = "waiting_storage", "waiting_storage"
+	j.Message = "Waiting for free storage"
+	return true
+}
+
+func storagePressureError(err error) bool {
+	return errors.Is(err, syscall.ENOSPC) || errors.Is(err, syscall.EDQUOT) || exportProblem(err).code == "storage_full"
 }

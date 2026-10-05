@@ -1,6 +1,6 @@
 # HTTP contract
 
-Base path: `/api/v1`. Timestamps are integer milliseconds on the original source timeline. A range is `[start_ms, end_ms)`. Delivery URLs (`preview_url`, `thumbnail_url`, `download_url`) are relative to the same origin. Platform page and embed URLs are absolute HTTPS URLs. Enum names and error codes are stable machine-readable identifiers; user-facing messages can be localized by a client.
+Base path: `/api/v1`. Media timestamps are integer milliseconds on the original source timeline. Retention and waiting deadlines are nullable RFC3339 strings. A range is `[start_ms, end_ms)`. Delivery URLs (`preview_url`, `thumbnail_url`, `download_url`) are relative to the same origin. Platform page and embed URLs are absolute HTTPS URLs. Enum names and error codes are stable machine-readable identifiers; user-facing messages can be localized by a client.
 
 Initialize a session with `GET /session`. The HttpOnly cookie is a bearer capability: keep it private and send it with every subsequent request, including media and downloads. Each request checks ownership; foreign resources return the same 404 as absent ones. Source preparation currently blocks until metadata/staging completes, bounded by the source timeout. Export is asynchronous.
 
@@ -10,10 +10,12 @@ JSON request bodies have a separate ten-second read budget (or an earlier reques
 
 | Method | Route | Response |
 |---|---|---|
-| GET | `/session` | `{ok:true}` and cookie |
+| GET | `/session` | `{ok:true,limits:{max_source_bytes,max_ranges,max_range_ms,max_job_ms}}` and cookie |
+| GET | `/sources` | `{sources:[Source...]}`; newest 20 owned sources |
 | POST | `/sources` | Source; request `{url}` |
 | POST | `/uploads` | Source; multipart field `file` |
 | GET | `/sources/{id}` | Source |
+| DELETE | `/sources/{id}` | HTTP 204; source, terminal jobs and outputs removed; active exports return 409 `source_in_use` |
 | GET | `/sources/{id}/media` | Authorized source bytes; Range supported |
 | GET | `/sources/{id}/thumbnail` | Authorized, inspected PNG/JPEG; Range supported |
 | POST | `/jobs` | Job, HTTP 202 |
@@ -35,6 +37,8 @@ and headers are never returned to clients.
 
 | Field | Meaning |
 |---|---|
+| `expires_at` | Nullable RFC3339 retention target; null while linked jobs pin the source |
+| `retention_blocked` | Whether retained jobs currently protect this source |
 | `provider` | `upload`, `direct`, `generic`, or one of the [15 recognized providers](providers.md) |
 | `provider_video_id` | Actual extractor video identity, or null; Twitch VOD IDs may start with `v` |
 | `source_url` | Platform page URL only; null for uploaded/direct files; never an extracted CDN URL |
@@ -61,7 +65,21 @@ Request:
 
 `format`: `mp4` or `mp3`. `quality`: `best`, `1080p`, `720p`. `cut_mode`: `accurate` or `copy`. MP3 requires accurate mode. Copy mode preserves source resolution: `best` means original quality. A source above an explicitly selected resolution cap returns `copy_quality_unsupported`; it is never silently resized or exported above the cap. Each range exports separately in request order. Optional `Idempotency-Key` replays the original submission for this owner; use a fresh key when changing the request.
 
-Statuses: `queued`, `running`, `succeeded`, `failed`, `cancelled`. Stage and message describe actual work; no invented percentage is returned. Items have their own status and optional artifact. A failed batch can contain downloadable successful items.
+Statuses: `queued`, `running`, `waiting_storage`, `succeeded`, `failed`, `cancelled`. Stage and message describe actual work; no invented percentage is returned. Items have their own status and optional artifact. A failed batch can contain downloadable successful items.
+
+`waiting_storage` is active, consumes both owner/global job slots, and can be
+cancelled immediately. `storage_wait_until` is null before the first wait and
+then carries a persisted RFC3339 deadline (`STORAGE_WAIT_TIMEOUT`, default
+30 minutes). Workers retry admission without occupying an encoding slot; expiry
+settles remaining items with `storage_timeout`. A job whose worst-case reservation
+cannot fit the configured media budget is rejected up front with HTTP 413
+`storage_limit`; reducing the number of fragments can make it admissible.
+
+Artifacts contain nullable `expires_at`. Active jobs pin their existing results
+and expose null; after completion the publication-time deadline becomes visible.
+Changing `ARTIFACT_TTL` affects newly published outputs, while existing stored
+deadlines remain stable. Legacy results without a stored deadline use the current
+TTL. Cleanup may lag a deadline by the maintenance interval.
 
 Failed/cancelled items have an additive optional `error_code`, stored with the item without a schema migration. Older jobs can omit this field. Codes are fixed public diagnostics, not signed media addresses or raw subprocess stderr. Clients should localize known codes and use a safe generic fallback for unknown or absent diagnostics. Codes include missing audio (`audio_missing`), unsupported stream/copy settings, platform access/availability, transfer errors, changed/expired sources, source/job timeouts, storage/output limits and server failure; the complete vocabulary is in [OpenAPI](../api/openapi.yaml). `audio_missing` permits an MP4 retry with the same video and time range.
 
@@ -93,3 +111,27 @@ Source admission returns distinct `429` codes: `source_limit` for the session's 
 Mutation requests are same-origin. Browser requests from another origin are rejected; non-browser clients without Origin can use the cookie API. There are no wildcard CORS grants. Polling, source admission, export creation, and per-IP mutation limits are enforced independently. Session-protected requests additionally share a ceiling of 1,200 requests per minute per IP, before owner state is allocated; clients behind one NAT share that ceiling. Per-owner request allowance remains 180 per minute.
 
 Known channel/collection URL rejections occur before source preparation: `400 unsupported_collection`. Twitch channel/player-channel URLs return `422 live_not_supported`; use `/videos/{id}` or a clip instead. Live, collection, access, availability and stream errors discovered during metadata/manifest inspection return 422 with their respective codes. Inspection deadlines return 504 `source_timeout`. Foreign or expired thumbnail/source resources return 404 without disclosing ownership.
+
+## Durable storage admission and explicit deletion
+
+Source preparation uses a shared PostgreSQL reservation, rather than a process
+mutex alone. Four preparations globally and one per owner may be admitted.
+Uploads reserve `MAX_SOURCE_BYTES`; metadata-only platform preparations reserve only the bounded
+2 MiB thumbnail in both the global and owner source budgets. Completed sources
+convert the reservation into actual registered file sizes atomically. An unknown
+commit outcome retains files and its reservation until safe reconciliation.
+
+Export admission reserves every unpublished output at `MAX_OUTPUT_BYTES`, plus
+up to two `MAX_SOURCE_BYTES` HLS inputs for platform jobs. This is intentionally
+conservative: it prevents a partly published batch from waiting for space that
+its own retained results occupy. The API exposes fixed diagnostics rather than
+an unsupported promise of estimated capacity.
+
+`DELETE /sources/{id}` requires an explicit user confirmation in clients. It
+returns 404 for absent/foreign IDs and 409 `source_in_use` while any related job is
+queued, running or waiting for storage. Terminal metadata is deleted atomically;
+file tombstones keep actual bytes charged until physical deletion succeeds.
+Failures are retried by periodic maintenance. Deletion and job admission take the
+same advisory lock before resource row locks, so concurrent submissions cannot
+create dangling or accidentally deleted sources. Results copied to a user's
+computer are outside server retention.
