@@ -29,6 +29,7 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 - Bounded private subprocess diagnostics classify failures into fixed categories without logging raw CDN URLs, credentials, or media paths; an unexplained nonzero exit is not automatically retried.
 
 ### Fixed
+- Preserve live HTTP connection contexts after fully consumed JSON and multipart bodies; close connections with unread bodies before sending a rejection, avoiding intermittent preview failures and false storage-limit errors behind a keep-alive proxy.
 - Parse HLS playlists with one validated base URL and bounded preallocation; locate selected segments with binary search while preserving network and timeline validation.
 - Read storage directories in bounded unsorted batches; continue quota scans after individual files disappear.
 - Inspect only required FFprobe fields, avoiding large unused metadata and rejecting fewer otherwise valid media files.

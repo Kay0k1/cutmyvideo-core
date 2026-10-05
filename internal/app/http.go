@@ -78,10 +78,14 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")
 		if r.Body != nil && r.Body != http.NoBody {
-			// End any unread-body drain when the handler exits, including early
-			// session/origin/rate rejection. net/http installs a fresh deadline
-			// for the next keep-alive request after a fully consumed body.
-			defer func() { _ = http.NewResponseController(w).SetReadDeadline(time.Now()) }()
+			body := &trackedRequestBody{ReadCloser: r.Body}
+			r.Body = body
+			w = &bodyGuardResponseWriter{ResponseWriter: w, body: body, http1: r.ProtoMajor == 1}
+			defer func() {
+				if !body.complete {
+					_ = http.NewResponseController(w).SetReadDeadline(time.Now())
+				}
+			}()
 			if r.Method == http.MethodGet || r.Method == http.MethodHead {
 				if r.ProtoMajor == 1 {
 					w.Header().Set("Connection", "close")

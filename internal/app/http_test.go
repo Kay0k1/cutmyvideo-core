@@ -182,7 +182,21 @@ func TestEarlyRejectionDoesNotDrainUntrustedBody(t *testing.T) {
 }
 
 func TestFullyConsumedJSONKeepsConnectionReusable(t *testing.T) {
-	server := httptest.NewServer(NewServer(Config{MutationsPerMinute: 20}, nil).Handler())
+	handler := NewServer(Config{MutationsPerMinute: 20}, nil).Handler()
+	completed := make(chan error, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler.ServeHTTP(w, r)
+		if r.Method == http.MethodPost {
+			// Leave time for net/http's background disconnect reader to observe
+			// a deadline before the outer handler finishes the request.
+			select {
+			case <-r.Context().Done():
+				completed <- r.Context().Err()
+			case <-time.After(10 * time.Millisecond):
+				completed <- nil
+			}
+		}
+	}))
 	defer server.Close()
 	client := server.Client()
 	request, err := http.NewRequest(http.MethodPost, server.URL+"/api/v1/sources", strings.NewReader(`{"url":"not a URL"}`))
@@ -198,6 +212,9 @@ func TestFullyConsumedJSONKeepsConnectionReusable(t *testing.T) {
 	response.Body.Close()
 	if response.StatusCode != http.StatusBadRequest {
 		t.Fatalf("invalid URL returned %d", response.StatusCode)
+	}
+	if err := <-completed; err != nil {
+		t.Fatalf("body cleanup cancelled the reusable connection context: %v", err)
 	}
 	reused := false
 	request, err = http.NewRequest(http.MethodGet, server.URL+"/healthz", nil)
