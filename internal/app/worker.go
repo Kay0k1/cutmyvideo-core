@@ -221,12 +221,12 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 		slog.Info("source_streams_resolved", "job_id", j.ID, "cache_hit", cachedMetadata, "elapsed_ms", time.Since(resolvedAt).Milliseconds())
 	}
 
-	releaseMedia, budgetErr := acquireMediaProcessing(ctx, source, streams, j.Request)
-	if budgetErr != nil {
+	var mediaPermit mediaProcessingPermit
+	if budgetErr := mediaPermit.Acquire(ctx, source, streams, j.Request); budgetErr != nil {
 		finishFailure("job_timeout", "Processing stopped or exceeded the time limit")
 		return
 	}
-	defer releaseMedia()
+	defer mediaPermit.Release()
 
 	work = filepath.Join(c.DataDir, "work", j.ID+"-"+token)
 	if err = os.MkdirAll(work, 0700); err != nil {
@@ -348,6 +348,9 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 			}
 			inputs, streams, playlists, cachedMetadata, e = platformInputs(ctx, c, s, source, guard, j.Request, true)
 			if e != nil {
+				break
+			}
+			if e = mediaPermit.Acquire(ctx, source, streams, j.Request); e != nil {
 				break
 			}
 			j.Stage = "processing"

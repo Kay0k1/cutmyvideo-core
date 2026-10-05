@@ -12,6 +12,27 @@ type mediaBudget struct {
 	weighted *semaphore.Weighted
 }
 
+// A refreshed platform URL can select a different input resolution. Drop the
+// old reservation before acquiring the new weight, so upgrades cannot deadlock
+// by waiting for slots still held by the same job.
+type mediaProcessingPermit struct{ release func() }
+
+func (p *mediaProcessingPermit) Acquire(ctx context.Context, source Source, streams []platformFormat, request ExportRequest) error {
+	p.Release()
+	release, err := acquireMediaProcessing(ctx, source, streams, request)
+	if err == nil {
+		p.release = release
+	}
+	return err
+}
+
+func (p *mediaProcessingPermit) Release() {
+	if p.release != nil {
+		p.release()
+		p.release = nil
+	}
+}
+
 func withMediaBudget(ctx context.Context, concurrency int) context.Context {
 	slots := int64(concurrency)
 	if slots < 1 {
