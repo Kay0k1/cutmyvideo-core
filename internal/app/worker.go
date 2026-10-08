@@ -485,22 +485,32 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 
 func cleanupFiles(ctx context.Context, c Config, s *Store) error {
 	var problems []error
-	paths, err := s.Cleanup(ctx, c.ArtifactTTL, c.SourceTTL)
-	if err != nil {
-		slog.Error("cleanup failed", "error", err)
-		return err
+	// Drain a busy expiry backlog within the existing maintenance deadline.
+	// Every batch releases the shared storage lock for admissions/publications;
+	// reconciliation still traverses the directories only once per cycle.
+	for range 8 {
+		batch, err := s.cleanupStorageBatch(ctx, c.ArtifactTTL, c.SourceTTL)
+		if err != nil {
+			slog.Error("cleanup failed", "error", err)
+			return err
+		}
+		if err = s.DrainStorageDeletes(ctx, c, batch.paths); err != nil {
+			slog.Warn("media deletion pending", "error", err)
+			problems = append(problems, err)
+			break
+		}
+		if !batch.full {
+			break
+		}
 	}
-	if err = s.DrainStorageDeletes(ctx, c, paths); err != nil {
-		slog.Warn("media deletion pending", "error", err)
-		problems = append(problems, err)
-	}
-	if err = s.ReconcileStorage(ctx, c); err != nil {
+	if err := s.ReconcileStorage(ctx, c); err != nil {
 		slog.Error("storage reconciliation failed", "error", err)
 		return errors.Join(append(problems, err)...)
 	}
 	// Pick up orphan tombstones created by reconciliation in the same cycle.
 	tx, err := s.storageTx(ctx)
 	if err == nil {
+		var paths []string
 		paths, err = pendingStoragePaths(ctx, tx)
 		rollbackStorage(tx)
 		if err == nil {

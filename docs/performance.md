@@ -40,6 +40,32 @@ five minutes and ends earlier than recognized signed-address expiry, with a
 never extend its deadline. Payloads are limited to 1 MiB. Upstream addresses
 and required headers stay private; process-local relay URLs are never cached.
 
+Large cache payloads now use gzip only when the serialized JSON is at least
+4 KiB and compression removes at least 75% of its bytes. Less compressible
+signed addresses retain JSON to avoid unnecessary decompression CPU. Both
+encoded and decoded payloads remain limited to 1 MiB; gzip lengths, checksums,
+single-member boundaries and legacy JSON rows are validated. The lifetime and
+owner checks remain unchanged, including on a hit. Repeated-import lookup
+reads the source identity and cached payload in one database round trip.
+
+On 2026-10-08, a local isolated PostgreSQL fixture with 182 formats and repeated
+2,000-byte synthetic tokens reduced cache payload transfer from 411,245 to
+5,126 bytes. Actual PostgreSQL `pg_column_size(payload)`, including its existing
+TOAST compression, fell from 17,459 to 3,365 bytes (81% less). Independently
+generated high-entropy tokens correctly stayed uncompressed. A smaller cache
+fixture measured repeated-import lookup at 662 µs with two queries versus
+353 µs with one query, and 7,923 versus 6,676 allocated bytes (three-run medians).
+These are offline cache fixtures, not public-platform or whole-export timings.
+
+Owner-protected local previews and thumbnails permit private browser retention
+with `max-age=0, must-revalidate`, a cookie-dependent cache key and a file-version
+ETag. Every conditional request still checks its owner and opens the file before
+it can return 304; deletion and cookie changes cannot serve an old cached hit.
+Export downloads and JSON retain `no-store`. A repeated 256 KiB local preview
+fixture transferred zero body bytes after revalidation and allocated about
+1,292 instead of 34,130 bytes; measured handler time was 20.3 instead of
+56.6 µs (three-run medians), excluding database authorization and network time.
+
 An offline benchmark with the pinned extractor and 182 formats measured
 1.464 s per uncached extraction versus 4.902 ms per persisted-cache read, with
 zero extractor invocations on a hit. These numbers isolate inspection; they
@@ -155,6 +181,8 @@ Ordinary tests and benchmarks use local fixtures, not public platform requests:
 go test -race -count=1 ./...
 go test ./internal/app -run '^$' -bench 'NetworkRelayRange|PublicIP' -benchmem -count=5
 go test ./internal/app -run '^$' -bench 'HLSParse|HLSSelect|StorageAdmission' -benchmem -count=3
+# With TEST_DATABASE_URL pointing to an isolated PostgreSQL test database:
+go test ./internal/app -run '^$' -bench 'MetadataPayload|RecentPlatformMetadata|PrivatePreviewRepeat' -benchmem -count=3
 # In an isolated PostgreSQL test database with the pinned yt-dlp executable:
 go test ./internal/app -run '^$' -bench 'Metadata' -benchmem
 ```
@@ -202,7 +230,10 @@ one-minute grace; failures keep their reservations charged.
 
 Retention deletes at most 200 resources/tombstones per batch. PostgreSQL removes
 metadata and creates tombstones together; filesystem failures remain retryable
-and do not release byte counters. Orphan reconciliation reads directories in
+and do not release byte counters. A maintenance cycle drains up to eight such
+batches within its existing ten-second deadline, releasing the storage lock
+between batches and stopping when no full batch remains or physical deletion
+fails. This also drains metadata-only source backlogs. Orphan reconciliation reads directories in
 128-entry batches, looks up known paths in one SQL batch, stats only unknown or
 mutable orphan files and registers them in bounded transactions. It never builds
 a whole-disk membership map. Young unregistered files have a safety floor of the
@@ -264,3 +295,49 @@ this workload, not user capacity, platform extraction availability or sustained
 snapshot predates the final dimension-based semaphore; these 1080p inputs use
 one slot in both versions. Reproduce with the web repository's
 `scripts/load-profile.py`; keep its input, limits and revision with the results.
+
+## Storage maintenance and source listing, 2026-10-08
+
+Source listing reads its twenty records, presentation fields and retention
+conditions in one owner-scoped database snapshot, replacing up to twenty-one
+queries. Single-source lookup uses the same decoder. Tombstones for one
+retention/deletion batch are inserted in one statement; duplicate paths retain
+the largest observed size. Successful physical deletions are acknowledged in
+transactions of at most 200 paths. A failed acknowledgement leaves removed
+files charged until the next retry, while failed physical removals remain
+charged throughout.
+
+Unchanged orphan files no longer start write transactions or rewrite their
+ledger rows. Growth or a newer file modification time still updates conservative
+byte counts and the safe retention floor. Modification times use PostgreSQL's
+microsecond precision to avoid false changes on filesystems with nanoseconds.
+Already pending orphan deletions no longer hide newly expired orphans from the
+next bounded candidate batch. Directory reconciliation runs once per maintenance
+cycle, regardless of the number of retention batches.
+
+Median local microbenchmarks compare a clean previous revision against these
+changes with identical fixtures: Go 1.27.1, linux/amd64, Ryzen 9 5950X, two Go
+scheduler threads, isolated PostgreSQL 17 and temporary files on tmpfs. Each
+measurement uses three sequential runs of ten iterations; fixture creation is
+excluded from timings. These measure database/filesystem operations rather than
+production encoding throughput.
+
+| Operation | Before | After | Speedup |
+| --- | ---: | ---: | ---: |
+| List 20 sources | 5.193 ms | 0.886 ms | 5.86x |
+| Acknowledge 200 removed files | 171.977 ms | 3.849 ms | 44.68x |
+| Reconcile 128 unchanged orphans | 8.873 ms | 2.230 ms | 3.98x |
+| Expire 200 sources and create tombstones | 91.419 ms | 37.009 ms | 2.47x |
+
+The source-list allocation count fell from 495 to 214 per operation; deletion
+acknowledgement fell from 4,203 to 837. Batched tombstone creation uses about
+141 KiB more temporary Go allocation for its bounded arrays while making fewer
+allocations and database round trips. Storage quotas, retained-media TTLs,
+active-job pinning and the physical headroom check remain unchanged.
+
+Integration tests cover multi-batch backlogs, the eight-batch ceiling, early
+stop after physical removal errors, active-source preservation, retry after
+failed database acknowledgement, duplicate paths and changing orphan sizes.
+Reproduce with `BenchmarkSourceList20`, `BenchmarkStorageDeleteBatch200`,
+`BenchmarkStorageReconcileUnchanged128` and `BenchmarkStorageRetentionSources200`
+using an isolated `TEST_DATABASE_URL`; never benchmark in the live schema.

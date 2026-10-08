@@ -94,5 +94,6 @@ func (s *Server) sourceThumbnail(w http.ResponseWriter, r *http.Request, owner s
 	}
 	_, _ = f.Seek(0, io.SeekStart)
 	w.Header().Set("Content-Type", mime)
+	privateSourceFileHeaders(w, v.ID, info)
 	http.ServeContent(w, r, "thumbnail", info.ModTime(), f)
 }

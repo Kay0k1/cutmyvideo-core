@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -244,6 +245,144 @@ func TestTombstoneChargesFailedDeleteUntilPhysicalRemoval(t *testing.T) {
 	bytes, _ = ledgerBytes(t, s)
 	if bytes != 0 {
 		t.Fatal("successful retry did not release tombstone")
+	}
+}
+
+func TestStorageDeleteBatchesRetainUnsafeFilesAndReleaseSuccessfulFiles(t *testing.T) {
+	s := testStore(t)
+	c := ledgerConfig(t)
+	ctx := context.Background()
+	paths := make([]string, storageBatch*2+3)
+	for i := range paths {
+		paths[i] = filepath.Join(c.DataDir, fmt.Sprintf("missing-%d", i))
+	}
+	// Failed physical deletion must not hold up acknowledgement of the other
+	// successful files, including batches larger than the maintenance limit.
+	if err := os.Mkdir(paths[0], 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB.Exec(ctx, `INSERT INTO storage_files(path,kind,size_bytes,delete_pending) SELECT path,'tombstone',17,true FROM unnest($1::text[]) AS f(path)`, paths); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DrainStorageDeletes(ctx, c, paths); err == nil {
+		t.Fatal("non-regular media path accepted")
+	}
+	stored, reserved := ledgerBytes(t, s)
+	if stored != 17 || reserved != 0 {
+		t.Fatal("successful removals stayed charged or unsafe deletion freed bytes", stored, reserved)
+	}
+	if _, err := os.Stat(paths[0]); err != nil {
+		t.Fatal("unsafe directory was removed", err)
+	}
+}
+
+func TestStorageDeleteAcknowledgementFailureKeepsBytesForRetry(t *testing.T) {
+	s := testStore(t)
+	c := ledgerConfig(t)
+	ctx := context.Background()
+	path := writeLedgerFile(t, c, "sources", "removed-before-commit", 19)
+	if _, err := s.DB.Exec(ctx, `INSERT INTO storage_files(path,kind,size_bytes,delete_pending) VALUES($1,'tombstone',19,true)`, path); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := s.storageTx(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rollbackStorage(lock)
+	bounded, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	err = s.DrainStorageDeletes(bounded, c, []string{path})
+	cancel()
+	rollbackStorage(lock)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("blocked acknowledgement must return its deadline", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("test did not reach the physical removal before acknowledgement", err)
+	}
+	if stored, _ := ledgerBytes(t, s); stored != 19 {
+		t.Fatal("failed acknowledgement uncharged tombstone", stored)
+	}
+	if err := s.DrainStorageDeletes(ctx, c, []string{path}); err != nil {
+		t.Fatal("retry did not acknowledge already missing file", err)
+	}
+	if stored, _ := ledgerBytes(t, s); stored != 0 {
+		t.Fatal("retry left removed file charged", stored)
+	}
+}
+
+func TestStorageTombstoneBatchDeduplicatesPathsAndPreservesLargestSize(t *testing.T) {
+	s := testStore(t)
+	c := ledgerConfig(t)
+	ctx := context.Background()
+	missing := filepath.Join(c.DataDir, "missing")
+	actual := writeLedgerFile(t, c, "sources", "actual", 13)
+	tx, err := s.storageTx(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rollbackStorage(tx)
+	files := []storageDeletionFile{{path: missing, owner: "owner", size: 2}, {path: missing, owner: "owner", size: 7}, {path: missing, owner: "owner", size: 5}, {path: actual, owner: "owner", size: 100}, {}}
+	if err = tombstoneStorageFiles(ctx, tx, files); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if stored, _ := ledgerBytes(t, s); stored != 20 {
+		t.Fatal("batch changed physical/fallback size accounting", stored)
+	}
+}
+
+func TestStorageReconciliationSkipsUnchangedOrphansAndTracksGrowth(t *testing.T) {
+	s := testStore(t)
+	c := ledgerConfig(t)
+	ctx := context.Background()
+	path := writeLedgerFile(t, c, "sources", "orphan", 13)
+	if err := s.ReconcileStorage(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	version := func() string {
+		t.Helper()
+		var value string
+		if err := s.DB.QueryRow(ctx, "SELECT xmin::text FROM storage_files WHERE path=$1", path).Scan(&value); err != nil {
+			t.Fatal(err)
+		}
+		return value
+	}
+	before := version()
+	if err := s.ReconcileStorage(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	if version() != before {
+		t.Fatal("unchanged orphan rewrote its database tuple")
+	}
+	if err := os.WriteFile(path, make([]byte, 29), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReconcileStorage(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	if stored, _ := ledgerBytes(t, s); stored != 29 || version() == before {
+		t.Fatal("growing orphan did not update its charged bytes", stored)
+	}
+}
+
+func TestStorageReconciliationFindsNewOrphansBehindPendingBatch(t *testing.T) {
+	s := testStore(t)
+	c := ledgerConfig(t)
+	ctx := context.Background()
+	if _, err := s.DB.Exec(ctx, `INSERT INTO storage_files(path,kind,size_bytes,delete_pending,observed_at) SELECT 'pending-'||i,'orphan',17,true,now()-interval '3 days' FROM generate_series(1,$1) i`, storageBatch); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB.Exec(ctx, `INSERT INTO storage_files(path,kind,size_bytes,observed_at) VALUES('newly-expired','orphan',19,now()-interval '2 days')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReconcileStorage(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	var pending bool
+	if err := s.DB.QueryRow(ctx, "SELECT delete_pending FROM storage_files WHERE path='newly-expired'").Scan(&pending); err != nil || !pending {
+		t.Fatal("old pending tombstones hid newly expired orphan", err)
 	}
 }
 func TestSourceDeletionProtectsWaitersAndOwnership(t *testing.T) {

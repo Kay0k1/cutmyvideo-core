@@ -10,11 +10,39 @@ import (
 	"time"
 )
 
-func tombstoneStorage(ctx context.Context, tx pgx.Tx, path, owner string, size int64) error {
-	if path == "" {
+type storageDeletionFile struct {
+	path, owner string
+	size        int64
+}
+
+// A retention batch shares one statement and one counter-trigger update.
+// Duplicate paths keep the largest observed size, as individual upserts did.
+func tombstoneStorageFiles(ctx context.Context, tx pgx.Tx, files []storageDeletionFile) error {
+	paths := make([]string, 0, len(files))
+	owners := make([]string, 0, len(files))
+	sizes := make([]int64, 0, len(files))
+	indices := make(map[string]int, len(files))
+	for _, file := range files {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if file.path == "" {
+			continue
+		}
+		size := observedSize(file.path, file.size)
+		if i, ok := indices[file.path]; ok {
+			sizes[i] = max(sizes[i], size)
+			continue
+		}
+		indices[file.path] = len(paths)
+		paths = append(paths, file.path)
+		owners = append(owners, file.owner)
+		sizes = append(sizes, size)
+	}
+	if len(paths) == 0 {
 		return nil
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO storage_files(path,owner,kind,size_bytes,delete_pending) VALUES($1,$2,'tombstone',$3,true) ON CONFLICT(path) DO UPDATE SET delete_pending=true,size_bytes=GREATEST(storage_files.size_bytes,excluded.size_bytes)`, path, owner, observedSize(path, size))
+	_, err := tx.Exec(ctx, `INSERT INTO storage_files(path,owner,kind,size_bytes,delete_pending) SELECT path,owner,'tombstone',size,true FROM unnest($1::text[],$2::text[],$3::bigint[]) AS f(path,owner,size) ON CONFLICT(path) DO UPDATE SET delete_pending=true,size_bytes=GREATEST(storage_files.size_bytes,excluded.size_bytes)`, paths, owners, sizes)
 	return err
 }
 func pendingStoragePaths(ctx context.Context, tx pgx.Tx) ([]string, error) {
@@ -33,90 +61,117 @@ func pendingStoragePaths(ctx context.Context, tx pgx.Tx) ([]string, error) {
 	}
 	return paths, rows.Err()
 }
+
+type storageCleanupBatch struct {
+	paths []string
+	full  bool
+}
+
 func (s *Store) Cleanup(ctx context.Context, artifactTTL, sourceTTL time.Duration) ([]string, error) {
+	batch, err := s.cleanupStorageBatch(ctx, artifactTTL, sourceTTL)
+	return batch.paths, err
+}
+
+func (s *Store) cleanupStorageBatch(ctx context.Context, artifactTTL, sourceTTL time.Duration) (storageCleanupBatch, error) {
 	cacheCtx, cancel := context.WithTimeout(ctx, platformMetadataDBTimeout)
 	_, _ = s.DB.Exec(cacheCtx, "DELETE FROM source_metadata_cache WHERE expires_at<=now()")
 	cancel()
 	tx, err := s.storageTx(ctx)
 	if err != nil {
-		return nil, err
+		return storageCleanupBatch{}, err
 	}
 	defer rollbackStorage(tx)
 	// Maintenance must give admission/publication the shared lock back promptly
 	// when an operator or migration holds a conflicting table/resource lock.
 	if _, err = tx.Exec(ctx, "SET LOCAL lock_timeout='750ms'"); err != nil {
-		return nil, err
+		return storageCleanupBatch{}, err
 	}
 
 	rows, err := tx.Query(ctx, `DELETE FROM artifacts WHERE id IN (SELECT a.id FROM artifacts a WHERE COALESCE(a.expires_at,a.created_at+($1*interval '1 second'))<=now() AND NOT EXISTS(SELECT 1 FROM jobs j WHERE j.id=a.job_id AND j.status IN ('queued','running','waiting_storage')) ORDER BY a.created_at LIMIT $2) RETURNING path,owner,size_bytes`, artifactTTL.Seconds(), storageBatch)
 	if err != nil {
-		return nil, err
+		return storageCleanupBatch{}, err
 	}
-	type file struct {
-		path, owner string
-		size        int64
-	}
-	var files []file
+	var files []storageDeletionFile
 	for rows.Next() {
-		var v file
+		var v storageDeletionFile
 		if err = rows.Scan(&v.path, &v.owner, &v.size); err != nil {
 			rows.Close()
-			return nil, err
+			return storageCleanupBatch{}, err
 		}
 		files = append(files, v)
 	}
 	rows.Close()
 	if err = rows.Err(); err != nil {
-		return nil, err
+		return storageCleanupBatch{}, err
 	}
-	for _, v := range files {
-		if err = tombstoneStorage(ctx, tx, v.path, v.owner, v.size); err != nil {
-			return nil, err
-		}
+	full := len(files) == storageBatch
+	if err = tombstoneStorageFiles(ctx, tx, files); err != nil {
+		return storageCleanupBatch{}, err
 	}
-	if _, err = tx.Exec(ctx, `DELETE FROM jobs WHERE id IN (SELECT id FROM jobs WHERE status NOT IN ('queued','running','waiting_storage') AND updated_at<now()-($1*interval '1 second') AND NOT EXISTS(SELECT 1 FROM artifacts WHERE job_id=jobs.id) ORDER BY updated_at LIMIT $2)`, artifactTTL.Seconds(), storageBatch); err != nil {
-		return nil, err
+	jobs, err := tx.Exec(ctx, `DELETE FROM jobs WHERE id IN (SELECT id FROM jobs WHERE status NOT IN ('queued','running','waiting_storage') AND updated_at<now()-($1*interval '1 second') AND NOT EXISTS(SELECT 1 FROM artifacts WHERE job_id=jobs.id) ORDER BY updated_at LIMIT $2)`, artifactTTL.Seconds(), storageBatch)
+	if err != nil {
+		return storageCleanupBatch{}, err
 	}
+	full = full || jobs.RowsAffected() == storageBatch
 	rows, err = tx.Query(ctx, `DELETE FROM sources WHERE id IN (SELECT id FROM sources WHERE created_at<now()-($1*interval '1 second') AND NOT EXISTS(SELECT 1 FROM jobs WHERE source_id=sources.id) ORDER BY created_at LIMIT $2) RETURNING path,thumbnail_path,owner`, sourceTTL.Seconds(), storageBatch)
 	if err != nil {
-		return nil, err
+		return storageCleanupBatch{}, err
 	}
 	files = nil
+	sourceCount := 0
 	for rows.Next() {
+		sourceCount++
 		var path, thumb, owner string
 		if err = rows.Scan(&path, &thumb, &owner); err != nil {
 			rows.Close()
-			return nil, err
+			return storageCleanupBatch{}, err
 		}
 		for _, p := range []string{path, thumb} {
 			if p != "" {
-				files = append(files, file{path: p, owner: owner})
+				files = append(files, storageDeletionFile{path: p, owner: owner})
 			}
 		}
 	}
 	rows.Close()
 	if err = rows.Err(); err != nil {
-		return nil, err
+		return storageCleanupBatch{}, err
 	}
-	for _, v := range files {
-		if err = tombstoneStorage(ctx, tx, v.path, v.owner, 0); err != nil {
-			return nil, err
-		}
+	if err = tombstoneStorageFiles(ctx, tx, files); err != nil {
+		return storageCleanupBatch{}, err
 	}
 	paths, err := pendingStoragePaths(ctx, tx)
 	if err != nil {
-		return nil, err
+		return storageCleanupBatch{}, err
 	}
 	if err = tx.Commit(ctx); err != nil {
-		return nil, err
+		return storageCleanupBatch{}, err
 	}
-	return paths, nil
+	return storageCleanupBatch{paths: paths, full: full || sourceCount == storageBatch || len(paths) == storageBatch}, nil
 }
 
 // Metadata deletion is atomic; physical deletion is retryable. Failed removal
 // keeps the tombstone and its bytes charged, including after process restarts.
 func (s *Store) DrainStorageDeletes(ctx context.Context, c Config, paths []string) error {
 	var first error
+	removed := make([]string, 0, min(len(paths), storageBatch))
+	acknowledge := func() error {
+		if len(removed) == 0 {
+			return nil
+		}
+		tx, err := s.storageTx(ctx)
+		if err != nil {
+			return err
+		}
+		defer rollbackStorage(tx)
+		if _, err = tx.Exec(ctx, "DELETE FROM storage_files WHERE path=ANY($1) AND delete_pending=true", removed); err != nil {
+			return err
+		}
+		if err = tx.Commit(ctx); err != nil {
+			return err
+		}
+		removed = removed[:0]
+		return nil
+	}
 	for _, path := range paths {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -143,23 +198,14 @@ func (s *Store) DrainStorageDeletes(ctx context.Context, c Config, paths []strin
 			}
 			continue
 		}
-		tx, e := s.storageTx(ctx)
-		if e != nil {
-			if first == nil {
-				first = e
+		removed = append(removed, path)
+		if len(removed) == storageBatch {
+			if err := acknowledge(); err != nil {
+				return errors.Join(first, err)
 			}
-			continue
-		}
-		_, e = tx.Exec(ctx, "DELETE FROM storage_files WHERE path=$1 AND delete_pending=true", path)
-		if e == nil {
-			e = tx.Commit(ctx)
-		}
-		rollbackStorage(tx)
-		if e != nil && first == nil {
-			first = e
 		}
 	}
-	return first
+	return errors.Join(first, acknowledge())
 }
 func (s *Store) DeleteSource(ctx context.Context, id, owner string) ([]string, error) {
 	tx, err := s.storageTx(ctx)
@@ -185,13 +231,9 @@ func (s *Store) DeleteSource(ctx context.Context, id, owner string) ([]string, e
 	if err != nil {
 		return nil, err
 	}
-	type file struct {
-		path string
-		size int64
-	}
-	var files []file
+	var files []storageDeletionFile
 	for rows.Next() {
-		var v file
+		v := storageDeletionFile{owner: owner}
 		if err = rows.Scan(&v.path, &v.size); err != nil {
 			rows.Close()
 			return nil, err
@@ -202,15 +244,9 @@ func (s *Store) DeleteSource(ctx context.Context, id, owner string) ([]string, e
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
-	for _, v := range files {
-		if err = tombstoneStorage(ctx, tx, v.path, owner, v.size); err != nil {
-			return nil, err
-		}
-	}
-	for _, v := range []string{path, thumb} {
-		if err = tombstoneStorage(ctx, tx, v, owner, 0); err != nil {
-			return nil, err
-		}
+	files = append(files, storageDeletionFile{path: path, owner: owner}, storageDeletionFile{path: thumb, owner: owner})
+	if err = tombstoneStorageFiles(ctx, tx, files); err != nil {
+		return nil, err
 	}
 	if _, err = tx.Exec(ctx, "DELETE FROM jobs WHERE source_id=$1", id); err != nil {
 		return nil, err
@@ -253,7 +289,7 @@ func (s *Store) ReconcileStorage(ctx context.Context, c Config) error {
 	}
 	floor := c.JobTimeout + c.SourceTimeout + time.Hour
 	ttl := max(c.SourceTTL, c.ArtifactTTL, floor)
-	if _, err = tx.Exec(ctx, `UPDATE storage_files SET delete_pending=true WHERE path IN (SELECT path FROM storage_files WHERE kind='orphan' AND observed_at<clock_timestamp()-($1*interval '1 second') ORDER BY observed_at LIMIT $2)`, ttl.Seconds(), storageBatch); err != nil {
+	if _, err = tx.Exec(ctx, `UPDATE storage_files SET delete_pending=true WHERE path IN (SELECT path FROM storage_files WHERE kind='orphan' AND NOT delete_pending AND observed_at<clock_timestamp()-($1*interval '1 second') ORDER BY observed_at LIMIT $2)`, ttl.Seconds(), storageBatch); err != nil {
 		return err
 	}
 	// The scan above charged all files abandoned by expired preparations before
@@ -316,18 +352,24 @@ func (s *Store) reconcileDirectory(ctx context.Context, path string) error {
 			}
 		}
 		if len(paths) > 0 {
-			rows, e := s.DB.Query(ctx, "SELECT path,kind FROM storage_files WHERE path=ANY($1)", paths)
+			rows, e := s.DB.Query(ctx, "SELECT path,kind,size_bytes,observed_at FROM storage_files WHERE path=ANY($1)", paths)
 			if e != nil {
 				return e
 			}
-			known := make(map[string]string, len(paths))
+			type observation struct {
+				kind     string
+				size     int64
+				modified time.Time
+			}
+			known := make(map[string]observation, len(paths))
 			for rows.Next() {
-				var p, kind string
-				if e = rows.Scan(&p, &kind); e != nil {
+				var p string
+				var seen observation
+				if e = rows.Scan(&p, &seen.kind, &seen.size, &seen.modified); e != nil {
 					rows.Close()
 					return e
 				}
-				known[p] = kind
+				known[p] = seen
 			}
 			rows.Close()
 			if e = rows.Err(); e != nil {
@@ -338,7 +380,8 @@ func (s *Store) reconcileDirectory(ctx context.Context, path string) error {
 			var modified []time.Time
 			for _, entry := range entries {
 				p := filepath.Join(path, entry.Name())
-				if !entry.Type().IsRegular() || (known[p] != "" && known[p] != "orphan") {
+				seen := known[p]
+				if !entry.Type().IsRegular() || (seen.kind != "" && seen.kind != "orphan") {
 					continue
 				}
 				info, e := entry.Info()
@@ -348,16 +391,22 @@ func (s *Store) reconcileDirectory(ctx context.Context, path string) error {
 				if e != nil {
 					return e
 				}
+				// PostgreSQL timestamps store microseconds. Unchanged orphan
+				// files need no write transaction, tuple rewrite or counter trigger.
+				mtime := info.ModTime().Truncate(time.Microsecond)
+				if seen.kind == "orphan" && info.Size() <= seen.size && !mtime.After(seen.modified) {
+					continue
+				}
 				unknownPaths = append(unknownPaths, p)
 				sizes = append(sizes, info.Size())
-				modified = append(modified, info.ModTime())
+				modified = append(modified, mtime)
 			}
 			if len(unknownPaths) > 0 {
 				tx, e := s.storageTx(ctx)
 				if e != nil {
 					return e
 				}
-				_, e = tx.Exec(ctx, `INSERT INTO storage_files(path,kind,size_bytes,observed_at) SELECT path,'orphan',size,modified FROM unnest($1::text[],$2::bigint[],$3::timestamptz[]) AS f(path,size,modified) ON CONFLICT(path) DO UPDATE SET size_bytes=GREATEST(storage_files.size_bytes,excluded.size_bytes),observed_at=GREATEST(storage_files.observed_at,excluded.observed_at) WHERE storage_files.kind='orphan' AND NOT storage_files.delete_pending`, unknownPaths, sizes, modified)
+				_, e = tx.Exec(ctx, `INSERT INTO storage_files(path,kind,size_bytes,observed_at) SELECT path,'orphan',size,modified FROM unnest($1::text[],$2::bigint[],$3::timestamptz[]) AS f(path,size,modified) ON CONFLICT(path) DO UPDATE SET size_bytes=GREATEST(storage_files.size_bytes,excluded.size_bytes),observed_at=GREATEST(storage_files.observed_at,excluded.observed_at) WHERE storage_files.kind='orphan' AND NOT storage_files.delete_pending AND (storage_files.size_bytes<excluded.size_bytes OR storage_files.observed_at<excluded.observed_at)`, unknownPaths, sizes, modified)
 				if e == nil {
 					e = tx.Commit(ctx)
 				}

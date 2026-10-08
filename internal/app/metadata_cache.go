@@ -4,13 +4,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"math"
 	"net"
 	"net/url"
 	"strconv"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 const platformMetadataCacheTTL = 5 * time.Minute
@@ -77,7 +78,12 @@ func freshPlatformMetadata(source Source, resolve func() (platformInfo, error)) 
 }
 
 func (s *Store) authorizePlatformMetadataSource(ctx context.Context, source Source) error {
-	stored, err := s.Source(ctx, source.ID, source.Owner)
+	var stored Source
+	err := s.DB.QueryRow(ctx, `SELECT url,path,provider_id,duration_ms FROM sources WHERE id=$1 AND owner=$2`, source.ID, source.Owner).
+		Scan(&stored.URL, &stored.Path, &stored.ProviderID, &stored.DurationMS)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
 	if err != nil {
 		return err
 	}
@@ -157,14 +163,16 @@ func (s *Store) RecentPlatformMetadata(ctx context.Context, owner, raw string) (
 	defer cancel()
 	var source Source
 	source.Owner, source.URL = owner, raw
-	err := s.DB.QueryRow(ctx, `SELECT source.id,source.provider_id,source.duration_ms FROM sources source
+	var payload []byte
+	var expires time.Time
+	err := s.DB.QueryRow(ctx, `SELECT source.id,source.provider_id,source.duration_ms,cache.payload,cache.expires_at FROM sources source
  JOIN source_metadata_cache cache ON cache.source_id=source.id
  WHERE source.owner=$1 AND cache.owner=$1 AND source.url=$2 AND source.path='' AND cache.expires_at>now()
- ORDER BY cache.expires_at DESC LIMIT 1`, owner, raw).Scan(&source.ID, &source.ProviderID, &source.DurationMS)
+ ORDER BY cache.expires_at DESC LIMIT 1`, owner, raw).Scan(&source.ID, &source.ProviderID, &source.DurationMS, &payload, &expires)
 	if err != nil {
 		return platformInfo{}, false
 	}
-	return readPlatformMetadataCache(ctx, s.DB, source)
+	return cachedPlatformMetadata(source, payload, expires)
 }
 
 func (s *Store) InvalidatePlatformMetadata(ctx context.Context, source Source) error {
@@ -190,11 +198,15 @@ func readPlatformMetadataCache(ctx context.Context, db dbExecutor, source Source
  WHERE cache.source_id=$1 AND cache.owner=$2 AND source.owner=$2 AND source.url=$3 AND source.path=''
  AND source.provider_id=$4 AND source.duration_ms=$5 AND cache.expires_at>now()`,
 		source.ID, source.Owner, source.URL, source.ProviderID, source.DurationMS).Scan(&payload, &expires)
-	if err != nil || len(payload) == 0 || len(payload) > platformMetadataCacheLimit {
+	if err != nil {
 		return platformInfo{}, false
 	}
-	var info platformInfo
-	if json.Unmarshal(payload, &info) != nil {
+	return cachedPlatformMetadata(source, payload, expires)
+}
+
+func cachedPlatformMetadata(source Source, payload []byte, expires time.Time) (platformInfo, bool) {
+	info, ok := decodePlatformMetadata(payload)
+	if !ok {
 		return platformInfo{}, false
 	}
 	info.cachedUntil = expires
@@ -209,8 +221,8 @@ func writePlatformMetadataCache(ctx context.Context, db dbExecutor, source Sourc
 	if err != nil {
 		return err
 	}
-	payload, err := json.Marshal(info)
-	if err != nil || len(payload) > platformMetadataCacheLimit {
+	payload, err := encodePlatformMetadata(info)
+	if err != nil {
 		return errMetadataNotCacheable
 	}
 	ctx, cancel := context.WithTimeout(ctx, platformMetadataDBTimeout)

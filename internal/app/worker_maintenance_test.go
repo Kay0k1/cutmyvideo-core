@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -261,6 +262,75 @@ func TestCleanupFilesPreservesActiveDataAndOrphanSafetyFloor(t *testing.T) {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Fatal("expired orphan was not removed", filepath.Base(path), err)
 		}
+	}
+}
+
+func TestCleanupFilesDrainsBacklogInBoundedBatches(t *testing.T) {
+	for _, fixture := range []struct {
+		name          string
+		count         int
+		files         bool
+		blockedDelete bool
+		remaining     int
+	}{
+		{name: "media", count: storageBatch*2 + 7, files: true},
+		{name: "metadata_only", count: storageBatch*2 + 7},
+		{name: "eight_batch_limit", count: storageBatch*9 + 1, remaining: storageBatch + 1},
+		{name: "deletion_error", count: storageBatch*2 + 7, blockedDelete: true, remaining: storageBatch + 7},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			s := testStore(t)
+			c := maintenanceConfig(t)
+			s.ConfigureStorage(c)
+			ctx := context.Background()
+			paths := make([]string, fixture.count)
+			for i := range paths {
+				if fixture.files {
+					paths[i] = writeLedgerFile(t, c, "sources", fmt.Sprintf("expired-%d", i), 13)
+				}
+			}
+			if _, err := s.DB.Exec(ctx, `INSERT INTO sources(id,owner,title,duration_ms,kind,path,created_at) SELECT 'expired-'||ordinal,'owner','Expired',10000,'upload',path,now()-interval '2 hours' FROM unnest($1::text[]) WITH ORDINALITY AS f(path,ordinal)`, paths); err != nil {
+				t.Fatal(err)
+			}
+			if fixture.blockedDelete {
+				blocked := filepath.Join(c.DataDir, "sources", "blocked")
+				if err := os.MkdirAll(blocked, 0700); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := s.DB.Exec(ctx, `INSERT INTO storage_files(path,kind,size_bytes,delete_pending) VALUES($1,'tombstone',17,true)`, blocked); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// A queued job must pin its old source while several other batches
+			// expire in the same maintenance cycle.
+			active := storedSource(t, s, "active")
+			if _, err := s.DB.Exec(ctx, "UPDATE sources SET created_at=now()-interval '2 hours' WHERE id=$1", active.ID); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.CreateJob(ctx, active.Owner, requestFor(active), ""); err != nil {
+				t.Fatal(err)
+			}
+			bounded, cancel := context.WithTimeout(ctx, workerMaintenanceTimeout)
+			err := cleanupFiles(bounded, c, s)
+			cancel()
+			if (err != nil) != fixture.blockedDelete {
+				t.Fatal("unexpected cleanup result", err)
+			}
+			var remaining int
+			if err := s.DB.QueryRow(ctx, "SELECT count(*) FROM sources WHERE owner='owner'").Scan(&remaining); err != nil || remaining != fixture.remaining {
+				t.Fatal("cleanup did not drain the bounded backlog", remaining, err)
+			}
+			if _, err := s.Source(ctx, active.ID, active.Owner); err != nil {
+				t.Fatal("backlog cleanup removed active source", err)
+			}
+			if fixture.files {
+				for _, path := range paths {
+					if _, err := os.Stat(path); !os.IsNotExist(err) {
+						t.Fatal("expired media remains after metadata cleanup", err)
+					}
+				}
+			}
+		})
 	}
 }
 

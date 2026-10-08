@@ -771,6 +771,9 @@ func serveFile(w http.ResponseWriter, r *http.Request, path, name string, attach
 		contentType = "application/octet-stream"
 	}
 	w.Header().Set("Content-Type", contentType)
+	if !attachment {
+		privateSourceFileHeaders(w, name, info)
+	}
 	http.ServeContent(w, r, name, info.ModTime(), f)
 }
 

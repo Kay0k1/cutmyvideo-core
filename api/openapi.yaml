@@ -108,18 +108,20 @@ paths:
   /api/v1/sources/{id}/media:
     parameters: [{$ref: '#/components/parameters/ID'}]
     get:
-      description: Original staged bytes; requires owner session. Range supported.
+      description: Original staged bytes; requires owner session. Range supported. Private conditional caching with ETag requires owner and file revalidation on every request.
       responses:
         '200': {description: Media bytes}
         '206': {description: Requested byte range}
+        '304': {description: Authorized preview is unchanged; use the privately cached bytes}
         default: {$ref: '#/components/responses/Error'}
   /api/v1/sources/{id}/thumbnail:
     parameters: [{$ref: '#/components/parameters/ID'}]
     get:
-      description: Owner-protected, bounded and inspected PNG/JPEG thumbnail. Raw CDN URLs are never returned to clients.
+      description: Owner-protected, bounded and inspected PNG/JPEG thumbnail. Raw CDN URLs are never returned to clients. Private conditional caching with ETag requires owner and file revalidation on every request.
       responses:
         '200': {description: Thumbnail image}
         '206': {description: Requested byte range}
+        '304': {description: Authorized thumbnail is unchanged; use the privately cached image}
         default: {$ref: '#/components/responses/Error'}
   /api/v1/jobs:
     post:
