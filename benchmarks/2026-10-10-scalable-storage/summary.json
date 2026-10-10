@@ -1,0 +1,2757 @@
+{
+  "comparability": {
+    "environment": true,
+    "go_version": true,
+    "harness_sha256": true,
+    "host": true,
+    "postgres_container_configuration": true,
+    "postgresql_10000": true,
+    "postgresql_100000": true,
+    "postgresql_settings_10000": true,
+    "postgresql_settings_100000": true,
+    "query_names_10000": true,
+    "query_names_100000": true,
+    "race": true,
+    "samples_per_query": true,
+    "sizes": true
+  },
+  "comparison": {
+    "10000": {
+      "active_source_reservations": {
+        "postgres_p50_delta_pct": 15.38,
+        "postgres_p95_delta_pct": 77.5,
+        "sql_changed": false
+      },
+      "artifact_retention": {
+        "postgres_p50_delta_pct": 5.9,
+        "postgres_p95_delta_pct": 51.78,
+        "sql_changed": false
+      },
+      "cache_recent_hit": {
+        "postgres_p50_delta_pct": 4.55,
+        "postgres_p95_delta_pct": -7.32,
+        "sql_changed": false
+      },
+      "cache_recent_miss": {
+        "postgres_p50_delta_pct": 0.0,
+        "postgres_p95_delta_pct": -4.35,
+        "sql_changed": false
+      },
+      "cache_retention": {
+        "postgres_p50_delta_pct": 1697.59,
+        "postgres_p95_delta_pct": 985.99,
+        "sql_changed": true
+      },
+      "job_retention": {
+        "postgres_p50_delta_pct": -8.71,
+        "postgres_p95_delta_pct": 11.38,
+        "sql_changed": false
+      },
+      "orphan_retention": {
+        "postgres_p50_delta_pct": 3.61,
+        "postgres_p95_delta_pct": -40.61,
+        "sql_changed": false
+      },
+      "pending_tombstones": {
+        "postgres_p50_delta_pct": 28.57,
+        "postgres_p95_delta_pct": 0.0,
+        "sql_changed": false
+      },
+      "source_retention": {
+        "postgres_p50_delta_pct": -4.81,
+        "postgres_p95_delta_pct": 0.87,
+        "sql_changed": false
+      },
+      "storage_admission_totals": {
+        "postgres_p50_delta_pct": -19.15,
+        "postgres_p95_delta_pct": -35.64,
+        "sql_changed": false
+      }
+    },
+    "100000": {
+      "active_source_reservations": {
+        "postgres_p50_delta_pct": 16.42,
+        "postgres_p95_delta_pct": 12.62,
+        "sql_changed": false
+      },
+      "artifact_retention": {
+        "postgres_p50_delta_pct": 1.8,
+        "postgres_p95_delta_pct": -29.04,
+        "sql_changed": false
+      },
+      "cache_recent_hit": {
+        "postgres_p50_delta_pct": 3.85,
+        "postgres_p95_delta_pct": 7.89,
+        "sql_changed": false
+      },
+      "cache_recent_miss": {
+        "postgres_p50_delta_pct": 12.5,
+        "postgres_p95_delta_pct": -37.14,
+        "sql_changed": false
+      },
+      "cache_retention": {
+        "postgres_p50_delta_pct": 814.03,
+        "postgres_p95_delta_pct": 1256.21,
+        "sql_changed": true
+      },
+      "job_retention": {
+        "postgres_p50_delta_pct": 3.21,
+        "postgres_p95_delta_pct": 5.98,
+        "sql_changed": false
+      },
+      "orphan_retention": {
+        "postgres_p50_delta_pct": -14.18,
+        "postgres_p95_delta_pct": -33.65,
+        "sql_changed": false
+      },
+      "pending_tombstones": {
+        "postgres_p50_delta_pct": -12.5,
+        "postgres_p95_delta_pct": -33.33,
+        "sql_changed": false
+      },
+      "source_retention": {
+        "postgres_p50_delta_pct": 2.25,
+        "postgres_p95_delta_pct": 31.3,
+        "sql_changed": false
+      },
+      "storage_admission_totals": {
+        "postgres_p50_delta_pct": 15.79,
+        "postgres_p95_delta_pct": 31.43,
+        "sql_changed": false
+      }
+    }
+  },
+  "format": 2,
+  "memory_scope": "Go heap/Go Sys/allocation counters and sampled process RSS belong to the Go test process. PostgreSQL memory.current includes all container processes and charged cache/tmpfs; its run-local sampled peak is distinct from lifetime memory.peak. Host cgroup readings may include unrelated processes. None is a production memory guarantee.",
+  "overall_workload_gate_pass": false,
+  "percentiles": "Nearest rank from all recorded samples, including the first; no confidence interval or independent run series.",
+  "provenance_checks": {
+    "after_immutable_harness_digest": true,
+    "after_immutable_runtime_digest": true,
+    "before_immutable_runtime_digest": true
+  },
+  "runs": {
+    "after": {
+      "elapsed_ms": 114887.338,
+      "environment": {
+        "GOFLAGS": "-p=2",
+        "GOGC": null,
+        "GOMAXPROCS": "2",
+        "GOMEMLIMIT": null,
+        "GOTOOLCHAIN": "local"
+      },
+      "go_version": "go version go1.27.2 linux/amd64",
+      "harness_sha256": "79cd6b8e69df090d96ad1b492f209623b4e5892324ad0137d92133127aad8c1a",
+      "host": {
+        "cpu_affinity_count": 4,
+        "kernel": "5.15.0-190-generic",
+        "machine": "x86_64"
+      },
+      "host_cgroup_after": {
+        "memory.current": 4653162496,
+        "memory.max": "max",
+        "memory.peak": null,
+        "memory.stat": {
+          "active_anon": 1577017344,
+          "active_file": 167608320,
+          "anon": 574357504,
+          "anon_thp": 0,
+          "file": 3992821760,
+          "file_dirty": 4468736,
+          "file_mapped": 104976384,
+          "file_thp": 0,
+          "file_writeback": 0,
+          "inactive_anon": 2671427584,
+          "inactive_file": 151126016,
+          "kernel_stack": 933888,
+          "pagetables": 3739648,
+          "percpu": 0,
+          "pgactivate": 35334118,
+          "pgdeactivate": 12108763,
+          "pgfault": 1544976414,
+          "pglazyfree": 0,
+          "pglazyfreed": 0,
+          "pgmajfault": 263140,
+          "pgrefill": 20686799,
+          "pgscan": 24387808,
+          "pgsteal": 16305759,
+          "shmem": 3674087424,
+          "shmem_thp": 0,
+          "slab": 80771912,
+          "slab_reclaimable": 49526296,
+          "slab_unreclaimable": 31245616,
+          "sock": 49152,
+          "swapcached": 0,
+          "thp_collapse_alloc": 3037,
+          "thp_fault_alloc": 1730874,
+          "unevictable": 0,
+          "workingset_activate_anon": 0,
+          "workingset_activate_file": 2771413,
+          "workingset_nodereclaim": 0,
+          "workingset_refault_anon": 0,
+          "workingset_refault_file": 7113875,
+          "workingset_restore_anon": 0,
+          "workingset_restore_file": 1952599
+        },
+        "memory.swap.current": 0,
+        "path": "/user.slice/user-0.slice/session-250.scope"
+      },
+      "host_cgroup_before": {
+        "memory.current": 5424136192,
+        "memory.max": "max",
+        "memory.peak": null,
+        "memory.stat": {
+          "active_anon": 1554702336,
+          "active_file": 372961280,
+          "anon": 632147968,
+          "anon_thp": 0,
+          "file": 4355788800,
+          "file_dirty": 5144576,
+          "file_mapped": 197439488,
+          "file_thp": 0,
+          "file_writeback": 0,
+          "inactive_anon": 2718359552,
+          "inactive_file": 341860352,
+          "kernel_stack": 1114112,
+          "pagetables": 4444160,
+          "percpu": 0,
+          "pgactivate": 35233145,
+          "pgdeactivate": 11932747,
+          "pgfault": 1543420179,
+          "pglazyfree": 0,
+          "pglazyfreed": 0,
+          "pgmajfault": 259342,
+          "pgrefill": 20439795,
+          "pgscan": 24087398,
+          "pgsteal": 16045836,
+          "shmem": 3640967168,
+          "shmem_thp": 0,
+          "slab": 429759320,
+          "slab_reclaimable": 397915648,
+          "slab_unreclaimable": 31843672,
+          "sock": 24576,
+          "swapcached": 0,
+          "thp_collapse_alloc": 3037,
+          "thp_fault_alloc": 1730872,
+          "unevictable": 0,
+          "workingset_activate_anon": 0,
+          "workingset_activate_file": 2741864,
+          "workingset_nodereclaim": 0,
+          "workingset_refault_anon": 0,
+          "workingset_refault_file": 6982605,
+          "workingset_restore_anon": 0,
+          "workingset_restore_file": 1929563
+        },
+        "memory.swap.current": 0,
+        "path": "/user.slice/user-0.slice/session-250.scope"
+      },
+      "observed_revision": "b1d2e486cd547e90f4f0fe6b3c61e3e5771fc059",
+      "postgres_cgroup_before": {
+        "memory.current": 307740672,
+        "memory.max": 1073741824,
+        "memory.peak": null,
+        "memory.stat": {
+          "active_anon": 197410816,
+          "active_file": 27897856,
+          "anon": 6426624,
+          "anon_thp": 0,
+          "file": 296665088,
+          "file_dirty": 0,
+          "file_mapped": 41226240,
+          "file_thp": 0,
+          "file_writeback": 0,
+          "inactive_anon": 24981504,
+          "inactive_file": 52801536,
+          "kernel_stack": 98304,
+          "pagetables": 962560,
+          "percpu": 144,
+          "pgactivate": 259629,
+          "pgdeactivate": 6605,
+          "pgfault": 2326443,
+          "pglazyfree": 0,
+          "pglazyfreed": 0,
+          "pgmajfault": 911,
+          "pgrefill": 7175,
+          "pgscan": 9531,
+          "pgsteal": 5634,
+          "shmem": 215965696,
+          "shmem_thp": 0,
+          "slab": 3460424,
+          "slab_reclaimable": 1736648,
+          "slab_unreclaimable": 1723776,
+          "sock": 0,
+          "swapcached": 0,
+          "thp_collapse_alloc": 0,
+          "thp_fault_alloc": 0,
+          "unevictable": 0,
+          "workingset_activate_anon": 0,
+          "workingset_activate_file": 3082,
+          "workingset_nodereclaim": 0,
+          "workingset_refault_anon": 0,
+          "workingset_refault_file": 25335,
+          "workingset_restore_anon": 0,
+          "workingset_restore_file": 3000
+        },
+        "memory.swap.current": 0,
+        "path": "/system.slice/docker-51918eb01cac70d9f521169633baeca858b6a05a0f719dc824a57a85b09a1e89.scope"
+      },
+      "postgres_container_configuration": {
+        "image": "postgres:17.11-bookworm",
+        "image_id": "sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826",
+        "memory_limit": 1073741824,
+        "name": "cutmy-scale-readiness-db",
+        "nano_cpus": 2000000000,
+        "pid": 3197146,
+        "shm_size": 134217728,
+        "tmpfs": {
+          "/var/lib/postgresql/data": "size=768m"
+        }
+      },
+      "postgres_sampled_peak_cgroup_bytes": 785145856,
+      "race": false,
+      "runtime_revision": "b1d2e486cd547e90f4f0fe6b3c61e3e5771fc059",
+      "runtime_source_sha256": "eedca484c0a43cff8ae835e6e9da3291d95e8904f24b800961a1714b2ba1d52e",
+      "samples_per_query": 20,
+      "sizes": [
+        10000,
+        100000
+      ],
+      "sizes_results": {
+        "10000": {
+          "duration_ms": 11581.526,
+          "failures": [
+            "progressive_bootstrap",
+            "short_reconciliation"
+          ],
+          "final_owned_schema_relation_bytes": 53485568,
+          "go_process_memory": {
+            "gc_delta": 66,
+            "peak_go_sys_bytes": 18192648,
+            "peak_heap_alloc_bytes": 5567880,
+            "sampled_peak_process_rss_bytes": 25600000,
+            "total_alloc_delta_bytes": 146052192
+          },
+          "owned_schema_relation_bytes": 30982144,
+          "postgresql": "PostgreSQL 17.11 (Debian 17.11-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+          "postgresql_settings": {
+            "checkpoint_timeout": "30",
+            "effective_cache_size": "524288",
+            "fsync": "on",
+            "full_page_writes": "on",
+            "jit": "on",
+            "max_connections": "100",
+            "max_wal_size": "128",
+            "min_wal_size": "32",
+            "random_page_cost": "4",
+            "shared_buffers": "4096",
+            "synchronous_commit": "on",
+            "work_mem": "8192"
+          },
+          "queries": {
+            "active_source_reservations": {
+              "client_round_trip": {
+                "max_ms": 0.794,
+                "p50_ms": 0.226,
+                "p95_ms": 0.378,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 1.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 3.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.074,
+                "p50_ms": 0.03,
+                "p95_ms": 0.071,
+                "sample_count": 20
+              },
+              "sql_sha256": "baf110c5e0caa7d88c8e46dddecfa1a849e5a3e7cbdec5914b33b64b59cbc75e"
+            },
+            "artifact_retention": {
+              "client_round_trip": {
+                "max_ms": 3.567,
+                "p50_ms": 1.846,
+                "p95_ms": 3.232,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 100.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 868.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 2.657,
+                "p50_ms": 1.31,
+                "p95_ms": 2.175,
+                "sample_count": 20
+              },
+              "sql_sha256": "6717d3836c37a7f8632f1d3f62db045a25584e454ed92239afba77d7599e0a78"
+            },
+            "cache_recent_hit": {
+              "client_round_trip": {
+                "max_ms": 1.1,
+                "p50_ms": 0.395,
+                "p95_ms": 0.714,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 1.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 6.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.047,
+                "p50_ms": 0.023,
+                "p95_ms": 0.038,
+                "sample_count": 20
+              },
+              "sql_sha256": "cf7af00ee73b833bd862df5cf6386deed9381175b3dccccb92b52bcced5b0da9"
+            },
+            "cache_recent_miss": {
+              "client_round_trip": {
+                "max_ms": 0.616,
+                "p50_ms": 0.367,
+                "p95_ms": 0.461,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 3.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.024,
+                "p50_ms": 0.015,
+                "p95_ms": 0.022,
+                "sample_count": 20
+              },
+              "sql_sha256": "cf7af00ee73b833bd862df5cf6386deed9381175b3dccccb92b52bcced5b0da9"
+            },
+            "cache_retention": {
+              "client_round_trip": {
+                "max_ms": 2.724,
+                "p50_ms": 2.076,
+                "p95_ms": 2.541,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 404.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 2.161,
+                "p50_ms": 1.492,
+                "p95_ms": 1.705,
+                "sample_count": 20
+              },
+              "sql_sha256": "1cc349b2260453bddd8ad02d540fcef89b3b3fedf7c2537f8c59ee6987bd26ec"
+            },
+            "job_retention": {
+              "client_round_trip": {
+                "max_ms": 7.734,
+                "p50_ms": 3.417,
+                "p95_ms": 5.93,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 851.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 6.45,
+                "p50_ms": 2.757,
+                "p95_ms": 4.337,
+                "sample_count": 20
+              },
+              "sql_sha256": "aaab6e6002bf053d4ad48ffb44e6d3d7e4199b8da877f741e35b8fcfd04f2d13"
+            },
+            "orphan_retention": {
+              "client_round_trip": {
+                "max_ms": 20.795,
+                "p50_ms": 11.289,
+                "p95_ms": 13.537,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 8.0,
+                "Shared Hit Blocks": 3296.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 8.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 20.01,
+                "p50_ms": 10.67,
+                "p95_ms": 12.879,
+                "sample_count": 20
+              },
+              "sql_sha256": "d26d855931007c238fa243ce259100cd0b09ac1b43c3cd889840fc431578a241"
+            },
+            "pending_tombstones": {
+              "client_round_trip": {
+                "max_ms": 0.796,
+                "p50_ms": 0.209,
+                "p95_ms": 0.257,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 1.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.014,
+                "p50_ms": 0.009,
+                "p95_ms": 0.011,
+                "sample_count": 20
+              },
+              "sql_sha256": "af683bc273684606a190dfa2d79b30b74e6d04ea5db4e0bb29b3f13ecf4583c1"
+            },
+            "source_retention": {
+              "client_round_trip": {
+                "max_ms": 12.229,
+                "p50_ms": 9.102,
+                "p95_ms": 11.291,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 200.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 1088.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 11.202,
+                "p50_ms": 8.28,
+                "p95_ms": 10.447,
+                "sample_count": 20
+              },
+              "sql_sha256": "f24b6db8d33ec3b30ac7f26c21fb5874add71f26ea128b1d0468fd20d841b474"
+            },
+            "storage_admission_totals": {
+              "client_round_trip": {
+                "max_ms": 0.908,
+                "p50_ms": 0.254,
+                "p95_ms": 0.367,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 1.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 7.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.068,
+                "p50_ms": 0.038,
+                "p95_ms": 0.065,
+                "sample_count": 20
+              },
+              "sql_sha256": "8aab8656b2ebac51ae20e92b927da726530cf1f46c13a41c0005aadd097acd95"
+            }
+          },
+          "workloads": {
+            "bounded_cache_backlog": {
+              "batch_limit": 200,
+              "calls": [
+                {
+                  "cycle": 1,
+                  "elapsed_ms": 95.89,
+                  "expired_remaining": 9800,
+                  "removed": 200
+                },
+                {
+                  "cycle": 2,
+                  "elapsed_ms": 86.705,
+                  "expired_remaining": 9600,
+                  "removed": 200
+                },
+                {
+                  "cycle": 3,
+                  "elapsed_ms": 88.438,
+                  "expired_remaining": 9400,
+                  "removed": 200
+                },
+                {
+                  "cycle": 4,
+                  "elapsed_ms": 92.255,
+                  "expired_remaining": 9200,
+                  "removed": 200
+                },
+                {
+                  "cycle": 5,
+                  "elapsed_ms": 89.703,
+                  "expired_remaining": 9000,
+                  "removed": 200
+                },
+                {
+                  "cycle": 6,
+                  "elapsed_ms": 82.226,
+                  "expired_remaining": 8800,
+                  "removed": 200
+                },
+                {
+                  "cycle": 7,
+                  "elapsed_ms": 84.065,
+                  "expired_remaining": 8600,
+                  "removed": 200
+                },
+                {
+                  "cycle": 8,
+                  "elapsed_ms": 87.246,
+                  "expired_remaining": 8400,
+                  "removed": 200
+                }
+              ],
+              "dedicated_sources_remaining": 10023,
+              "errors": null,
+              "final_expired": 8400,
+              "fresh_control_rows": 23,
+              "fresh_identity_payload_deadline_xmin_unchanged": true,
+              "initial_expired": 10000,
+              "latency": {
+                "max_ms": 95.89,
+                "p50_ms": 87.246,
+                "p95_ms": 95.89,
+                "sample_count": 8
+              },
+              "max_removed_per_call": 200,
+              "pass": true,
+              "scope": "Eight public Cleanup calls; fresh dedicated sources protect cache rows from source cascades. Does not require draining the complete backlog.",
+              "total_removed": 1600
+            },
+            "concurrent_admission_publication": {
+              "admission_workers": 4,
+              "advisory_lock_samples": 105,
+              "counters_match_actual_ledger": true,
+              "durable_source_publication": {
+                "max_ms": 45.53,
+                "p50_ms": 11.104,
+                "p95_ms": 39.602,
+                "sample_count": 80
+              },
+              "duration_ms": 543.064,
+              "errors": null,
+              "max_observed_waiters": 4,
+              "operations_per_worker": 20,
+              "pass": true,
+              "persisted_metadata_hit": {
+                "max_ms": 35.033,
+                "p50_ms": 1.137,
+                "p95_ms": 14.324,
+                "sample_count": 80
+              },
+              "published_sources": 80,
+              "reserve_source": {
+                "max_ms": 63.701,
+                "p50_ms": 11.301,
+                "p95_ms": 40.475,
+                "sample_count": 80
+              },
+              "retention_batch": {
+                "max_ms": 88.702,
+                "p50_ms": 11.951,
+                "p95_ms": 57.981,
+                "sample_count": 20
+              },
+              "samples_with_waiters": 105,
+              "sampling_interval_ms": 5,
+              "source_reservations_remaining": 0
+            },
+            "legacy_null_deadline_admission": {
+              "admission_calls": 3,
+              "admission_latency": {
+                "max_ms": 881.151,
+                "p50_ms": 335.385,
+                "p95_ms": 881.151,
+                "sample_count": 3
+              },
+              "aggregate_budget_ms": 120000,
+              "call_budget_ms": 5000,
+              "counters_match_actual_ledger": true,
+              "duration_ms": 1449.389,
+              "initial_null_deadlines": 10000,
+              "initialization_markers": 1,
+              "initializing_deferrals": 2,
+              "pass": true,
+              "remaining_after_each_admission": [
+                7800,
+                3000,
+                0
+              ],
+              "remaining_null_deadlines": 0,
+              "timeouts": 0
+            },
+            "poison_deletion": {
+              "cycles": 3,
+              "latency": {
+                "max_ms": 74.184,
+                "p50_ms": 50.323,
+                "p95_ms": 74.184,
+                "sample_count": 3
+              },
+              "pass": true,
+              "poison_bytes_still_charged": 1800,
+              "poison_count": 200,
+              "poison_rows_preserved": 200,
+              "safe_count": 200,
+              "safe_physical_files_remaining": 0,
+              "safe_rows_remaining": 0
+            },
+            "progressive_bootstrap": {
+              "cycle_budget_ms": 5,
+              "cycles": 32,
+              "deferrals": 32,
+              "final_pass_ms": 1205.219,
+              "final_registered_files": 11024,
+              "final_retry_calls": 1,
+              "initialization_markers": 1,
+              "latency": {
+                "max_ms": 6.085,
+                "p50_ms": 5.136,
+                "p95_ms": 5.976,
+                "sample_count": 32
+              },
+              "pass": false,
+              "registered_after_each_cycle": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "registered_before_final_pass": 0
+            },
+            "short_reconciliation": {
+              "cycle_budget_ms": 5,
+              "cycles": 32,
+              "final_full_scan_calls": 1,
+              "final_full_scan_ms": 1227.966,
+              "latency": {
+                "max_ms": 5.556,
+                "p50_ms": 5.206,
+                "p95_ms": 5.542,
+                "sample_count": 32
+              },
+              "pass": false,
+              "physical_files": 11024,
+              "physical_small_files": 1024,
+              "physical_zero_byte_entries": 10000,
+              "registered_after_each_cycle": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "registered_before_full_scan": 0,
+              "timeouts": 32,
+              "unchanged_full_scan_calls": 1,
+              "unchanged_full_scan_ms": 814.429,
+              "unchanged_scan_preserves_tuple_xmin": true
+            }
+          }
+        },
+        "100000": {
+          "duration_ms": 102628.222,
+          "failures": [
+            "progressive_bootstrap",
+            "short_reconciliation"
+          ],
+          "final_owned_schema_relation_bytes": 499392512,
+          "go_process_memory": {
+            "gc_delta": 498,
+            "peak_go_sys_bytes": 27105544,
+            "peak_heap_alloc_bytes": 11273360,
+            "sampled_peak_process_rss_bytes": 33173504,
+            "total_alloc_delta_bytes": 1194170160
+          },
+          "owned_schema_relation_bytes": 305717248,
+          "postgresql": "PostgreSQL 17.11 (Debian 17.11-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+          "postgresql_settings": {
+            "checkpoint_timeout": "30",
+            "effective_cache_size": "524288",
+            "fsync": "on",
+            "full_page_writes": "on",
+            "jit": "on",
+            "max_connections": "100",
+            "max_wal_size": "128",
+            "min_wal_size": "32",
+            "random_page_cost": "4",
+            "shared_buffers": "4096",
+            "synchronous_commit": "on",
+            "work_mem": "8192"
+          },
+          "queries": {
+            "active_source_reservations": {
+              "client_round_trip": {
+                "max_ms": 0.701,
+                "p50_ms": 0.264,
+                "p95_ms": 0.543,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 1.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 16.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.217,
+                "p50_ms": 0.078,
+                "p95_ms": 0.116,
+                "sample_count": 20
+              },
+              "sql_sha256": "baf110c5e0caa7d88c8e46dddecfa1a849e5a3e7cbdec5914b33b64b59cbc75e"
+            },
+            "artifact_retention": {
+              "client_round_trip": {
+                "max_ms": 26.552,
+                "p50_ms": 11.323,
+                "p95_ms": 14.129,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 200.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 6106.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 24.911,
+                "p50_ms": 10.499,
+                "p95_ms": 13.306,
+                "sample_count": 20
+              },
+              "sql_sha256": "6717d3836c37a7f8632f1d3f62db045a25584e454ed92239afba77d7599e0a78"
+            },
+            "cache_recent_hit": {
+              "client_round_trip": {
+                "max_ms": 1.157,
+                "p50_ms": 0.394,
+                "p95_ms": 0.481,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 1.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 8.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.075,
+                "p50_ms": 0.027,
+                "p95_ms": 0.041,
+                "sample_count": 20
+              },
+              "sql_sha256": "cf7af00ee73b833bd862df5cf6386deed9381175b3dccccb92b52bcced5b0da9"
+            },
+            "cache_recent_miss": {
+              "client_round_trip": {
+                "max_ms": 0.434,
+                "p50_ms": 0.36,
+                "p95_ms": 0.421,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 4.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.023,
+                "p50_ms": 0.018,
+                "p95_ms": 0.022,
+                "sample_count": 20
+              },
+              "sql_sha256": "cf7af00ee73b833bd862df5cf6386deed9381175b3dccccb92b52bcced5b0da9"
+            },
+            "cache_retention": {
+              "client_round_trip": {
+                "max_ms": 12.156,
+                "p50_ms": 7.297,
+                "p95_ms": 12.056,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 817.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 11.326,
+                "p50_ms": 6.709,
+                "p95_ms": 11.243,
+                "sample_count": 20
+              },
+              "sql_sha256": "1cc349b2260453bddd8ad02d540fcef89b3b3fedf7c2537f8c59ee6987bd26ec"
+            },
+            "job_retention": {
+              "client_round_trip": {
+                "max_ms": 5.76,
+                "p50_ms": 3.289,
+                "p95_ms": 5.628,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 1092.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 5.167,
+                "p50_ms": 2.897,
+                "p95_ms": 4.645,
+                "sample_count": 20
+              },
+              "sql_sha256": "aaab6e6002bf053d4ad48ffb44e6d3d7e4199b8da877f741e35b8fcfd04f2d13"
+            },
+            "orphan_retention": {
+              "client_round_trip": {
+                "max_ms": 14.565,
+                "p50_ms": 13.074,
+                "p95_ms": 14.473,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 8.0,
+                "Shared Hit Blocks": 4369.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 8.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 13.888,
+                "p50_ms": 12.372,
+                "p95_ms": 13.776,
+                "sample_count": 20
+              },
+              "sql_sha256": "d26d855931007c238fa243ce259100cd0b09ac1b43c3cd889840fc431578a241"
+            },
+            "pending_tombstones": {
+              "client_round_trip": {
+                "max_ms": 0.905,
+                "p50_ms": 0.19,
+                "p95_ms": 0.245,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 1.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.011,
+                "p50_ms": 0.007,
+                "p95_ms": 0.01,
+                "sample_count": 20
+              },
+              "sql_sha256": "af683bc273684606a190dfa2d79b30b74e6d04ea5db4e0bb29b3f13ecf4583c1"
+            },
+            "source_retention": {
+              "client_round_trip": {
+                "max_ms": 92.514,
+                "p50_ms": 65.464,
+                "p95_ms": 91.349,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 200.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 2313.5,
+                "Shared Read Blocks": 2732.0,
+                "Shared Written Blocks": 6.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 91.335,
+                "p50_ms": 64.602,
+                "p95_ms": 90.061,
+                "sample_count": 20
+              },
+              "sql_sha256": "f24b6db8d33ec3b30ac7f26c21fb5874add71f26ea128b1d0468fd20d841b474"
+            },
+            "storage_admission_totals": {
+              "client_round_trip": {
+                "max_ms": 0.863,
+                "p50_ms": 0.301,
+                "p95_ms": 0.513,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 1.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 5.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.057,
+                "p50_ms": 0.022,
+                "p95_ms": 0.046,
+                "sample_count": 20
+              },
+              "sql_sha256": "8aab8656b2ebac51ae20e92b927da726530cf1f46c13a41c0005aadd097acd95"
+            }
+          },
+          "workloads": {
+            "bounded_cache_backlog": {
+              "batch_limit": 200,
+              "calls": [
+                {
+                  "cycle": 1,
+                  "elapsed_ms": 774.774,
+                  "expired_remaining": 99800,
+                  "removed": 200
+                },
+                {
+                  "cycle": 2,
+                  "elapsed_ms": 630.191,
+                  "expired_remaining": 99600,
+                  "removed": 200
+                },
+                {
+                  "cycle": 3,
+                  "elapsed_ms": 709.012,
+                  "expired_remaining": 99400,
+                  "removed": 200
+                },
+                {
+                  "cycle": 4,
+                  "elapsed_ms": 636.541,
+                  "expired_remaining": 99200,
+                  "removed": 200
+                },
+                {
+                  "cycle": 5,
+                  "elapsed_ms": 650.86,
+                  "expired_remaining": 99000,
+                  "removed": 200
+                },
+                {
+                  "cycle": 6,
+                  "elapsed_ms": 694.42,
+                  "expired_remaining": 98800,
+                  "removed": 200
+                },
+                {
+                  "cycle": 7,
+                  "elapsed_ms": 635.501,
+                  "expired_remaining": 98600,
+                  "removed": 200
+                },
+                {
+                  "cycle": 8,
+                  "elapsed_ms": 658.892,
+                  "expired_remaining": 98400,
+                  "removed": 200
+                }
+              ],
+              "dedicated_sources_remaining": 100023,
+              "errors": null,
+              "final_expired": 98400,
+              "fresh_control_rows": 23,
+              "fresh_identity_payload_deadline_xmin_unchanged": true,
+              "initial_expired": 100000,
+              "latency": {
+                "max_ms": 774.774,
+                "p50_ms": 650.86,
+                "p95_ms": 774.774,
+                "sample_count": 8
+              },
+              "max_removed_per_call": 200,
+              "pass": true,
+              "scope": "Eight public Cleanup calls; fresh dedicated sources protect cache rows from source cascades. Does not require draining the complete backlog.",
+              "total_removed": 1600
+            },
+            "concurrent_admission_publication": {
+              "admission_workers": 4,
+              "advisory_lock_samples": 384,
+              "counters_match_actual_ledger": true,
+              "durable_source_publication": {
+                "max_ms": 150.065,
+                "p50_ms": 54.623,
+                "p95_ms": 108.592,
+                "sample_count": 80
+              },
+              "duration_ms": 1978.809,
+              "errors": null,
+              "max_observed_waiters": 4,
+              "operations_per_worker": 20,
+              "pass": true,
+              "persisted_metadata_hit": {
+                "max_ms": 147.495,
+                "p50_ms": 1.176,
+                "p95_ms": 92.021,
+                "sample_count": 80
+              },
+              "published_sources": 80,
+              "reserve_source": {
+                "max_ms": 152.148,
+                "p50_ms": 34.949,
+                "p95_ms": 109.871,
+                "sample_count": 80
+              },
+              "retention_batch": {
+                "max_ms": 207.518,
+                "p50_ms": 84.736,
+                "p95_ms": 195.563,
+                "sample_count": 20
+              },
+              "samples_with_waiters": 382,
+              "sampling_interval_ms": 5,
+              "source_reservations_remaining": 0
+            },
+            "legacy_null_deadline_admission": {
+              "admission_calls": 26,
+              "admission_latency": {
+                "max_ms": 2868.746,
+                "p50_ms": 466.097,
+                "p95_ms": 2285.145,
+                "sample_count": 26
+              },
+              "aggregate_budget_ms": 120000,
+              "call_budget_ms": 5000,
+              "counters_match_actual_ledger": true,
+              "duration_ms": 19974.061,
+              "initial_null_deadlines": 100000,
+              "initialization_markers": 1,
+              "initializing_deferrals": 25,
+              "pass": true,
+              "remaining_after_each_admission": [
+                100000,
+                100000,
+                100000,
+                100000,
+                96200,
+                91400,
+                86600,
+                81800,
+                77000,
+                72200,
+                67400,
+                62600,
+                57800,
+                53000,
+                48200,
+                43400,
+                38600,
+                33800,
+                29000,
+                24200,
+                19400,
+                14600,
+                9800,
+                5000,
+                200,
+                0
+              ],
+              "remaining_null_deadlines": 0,
+              "timeouts": 0
+            },
+            "poison_deletion": {
+              "cycles": 3,
+              "latency": {
+                "max_ms": 63.634,
+                "p50_ms": 50.882,
+                "p95_ms": 63.634,
+                "sample_count": 3
+              },
+              "pass": true,
+              "poison_bytes_still_charged": 1800,
+              "poison_count": 200,
+              "poison_rows_preserved": 200,
+              "safe_count": 200,
+              "safe_physical_files_remaining": 0,
+              "safe_rows_remaining": 0
+            },
+            "progressive_bootstrap": {
+              "cycle_budget_ms": 5,
+              "cycles": 32,
+              "deferrals": 32,
+              "final_pass_ms": 12979.243,
+              "final_registered_files": 101024,
+              "final_retry_calls": 5,
+              "initialization_markers": 1,
+              "latency": {
+                "max_ms": 5.897,
+                "p50_ms": 5.196,
+                "p95_ms": 5.775,
+                "sample_count": 32
+              },
+              "pass": false,
+              "registered_after_each_cycle": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "registered_before_final_pass": 0
+            },
+            "short_reconciliation": {
+              "cycle_budget_ms": 5,
+              "cycles": 32,
+              "final_full_scan_calls": 1,
+              "final_full_scan_ms": 13106.596,
+              "latency": {
+                "max_ms": 5.914,
+                "p50_ms": 5.17,
+                "p95_ms": 5.605,
+                "sample_count": 32
+              },
+              "pass": false,
+              "physical_files": 101024,
+              "physical_small_files": 1024,
+              "physical_zero_byte_entries": 100000,
+              "registered_after_each_cycle": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "registered_before_full_scan": 0,
+              "timeouts": 32,
+              "unchanged_full_scan_calls": 1,
+              "unchanged_full_scan_ms": 8677.509,
+              "unchanged_scan_preserves_tuple_xmin": true
+            }
+          }
+        }
+      },
+      "test_binary_sha256": "c56a03885847273d42930cd6db852620cb53058bf5cbcaad3da59c82a42d7a13",
+      "test_exit_code": 1
+    },
+    "before": {
+      "elapsed_ms": 123118.559,
+      "environment": {
+        "GOFLAGS": "-p=2",
+        "GOGC": null,
+        "GOMAXPROCS": "2",
+        "GOMEMLIMIT": null,
+        "GOTOOLCHAIN": "local"
+      },
+      "go_version": "go version go1.27.2 linux/amd64",
+      "harness_sha256": "79cd6b8e69df090d96ad1b492f209623b4e5892324ad0137d92133127aad8c1a",
+      "host": {
+        "cpu_affinity_count": 4,
+        "kernel": "5.15.0-190-generic",
+        "machine": "x86_64"
+      },
+      "host_cgroup_after": {
+        "memory.current": 5357207552,
+        "memory.max": "max",
+        "memory.peak": null,
+        "memory.stat": {
+          "active_anon": 1576857600,
+          "active_file": 356880384,
+          "anon": 547450880,
+          "anon_thp": 0,
+          "file": 4375441408,
+          "file_dirty": 3964928,
+          "file_mapped": 167997440,
+          "file_thp": 0,
+          "file_writeback": 0,
+          "inactive_anon": 2633719808,
+          "inactive_file": 355434496,
+          "kernel_stack": 950272,
+          "pagetables": 3735552,
+          "percpu": 0,
+          "pgactivate": 35229267,
+          "pgdeactivate": 11932747,
+          "pgfault": 1543373918,
+          "pglazyfree": 0,
+          "pglazyfreed": 0,
+          "pgmajfault": 259339,
+          "pgrefill": 20439795,
+          "pgscan": 24087398,
+          "pgsteal": 16045836,
+          "shmem": 3663126528,
+          "shmem_thp": 0,
+          "slab": 429126792,
+          "slab_reclaimable": 397865272,
+          "slab_unreclaimable": 31261520,
+          "sock": 32768,
+          "swapcached": 0,
+          "thp_collapse_alloc": 3037,
+          "thp_fault_alloc": 1730872,
+          "unevictable": 0,
+          "workingset_activate_anon": 0,
+          "workingset_activate_file": 2741825,
+          "workingset_nodereclaim": 0,
+          "workingset_refault_anon": 0,
+          "workingset_refault_file": 6982560,
+          "workingset_restore_anon": 0,
+          "workingset_restore_file": 1929548
+        },
+        "memory.swap.current": 0,
+        "path": "/user.slice/user-0.slice/session-250.scope"
+      },
+      "host_cgroup_before": {
+        "memory.current": 5296812032,
+        "memory.max": "max",
+        "memory.peak": null,
+        "memory.stat": {
+          "active_anon": 1554673664,
+          "active_file": 298135552,
+          "anon": 446492672,
+          "anon_thp": 0,
+          "file": 4404084736,
+          "file_dirty": 23191552,
+          "file_mapped": 105275392,
+          "file_thp": 0,
+          "file_writeback": 0,
+          "inactive_anon": 2522124288,
+          "inactive_file": 475643904,
+          "kernel_stack": 851968,
+          "pagetables": 3096576,
+          "percpu": 0,
+          "pgactivate": 35179487,
+          "pgdeactivate": 11902979,
+          "pgfault": 1542784853,
+          "pglazyfree": 0,
+          "pglazyfreed": 0,
+          "pgmajfault": 258764,
+          "pgrefill": 20401234,
+          "pgscan": 24023421,
+          "pgsteal": 15982180,
+          "shmem": 3630305280,
+          "shmem_thp": 0,
+          "slab": 441676304,
+          "slab_reclaimable": 410713848,
+          "slab_unreclaimable": 30962456,
+          "sock": 69632,
+          "swapcached": 0,
+          "thp_collapse_alloc": 3037,
+          "thp_fault_alloc": 1730872,
+          "unevictable": 0,
+          "workingset_activate_anon": 0,
+          "workingset_activate_file": 2741725,
+          "workingset_nodereclaim": 0,
+          "workingset_refault_anon": 0,
+          "workingset_refault_file": 6974453,
+          "workingset_restore_anon": 0,
+          "workingset_restore_file": 1929458
+        },
+        "memory.swap.current": 0,
+        "path": "/user.slice/user-0.slice/session-250.scope"
+      },
+      "observed_revision": "91192c8dd26ac545515d93b50f63d50db121deba",
+      "postgres_cgroup_before": {
+        "memory.current": 239239168,
+        "memory.max": 1073741824,
+        "memory.peak": null,
+        "memory.stat": {
+          "active_anon": 195739648,
+          "active_file": 9187328,
+          "anon": 6479872,
+          "anon_thp": 0,
+          "file": 227209216,
+          "file_dirty": 0,
+          "file_mapped": 39165952,
+          "file_thp": 0,
+          "file_writeback": 0,
+          "inactive_anon": 26083328,
+          "inactive_file": 2678784,
+          "kernel_stack": 98304,
+          "pagetables": 946176,
+          "percpu": 144,
+          "pgactivate": 90357,
+          "pgdeactivate": 5864,
+          "pgfault": 1935964,
+          "pglazyfree": 0,
+          "pglazyfreed": 0,
+          "pgmajfault": 352,
+          "pgrefill": 6088,
+          "pgscan": 3559,
+          "pgsteal": 3559,
+          "shmem": 215343104,
+          "shmem_thp": 0,
+          "slab": 4372096,
+          "slab_reclaimable": 1888288,
+          "slab_unreclaimable": 2483808,
+          "sock": 0,
+          "swapcached": 0,
+          "thp_collapse_alloc": 0,
+          "thp_fault_alloc": 0,
+          "unevictable": 0,
+          "workingset_activate_anon": 0,
+          "workingset_activate_file": 2668,
+          "workingset_nodereclaim": 0,
+          "workingset_refault_anon": 0,
+          "workingset_refault_file": 6455,
+          "workingset_restore_anon": 0,
+          "workingset_restore_file": 2653
+        },
+        "memory.swap.current": 0,
+        "path": "/system.slice/docker-51918eb01cac70d9f521169633baeca858b6a05a0f719dc824a57a85b09a1e89.scope"
+      },
+      "postgres_container_configuration": {
+        "image": "postgres:17.11-bookworm",
+        "image_id": "sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826",
+        "memory_limit": 1073741824,
+        "name": "cutmy-scale-readiness-db",
+        "nano_cpus": 2000000000,
+        "pid": 3197146,
+        "shm_size": 134217728,
+        "tmpfs": {
+          "/var/lib/postgresql/data": "size=768m"
+        }
+      },
+      "postgres_sampled_peak_cgroup_bytes": 899751936,
+      "race": false,
+      "runtime_revision": "91192c8dd26ac545515d93b50f63d50db121deba",
+      "runtime_source_sha256": "f0d2e7daa0cf7288899c8403057c88772d59ef49d5d086eaaa3491c5292047e0",
+      "samples_per_query": 20,
+      "sizes": [
+        10000,
+        100000
+      ],
+      "sizes_results": {
+        "10000": {
+          "duration_ms": 11405.017,
+          "failures": [
+            "bounded_cache_backlog",
+            "progressive_bootstrap",
+            "short_reconciliation"
+          ],
+          "final_owned_schema_relation_bytes": 51937280,
+          "go_process_memory": {
+            "gc_delta": 85,
+            "peak_go_sys_bytes": 18192648,
+            "peak_heap_alloc_bytes": 5579384,
+            "sampled_peak_process_rss_bytes": 25325568,
+            "total_alloc_delta_bytes": 171210168
+          },
+          "owned_schema_relation_bytes": 30212096,
+          "postgresql": "PostgreSQL 17.11 (Debian 17.11-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+          "postgresql_settings": {
+            "checkpoint_timeout": "30",
+            "effective_cache_size": "524288",
+            "fsync": "on",
+            "full_page_writes": "on",
+            "jit": "on",
+            "max_connections": "100",
+            "max_wal_size": "128",
+            "min_wal_size": "32",
+            "random_page_cost": "4",
+            "shared_buffers": "4096",
+            "synchronous_commit": "on",
+            "work_mem": "8192"
+          },
+          "queries": {
+            "active_source_reservations": {
+              "client_round_trip": {
+                "max_ms": 0.427,
+                "p50_ms": 0.206,
+                "p95_ms": 0.265,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 1.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 3.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.042,
+                "p50_ms": 0.026,
+                "p95_ms": 0.04,
+                "sample_count": 20
+              },
+              "sql_sha256": "baf110c5e0caa7d88c8e46dddecfa1a849e5a3e7cbdec5914b33b64b59cbc75e"
+            },
+            "artifact_retention": {
+              "client_round_trip": {
+                "max_ms": 4.011,
+                "p50_ms": 1.739,
+                "p95_ms": 1.984,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 100.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 868.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 2.279,
+                "p50_ms": 1.237,
+                "p95_ms": 1.433,
+                "sample_count": 20
+              },
+              "sql_sha256": "6717d3836c37a7f8632f1d3f62db045a25584e454ed92239afba77d7599e0a78"
+            },
+            "cache_recent_hit": {
+              "client_round_trip": {
+                "max_ms": 0.714,
+                "p50_ms": 0.333,
+                "p95_ms": 0.467,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 1.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 6.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.044,
+                "p50_ms": 0.022,
+                "p95_ms": 0.041,
+                "sample_count": 20
+              },
+              "sql_sha256": "cf7af00ee73b833bd862df5cf6386deed9381175b3dccccb92b52bcced5b0da9"
+            },
+            "cache_recent_miss": {
+              "client_round_trip": {
+                "max_ms": 0.583,
+                "p50_ms": 0.327,
+                "p95_ms": 0.459,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 3.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.028,
+                "p50_ms": 0.015,
+                "p95_ms": 0.023,
+                "sample_count": 20
+              },
+              "sql_sha256": "cf7af00ee73b833bd862df5cf6386deed9381175b3dccccb92b52bcced5b0da9"
+            },
+            "cache_retention": {
+              "client_round_trip": {
+                "max_ms": 0.86,
+                "p50_ms": 0.251,
+                "p95_ms": 0.423,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 202.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.427,
+                "p50_ms": 0.083,
+                "p95_ms": 0.157,
+                "sample_count": 20
+              },
+              "sql_sha256": "88d1e8ad276ac437e0b147a34b39668657757ae412baf0b3c81f7271a84b27f1"
+            },
+            "job_retention": {
+              "client_round_trip": {
+                "max_ms": 9.195,
+                "p50_ms": 3.438,
+                "p95_ms": 4.424,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 851.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 8.617,
+                "p50_ms": 3.02,
+                "p95_ms": 3.894,
+                "sample_count": 20
+              },
+              "sql_sha256": "aaab6e6002bf053d4ad48ffb44e6d3d7e4199b8da877f741e35b8fcfd04f2d13"
+            },
+            "orphan_retention": {
+              "client_round_trip": {
+                "max_ms": 23.107,
+                "p50_ms": 10.848,
+                "p95_ms": 22.516,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 8.0,
+                "Shared Hit Blocks": 3296.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 8.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 22.157,
+                "p50_ms": 10.298,
+                "p95_ms": 21.685,
+                "sample_count": 20
+              },
+              "sql_sha256": "d26d855931007c238fa243ce259100cd0b09ac1b43c3cd889840fc431578a241"
+            },
+            "pending_tombstones": {
+              "client_round_trip": {
+                "max_ms": 1.446,
+                "p50_ms": 0.219,
+                "p95_ms": 0.421,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 1.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.022,
+                "p50_ms": 0.007,
+                "p95_ms": 0.011,
+                "sample_count": 20
+              },
+              "sql_sha256": "af683bc273684606a190dfa2d79b30b74e6d04ea5db4e0bb29b3f13ecf4583c1"
+            },
+            "source_retention": {
+              "client_round_trip": {
+                "max_ms": 15.06,
+                "p50_ms": 9.554,
+                "p95_ms": 11.412,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 200.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 1088.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 13.259,
+                "p50_ms": 8.698,
+                "p95_ms": 10.357,
+                "sample_count": 20
+              },
+              "sql_sha256": "f24b6db8d33ec3b30ac7f26c21fb5874add71f26ea128b1d0468fd20d841b474"
+            },
+            "storage_admission_totals": {
+              "client_round_trip": {
+                "max_ms": 0.88,
+                "p50_ms": 0.352,
+                "p95_ms": 0.51,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 1.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 7.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.197,
+                "p50_ms": 0.047,
+                "p95_ms": 0.101,
+                "sample_count": 20
+              },
+              "sql_sha256": "8aab8656b2ebac51ae20e92b927da726530cf1f46c13a41c0005aadd097acd95"
+            }
+          },
+          "workloads": {
+            "bounded_cache_backlog": {
+              "batch_limit": 200,
+              "calls": [
+                {
+                  "cycle": 1,
+                  "elapsed_ms": 77.891,
+                  "expired_remaining": 0,
+                  "removed": 10000
+                },
+                {
+                  "cycle": 2,
+                  "elapsed_ms": 72.565,
+                  "expired_remaining": 0,
+                  "removed": 0
+                },
+                {
+                  "cycle": 3,
+                  "elapsed_ms": 61.946,
+                  "expired_remaining": 0,
+                  "removed": 0
+                },
+                {
+                  "cycle": 4,
+                  "elapsed_ms": 62.662,
+                  "expired_remaining": 0,
+                  "removed": 0
+                },
+                {
+                  "cycle": 5,
+                  "elapsed_ms": 66.791,
+                  "expired_remaining": 0,
+                  "removed": 0
+                },
+                {
+                  "cycle": 6,
+                  "elapsed_ms": 62.619,
+                  "expired_remaining": 0,
+                  "removed": 0
+                },
+                {
+                  "cycle": 7,
+                  "elapsed_ms": 65.116,
+                  "expired_remaining": 0,
+                  "removed": 0
+                },
+                {
+                  "cycle": 8,
+                  "elapsed_ms": 60.969,
+                  "expired_remaining": 0,
+                  "removed": 0
+                }
+              ],
+              "dedicated_sources_remaining": 10023,
+              "errors": null,
+              "final_expired": 0,
+              "fresh_control_rows": 23,
+              "fresh_identity_payload_deadline_xmin_unchanged": true,
+              "initial_expired": 10000,
+              "latency": {
+                "max_ms": 77.891,
+                "p50_ms": 62.662,
+                "p95_ms": 77.891,
+                "sample_count": 8
+              },
+              "max_removed_per_call": 10000,
+              "pass": false,
+              "scope": "Eight public Cleanup calls; fresh dedicated sources protect cache rows from source cascades. Does not require draining the complete backlog.",
+              "total_removed": 10000
+            },
+            "concurrent_admission_publication": {
+              "admission_workers": 4,
+              "advisory_lock_samples": 101,
+              "counters_match_actual_ledger": true,
+              "durable_source_publication": {
+                "max_ms": 52.473,
+                "p50_ms": 10.217,
+                "p95_ms": 43.219,
+                "sample_count": 80
+              },
+              "duration_ms": 527.772,
+              "errors": null,
+              "max_observed_waiters": 4,
+              "operations_per_worker": 20,
+              "pass": true,
+              "persisted_metadata_hit": {
+                "max_ms": 36.914,
+                "p50_ms": 1.309,
+                "p95_ms": 12.143,
+                "sample_count": 80
+              },
+              "published_sources": 80,
+              "reserve_source": {
+                "max_ms": 65.916,
+                "p50_ms": 10.699,
+                "p95_ms": 24.961,
+                "sample_count": 80
+              },
+              "retention_batch": {
+                "max_ms": 95.695,
+                "p50_ms": 11.761,
+                "p95_ms": 67.258,
+                "sample_count": 20
+              },
+              "samples_with_waiters": 101,
+              "sampling_interval_ms": 5,
+              "source_reservations_remaining": 0
+            },
+            "legacy_null_deadline_admission": {
+              "admission_calls": 3,
+              "admission_latency": {
+                "max_ms": 1033.051,
+                "p50_ms": 326.848,
+                "p95_ms": 1033.051,
+                "sample_count": 3
+              },
+              "aggregate_budget_ms": 120000,
+              "call_budget_ms": 5000,
+              "counters_match_actual_ledger": true,
+              "duration_ms": 1558.506,
+              "initial_null_deadlines": 10000,
+              "initialization_markers": 1,
+              "initializing_deferrals": 2,
+              "pass": true,
+              "remaining_after_each_admission": [
+                7800,
+                3000,
+                0
+              ],
+              "remaining_null_deadlines": 0,
+              "timeouts": 0
+            },
+            "poison_deletion": {
+              "cycles": 3,
+              "latency": {
+                "max_ms": 60.349,
+                "p50_ms": 46.982,
+                "p95_ms": 60.349,
+                "sample_count": 3
+              },
+              "pass": true,
+              "poison_bytes_still_charged": 1800,
+              "poison_count": 200,
+              "poison_rows_preserved": 200,
+              "safe_count": 200,
+              "safe_physical_files_remaining": 0,
+              "safe_rows_remaining": 0
+            },
+            "progressive_bootstrap": {
+              "cycle_budget_ms": 5,
+              "cycles": 32,
+              "deferrals": 32,
+              "final_pass_ms": 1271.083,
+              "final_registered_files": 11024,
+              "final_retry_calls": 1,
+              "initialization_markers": 1,
+              "latency": {
+                "max_ms": 6.628,
+                "p50_ms": 5.164,
+                "p95_ms": 5.88,
+                "sample_count": 32
+              },
+              "pass": false,
+              "registered_after_each_cycle": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "registered_before_final_pass": 0
+            },
+            "short_reconciliation": {
+              "cycle_budget_ms": 5,
+              "cycles": 32,
+              "final_full_scan_calls": 1,
+              "final_full_scan_ms": 1253.782,
+              "latency": {
+                "max_ms": 5.969,
+                "p50_ms": 5.188,
+                "p95_ms": 5.773,
+                "sample_count": 32
+              },
+              "pass": false,
+              "physical_files": 11024,
+              "physical_small_files": 1024,
+              "physical_zero_byte_entries": 10000,
+              "registered_after_each_cycle": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "registered_before_full_scan": 0,
+              "timeouts": 32,
+              "unchanged_full_scan_calls": 1,
+              "unchanged_full_scan_ms": 850.929,
+              "unchanged_scan_preserves_tuple_xmin": true
+            }
+          }
+        },
+        "100000": {
+          "duration_ms": 111073.594,
+          "failures": [
+            "bounded_cache_backlog",
+            "progressive_bootstrap",
+            "short_reconciliation"
+          ],
+          "final_owned_schema_relation_bytes": 480919552,
+          "go_process_memory": {
+            "gc_delta": 1710,
+            "peak_go_sys_bytes": 26843400,
+            "peak_heap_alloc_bytes": 6742024,
+            "sampled_peak_process_rss_bytes": 26943488,
+            "total_alloc_delta_bytes": 3432095944
+          },
+          "owned_schema_relation_bytes": 297762816,
+          "postgresql": "PostgreSQL 17.11 (Debian 17.11-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+          "postgresql_settings": {
+            "checkpoint_timeout": "30",
+            "effective_cache_size": "524288",
+            "fsync": "on",
+            "full_page_writes": "on",
+            "jit": "on",
+            "max_connections": "100",
+            "max_wal_size": "128",
+            "min_wal_size": "32",
+            "random_page_cost": "4",
+            "shared_buffers": "4096",
+            "synchronous_commit": "on",
+            "work_mem": "8192"
+          },
+          "queries": {
+            "active_source_reservations": {
+              "client_round_trip": {
+                "max_ms": 0.521,
+                "p50_ms": 0.233,
+                "p95_ms": 0.329,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 1.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 16.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.153,
+                "p50_ms": 0.067,
+                "p95_ms": 0.103,
+                "sample_count": 20
+              },
+              "sql_sha256": "baf110c5e0caa7d88c8e46dddecfa1a849e5a3e7cbdec5914b33b64b59cbc75e"
+            },
+            "artifact_retention": {
+              "client_round_trip": {
+                "max_ms": 27.473,
+                "p50_ms": 11.116,
+                "p95_ms": 19.549,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 200.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 6106.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 25.962,
+                "p50_ms": 10.313,
+                "p95_ms": 18.752,
+                "sample_count": 20
+              },
+              "sql_sha256": "6717d3836c37a7f8632f1d3f62db045a25584e454ed92239afba77d7599e0a78"
+            },
+            "cache_recent_hit": {
+              "client_round_trip": {
+                "max_ms": 0.923,
+                "p50_ms": 0.383,
+                "p95_ms": 0.601,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 1.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 8.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.056,
+                "p50_ms": 0.026,
+                "p95_ms": 0.038,
+                "sample_count": 20
+              },
+              "sql_sha256": "cf7af00ee73b833bd862df5cf6386deed9381175b3dccccb92b52bcced5b0da9"
+            },
+            "cache_recent_miss": {
+              "client_round_trip": {
+                "max_ms": 0.441,
+                "p50_ms": 0.338,
+                "p95_ms": 0.44,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 4.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.046,
+                "p50_ms": 0.016,
+                "p95_ms": 0.035,
+                "sample_count": 20
+              },
+              "sql_sha256": "cf7af00ee73b833bd862df5cf6386deed9381175b3dccccb92b52bcced5b0da9"
+            },
+            "cache_retention": {
+              "client_round_trip": {
+                "max_ms": 7.863,
+                "p50_ms": 0.965,
+                "p95_ms": 1.116,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 2002.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 6.951,
+                "p50_ms": 0.734,
+                "p95_ms": 0.829,
+                "sample_count": 20
+              },
+              "sql_sha256": "88d1e8ad276ac437e0b147a34b39668657757ae412baf0b3c81f7271a84b27f1"
+            },
+            "job_retention": {
+              "client_round_trip": {
+                "max_ms": 5.821,
+                "p50_ms": 3.394,
+                "p95_ms": 5.319,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 1092.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 4.999,
+                "p50_ms": 2.807,
+                "p95_ms": 4.383,
+                "sample_count": 20
+              },
+              "sql_sha256": "aaab6e6002bf053d4ad48ffb44e6d3d7e4199b8da877f741e35b8fcfd04f2d13"
+            },
+            "orphan_retention": {
+              "client_round_trip": {
+                "max_ms": 22.232,
+                "p50_ms": 15.265,
+                "p95_ms": 21.823,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 8.0,
+                "Shared Hit Blocks": 4369.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 8.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 21.326,
+                "p50_ms": 14.416,
+                "p95_ms": 20.762,
+                "sample_count": 20
+              },
+              "sql_sha256": "d26d855931007c238fa243ce259100cd0b09ac1b43c3cd889840fc431578a241"
+            },
+            "pending_tombstones": {
+              "client_round_trip": {
+                "max_ms": 0.799,
+                "p50_ms": 0.209,
+                "p95_ms": 0.321,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 1.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.019,
+                "p50_ms": 0.008,
+                "p95_ms": 0.015,
+                "sample_count": 20
+              },
+              "sql_sha256": "af683bc273684606a190dfa2d79b30b74e6d04ea5db4e0bb29b3f13ecf4583c1"
+            },
+            "source_retention": {
+              "client_round_trip": {
+                "max_ms": 69.528,
+                "p50_ms": 64.12,
+                "p95_ms": 69.507,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 200.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 2343.0,
+                "Shared Read Blocks": 2699.0,
+                "Shared Written Blocks": 3.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 68.596,
+                "p50_ms": 63.178,
+                "p95_ms": 68.59,
+                "sample_count": 20
+              },
+              "sql_sha256": "f24b6db8d33ec3b30ac7f26c21fb5874add71f26ea128b1d0468fd20d841b474"
+            },
+            "storage_admission_totals": {
+              "client_round_trip": {
+                "max_ms": 0.937,
+                "p50_ms": 0.292,
+                "p95_ms": 0.456,
+                "sample_count": 20
+              },
+              "median_root_statistics": {
+                "Actual Loops": 1.0,
+                "Actual Rows": 1.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Hit Blocks": 5.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root buffer counts include descendants; summing per-node buffers again double counts. Inspect gzip raw plans for every node, rows/loops and trigger timing.",
+              "postgres_execution": {
+                "max_ms": 0.079,
+                "p50_ms": 0.019,
+                "p95_ms": 0.035,
+                "sample_count": 20
+              },
+              "sql_sha256": "8aab8656b2ebac51ae20e92b927da726530cf1f46c13a41c0005aadd097acd95"
+            }
+          },
+          "workloads": {
+            "bounded_cache_backlog": {
+              "batch_limit": 200,
+              "calls": [
+                {
+                  "cycle": 1,
+                  "elapsed_ms": 1231.061,
+                  "expired_remaining": 0,
+                  "removed": 100000
+                },
+                {
+                  "cycle": 2,
+                  "elapsed_ms": 786.496,
+                  "expired_remaining": 0,
+                  "removed": 0
+                },
+                {
+                  "cycle": 3,
+                  "elapsed_ms": 836.942,
+                  "expired_remaining": 0,
+                  "removed": 0
+                },
+                {
+                  "cycle": 4,
+                  "elapsed_ms": 761.518,
+                  "expired_remaining": 0,
+                  "removed": 0
+                },
+                {
+                  "cycle": 5,
+                  "elapsed_ms": 858.944,
+                  "expired_remaining": 0,
+                  "removed": 0
+                },
+                {
+                  "cycle": 6,
+                  "elapsed_ms": 812.232,
+                  "expired_remaining": 0,
+                  "removed": 0
+                },
+                {
+                  "cycle": 7,
+                  "elapsed_ms": 810.978,
+                  "expired_remaining": 0,
+                  "removed": 0
+                },
+                {
+                  "cycle": 8,
+                  "elapsed_ms": 839.621,
+                  "expired_remaining": 0,
+                  "removed": 0
+                }
+              ],
+              "dedicated_sources_remaining": 100023,
+              "errors": null,
+              "final_expired": 0,
+              "fresh_control_rows": 23,
+              "fresh_identity_payload_deadline_xmin_unchanged": true,
+              "initial_expired": 100000,
+              "latency": {
+                "max_ms": 1231.061,
+                "p50_ms": 812.232,
+                "p95_ms": 1231.061,
+                "sample_count": 8
+              },
+              "max_removed_per_call": 100000,
+              "pass": false,
+              "scope": "Eight public Cleanup calls; fresh dedicated sources protect cache rows from source cascades. Does not require draining the complete backlog.",
+              "total_removed": 100000
+            },
+            "concurrent_admission_publication": {
+              "admission_workers": 4,
+              "advisory_lock_samples": 423,
+              "counters_match_actual_ledger": true,
+              "durable_source_publication": {
+                "max_ms": 150.667,
+                "p50_ms": 39.661,
+                "p95_ms": 137.195,
+                "sample_count": 80
+              },
+              "duration_ms": 2178.349,
+              "errors": null,
+              "max_observed_waiters": 4,
+              "operations_per_worker": 20,
+              "pass": true,
+              "persisted_metadata_hit": {
+                "max_ms": 144.582,
+                "p50_ms": 1.291,
+                "p95_ms": 101.608,
+                "sample_count": 80
+              },
+              "published_sources": 80,
+              "reserve_source": {
+                "max_ms": 150.497,
+                "p50_ms": 60.862,
+                "p95_ms": 138.672,
+                "sample_count": 80
+              },
+              "retention_batch": {
+                "max_ms": 211.618,
+                "p50_ms": 93.097,
+                "p95_ms": 193.045,
+                "sample_count": 20
+              },
+              "samples_with_waiters": 420,
+              "sampling_interval_ms": 5,
+              "source_reservations_remaining": 0
+            },
+            "legacy_null_deadline_admission": {
+              "admission_calls": 26,
+              "admission_latency": {
+                "max_ms": 3206.663,
+                "p50_ms": 377.557,
+                "p95_ms": 2942.801,
+                "sample_count": 26
+              },
+              "aggregate_budget_ms": 120000,
+              "call_budget_ms": 5000,
+              "counters_match_actual_ledger": true,
+              "duration_ms": 19430.113,
+              "initial_null_deadlines": 100000,
+              "initialization_markers": 1,
+              "initializing_deferrals": 25,
+              "pass": true,
+              "remaining_after_each_admission": [
+                100000,
+                100000,
+                100000,
+                100000,
+                96200,
+                91400,
+                86600,
+                81800,
+                77000,
+                72200,
+                67400,
+                62600,
+                57800,
+                53000,
+                48200,
+                43400,
+                38600,
+                33800,
+                29000,
+                24200,
+                19400,
+                14600,
+                9800,
+                5000,
+                200,
+                0
+              ],
+              "remaining_null_deadlines": 0,
+              "timeouts": 0
+            },
+            "poison_deletion": {
+              "cycles": 3,
+              "latency": {
+                "max_ms": 72.436,
+                "p50_ms": 52.303,
+                "p95_ms": 72.436,
+                "sample_count": 3
+              },
+              "pass": true,
+              "poison_bytes_still_charged": 1800,
+              "poison_count": 200,
+              "poison_rows_preserved": 200,
+              "safe_count": 200,
+              "safe_physical_files_remaining": 0,
+              "safe_rows_remaining": 0
+            },
+            "progressive_bootstrap": {
+              "cycle_budget_ms": 5,
+              "cycles": 32,
+              "deferrals": 32,
+              "final_pass_ms": 15964.594,
+              "final_registered_files": 101024,
+              "final_retry_calls": 5,
+              "initialization_markers": 1,
+              "latency": {
+                "max_ms": 5.761,
+                "p50_ms": 5.131,
+                "p95_ms": 5.425,
+                "sample_count": 32
+              },
+              "pass": false,
+              "registered_after_each_cycle": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "registered_before_final_pass": 0
+            },
+            "short_reconciliation": {
+              "cycle_budget_ms": 5,
+              "cycles": 32,
+              "final_full_scan_calls": 1,
+              "final_full_scan_ms": 16173.104,
+              "latency": {
+                "max_ms": 6.162,
+                "p50_ms": 5.273,
+                "p95_ms": 5.707,
+                "sample_count": 32
+              },
+              "pass": false,
+              "physical_files": 101024,
+              "physical_small_files": 1024,
+              "physical_zero_byte_entries": 100000,
+              "registered_after_each_cycle": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "registered_before_full_scan": 0,
+              "timeouts": 32,
+              "unchanged_full_scan_calls": 1,
+              "unchanged_full_scan_ms": 11554.936,
+              "unchanged_scan_preserves_tuple_xmin": true
+            }
+          }
+        }
+      },
+      "test_binary_sha256": "875fd6ef47a35d720e2dde359450af6d0a4af78949d4140a8c3f3a4918149261",
+      "test_exit_code": 1
+    }
+  },
+  "scope": "Synthetic retained database rows, real zero-byte filesystem entries and tiny files. Measures storage maintenance and metadata expiry; excludes FFmpeg, large-media I/O, live providers, network transfer and 4K/export capacity.",
+  "status": "complete measurements; overall workload gate failed"
+}

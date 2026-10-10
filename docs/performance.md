@@ -278,6 +278,10 @@ three directory readers for the duration of a call, advancing only after an
 acknowledged batch commit. A stable flat directory's names are read once within
 that call. Calls, restarts and work-directory switches still replay O(prefix)
 names to verify a saved cursor; frequent interruptions can repeat that work.
+The [scalable-storage comparison](../benchmarks/2026-10-10-scalable-storage/README.md)
+measures 19.0% faster full reconciliation and a 200-entry cache deletion bound
+at 100k, alongside slower cache SQL, larger sampled heap/RSS peaks and failed
+five-millisecond gates. It preserves complete before/after outputs and regressions.
 
 Job polling fetches all artifact expiry records with one aggregate SQL query,
 removing the previous potential twelve extra round trips. Source listing is

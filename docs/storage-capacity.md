@@ -10,6 +10,9 @@ The [2026-10-10 before/after report](../benchmarks/2026-10-10-storage-maintenanc
 preserves complete results at both sizes, including regressions and the overall
 failed workload gate. Use its recorded runtime/harness hashes and configuration
 when reproducing that comparison.
+The [subsequent scalable-storage report](../benchmarks/2026-10-10-scalable-storage/README.md)
+uses the revised frozen harness with the additional bounded-cache backlog stage;
+compare its own matched before/after pair rather than mixing harness versions.
 
 ```sh
 export TEST_DATABASE_URL='postgres://cutmy_test:test-only@127.0.0.1:55440/cutmy_storage_test?sslmode=disable'
