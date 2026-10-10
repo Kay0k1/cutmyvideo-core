@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -238,5 +240,46 @@ func TestMetadataRetentionPreservesCancellationAndDatabaseErrors(t *testing.T) {
 	batch, err = s.cleanupStorageBatch(context.Background(), time.Hour, time.Hour)
 	if !errors.Is(err, puddle.ErrClosedPool) || !errors.Is(batch.cacheErr, puddle.ErrClosedPool) {
 		t.Fatalf("database failure was silently treated as empty cache: batch=%+v error=%v", batch, err)
+	}
+}
+
+func TestMetadataRetentionWorkerDrainsMediaAfterCacheFailure(t *testing.T) {
+	s := testStore(t)
+	c := ledgerConfig(t)
+	path := metadataRetentionArtifact(t, s, c)
+	initialStored, initialReserved := ledgerBytes(t, s)
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	lock, err := s.DB.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Rollback(context.Background())
+	if _, err := lock.Exec(ctx, "LOCK TABLE source_metadata_cache IN ACCESS EXCLUSIVE MODE"); err != nil {
+		t.Fatal(err)
+	}
+	// Exercise the actual worker cleanup orchestration while the cache remains
+	// unavailable. Media must be durably removed before this lock is released.
+	err = cleanupFiles(ctx, c, s)
+	if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "metadata cache retention") || ctx.Err() != nil {
+		t.Fatalf("worker masked the cache cause or exhausted its whole budget: error=%v parent=%v", err, ctx.Err())
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("cache failure prevented physical artifact deletion", err)
+	}
+	var artifact, charged bool
+	var stored, reserved int64
+	if err := s.DB.QueryRow(ctx, `SELECT
+ EXISTS(SELECT 1 FROM artifacts WHERE id='cache-error-artifact'),
+ EXISTS(SELECT 1 FROM storage_files WHERE path=$1),
+ stored_bytes,reserved_bytes FROM storage_counters WHERE id=1`, path).Scan(&artifact, &charged, &stored, &reserved); err != nil {
+		t.Fatal(err)
+	}
+	if artifact || charged || stored != initialStored-16 || reserved != initialReserved {
+		t.Fatalf("worker retained/incorrectly released media charge after cache failure: artifact=%t charged=%t stored=%d want=%d reserved=%d want=%d", artifact, charged, stored, initialStored-16, reserved, initialReserved)
+	}
+	actualStored, actualReserved := ledgerBytes(t, s)
+	if stored != actualStored || reserved != actualReserved {
+		t.Fatalf("worker counters no longer match actual ledger: counter=%d/%d ledger=%d/%d", stored, reserved, actualStored, actualReserved)
 	}
 }
