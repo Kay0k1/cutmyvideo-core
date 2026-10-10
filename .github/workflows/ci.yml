@@ -30,7 +30,7 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends ffmpeg python3 git ca-certificates gcc libc6-dev
           ffmpeg -version
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.ref }}
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
@@ -61,7 +61,7 @@ jobs:
       TEST_DATABASE_URL: postgres://cutmy:test-only-password@localhost:5432/cutmy_test?sslmode=disable
       CUTMY_TEST_YTDLP: /tmp/cutmy-yt-dlp
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.ref }}
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
