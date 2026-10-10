@@ -36,10 +36,14 @@ func TestCopyPreservesFirstKeyframeAndAudioTimeline(t *testing.T) {
 		}
 	}
 	mkv, delayedMKV := filepath.Join(c.DataDir, "source.mkv"), filepath.Join(c.DataDir, "delayed.mkv")
+	shiftedMKV := filepath.Join(c.DataDir, "shifted.mkv")
 	video, audio := filepath.Join(c.DataDir, "video.mp4"), filepath.Join(c.DataDir, "audio.m4a")
 	for _, args := range [][]string{
 		{"-v", "error", "-i", base, "-c", "copy", mkv},
 		{"-v", "error", "-i", delayed, "-c", "copy", delayedMKV},
+		// A positive container start must not be added to the packet DTS
+		// selected by ffprobe. Keep it below the near-zero requested cut.
+		{"-v", "error", "-i", base, "-c", "copy", "-output_ts_offset", "0.040", shiftedMKV},
 		{"-v", "error", "-i", base, "-map", "0:v:0", "-c", "copy", video},
 		{"-v", "error", "-i", base, "-map", "0:a:0", "-c", "copy", audio},
 	} {
@@ -56,6 +60,7 @@ func TestCopyPreservesFirstKeyframeAndAudioTimeline(t *testing.T) {
 	}{
 		{"mp4", []string{base}, base, false},
 		{"mkv", []string{mkv}, mkv, true},
+		{"mkv-positive-container-start", []string{shiftedMKV}, shiftedMKV, true},
 		{"separate-progressive-audio", []string{video, audio}, base, false},
 		{"mp4-intentional-audio-delay", []string{delayed}, delayed, false},
 		{"mkv-intentional-audio-delay", []string{delayedMKV}, delayedMKV, true},
@@ -112,10 +117,11 @@ func TestCopyPreservesFirstKeyframeAndAudioTimeline(t *testing.T) {
 					}
 					// Decode from zero rather than seeking the reference: input -ss
 					// can itself discard AAC priming or normalize its initial delay.
-					// first_pts=0 retains silence for an intentional audio offset.
+					// copyts preserves a positive container origin; first_pts=0
+					// retains silence for that origin and intentional audio offsets.
 					readPCM := func(path string, from int64) []byte {
 						filter := fmt.Sprintf("aresample=async=1:first_pts=0,atrim=start=%s:end=%s,asetpts=PTS-STARTPTS", seconds(from), seconds(from+400))
-						pcm, err := runCommand(ctx, c.FFmpeg, "-v", "error", "-i", path, "-map", "0:a:0", "-af", filter, "-ac", "1", "-ar", "48000", "-f", "s16le", "-")
+						pcm, err := runCommand(ctx, c.FFmpeg, "-v", "error", "-copyts", "-i", path, "-map", "0:a:0", "-af", filter, "-ac", "1", "-ar", "48000", "-f", "s16le", "-")
 						if err != nil {
 							t.Fatal(err)
 						}

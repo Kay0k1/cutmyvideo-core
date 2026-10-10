@@ -17,6 +17,30 @@ permissions:
   contents: read
 
 jobs:
+  bookworm-media:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container:
+      image: node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - name: Install production-family media tools and race compiler
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ffmpeg python3 git ca-certificates gcc libc6-dev
+          ffmpeg -version
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - name: Copy and HLS timeline regressions on FFmpeg 5.1
+        run: >-
+          go test -race -count=1 -timeout=5m ./internal/app
+          -run '^(TestCopyPreservesFirstKeyframeAndAudioTimeline|TestHLSMiddleExportUsesGlobalTimelineAndRemovesStaging|TestHLSPreservesCombinedIntentionalAudioDelay|TestHLSContinuityPreservesTinyBridgeVideoAndAudioTimeline|TestHLSContinuityRejectsChangedCodecAndCleansFailedGroups)$'
   test:
     runs-on: ubuntu-24.04
     timeout-minutes: 30

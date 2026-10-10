@@ -371,13 +371,20 @@ func nearestKeyframe(ctx context.Context, c Config, path string, start int64, re
 	if from < 0 {
 		from = 0
 	}
+	until := start + 1
+	if start == 0 {
+		// Matroska can place its first video packet after zero (for example
+		// because audio starts first). Read the same bounded initial window
+		// accepted below; a 1 ms interval can otherwise contain no keyframe.
+		until = 2001
+	}
 	protocols := "file"
 	if remote {
 		protocols = "http,tcp"
 	}
 	args := []string{"-v", "error", "-max_alloc", "268435456", "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats}
 	args = append(args, mediaInputBounds(c)...)
-	args = append(args, "-select_streams", "v:0", "-read_intervals", seconds(from)+"%"+seconds(start+1), "-show_packets", "-show_entries", "packet=pts_time,dts_time,flags", "-of", "json", path)
+	args = append(args, "-select_streams", "v:0", "-read_intervals", seconds(from)+"%"+seconds(until), "-show_packets", "-show_entries", "packet=pts_time,dts_time,flags", "-of", "json", path)
 	b, err := runCommand(ctx, c.FFprobe, args...)
 	if err != nil {
 		return copyKeyframe{}, err
@@ -497,6 +504,12 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 		}
 		args = append(args, "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats)
 		args = append(args, mediaInputBounds(c)...)
+		if request.CutMode == "copy" {
+			// ffprobe reports packet PTS/DTS in the container's clock. Treat
+			// the selected DTS as an absolute timestamp too: adding a nonzero
+			// container start would move this keyframe before the output trim.
+			args = append(args, "-seek_timestamp", "1")
+		}
 		args = append(args, "-ss", seconds(localStart), "-i", input.Path)
 	}
 	if request.CutMode == "copy" && copyTrim {

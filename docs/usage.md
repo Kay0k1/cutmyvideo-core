@@ -46,7 +46,7 @@ native macOS/Windows behavior is not yet verified in CI.
 Add the module to your application:
 
 ```sh
-go get github.com/Kay0k1/cutmyvideo-core@v0.2.0
+go get github.com/Kay0k1/cutmyvideo-core@v0.2.1
 ```
 
 ```go

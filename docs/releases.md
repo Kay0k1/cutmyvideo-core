@@ -11,7 +11,7 @@ availability.
 1. Run `make check-full` with pinned tools and isolated PostgreSQL. Verify CLI and
    server export behavior with synthetic media.
 2. Move completed Unreleased notes under a dated heading such as
-   `## 0.2.0 - 2026-10-10`, retaining Unreleased for future changes. Include known
+   `## 0.2.1 - 2026-10-10`, retaining Unreleased for future changes. Include known
    limitations and measured benchmark methods.
 3. Commit the reviewed changes and tag that exact commit. Push the commit/tag when
    release publication is intended.
@@ -19,8 +19,8 @@ availability.
 From a clean reviewed checkout:
 
 ```sh
-git tag -a v0.2.0 -m 'cutmyvideo-core v0.2.0'
-make release VERSION=v0.2.0
+git tag -a v0.2.1 -m 'cutmyvideo-core v0.2.1'
+make release VERSION=v0.2.1
 ```
 
 The script refuses dirty/untracked files, malformed versions and tags that do not
@@ -40,8 +40,8 @@ extractor and Node runtime. Docker bundles server dependencies.
 Rebuild the same tag with the same Go and Python/zlib toolchain:
 
 ```sh
-scripts/release.sh v0.2.0 /tmp/cutmy-release-first
-scripts/release.sh v0.2.0 /tmp/cutmy-release-second
+scripts/release.sh v0.2.1 /tmp/cutmy-release-first
+scripts/release.sh v0.2.1 /tmp/cutmy-release-second
 cmp /tmp/cutmy-release-first/SHA256SUMS /tmp/cutmy-release-second/SHA256SUMS
 cd /tmp/cutmy-release-first
 sha256sum --check SHA256SUMS
@@ -65,5 +65,7 @@ Failed checks prevent packaging/publication.
 
 CI uses Go 1.27.2 and checks runtime/media/cancellation on Linux. Other targets are
 cross-built and need native verification before equivalent support is claimed.
+Release checks include the full Ubuntu/FFmpeg 6.1 suite and targeted copy/HLS
+timeline regressions in the pinned Bookworm runtime base with FFmpeg 5.1.
 Website production deployment is separate and must preserve persistent volumes;
 see [operations](operations.md).

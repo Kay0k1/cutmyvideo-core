@@ -4,6 +4,22 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 
 ## Unreleased
 
+## 0.2.1 - 2026-10-10
+
+This is the first published CLI binary release. It includes the open-source
+foundation documented in the [0.2.0 entry](https://github.com/Kay0k1/cutmyvideo-core/blob/v0.2.1/CHANGELOG.md#020---2026-10-10): local CLI/library/API, documentation, CI, reproducible
+archives, dependency notices and measured metadata-cache optimization. The 0.2.0
+source tag remains immutable; its automated media checks failed and no release
+assets were published.
+
+### Fixed
+- Preserve the selected first keyframe and audio timeline in stream-copy exports on FFmpeg 5.1/6.1, including MKV files with a positive container start timestamp; seek against the absolute input clock and retain timestamps through output trimming.
+- Include the first nearby keyframe when probing a zero-start MKV interval, and preserve tiny HLS continuity bridges without shifting or dropping their video/audio content. Synthetic content and audio regressions pass on FFmpeg 5.1.9, 6.1.1 and the current development build.
+
+### Build
+- Pin the Go 1.27.2 Docker build image by its verified manifest digest, matching the security-patched CI/release toolchain.
+- Gate releases on existing copy/HLS timeline regressions with FFmpeg 5.1 in the pinned Bookworm runtime base, alongside full Ubuntu/FFmpeg 6.1 checks.
+
 ## 0.2.0 - 2026-10-10
 
 ### Added
