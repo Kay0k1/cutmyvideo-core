@@ -16,8 +16,11 @@ For slow/long local exports, set --timeout (default 30m); FFmpeg is a separate p
 BUILD.json records source revision, target and binary checksum. Verify the archive
 against SHA256SUMS from the same GitHub release before installation.
 
-Linux is exercised with real media in CI. macOS/Windows archives are cross-built;
-their runtime and cancellation behavior still need native-platform verification.
+Release checks require native media, exclusive publication, process cancellation
+and the PostgreSQL API/worker path on every shipped Linux/macOS/Windows target.
+Outputs require a filesystem that supports hard links and reliable file/directory
+synchronization. An uncertain publication retains its final name; inspect it
+before retrying. See the platform and operation guides in the source repository.
 
 The executable also includes server, worker and maintenance commands. Hosting
 requires PostgreSQL and persistent media storage; platform import additionally
