@@ -328,16 +328,16 @@
     "-run",
     "^TestMediaContract"
   ],
-  "started_at": "2026-10-10T23:26:30.922795+00:00",
-  "finished_at": "2026-10-10T23:26:51.230469+00:00",
+  "started_at": "2026-10-10T23:41:07.359866+00:00",
+  "finished_at": "2026-10-10T23:41:29.493114+00:00",
   "exit_code": 1,
-  "test_helper_sha256": "2ef78e50f4c3885806abbab01c1789866116d6c67b083cdab10e24c691b30fe1",
+  "test_helper_sha256": "edeb4a86e63ea71a883b707a8bcd75e4fd5de5549e0d5e9b1f480b5ed7b27329",
   "helper_unchanged_during_run": true,
   "fixture_files": [
     {
       "path": "internal/app/testdata/media-contract/README.md",
-      "sha256": "37979e7f716bc24d9f4453f399f870f0b6ed3844955ad150d912e35cd38b18a2",
-      "bytes": 2206
+      "sha256": "5c72439be50b03c45d17d7bb642391ad3dea43f042fc3064572695f5bee90163",
+      "bytes": 3374
     },
     {
       "path": "internal/app/testdata/media-contract/generate.py",
@@ -372,48 +372,48 @@
   ],
   "fixture_unchanged_during_run": true,
   "raw": "final-seven-before-b59.jsonl",
-  "raw_sha256": "0d4121975bafe8b9726a2d8d1aa7d0beddceed5abcabe2dced7265925aad785b",
+  "raw_sha256": "20a439492f813e11ef7f52a3b8b0e2033e895fbd849c1eac350a788852f2f188",
   "gzip": "final-seven-before-b59.jsonl.gz",
-  "gzip_sha256": "b8e19162a39700f2a6b917ca50ab2ad998f4d696d6930bec2a60f75cee666fd9",
+  "gzip_sha256": "a2a368edcb176d11e4cbbd78d74a33b19e834a37f1a6b128044b231b12cc1436",
   "stderr": "final-seven-before-b59.stderr.log",
   "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "top_level_results": [
     {
       "Test": "TestMediaContractRotationDisplayGeometry",
       "Action": "fail",
-      "Elapsed": 2.65
+      "Elapsed": 2.79
     },
     {
       "Test": "TestMediaContractSampleAspectNormalization",
       "Action": "fail",
-      "Elapsed": 0.87
+      "Elapsed": 1.39
     },
     {
       "Test": "TestMediaContractDefaultAudioSelection",
       "Action": "fail",
-      "Elapsed": 1.53
+      "Elapsed": 1.72
     },
     {
       "Test": "TestMediaContractAttachedPicturesAreNotVideo",
       "Action": "pass",
-      "Elapsed": 0.28
+      "Elapsed": 0.47
     },
     {
       "Test": "TestMediaContractCopyQualityUsesSelectedVideo",
       "Action": "fail",
-      "Elapsed": 0.2
+      "Elapsed": 0.36
     },
     {
       "Test": "TestMediaContractHDRToneMappingAndCopy",
       "Action": "fail",
-      "Elapsed": 0.96
+      "Elapsed": 1.18
     },
     {
       "Test": "TestMediaContractVariableFrameTimestamps",
       "Action": "fail",
-      "Elapsed": 8.93
+      "Elapsed": 8.97
     }
   ],
-  "package_elapsed_seconds": 15.449,
+  "package_elapsed_seconds": 16.917,
   "scope": "Functional decoded-media checks including independently validated input signals and a bounded8-second originalmono-silence AAC regression. Elapsed times are not encoding performance measurements."
 }

@@ -27,7 +27,10 @@ func hmcStage(t *testing.T, ctx context.Context, c Config, input, kind, name str
 	if kind == "fmp4" {
 		ext = "m4s"
 	}
-	mcRun(t, ctx, c, "-i", input, "-map", "0", "-c", "copy", "-f", "hls", "-hls_time", "1", "-hls_playlist_type", "vod", "-hls_segment_type", kind, "-hls_segment_filename", filepath.Join(dir, "%02d."+ext), filepath.Join(dir, "index.m3u8"))
+	// The HLS muxer derives the init-map directory from URL slash separators.
+	// Native Windows backslashes put init.mp4 in the process working directory;
+	// use slash paths for FFmpeg while filesystem operations keep native paths.
+	mcRun(t, ctx, c, "-i", filepath.ToSlash(input), "-map", "0", "-c", "copy", "-f", "hls", "-hls_time", "1", "-hls_playlist_type", "vod", "-hls_segment_type", kind, "-hls_segment_filename", filepath.ToSlash(filepath.Join(dir, "%02d."+ext)), filepath.ToSlash(filepath.Join(dir, "index.m3u8")))
 	if kind == "fmp4" {
 		// FFmpeg 5.1's nested HLS muxer drops tkhd display matrices. Construct
 		// the same valid fMP4 presentation on old and current fixture tools;

@@ -136,13 +136,51 @@ func mcBaseVideo(t *testing.T, ctx context.Context, c Config, name string, width
 	image := filepath.Join(c.DataDir, name+".ppm")
 	mcCorners(t, image, width, height)
 	out := filepath.Join(c.DataDir, name+".mp4")
-	args := []string{"-loop", "1", "-i", image, "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", "2", "-r", "25", "-c:v", "libx264", "-threads", "1", "-pix_fmt", "yuv420p", "-g", "25", "-bf", "0", "-x264-params", "colorprim=bt709:transfer=bt709:colormatrix=bt709", "-c:a", "aac", "-b:a", "96k", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"}
+	args := []string{"-loop", "1", "-i", image, "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", "2", "-r", "25", "-c:v", "libx264", "-threads", "1", "-pix_fmt", "yuv420p", "-g", "25", "-bf", "0", "-x264-params", "colorprim=bt709:transfer=bt709:colormatrix=bt709", "-c:a", "aac", "-b:a", "96k", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv"}
 	if filter == "" {
 		filter = "setsar=1"
 	}
+	// Color labels do not select the physical RGB-to-YCbCr conversion. Make
+	// that conversion explicit before the fixture's independent geometry filter.
+	filter = "scale=in_range=full:out_color_matrix=bt709:out_range=tv,format=yuv420p," + filter
 	args = append(args, "-vf", filter)
 	mcRun(t, ctx, c, append(args, out)...)
+	mcCheckSDRInput(t, ctx, c, out, width, height)
 	return out
+}
+
+func mcCheckSDRInput(t *testing.T, ctx context.Context, c Config, path string, width, height int) {
+	t.Helper()
+	s := mcVideo(t, mcProbe(t, ctx, c, path))
+	if s.Width != width || s.Height != height || s.PixelFormat != "yuv420p" || s.Primaries != "bt709" || s.Transfer != "bt709" || s.Matrix != "bt709" || s.ColorRange != "tv" {
+		t.Fatalf("invalid SDR INPUT geometry/color metadata: %+v", s)
+	}
+	// Decode native YCbCr planes without a color conversion. The independent
+	// oracle follows ITU-R BT.709-6 sections 3.2-3.4, not the fixture filter.
+	raw := mcRun(t, ctx, c, "-noautorotate", "-i", path, "-map", "0:v:0", "-frames:v", "1", "-pix_fmt", "yuv420p", "-f", "rawvideo", "-")
+	lumaBytes, chromaBytes := width*height, (width/2)*(height/2)
+	if len(raw) != lumaBytes+2*chromaBytes {
+		t.Fatalf("invalid SDR INPUT raw YCbCr length %d for %dx%d", len(raw), width, height)
+	}
+	colors := [4][3]byte{{240, 20, 20}, {20, 240, 20}, {20, 20, 240}, {240, 240, 240}}
+	var samples, expected [4][3]int
+	for i, point := range [4][2]int{{width / 4, height / 4}, {3 * width / 4, height / 4}, {width / 4, 3 * height / 4}, {3 * width / 4, 3 * height / 4}} {
+		r, g, b := float64(colors[i][0])/255, float64(colors[i][1])/255, float64(colors[i][2])/255
+		y := 0.2126*r + 0.7152*g + 0.0722*b
+		expected[i] = [3]int{int(math.Round(16 + 219*y)), int(math.Round(128 + 224*(b-y)/1.8556)), int(math.Round(128 + 224*(r-y)/1.5748))}
+		chromaOffset := (point[1]/2)*(width/2) + point[0]/2
+		samples[i] = [3]int{int(raw[point[1]*width+point[0]]), int(raw[lumaBytes+chromaOffset]), int(raw[lumaBytes+chromaBytes+chromaOffset])}
+		for channel := range 3 {
+			// Flat patch interiors allow four code values for integer conversion
+			// and H.264 quantization; a mislabeled BT.601 matrix fails this check.
+			if mcAbs(samples[i][channel]-expected[i][channel]) > 4 {
+				t.Fatalf("invalid physical SDR INPUT corner %d YCbCr=%v want BT.709=%v", i, samples[i], expected[i])
+			}
+		}
+	}
+	t.Logf("SDR INPUT %dx%d BT.709/tv YCbCr=%v independent matrix=%v", width, height, samples, expected)
+	rgb, w, h := mcFrame(t, ctx, c, path, true)
+	mcCheckCorners(t, rgb, w, h, [4]int{0, 1, 2, 3})
 }
 
 func mcFrame(t *testing.T, ctx context.Context, c Config, path string, noRotate bool) ([]byte, int, int) {

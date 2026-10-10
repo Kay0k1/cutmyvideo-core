@@ -23,7 +23,11 @@ color conversion and fixed diagnostics; v0.2.1 archives predate this policy.
 
 ## CLI
 
-Install FFmpeg/ffprobe and build or unpack `cutmy`, then:
+Install FFmpeg/ffprobe and build or unpack `cutmy`.
+
+Current-source HDR accurate exports and previews need zscale/libzimg and tonemap.
+On macOS, select Homebrew's keg-only `ffmpeg-full` binaries, or `ffmpeg@7` on Intel; see the
+[platform installation guide](platforms.md#macos-and-linux).
 
 ```sh
 ./cutmy version

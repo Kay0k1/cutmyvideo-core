@@ -43,7 +43,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg python3
       - name: macOS media dependencies
         if: runner.os == 'macOS'
-        run: brew install ffmpeg postgresql@17
+        run: |
+          media_formula=ffmpeg-full
+          if [ "$RUNNER_ARCH" = X64 ]; then media_formula=ffmpeg@7; fi
+          brew install "$media_formula" postgresql@17
+          echo "$(brew --prefix "$media_formula")/bin" >> "$GITHUB_PATH"
       - name: Windows media dependencies (pinned archive and checksum)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -86,14 +90,16 @@ jobs:
         run: |
           ffmpeg -version | tee ffmpeg-version.txt
           ffprobe -version | tee ffprobe-version.txt
+          python_command=python3
+          if [ "$RUNNER_OS" = Windows ]; then python_command=python; fi
+          "$python_command" scripts/check-media-capabilities.py
           go test -json -race -count=1 -timeout=8m ./pkg/engine ./internal/fsdurable ./cmd/cutmy | tee native-media-tests.jsonl
           go test -json -race -count=1 -timeout=3m ./internal/app -run '^(TestProcess.*|TestDiagnosticCopyCannotBypassMemoryBound)$' | tee native-process-tests.jsonl
           go test -json -race -count=1 -timeout=3m ./internal/app -run '^(TestNativeServiceUploadExportAndDownload|TestPreviewMediaPolicyUpgradeDoesNotReuseLegacyCache|TestLocalMediaDimensionsRefresh(FencesLegacyDecoderCapacity|PreservesIdentityAndCancellation|KeepsUnknownInputConservative))$' | tee native-service-tests.jsonl
           go test -json -race -count=1 -timeout=4m ./internal/app -run '^(TestStorage(BootstrapProgressSurvivesRestart|BootstrapAmortizesLegacyExpiryAndResumesAfterCancellation|ScanCanceledBatchDoesNotAdvance|ScanPrefixChangeRestartsCoverage|ScanClassesRemainFairAcrossNewWorkAndRestart|ReconcileCoverageGatesExpiredReservations|WorkProgressSurvivesRestartAndUnsafeCandidate|DeletePoisonBatchDoesNotStarveAcrossCyclesAndRestart|DeleteDirectorySyncFailureKeepsChargeUntilDurableRetry|DeleteLockAndCancellationFencePhysicalRemoval|DeleteStaleListCannotRemoveRegisteredReplacement|DeleteSerializesConcurrentReplacementRegistration|DeletePreservesAnotherSourceSharingTheFile|DeleteBackoffIsBoundedAndRetombstonePreservesSchedule|DeleteDuePickerUsesBoundedIndexBeforeFuturePoison|ScanSession.*)|TestMetadataRetention.*|TestMetadataCacheExpiryCorruptionAndFailureFallback|TestMigrationsUpgradeMaintenancePredecessorPreservesProgressRetriesAndCache)$' | tee native-storage-tests.jsonl
           go test -json -race -count=1 -timeout=6m ./internal/app ./pkg/engine -run '^(TestMediaContract(RotationDisplayGeometry|SampleAspectNormalization|VariableFrameTimestamps|HDRToneMappingAndCopy|DefaultAudioSelection|AttachedPicturesAreNotVideo|CopyQualityUsesSelectedVideo)|TestHLSMediaContract(RotationAndSAR|DefaultAudio|HDRTags|ContinuityMetadata|FingerprintUsesSelectedTracks)|TestHDR(CapabilityFailureKeepsProcessCause|FailurePreservesCancellationAndLimits)|TestEngineInspectSeparatesCodedAndDisplayDimensions)$' | tee native-media-contract-tests.jsonl
           binary=cutmy-native
-          python_command=python3
-          if [ "$RUNNER_OS" = Windows ]; then binary=cutmy-native.exe; python_command=python; fi
+          if [ "$RUNNER_OS" = Windows ]; then binary=cutmy-native.exe; fi
           go build -trimpath -o "$binary" ./cmd/cutmy
           "./$binary" version | tee native-version.json
           "./$binary" --json-errors inspect --input absent.mp4 >success.txt 2>error.json && exit 1 || test "$?" -eq 1

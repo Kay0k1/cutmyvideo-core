@@ -1,6 +1,6 @@
 {
   "name": "final-seven-after",
-  "source_head": "b59e1d22adc3f20533bf3b54243bd6c28e6c6b48",
+  "source_head": "6fe8c1b9696b8c6e59014043f31bed844152aded",
   "source_dirty": true,
   "runtime_source": {
     "runtime_source_sha256": "311473c2757c8436c238cde2d1a6df5eca09197bc5fe1d0f91415a68ea1d6280",
@@ -340,16 +340,16 @@
     "-run",
     "^TestMediaContract"
   ],
-  "started_at": "2026-10-10T23:26:13.178391+00:00",
-  "finished_at": "2026-10-10T23:26:30.908330+00:00",
+  "started_at": "2026-10-10T23:40:50.919180+00:00",
+  "finished_at": "2026-10-10T23:41:07.339342+00:00",
   "exit_code": 0,
-  "test_helper_sha256": "2ef78e50f4c3885806abbab01c1789866116d6c67b083cdab10e24c691b30fe1",
+  "test_helper_sha256": "edeb4a86e63ea71a883b707a8bcd75e4fd5de5549e0d5e9b1f480b5ed7b27329",
   "helper_unchanged_during_run": true,
   "fixture_files": [
     {
       "path": "internal/app/testdata/media-contract/README.md",
-      "sha256": "37979e7f716bc24d9f4453f399f870f0b6ed3844955ad150d912e35cd38b18a2",
-      "bytes": 2206
+      "sha256": "5c72439be50b03c45d17d7bb642391ad3dea43f042fc3064572695f5bee90163",
+      "bytes": 3374
     },
     {
       "path": "internal/app/testdata/media-contract/generate.py",
@@ -384,9 +384,9 @@
   ],
   "fixture_unchanged_during_run": true,
   "raw": "final-seven-after.jsonl",
-  "raw_sha256": "f15657efb114912d447483af5511ead90d9d61e04c8f9b2c2bdf4f6495c9481a",
+  "raw_sha256": "0c803e0eb9da08e63132704ba8032449d3cc7f3a80259ef18e071c179f8438f6",
   "gzip": "final-seven-after.jsonl.gz",
-  "gzip_sha256": "f3fd464394a1033291b8be08eb27442a2e7e4d03b073ff00de53c446b95e0381",
+  "gzip_sha256": "fdea4da05aeeca0507ba0f395fd9c0400aa5050bf64a7d384b355216e1914337",
   "stderr": "final-seven-after.stderr.log",
   "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "top_level_results": [
@@ -398,34 +398,34 @@
     {
       "Test": "TestMediaContractSampleAspectNormalization",
       "Action": "pass",
-      "Elapsed": 1.07
+      "Elapsed": 1.22
     },
     {
       "Test": "TestMediaContractDefaultAudioSelection",
       "Action": "pass",
-      "Elapsed": 1.68
+      "Elapsed": 1.79
     },
     {
       "Test": "TestMediaContractAttachedPicturesAreNotVideo",
       "Action": "pass",
-      "Elapsed": 0.23
+      "Elapsed": 0.21
     },
     {
       "Test": "TestMediaContractCopyQualityUsesSelectedVideo",
       "Action": "pass",
-      "Elapsed": 0.35
+      "Elapsed": 0.41
     },
     {
       "Test": "TestMediaContractHDRToneMappingAndCopy",
       "Action": "pass",
-      "Elapsed": 1.99
+      "Elapsed": 1.92
     },
     {
       "Test": "TestMediaContractVariableFrameTimestamps",
       "Action": "pass",
-      "Elapsed": 1.32
+      "Elapsed": 1.36
     }
   ],
-  "package_elapsed_seconds": 10.664,
+  "package_elapsed_seconds": 10.948,
   "scope": "Functional decoded-media checks including independently validated input signals and a bounded8-second originalmono-silence AAC regression. Elapsed times are not encoding performance measurements."
 }

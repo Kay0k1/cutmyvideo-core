@@ -64,6 +64,31 @@ their own process group so cancellation terminates descendants. Required native
 tests exercise file and directory synchronization and exclusive hard-link
 publication on the runner's local filesystem.
 
+On macOS, use Homebrew's [full FFmpeg formula](https://formulae.brew.sh/formula/ffmpeg-full),
+which includes zimg for current-source HDR conversion. It is keg-only, so select
+its binaries explicitly:
+
+```sh
+brew install ffmpeg-full
+export PATH="$(brew --prefix ffmpeg-full)/bin:$PATH"
+```
+
+For Intel macOS, the versioned [FFmpeg 7 formula](https://formulae.brew.sh/formula/ffmpeg@7)
+also includes zimg and provides an Intel bottle; select its keg-only binaries:
+
+```sh
+brew install ffmpeg@7
+export PATH="$(brew --prefix ffmpeg@7)/bin:$PATH"
+```
+
+The native ARM runner uses `ffmpeg-full`; the Intel runner uses `ffmpeg@7`
+so installation can use its compatible Intel bottle. Both execute the full media
+contract and retain the installed tool versions.
+
+The regular Homebrew `ffmpeg` formula may omit zscale/libzimg. The native gate
+runs a one-frame zscale/tonemap conversion with a 15-second deadline before the
+tests; missing conversion capabilities fail the gate rather than skipping HDR.
+
 ## Self-hosting
 
 The [Compose example](../deploy/compose.example.yml) runs Linux containers and
