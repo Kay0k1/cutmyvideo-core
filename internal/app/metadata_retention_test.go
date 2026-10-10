@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/puddle/v2"
 )
@@ -126,33 +128,241 @@ func TestMetadataRetentionSkipsConcurrentRefreshLocks(t *testing.T) {
 }
 
 func TestMetadataRetentionConcurrentCleanersPreserveFreshRows(t *testing.T) {
-	s := testStore(t)
-	seedMetadataRetention(t, s, storageBatch*2, 19)
-	before := metadataRetentionSnapshot(t, s.DB)
-	start := make(chan struct{})
-	results := make(chan error, 2)
-	var group sync.WaitGroup
-	for range 2 {
-		group.Add(1)
-		go func() {
-			defer group.Done()
-			<-start
+	type firstAttempt struct {
+		cacheErr, mediaErr, parentErr error
+		elapsed                       time.Duration
+	}
+	type cleanerResult struct {
+		attempts, deferrals int
+		err                 error
+	}
+	// Only the independently bounded cache stage may be deferred. Keep one
+	// caller deadline across retries; media/DB errors and caller cancellation
+	// must remain terminal rather than being mistaken for an empty cache.
+	clean := func(ctx context.Context, s *Store, first chan<- firstAttempt, retryReady <-chan struct{}) cleanerResult {
+		result := cleanerResult{}
+		for result.attempts < 64 {
+			result.attempts++
+			started := time.Now()
+			batch, err := s.cleanupStorageBatch(ctx, time.Hour, time.Hour)
+			if result.attempts == 1 && first != nil {
+				first <- firstAttempt{batch.cacheErr, err, ctx.Err(), time.Since(started)}
+			}
+			if err != nil || ctx.Err() != nil {
+				result.err = errors.Join(ctx.Err(), batch.cacheErr, err)
+				return result
+			}
+			if batch.cacheErr == nil {
+				return result
+			}
+			var databaseErr *pgconn.PgError
+			if !errors.Is(batch.cacheErr, context.DeadlineExceeded) || errors.Is(batch.cacheErr, context.Canceled) || errors.Is(batch.cacheErr, puddle.ErrClosedPool) || (errors.As(batch.cacheErr, &databaseErr) && databaseErr.Code != "57014") {
+				result.err = batch.cacheErr
+				return result
+			}
+			result.deferrals++
+			if result.attempts == 1 && retryReady != nil {
+				select {
+				case <-retryReady:
+				case <-ctx.Done():
+					result.err = ctx.Err()
+					return result
+				}
+			}
+			timer := time.NewTimer(20 * time.Millisecond)
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				timer.Stop()
+				result.err = ctx.Err()
+				return result
+			}
+		}
+		result.err = fmt.Errorf("cache deferral exceeded bounded retry attempts")
+		return result
+	}
+	for _, delayed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("delayed_cache=%t", delayed), func(t *testing.T) {
+			s := testStore(t)
+			seedMetadataRetention(t, s, storageBatch*2, 19)
+			before := metadataRetentionSnapshot(t, s.DB)
+			setup, cancelSetup := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancelSetup()
+			// Warm both of the fixture pool's connections. The separate locker
+			// below does not consume either cleaner's pool-acquisition slot.
+			if delayed {
+				one, err := s.DB.Acquire(setup)
+				if err != nil {
+					t.Fatal(err)
+				}
+				two, err := s.DB.Acquire(setup)
+				if err != nil {
+					one.Release()
+					t.Fatal(err)
+				}
+				_, oneErr := one.Exec(setup, "SELECT 1")
+				_, twoErr := two.Exec(setup, "SELECT 1")
+				one.Release()
+				two.Release()
+				if err := errors.Join(oneErr, twoErr); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var lock pgx.Tx
+			var retryReady chan struct{}
+			if delayed {
+				locker, err := pgx.ConnectConfig(setup, s.DB.Config().ConnConfig.Copy())
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					cleanup, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+					defer cancel()
+					_ = locker.Close(cleanup)
+				}()
+				lock, err = locker.Begin(setup)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					cleanup, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+					defer cancel()
+					_ = lock.Rollback(cleanup)
+				}()
+				if _, err := lock.Exec(setup, "LOCK TABLE source_metadata_cache IN ACCESS EXCLUSIVE MODE"); err != nil {
+					t.Fatal(err)
+				}
+				retryReady = make(chan struct{})
+			}
+			workerParent, cancelWorkers := context.WithCancel(context.Background())
+			start := make(chan struct{})
+			first := make(chan firstAttempt, 2)
+			results := make(chan cleanerResult, 2)
+			var group sync.WaitGroup
+			defer func() { cancelWorkers(); group.Wait() }()
+			for range 2 {
+				group.Add(1)
+				go func() {
+					defer group.Done()
+					<-start
+					ctx, cancel := context.WithTimeout(workerParent, 5*time.Second)
+					defer cancel()
+					results <- clean(ctx, s, first, retryReady)
+				}()
+			}
+			close(start)
+			if delayed {
+				// Observe a real relation-lock waiter; requiring two simultaneous
+				// waiters inside a 250ms window would add another timing assumption.
+				witness, cancel := context.WithTimeout(workerParent, time.Second)
+				defer cancel()
+				for {
+					var waiting int
+					if err := lock.QueryRow(witness, `SELECT count(*) FROM pg_locks WHERE relation='source_metadata_cache'::regclass AND NOT granted AND pid<>pg_backend_pid()`).Scan(&waiting); err != nil {
+						t.Fatal("cache lock witness", err)
+					}
+					if waiting > 0 {
+						t.Logf("controlled cache delay witnessed %d real ungranted table locks", waiting)
+						break
+					}
+					select {
+					case <-time.After(5 * time.Millisecond):
+					case <-witness.Done():
+						t.Fatal("cache operation never reached held PostgreSQL relation lock", witness.Err())
+					}
+				}
+				for range 2 {
+					select {
+					case outcome := <-first:
+						if outcome.mediaErr != nil || outcome.parentErr != nil || !errors.Is(outcome.cacheErr, context.DeadlineExceeded) {
+							t.Fatalf("controlled first attempt must defer only cache with live caller: %+v", outcome)
+						}
+						t.Logf("first cache deferral elapsed=%s parent=%v media=%v", outcome.elapsed, outcome.parentErr, outcome.mediaErr)
+					case <-setup.Done():
+						t.Fatal("cleaners did not defer their blocked cache stages", setup.Err())
+					}
+				}
+				// Client cancellation can precede the backend settling. Keep the
+				// exclusive lock until actual canceled statements have disappeared,
+				// so a late DELETE cannot run after we release the test barrier.
+				settled, cancelSettled := context.WithTimeout(workerParent, time.Second)
+				defer cancelSettled()
+				settlingStarted := time.Now()
+				for {
+					var waiting int
+					if err := lock.QueryRow(settled, `SELECT count(*) FROM pg_locks WHERE relation='source_metadata_cache'::regclass AND NOT granted AND pid<>pg_backend_pid()`).Scan(&waiting); err != nil {
+						t.Fatal("canceled cache statement did not settle before unlock", err)
+					}
+					if waiting == 0 {
+						break
+					}
+					select {
+					case <-time.After(5 * time.Millisecond):
+					case <-settled.Done():
+						t.Fatal("canceled cache statement retained a relation-lock waiter", settled.Err())
+					}
+				}
+				t.Logf("canceled cache statements settled before unlock in %s", time.Since(settlingStarted))
+				var rows int
+				if err := lock.QueryRow(settled, `SELECT count(*) FROM source_metadata_cache`).Scan(&rows); err != nil || rows != 419 {
+					t.Fatalf("deferred statements changed cache while lock held: rows=%d error=%v", rows, err)
+				}
+				if err := lock.Rollback(settled); err != nil {
+					t.Fatal(err)
+				}
+				close(retryReady)
+			}
+			group.Wait()
+			close(results)
+			for result := range results {
+				if result.err != nil || (delayed && result.deferrals == 0) {
+					t.Fatalf("concurrent cleaner did not recover within its original 5s caller: %+v", result)
+				}
+				t.Logf("cleaner success attempts=%d cache_deferrals=%d", result.attempts, result.deferrals)
+			}
+			if got := metadataRetentionSnapshot(t, s.DB); !reflect.DeepEqual(got, before[storageBatch*2:]) {
+				t.Fatal("concurrent bounded cleaners failed to delete exactly 400 expired rows or changed 19 fresh identities/owners/payloads/deadlines")
+			}
+			assertion, cancelAssertion := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancelAssertion()
+			var sources int
+			if err := s.DB.QueryRow(assertion, "SELECT count(*) FROM sources").Scan(&sources); err != nil || sources != 419 {
+				t.Fatalf("cache cleaners changed source identity/count: count=%d error=%v", sources, err)
+			}
+		})
+	}
+	for _, failure := range []string{"caller_canceled", "database_error", "media_error"} {
+		t.Run(failure, func(t *testing.T) {
+			s := testStore(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			batch, err := s.cleanupStorageBatch(ctx, time.Hour, time.Hour)
-			results <- errors.Join(batch.cacheErr, err)
-		}()
-	}
-	close(start)
-	group.Wait()
-	close(results)
-	for err := range results {
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	if got := metadataRetentionSnapshot(t, s.DB); !reflect.DeepEqual(got, before[storageBatch*2:]) {
-		t.Fatal("concurrent bounded cleaners failed to drain two batches or changed live cache")
+			switch failure {
+			case "caller_canceled":
+				cancel()
+			case "database_error":
+				if _, err := s.DB.Exec(ctx, "DROP TABLE source_metadata_cache"); err != nil {
+					t.Fatal(err)
+				}
+			case "media_error":
+				if _, err := s.DB.Exec(ctx, "DROP TABLE artifacts"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			result := clean(ctx, s, nil, nil)
+			if result.err == nil || result.attempts != 1 || result.deferrals != 0 {
+				t.Fatalf("terminal error was hidden/retried: %+v", result)
+			}
+			if failure == "caller_canceled" {
+				if !errors.Is(result.err, context.Canceled) {
+					t.Fatal("caller cancellation lost", result.err)
+				}
+			} else {
+				var databaseErr *pgconn.PgError
+				if !errors.As(result.err, &databaseErr) || databaseErr.Code != "42P01" || ctx.Err() != nil {
+					t.Fatalf("actual database/media failure lost or caller exhausted: %v parent=%v", result.err, ctx.Err())
+				}
+			}
+		})
 	}
 }
 
