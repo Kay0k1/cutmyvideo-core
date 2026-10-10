@@ -37,7 +37,10 @@ func storageSessionFiles(t *testing.T, c Config, folder string, count int) {
 
 func assertStorageReaderClosed(t *testing.T, dir *os.File) {
 	t.Helper()
-	if _, err := dir.Stat(); !errors.Is(err, os.ErrClosed) {
+	// A second Close returns os.ErrClosed on all supported platforms. Stat on
+	// a closed Windows directory instead reports ERROR_INVALID_HANDLE. An
+	// actually open handle would close successfully here and fail this check.
+	if err := dir.Close(); !errors.Is(err, os.ErrClosed) {
 		t.Fatal("operation retained an open directory handle", err)
 	}
 }
