@@ -13,7 +13,7 @@ required = [
     {"TestNativeServiceUploadExportAndDownload"},
 ]
 for filename, names in zip(sys.argv[1:], required):
-    events = [json.loads(line) for line in Path(filename).read_text().splitlines() if line.strip()]
+    events = [json.loads(line) for line in Path(filename).read_text(encoding="utf-8").splitlines() if line.strip()]
     failures = [event for event in events if event.get("Action") in {"fail", "skip"}]
     passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
     if failures or not names <= passed:
