@@ -31,6 +31,8 @@ retains the historical marker and records each new version.
 `app_schema_migrations` stores consecutive positions, versions, SHA-256 checksums
 of the immutable SQL files and application timestamps. All pending migrations
 and their records commit in one transaction.
+SQL uses canonical LF line endings for execution and checksums; Windows CRLF
+checkouts or source archives cannot create a different migration identity.
 
 ## Refusal and recovery
 

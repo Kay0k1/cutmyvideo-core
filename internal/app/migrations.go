@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -47,7 +48,14 @@ func migrationSQL(m schemaMigration) string {
 	if err != nil {
 		panic(err) // Embedded release inputs are checked by compilation/tests.
 	}
-	return string(value)
+	return canonicalMigrationSQL(value)
+}
+
+// The execution text and checksum use LF, including native Windows source
+// archives whose SQL files did not pass through Git's eol attributes. Preserve
+// every other byte: content changes require a new migration version.
+func canonicalMigrationSQL(value []byte) string {
+	return strings.ReplaceAll(string(value), "\r\n", "\n")
 }
 
 func migrationChecksum(m schemaMigration) string {

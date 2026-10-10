@@ -81,7 +81,7 @@ func installHistoricalSchema(t *testing.T, f migrationFixture, fixture string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	migrationExec(t, f.db, string(data))
+	migrationExec(t, f.db, canonicalMigrationSQL(data))
 }
 
 func openMigrationStore(t *testing.T, f migrationFixture) *Store {
@@ -406,7 +406,7 @@ func TestMigrationInputsArePinnedAndPrefixValidationIsConservative(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(fixture), migrationSQL(schemaMigrations[0])) {
+	if !strings.Contains(canonicalMigrationSQL(fixture), migrationSQL(schemaMigrations[0])) {
 		t.Fatal("immutable baseline differs from captured released v0.2.1 SQL")
 	}
 	if schemaVersion != schemaMigrations[len(schemaMigrations)-1].version {
@@ -416,6 +416,42 @@ func TestMigrationInputsArePinnedAndPrefixValidationIsConservative(t *testing.T)
 		if _, err := knownMigrationPrefix(versions); !errors.Is(err, ErrSchemaIncompatible) {
 			t.Fatal("unrecognized/non-prefix version history was accepted")
 		}
+	}
+}
+
+func TestMigrationSQLChecksumsArePinnedAcrossWindowsNewlines(t *testing.T) {
+	// These independently pinned SHA-256 values define the immutable LF SQL
+	// shipped with the first ordered migration ledger. The baseline is also
+	// compared with the separately captured actual v0.2.1 fixture above.
+	pinned := map[string]string{
+		"20261005-storage-queue-v3":      "8630cebd9bf2bb2c038519d807f75456a60d8dea24cc1114304551270b3e949f",
+		"20261010-ordered-migrations-v1": "17caf6f352044a62dd4bbfee154d02965d9c411ca6783422b96db5eed6b40e57",
+	}
+	for _, migration := range schemaMigrations {
+		t.Run(migration.version, func(t *testing.T) {
+			want, exists := pinned[migration.version]
+			if !exists {
+				t.Fatal("migration has no independently pinned immutable checksum")
+			}
+			if got := migrationChecksum(migration); got != want {
+				t.Fatalf("shipped migration content changed: checksum=%s want=%s", got, want)
+			}
+			sql := migrationSQL(migration)
+			windows := []byte(strings.ReplaceAll(sql, "\n", "\r\n"))
+			canonical := canonicalMigrationSQL(windows)
+			if canonical != sql {
+				t.Fatal("Windows newlines changed migration execution text")
+			}
+			digest := sha256.Sum256([]byte(canonical))
+			if got := hex.EncodeToString(digest[:]); got != want {
+				t.Fatal("Windows newlines changed the immutable checksum", got)
+			}
+			changed := append(windows, []byte("\r\n-- content changed\r\n")...)
+			digest = sha256.Sum256([]byte(canonicalMigrationSQL(changed)))
+			if hex.EncodeToString(digest[:]) == want {
+				t.Fatal("SQL content change passed the immutable checksum")
+			}
+		})
 	}
 }
 
