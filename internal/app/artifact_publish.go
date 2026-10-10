@@ -100,10 +100,17 @@ func publishArtifactTransaction(ctx context.Context, tx pgx.Tx, j Job, path, tok
 		return &ArtifactPublicationError{cause: err}
 	}
 	if c.MaxStorageBytes > 0 {
-		if a.SizeBytes < 0 || a.SizeBytes > c.MaxOutputBytes {
+		budget := c.MaxOutputBytes
+		for _, item := range j.Items {
+			if item.Artifact != nil && item.Artifact.ID == a.ID {
+				budget = outputBudget(c, Range{StartMS: item.StartMS, EndMS: item.EndMS}, j.Request)
+				break
+			}
+		}
+		if a.SizeBytes < 0 || a.SizeBytes > budget {
 			return &ArtifactPublicationError{cause: errStorageUnavailable}
 		}
-		changed, e := tx.Exec(ctx, "UPDATE storage_reservations SET size_bytes=size_bytes-$3 WHERE id=$1 AND token=$2 AND size_bytes>=$3", jobReservationID(j.ID, token), token, c.MaxOutputBytes)
+		changed, e := tx.Exec(ctx, "UPDATE storage_reservations SET size_bytes=size_bytes-$3 WHERE id=$1 AND token=$2 AND size_bytes>=$3", jobReservationID(j.ID, token), token, budget)
 		if e != nil {
 			return &ArtifactPublicationError{cause: e}
 		}

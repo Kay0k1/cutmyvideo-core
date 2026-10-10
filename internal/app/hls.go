@@ -15,6 +15,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 const maxManifestBytes int64 = 2 << 20
@@ -298,7 +300,9 @@ func loadHLS(ctx context.Context, g *networkGuard, f platformFormat, quality str
 		return p, nil
 	}
 	cap := 100000
-	if quality == "720p" {
+	if quality == "480p" {
+		cap = 480
+	} else if quality == "720p" {
 		cap = 720
 	} else if quality == "1080p" {
 		cap = 1080
@@ -359,6 +363,10 @@ func selectHLSSegments(p hlsPlaylist, r Range) ([]hlsSegment, error) {
 // Staged data contains media bytes only, never untrusted playlist references.
 // A local remux normalizes container timestamps before the common export path.
 func stageHLS(ctx context.Context, c Config, g *networkGuard, f platformFormat, p hlsPlaylist, r Range, dir string, index int) (string, int64, error) {
+	return stageHLSProgress(ctx, c, g, f, p, r, dir, index, nil)
+}
+
+func stageHLSProgress(ctx context.Context, c Config, g *networkGuard, f platformFormat, p hlsPlaylist, r Range, dir string, index int, progress func(int, int)) (string, int64, error) {
 	segments, e := selectHLSSegments(p, r)
 	if e != nil {
 		return "", 0, e
@@ -376,14 +384,13 @@ func stageHLS(ctx context.Context, c Config, g *networkGuard, f platformFormat, 
 			_ = os.Remove(out)
 		}
 	}()
+	var downloaded atomic.Int64
+	limit := remoteSourceBudget(c)
 	if segments[0].MapURL != "" {
-		e = g.fetch(ctx, segments[0].MapURL, f.Headers, file, remoteSourceBudget(c))
+		e = g.fetch(ctx, segments[0].MapURL, f.Headers, &stagingWriter{writer: file, downloaded: &downloaded, limit: limit}, limit)
 	}
-	for _, s := range segments {
-		if e != nil {
-			break
-		}
-		e = g.fetch(ctx, s.URL, f.Headers, file, remoteSourceBudget(c))
+	if e == nil {
+		e = fetchHLSSegments(ctx, g, f, segments, dir, index, file, &downloaded, limit, progress)
 	}
 	closeErr := file.Close()
 	if e != nil {
@@ -441,4 +448,82 @@ func stageHLS(ctx context.Context, c Config, g *networkGuard, f platformFormat, 
 	}
 	keep = true
 	return out, segments[0].StartMS - int64(math.Round(anchor*1000)), nil
+}
+
+type stagingWriter struct {
+	writer     io.Writer
+	downloaded *atomic.Int64
+	limit      int64
+}
+
+func (w *stagingWriter) Write(data []byte) (int, error) {
+	if w.downloaded.Add(int64(len(data))) > w.limit {
+		return 0, errors.New("source transfer budget exceeded")
+	}
+	return w.writer.Write(data)
+}
+
+// Four bounded downloads hide per-segment latency without buffering media in
+// RAM. Files are appended in playlist order and removed after each batch. Raw
+// plus pending segments never exceeds twice the enforced staging allowance;
+// all segment files are gone before remuxing creates the second full copy.
+func fetchHLSSegments(ctx context.Context, g *networkGuard, format platformFormat, segments []hlsSegment, dir string, stream int, output io.Writer, downloaded *atomic.Int64, limit int64, progress func(int, int)) error {
+	const concurrency = 4
+	for first := 0; first < len(segments); first += concurrency {
+		count := min(concurrency, len(segments)-first)
+		batchCtx, cancel := context.WithCancel(ctx)
+		paths := make([]string, count)
+		failures := make([]error, count)
+		var workers sync.WaitGroup
+		for slot := range count {
+			paths[slot] = filepath.Join(dir, fmt.Sprintf("segment-%d-%d.part", stream, first+slot))
+			workers.Add(1)
+			go func(slot int) {
+				defer workers.Done()
+				file, err := os.OpenFile(paths[slot], os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+				if err == nil {
+					err = g.fetch(batchCtx, segments[first+slot].URL, format.Headers, &stagingWriter{writer: file, downloaded: downloaded, limit: limit}, limit)
+					closeErr := file.Close()
+					if err == nil {
+						err = closeErr
+					}
+				}
+				failures[slot] = err
+				if err != nil {
+					cancel()
+				}
+			}(slot)
+		}
+		workers.Wait()
+		cancel()
+		var failure error
+		for _, err := range failures {
+			if err != nil && (failure == nil || errors.Is(failure, context.Canceled)) {
+				failure = err
+			}
+		}
+		for slot, path := range paths {
+			if failure == nil {
+				file, err := os.Open(path)
+				if err == nil {
+					_, err = io.Copy(output, file)
+					closeErr := file.Close()
+					if err == nil {
+						err = closeErr
+					}
+				}
+				failure = err
+				if failure == nil && progress != nil {
+					progress(first+slot+1, len(segments))
+				}
+			}
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) && failure == nil {
+				failure = err
+			}
+		}
+		if failure != nil {
+			return failure
+		}
+	}
+	return nil
 }

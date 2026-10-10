@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -27,12 +28,15 @@ func fixtureGuard(t *testing.T, dir string) (*networkGuard, *[]string) {
 	}
 	t.Cleanup(g.Close)
 	requests := &[]string{}
+	var requestMu sync.Mutex
 	g.client.Transport = hlsTestTransport(func(r *http.Request) (*http.Response, error) {
 		if r.URL.Scheme != "https" || r.URL.Host != "media.example" || strings.Contains(r.URL.Path, "..") {
 			return nil, errors.New("unexpected fixture address")
 		}
 		name := strings.TrimPrefix(r.URL.Path, "/")
+		requestMu.Lock()
 		*requests = append(*requests, name)
+		requestMu.Unlock()
 		b, e := os.ReadFile(filepath.Join(dir, name))
 		if e != nil {
 			return nil, e
@@ -207,7 +211,7 @@ func TestHLSMasterSelectionIsBoundedAndRejectsExternalAudio(t *testing.T) {
 		}
 	}
 	g, requests := fixtureGuard(t, dir)
-	p, e := loadHLS(context.Background(), g, platformFormat{URL: "https://media.example/master.m3u8"}, "720p", 0)
+	p, e := loadHLS(context.Background(), g, platformFormat{URL: "https://media.example/master.m3u8"}, "480p", 0)
 	if e != nil || len(p.Segments) != 1 || len(*requests) != 2 || (*requests)[1] != "low.m3u8" {
 		t.Fatalf("bad master selection: %+v %v", requests, e)
 	}

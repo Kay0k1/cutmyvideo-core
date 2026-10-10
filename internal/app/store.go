@@ -59,7 +59,11 @@ func (s *Store) CreateJobLimited(ctx context.Context, owner string, r ExportRequ
 	}
 	c := s.storageConfig()
 	if c.MaxStorageBytes > 0 {
-		reserve, e := remainingJobReserve(c, Job{Items: make([]JobItem, len(r.Ranges))}, sourceKind == "platform" || sourceKind == "youtube")
+		items := make([]JobItem, len(r.Ranges))
+		for i, selected := range r.Ranges {
+			items[i] = JobItem{StartMS: selected.StartMS, EndMS: selected.EndMS}
+		}
+		reserve, e := remainingJobReserve(c, Job{Items: items, Request: r}, sourceKind == "platform" || sourceKind == "youtube")
 		if e != nil || reserve > c.MaxStorageBytes {
 			return Job{}, ErrJobTooLarge
 		}

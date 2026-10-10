@@ -426,6 +426,7 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 	if len(inputs) == 0 {
 		return 0, 0, errUnsupportedStream
 	}
+	limit := outputBudget(c, r, request)
 	start := r.StartMS
 	if request.CutMode == "copy" {
 		if request.Quality != "best" {
@@ -485,7 +486,8 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 		if request.CutMode == "copy" {
 			args = append(args, "-c", "copy", "-avoid_negative_ts", "make_zero")
 		} else {
-			args = append(args, "-c:v", "libx264")
+			rate := exportVideoBitrate(c, r, request)
+			args = append(args, "-c:v", "libx264", "-maxrate", strconv.FormatInt(rate, 10), "-bufsize", strconv.FormatInt(rate*2, 10))
 			if c.FFmpegProfile == "compact" {
 				args = append(args, "-preset", "veryfast", "-crf", "20")
 			} else {
@@ -507,7 +509,7 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 		}
 		args = append(args, "-movflags", "+faststart")
 	}
-	args = append(args, "-threads", threads, "-map_metadata", "-1", "-map_chapters", "-1", "-fs", strconv.FormatInt(c.MaxOutputBytes, 10), out)
+	args = append(args, "-threads", threads, "-map_metadata", "-1", "-map_chapters", "-1", "-fs", strconv.FormatInt(limit, 10), out)
 	var commandErr error
 	if report == nil {
 		_, commandErr = runCommand(ctx, c.FFmpeg, args...)
@@ -515,7 +517,7 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 		commandErr = runCommandOutput(ctx, c.FFmpeg, args, &mediaProgressWriter{totalMS: r.EndMS - start, report: report})
 	}
 	if err := commandErr; err != nil {
-		if info, statErr := os.Stat(out); statErr == nil && info.Size() >= c.MaxOutputBytes {
+		if info, statErr := os.Stat(out); statErr == nil && info.Size() >= limit {
 			return 0, 0, errOutputLimit
 		}
 		return 0, 0, err
@@ -524,7 +526,7 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 	if err != nil {
 		return 0, 0, err
 	}
-	if info.Size() >= c.MaxOutputBytes {
+	if info.Size() >= limit {
 		return 0, 0, errOutputLimit
 	}
 	p, duration, err := probe(ctx, c, out, false)

@@ -287,13 +287,13 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 					return
 				}
 			} else {
-				reserve := c.MaxOutputBytes
+				reserve := outputBudget(c, j.Request.Ranges[i], j.Request)
 				for _, f := range streams {
 					if isHLS(f) {
-						if remoteSourceBudget(c) > ((1<<63-1)-reserve)/2 {
+						if inputBudget(c, j.Request.Ranges[i], j.Request) > ((1<<63-1)-reserve)/2 {
 							storageOK = false
 						} else {
-							reserve += 2 * remoteSourceBudget(c)
+							reserve += 2 * inputBudget(c, j.Request.Ranges[i], j.Request)
 						}
 						break
 					}
@@ -325,13 +325,27 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 				}
 				var path string
 				var offset int64
-				path, offset, e = stageHLS(ctx, c, guard, f, playlists[k], j.Request.Ranges[i], fragmentDir, k)
+				j.Stage = "fetching"
+				fragmentConfig := c
+				fragmentConfig.MaxFetchBytes = inputBudget(c, j.Request.Ranges[i], j.Request)
+				path, offset, e = stageHLSProgress(ctx, fragmentConfig, guard, f, playlists[k], j.Request.Ranges[i], fragmentDir, k, func(done, total int) {
+					j.Message = fmt.Sprintf("Preparing fragment %d of %d: %d%% downloaded", i+1, len(j.Items), done*100/max(1, total))
+					if time.Since(lastProgressSave) >= time.Second {
+						lastProgressSave = time.Now()
+						persist()
+					}
+				})
 				if e != nil {
 					break
 				}
 				itemInputs[k] = mediaInput{Path: path, OffsetMS: offset}
 			}
 			if e == nil {
+				j.Stage = "processing"
+				j.Message = fmt.Sprintf("Processing fragment %d of %d", i+1, len(j.Items))
+				if !persist() {
+					return
+				}
 				start, end, e = exportInputsProgress(ctx, c, itemInputs, j.Request.Ranges[i], j.Request, out, report)
 			}
 			_ = os.RemoveAll(fragmentDir)

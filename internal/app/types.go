@@ -29,16 +29,16 @@ type Config struct {
 }
 
 func ConfigFromEnv() (Config, error) {
-	c := Config{DatabaseURL: os.Getenv("DATABASE_URL"), DataDir: env("DATA_DIR", "./data"), ListenAddr: env("LISTEN_ADDR", ":8080"), FFmpeg: env("FFMPEG_PATH", "ffmpeg"), FFprobe: env("FFPROBE_PATH", "ffprobe"), YTDLP: env("YTDLP_PATH", "yt-dlp"), MaxSourceBytes: 1 << 30, MaxOutputBytes: 1 << 30, MaxRanges: 12, MaxRangeMS: 600000, MaxJobMS: 3600000, JobTimeout: 30 * time.Minute, SourceTimeout: 2 * time.Minute, ArtifactTTL: 24 * time.Hour, SecureCookie: os.Getenv("COOKIE_SECURE") == "true"}
+	c := Config{DatabaseURL: os.Getenv("DATABASE_URL"), DataDir: env("DATA_DIR", "./data"), ListenAddr: env("LISTEN_ADDR", ":8080"), FFmpeg: env("FFMPEG_PATH", "ffmpeg"), FFprobe: env("FFPROBE_PATH", "ffprobe"), YTDLP: env("YTDLP_PATH", "yt-dlp"), MaxSourceBytes: 32 << 30, MaxOutputBytes: 16 << 30, MaxRanges: 32, MaxRangeMS: 12 * 60 * 60 * 1000, MaxJobMS: 24 * 60 * 60 * 1000, JobTimeout: 12 * time.Hour, SourceTimeout: 2 * time.Minute, ArtifactTTL: 24 * time.Hour, SecureCookie: os.Getenv("COOKIE_SECURE") == "true"}
 	c.PublicOrigin = os.Getenv("PUBLIC_ORIGIN")
-	c.MaxFetchBytes = 1 << 30
+	c.MaxFetchBytes = 32 << 30
 	c.UploadTimeout = 2 * time.Hour
 	c.WorkerHealthPath = workerHealthPath(os.Getenv("WORKER_HEALTH_PATH"))
 	c.SourceTTL = 24 * time.Hour
-	c.MaxStorageBytes = 10 << 30
+	c.MaxStorageBytes = 96 << 30
 	c.StorageSafetyBytes = 512 << 20
 	c.StorageWaitTimeout = 30 * time.Minute
-	c.MaxOwnerBytes = 2 << 30
+	c.MaxOwnerBytes = 64 << 30
 	c.MaxActiveJobs = 32
 	c.MutationsPerMinute = 20
 	c.TrustProxy = os.Getenv("TRUST_PROXY") == "true"

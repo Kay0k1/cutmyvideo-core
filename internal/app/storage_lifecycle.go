@@ -227,6 +227,9 @@ func (s *Store) DeleteSource(ctx context.Context, id, owner string) ([]string, e
 	if active {
 		return nil, ErrSourceInUse
 	}
+	if err = deleteSourcePreviews(ctx, tx, s.storageConfig(), id); err != nil {
+		return nil, err
+	}
 	rows, err := tx.Query(ctx, `DELETE FROM artifacts WHERE job_id IN (SELECT id FROM jobs WHERE source_id=$1) RETURNING path,size_bytes`, id)
 	if err != nil {
 		return nil, err

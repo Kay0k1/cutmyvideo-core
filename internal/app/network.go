@@ -145,7 +145,7 @@ func partialDialDeadline(now, deadline time.Time, addressesRemaining int) (time.
 }
 
 func safeClient() *http.Client {
-	t := &http.Transport{Proxy: nil, DialContext: safeDial, TLSHandshakeTimeout: 15 * time.Second, ResponseHeaderTimeout: 20 * time.Second, MaxResponseHeaderBytes: 64 << 10, MaxIdleConns: 20, MaxIdleConnsPerHost: 2, IdleConnTimeout: 30 * time.Second}
+	t := &http.Transport{Proxy: nil, DialContext: safeDial, TLSHandshakeTimeout: 15 * time.Second, ResponseHeaderTimeout: 20 * time.Second, MaxResponseHeaderBytes: 64 << 10, MaxIdleConns: 20, MaxIdleConnsPerHost: 4, IdleConnTimeout: 30 * time.Second}
 	return &http.Client{Transport: t, CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 5 {
 			return errors.New("too many redirects")

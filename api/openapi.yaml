@@ -37,6 +37,8 @@ paths:
                     description: Public admission policy; contains no private configuration.
                     properties:
                       max_source_bytes: {type: integer, minimum: 1}
+                      max_output_bytes: {type: integer, minimum: 1, description: Maximum bytes in one exported file}
+                      max_fetch_bytes: {type: integer, minimum: 1, description: Aggregate remote media transfer budget for one export job}
                       max_ranges: {type: integer, minimum: 1, maximum: 128}
                       max_range_ms: {type: integer, minimum: 1}
                       max_job_ms: {type: integer, minimum: 1}
@@ -117,7 +119,7 @@ paths:
   /api/v1/sources/{id}/preview:
     parameters: [{$ref: '#/components/parameters/ID'}]
     get:
-      description: Owner-protected H.264/AAC MP4 interval, up to 30 seconds and 16 MiB. Works for accessible platform recordings and staged files with browser-incompatible codecs. Original source time is supplied in response headers. Temporary media is removed after the response; no-store. A preview pins the source against deletion and uses a bounded shared storage reservation.
+      description: Owner-protected H.264/AAC MP4 interval, up to 30 seconds and 16 MiB. Works for accessible platform recordings and staged files with browser-incompatible codecs. Original source time is supplied in response headers. Aligned windows are retained in a private owner-protected cache for up to 30 idle minutes (512 MiB globally, 128 MiB per owner). Responses remain no-store. Rendering pins the source and uses a bounded reservation; completed cache entries do not pin sources. Duplicate interval requests coalesce.
       parameters:
         - in: query
           name: start_ms
@@ -127,6 +129,7 @@ paths:
         '200':
           description: Preview interval
           headers:
+            X-Preview-Cache: {schema: {type: string, enum: [hit, miss]}}
             X-Preview-Start-MS: {schema: {type: integer}}
             X-Preview-End-MS: {schema: {type: integer}}
           content:
@@ -143,6 +146,22 @@ paths:
         '304': {description: Authorized thumbnail is unchanged; use the privately cached image}
         default: {$ref: '#/components/responses/Error'}
   /api/v1/jobs:
+    get:
+      description: Up to 30 owner-only exports, active jobs first and newest first within each group. Contains only retained files with private download URLs.
+      responses:
+        '200':
+          description: Export history
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [jobs]
+                properties:
+                  jobs:
+                    type: array
+                    maxItems: 30
+                    items: {$ref: '#/components/schemas/JobSummary'}
+        default: {$ref: '#/components/responses/Error'}
     post:
       description: JSON body reads are limited to ten seconds; stalled requests return 408 request_timeout.
       parameters:
@@ -299,6 +318,20 @@ components:
           oneOf:
             - {$ref: '#/components/schemas/Artifact'}
             - {type: 'null'}
+    JobSummary:
+      type: object
+      required: [id, source_id, title, status, stage, created_at, total, files]
+      properties:
+        id: {type: string}
+        source_id: {type: string}
+        title: {type: string}
+        status: {type: string, enum: [queued, running, waiting_storage, succeeded, failed, cancelled]}
+        stage: {type: string}
+        created_at: {type: string, format: date-time}
+        total: {type: integer}
+        files:
+          type: array
+          items: {$ref: '#/components/schemas/Artifact'}
     Job:
       type: object
       required: [id, status, stage, message, items, storage_wait_until]

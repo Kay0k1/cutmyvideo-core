@@ -4,22 +4,23 @@ Base path: `/api/v1`. Media timestamps are integer milliseconds on the original 
 
 Initialize a session with `GET /session`. The HttpOnly cookie is a bearer capability: keep it private and send it with every subsequent request, including media and downloads. Each request checks ownership; foreign resources return the same 404 as absent ones. Source preparation currently blocks until metadata/staging completes, bounded by the source timeout. Export is asynchronous.
 
-`SOURCE_TIMEOUT` covers quota admission, the upload/download body, and media inspection together. A stalled upload returns `504 source_timeout` and removes its partial file. Increase this configured budget when allowing large uploads over slow connections. An interrupted upload returns `400 invalid_upload`; exceeding the byte limit returns `413 source_too_large`.
+`SOURCE_TIMEOUT` bounds platform metadata preparation. `UPLOAD_TIMEOUT` covers large uploads and direct-file downloads, including admission and media inspection. A stalled upload returns `504 source_timeout` and removes its partial file. Increase the upload budget when allowing large files over slow connections. An interrupted upload returns `400 invalid_upload`; exceeding the byte limit returns `413 source_too_large`.
 
 JSON request bodies have a separate ten-second read budget (or an earlier request deadline); stalled bodies return `408 request_timeout`. Rejected bodies are not drained indefinitely. GET/HEAD requests with bodies return `400 invalid_request`. Fully consumed requests retain normal connection reuse.
 
 | Method | Route | Response |
 |---|---|---|
-| GET | `/session` | `{ok:true,limits:{max_source_bytes,max_ranges,max_range_ms,max_job_ms}}` and cookie |
+| GET | `/session` | `{ok:true,limits:{max_source_bytes,max_output_bytes,max_fetch_bytes,max_ranges,max_range_ms,max_job_ms}}` and cookie |
 | GET | `/sources` | `{sources:[Source...]}`; newest 20 owned sources |
 | POST | `/sources` | Source; request `{url}` |
 | POST | `/uploads` | Source; multipart field `file` |
 | GET | `/sources/{id}` | Source |
 | DELETE | `/sources/{id}` | HTTP 204; source, terminal jobs and outputs removed; active exports return 409 `source_in_use` |
 | GET | `/sources/{id}/media` | Authorized source bytes; Range supported |
-| GET | `/sources/{id}/preview?start_ms=…` | Up to 30 seconds of H.264/AAC MP4, no-store; source time in X-Preview-Start-MS / X-Preview-End-MS |
+| GET | `/sources/{id}/preview?start_ms=…` | Aligned 30-second H.264/AAC MP4 window, no-store; source time in X-Preview-Start-MS / X-Preview-End-MS; X-Preview-Cache is hit/miss; optional priority=background yields rendering capacity to foreground seeks |
 | GET | `/sources/{id}/thumbnail` | Authorized, inspected PNG/JPEG; Range supported |
 | POST | `/jobs` | Job, HTTP 202 |
+| GET | `/jobs` | `{jobs:[JobSummary...]}`; up to 30 owned exports, active jobs first |
 | GET | `/jobs/{id}` | Job; clients may poll once per second |
 | POST | `/jobs/{id}/cancel` | Job; running cancellation settles asynchronously |
 | GET | `/artifacts/{id}/download` | Authorized attachment; Range supported |
@@ -57,6 +58,8 @@ Twitch VODs/clips and finite unencrypted combined HLS recordings, including acce
 Actual live/upcoming/in-progress recordings, DRM/encrypted keys, HLS byte ranges, low-latency parts, gaps, changing init maps/discontinuities inside the selected range, separate HLS audio/video renditions, and DASH fragments are unsupported. Their errors are explicit; no full long-video/live fallback is started. Separate progressive HTTPS video/audio streams remain supported.
 
 ## Jobs
+
+`GET /jobs` lists up to 30 exports from the current session, placing active jobs first and sorting newest first within each group. Each summary includes `id`, `source_id`, `title`, `status`, `stage`, `created_at`, `total`, and `files` (retained artifact records with owner-protected download URLs). Opening a different source does not cancel an export or hide it from this history. Deleting a source removes its terminal jobs and associated files; active jobs continue to prevent source deletion. Polling can pause while the history is closed, hidden, or offline.
 
 Request:
 

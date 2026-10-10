@@ -80,6 +80,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/sources/{id}/preview", s.withSession(s.sourcePreview))
 	mux.HandleFunc("GET /api/v1/sources/{id}/thumbnail", s.withSession(s.sourceThumbnail))
 	mux.HandleFunc("POST /api/v1/jobs", s.withSession(s.createJob))
+	mux.HandleFunc("GET /api/v1/jobs", s.withSession(s.listJobs))
 	mux.HandleFunc("GET /api/v1/jobs/{id}", s.withSession(s.job))
 	mux.HandleFunc("POST /api/v1/jobs/{id}/cancel", s.withSession(s.cancelJob))
 	mux.HandleFunc("GET /api/v1/artifacts/{id}/download", s.withSession(s.download))
@@ -183,7 +184,7 @@ func (s *Server) session(w http.ResponseWriter, r *http.Request) {
 		}
 		http.SetCookie(w, &http.Cookie{Name: "cutmy_session", Value: base64.RawURLEncoding.EncodeToString(b), Path: "/", MaxAge: 7 * 24 * 3600, HttpOnly: true, Secure: s.Config.SecureCookie, SameSite: http.SameSiteLaxMode})
 	}
-	writeJSON(w, 200, map[string]any{"ok": true, "limits": map[string]any{"max_source_bytes": s.Config.MaxSourceBytes, "max_ranges": s.Config.MaxRanges, "max_range_ms": s.Config.MaxRangeMS, "max_job_ms": s.Config.MaxJobMS}})
+	writeJSON(w, 200, map[string]any{"ok": true, "limits": map[string]any{"max_source_bytes": s.Config.MaxSourceBytes, "max_output_bytes": s.Config.MaxOutputBytes, "max_fetch_bytes": remoteSourceBudget(s.Config), "max_ranges": s.Config.MaxRanges, "max_range_ms": s.Config.MaxRangeMS, "max_job_ms": s.Config.MaxJobMS}})
 }
 
 type ownerHandler func(http.ResponseWriter, *http.Request, string)
@@ -764,6 +765,9 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request, owner string) 
 		lookupError(w, err)
 		return
 	}
+	// Large results can outlive the server's ordinary ten-minute response limit.
+	// ServeContent retains HTTP range/If-Range support for interrupted downloads.
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(12 * time.Hour))
 	serveFile(w, r, path, name, true)
 }
 

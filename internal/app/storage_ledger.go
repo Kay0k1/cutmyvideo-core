@@ -285,25 +285,27 @@ func (s *Store) AddSource(ctx context.Context, v Source) error {
 	return err
 }
 func remainingJobReserve(c Config, j Job, platform bool) (int64, error) {
-	var count int64
+	var size, staging int64
 	for _, item := range j.Items {
-		if item.Status != "succeeded" || item.Artifact == nil {
-			count++
+		if item.Status == "succeeded" && item.Artifact != nil {
+			continue
 		}
-	}
-	if c.MaxOutputBytes <= 0 || count > math.MaxInt64/c.MaxOutputBytes {
-		return 0, errStorageUnavailable
-	}
-	size := count * c.MaxOutputBytes
-	if count == 0 {
-		return 0, nil
-	}
-	if platform {
-		if remoteSourceBudget(c) < 0 || remoteSourceBudget(c) > (math.MaxInt64-size)/2 {
+		r := Range{StartMS: item.StartMS, EndMS: item.EndMS}
+		budget := outputBudget(c, r, j.Request)
+		if budget <= 0 || budget > math.MaxInt64-size {
 			return 0, errStorageUnavailable
 		}
-		size += 2 * remoteSourceBudget(c)
+		size += budget
+		if platform {
+			staging = max(staging, inputBudget(c, r, j.Request))
+		}
 	}
+	// Only one interval is staged at a time. Published files are charged
+	// separately, while the unfinished outputs retain their exact ceilings.
+	if staging < 0 || staging > (math.MaxInt64-size)/2 {
+		return 0, errStorageUnavailable
+	}
+	size += 2 * staging
 	return size, nil
 }
 func (s *Store) ReleaseJobStorage(ctx context.Context, id, token string) error {

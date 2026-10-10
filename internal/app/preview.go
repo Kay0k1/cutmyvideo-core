@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -9,6 +11,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 const previewWindowMS int64 = 30000
@@ -17,9 +21,16 @@ const previewInputBytes int64 = 64 << 20
 const previewReservationBytes = 2*previewInputBytes + previewOutputBytes
 const previewTimeout = 90 * time.Second
 const previewReservationTTL = 5 * time.Minute
+const previewCacheTTL = 30 * time.Minute
+const previewCacheBytes int64 = 512 << 20
+const previewOwnerCacheBytes int64 = 128 << 20
+const previewCacheEntries = 64
+const previewOwnerCacheEntries = 16
 
-// Previews retain only one bounded interval. No full recording or second
-// persistent copy is needed, including for HLS recordings many hours long.
+var errPreviewPending = errors.New("this preview is being prepared")
+
+// Small, reusable intervals keep seeking independent of recording length.
+// Cached files remain private and charged to the durable storage ledger.
 func (s *Server) sourcePreview(w http.ResponseWriter, r *http.Request, owner string) {
 	ctx, cancel := context.WithTimeout(r.Context(), previewTimeout)
 	defer cancel()
@@ -37,8 +48,26 @@ func (s *Server) sourcePreview(w http.ResponseWriter, r *http.Request, owner str
 		writeError(w, 429, "rate_limit", "Wait before requesting another preview")
 		return
 	}
+	// Canonical intervals make nearby seeks reuse the same result.
+	start = start / previewWindowMS * previewWindowMS
+	key := previewCacheKey(v, start)
 	id := newID("preview")
-	if err = s.Store.reservePreview(ctx, s.Config, v, id); err != nil {
+	var cached *os.File
+	for {
+		cached, err = s.Store.acquirePreview(ctx, s.Config, v, id, key, r.URL.Query().Get("priority") == "background")
+		if !errors.Is(err, errPreviewPending) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			if r.Context().Err() == nil {
+				writeError(w, 504, "source_timeout", "Preview preparation timed out; try again")
+			}
+			return
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			lookupError(w, err)
 			return
@@ -46,8 +75,18 @@ func (s *Server) sourcePreview(w http.ResponseWriter, r *http.Request, owner str
 		writeSourceAdmissionError(w, ctx, err)
 		return
 	}
+	rangeMS := Range{StartMS: start, EndMS: min(start+previewWindowMS, v.DurationMS)}
+	if cached != nil {
+		defer cached.Close()
+		servePreview(w, r, cached, rangeMS, "hit")
+		return
+	}
 	dir := filepath.Join(s.Config.DataDir, "previews", id)
+	retain := false
 	defer func() {
+		if retain {
+			return
+		}
 		cleanupCtx, stop := context.WithTimeout(context.Background(), workerDatabaseTimeout)
 		defer stop()
 		// Keep the reservation if removal failed; maintenance retries it.
@@ -61,7 +100,6 @@ func (s *Server) sourcePreview(w http.ResponseWriter, r *http.Request, owner str
 	}
 	c := s.Config
 	c.MaxSourceBytes, c.MaxFetchBytes, c.MaxOutputBytes = previewInputBytes, previewInputBytes, previewOutputBytes
-	rangeMS := Range{StartMS: start, EndMS: min(start+previewWindowMS, v.DurationMS)}
 	out := filepath.Join(dir, "preview.mp4")
 	inputs := []mediaInput{{Path: v.Path}}
 	if v.Path == "" {
@@ -109,12 +147,64 @@ func (s *Server) sourcePreview(w http.ResponseWriter, r *http.Request, owner str
 		writeError(w, 422, problem.code, problem.message)
 		return
 	}
-	// Never cache a temporary URL or expose private upstream addresses.
+	// Release staged inputs before turning the processing reservation into a
+	// cache entry charged at the actual MP4 size. Keep a file descriptor open:
+	// eviction/source deletion can unlink the file without interrupting a read.
+	file, err := os.Open(out)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	defer file.Close()
+	if err = trimPreviewWorkspace(ctx, dir); err != nil {
+		internalError(w, err)
+		return
+	}
+	// A failed COMMIT can have succeeded remotely. Preserve the bounded lease
+	// until maintenance decides its state instead of deleting a published file.
+	retain = true
+	if err = s.Store.publishPreview(ctx, s.Config, v, id, file); err != nil {
+		internalError(w, err)
+		return
+	}
+	servePreview(w, r, file, rangeMS, "miss")
+}
+
+func previewCacheKey(source Source, start int64) string {
+	sum := sha256.Sum256([]byte(source.ID + ":" + strconv.FormatInt(start, 10)))
+	return hex.EncodeToString(sum[:])
+}
+
+func servePreview(w http.ResponseWriter, r *http.Request, file *os.File, interval Range, cache string) {
+	info, err := file.Stat()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	// The browser's bounded blob cache is session-local. HTTP/shared caches
+	// must never bypass source ownership checks or retain private URLs.
+	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "video/mp4")
-	w.Header().Set("X-Preview-Start-MS", strconv.FormatInt(start, 10))
-	w.Header().Set("X-Preview-End-MS", strconv.FormatInt(rangeMS.EndMS, 10))
+	w.Header().Set("X-Preview-Cache", cache)
+	w.Header().Set("X-Preview-Start-MS", strconv.FormatInt(interval.StartMS, 10))
+	w.Header().Set("X-Preview-End-MS", strconv.FormatInt(interval.EndMS, 10))
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(30 * time.Second))
-	http.ServeFile(w, r, out)
+	http.ServeContent(w, r, "preview.mp4", info.ModTime(), file)
+}
+
+func trimPreviewWorkspace(ctx context.Context, dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.Name() != "preview.mp4" {
+			if err := removeStorageTree(ctx, filepath.Join(dir, entry.Name())); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func renderPreview(ctx context.Context, c Config, inputs []mediaInput, r Range, out string) error {
@@ -159,47 +249,213 @@ func renderPreview(ctx context.Context, c Config, inputs []mediaInput, r Range, 
 }
 
 func (s *Store) reservePreview(ctx context.Context, c Config, source Source, id string) error {
+	file, err := s.acquirePreview(ctx, c, source, id, id, false)
+	if file != nil {
+		file.Close()
+	}
+	return err
+}
+
+// Admission and cache lookup share the storage lock, so two API processes can
+// never render the same interval concurrently. Cached descriptors remain valid
+// after eviction; no source is pinned by a completed cache entry.
+func (s *Store) acquirePreview(ctx context.Context, c Config, source Source, id, key string, background bool) (*os.File, error) {
+	tx, err := s.storageTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer rollbackStorage(tx)
+	if err = s.bootstrapStorage(ctx, tx, c); err != nil {
+		return nil, err
+	}
+	var exists bool
+	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM sources WHERE id=$1 AND owner=$2)", source.ID, source.Owner).Scan(&exists); err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, ErrNotFound
+	}
+	var cachedID string
+	err = tx.QueryRow(ctx, "SELECT id FROM storage_reservations WHERE kind='preview_cache' AND owner=$1 AND job_id=$2 AND token=$3 AND expires_at>clock_timestamp() LIMIT 1", source.Owner, source.ID, key).Scan(&cachedID)
+	if err == nil {
+		path, pathErr := previewDirectory(c, cachedID)
+		if pathErr != nil {
+			return nil, pathErr
+		}
+		file, openErr := os.Open(filepath.Join(path, "preview.mp4"))
+		if openErr == nil {
+			info, statErr := file.Stat()
+			if statErr != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() >= previewOutputBytes {
+				file.Close()
+				openErr = errors.New("invalid preview cache file")
+			} else {
+				_, err = tx.Exec(ctx, "UPDATE storage_reservations SET expires_at=clock_timestamp()+($2*interval '1 second') WHERE id=$1", cachedID, previewCacheTTL.Seconds())
+				if err == nil {
+					err = tx.Commit(ctx)
+				}
+				if err != nil {
+					file.Close()
+					return nil, err
+				}
+				return file, nil
+			}
+		}
+		if openErr != nil && !os.IsNotExist(openErr) {
+			return nil, openErr
+		}
+		if err = removePreviewEntry(ctx, tx, c, cachedID); err != nil {
+			return nil, err
+		}
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	var pending bool
+	var active, weight int
+	if err = tx.QueryRow(ctx, `SELECT count(*),COALESCE(sum(CASE WHEN s.width>0 AND s.height>0 AND s.width<=8388608/GREATEST(1,s.height) THEN 1 ELSE 2 END),0),COALESCE(bool_or(r.job_id=$1 AND r.token=$2),false) FROM storage_reservations r LEFT JOIN sources s ON s.id=r.job_id WHERE r.kind='preview'`, source.ID, key).Scan(&active, &weight, &pending); err != nil {
+		return nil, err
+	}
+	if pending {
+		return nil, errPreviewPending
+	}
+	// Large/unknown inputs can use much more decoder RAM than the 480p
+	// result. Platforms can also fall back to a larger rendition. Give those
+	// sources the whole pool, as workers do.
+	needed := 1
+	if source.Width <= 0 || source.Height <= 0 || source.Width > 8_388_608/source.Height {
+		needed = 2
+	}
+	if weight+needed > 2 || background && active >= 1 {
+		return nil, errSourceServerBusy
+	}
+	if err = prunePreviewCache(ctx, tx, c, source.Owner, 0, false); err != nil {
+		return nil, err
+	}
+	if c.MaxStorageBytes > 0 {
+		fits, err := storageFits(ctx, tx, c, previewReservationBytes, "")
+		if err != nil {
+			return nil, err
+		}
+		if !fits {
+			// Preview cache is disposable: release it before rejecting useful
+			// work for lack of disk space.
+			if err = prunePreviewCache(ctx, tx, c, "", 0, true); err != nil {
+				return nil, err
+			}
+			fits, err = storageFits(ctx, tx, c, previewReservationBytes, "")
+			if err != nil {
+				return nil, err
+			}
+			if !fits {
+				return nil, errSourceStorage
+			}
+		}
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO storage_reservations(id,owner,kind,size_bytes,expires_at,job_id,token) VALUES($1,$2,'preview',$3,clock_timestamp()+($4*interval '1 second'),$5,$6)`, id, source.Owner, previewReservationBytes, previewReservationTTL.Seconds(), source.ID, key)
+	if err != nil {
+		return nil, err
+	}
+	return nil, tx.Commit(ctx)
+}
+
+func (s *Store) publishPreview(ctx context.Context, c Config, source Source, id string, file *os.File) error {
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
 	tx, err := s.storageTx(ctx)
 	if err != nil {
 		return err
 	}
 	defer rollbackStorage(tx)
-	if err = s.bootstrapStorage(ctx, tx, c); err != nil {
+	if err = prunePreviewCache(ctx, tx, c, source.Owner, info.Size(), false); err != nil {
 		return err
 	}
-	var exists bool
-	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM sources WHERE id=$1 AND owner=$2)", source.ID, source.Owner).Scan(&exists); err != nil {
-		return err
-	}
-	if !exists {
-		return ErrNotFound
-	}
-	var busy bool
-	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM storage_reservations WHERE kind='preview')").Scan(&busy); err != nil {
-		return err
-	}
-	if busy {
-		return errSourceServerBusy
-	}
-	if c.MaxStorageBytes > 0 {
-		fits, err := storageFits(ctx, tx, c, previewReservationBytes, "")
-		if err != nil {
-			return err
-		}
-		if !fits {
-			return errSourceStorage
-		}
-	}
-	_, err = tx.Exec(ctx, `INSERT INTO storage_reservations(id,owner,kind,size_bytes,expires_at,job_id) VALUES($1,$2,'preview',$3,clock_timestamp()+($4*interval '1 second'),$5)`, id, source.Owner, previewReservationBytes, previewReservationTTL.Seconds(), source.ID)
+	tag, err := tx.Exec(ctx, "UPDATE storage_reservations SET kind='preview_cache',size_bytes=$2,expires_at=clock_timestamp()+($3*interval '1 second') WHERE id=$1 AND kind='preview' AND expires_at>clock_timestamp()", id, info.Size(), previewCacheTTL.Seconds())
 	if err != nil {
 		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return errors.New("preview lease expired")
 	}
 	return tx.Commit(ctx)
 }
 
-// Expired requests cannot keep disk space or hold source deletion indefinitely.
-// Directory removal happens before releasing the charged reservation, under
-// the same lock as admissions. An interrupted removal is safely retried.
+type previewCacheEntry struct {
+	id, owner string
+	size      int64
+	expired   bool
+}
+
+func prunePreviewCache(ctx context.Context, tx pgx.Tx, c Config, owner string, incoming int64, all bool) error {
+	rows, err := tx.Query(ctx, "SELECT id,owner,size_bytes,expires_at<=clock_timestamp() OR NOT EXISTS(SELECT 1 FROM sources WHERE id=job_id) FROM storage_reservations WHERE kind='preview_cache' ORDER BY expires_at LIMIT $1", storageBatch)
+	if err != nil {
+		return err
+	}
+	var entries []previewCacheEntry
+	var total, owned int64
+	var ownerCount int
+	for rows.Next() {
+		var entry previewCacheEntry
+		if err := rows.Scan(&entry.id, &entry.owner, &entry.size, &entry.expired); err != nil {
+			rows.Close()
+			return err
+		}
+		entries = append(entries, entry)
+		total += entry.size
+		if entry.owner == owner {
+			owned += entry.size
+			ownerCount++
+		}
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	count := len(entries)
+	addition := 0
+	if incoming > 0 {
+		addition = 1
+	}
+	for _, entry := range entries {
+		exceeds := total+incoming > previewCacheBytes || count+addition > previewCacheEntries
+		ownerExceeds := entry.owner == owner && (owned+incoming > previewOwnerCacheBytes || ownerCount+addition > previewOwnerCacheEntries)
+		if all || entry.expired || exceeds || ownerExceeds {
+			if err := removePreviewEntry(ctx, tx, c, entry.id); err != nil {
+				return err
+			}
+			total -= entry.size
+			count--
+			if entry.owner == owner {
+				owned -= entry.size
+				ownerCount--
+			}
+		}
+	}
+	return nil
+}
+
+func previewDirectory(c Config, id string) (string, error) {
+	if id == "" || filepath.Base(id) != id || id == "." || id == ".." {
+		return "", fmt.Errorf("invalid preview workspace")
+	}
+	return filepath.Join(c.DataDir, "previews", id), nil
+}
+
+func removePreviewEntry(ctx context.Context, tx pgx.Tx, c Config, id string) error {
+	dir, err := previewDirectory(c, id)
+	if err != nil {
+		return err
+	}
+	if err = removeStorageTree(ctx, dir); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, "DELETE FROM storage_reservations WHERE id=$1 AND kind IN ('preview','preview_cache')", id)
+	return err
+}
+
+// Expired requests cannot retain disk space or pin sources indefinitely. Cache
+// files are removed before their charge is released, under the admission lock.
 func (s *Store) cleanupPreviews(ctx context.Context, c Config) error {
 	tx, err := s.storageTx(ctx)
 	if err != nil {
@@ -225,15 +481,39 @@ func (s *Store) cleanupPreviews(ctx context.Context, c Config) error {
 		return err
 	}
 	for _, id := range ids {
-		if filepath.Base(id) != id {
-			return fmt.Errorf("invalid preview workspace")
-		}
-		if err = removeStorageTree(ctx, filepath.Join(c.DataDir, "previews", id)); err != nil {
+		if err = removePreviewEntry(ctx, tx, c, id); err != nil {
 			return err
 		}
 	}
-	if _, err = tx.Exec(ctx, "DELETE FROM storage_reservations WHERE id=ANY($1) AND kind='preview'", ids); err != nil {
+	if err = prunePreviewCache(ctx, tx, c, "", 0, false); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+func deleteSourcePreviews(ctx context.Context, tx pgx.Tx, c Config, sourceID string) error {
+	rows, err := tx.Query(ctx, "SELECT id FROM storage_reservations WHERE kind='preview_cache' AND job_id=$1", sourceID)
+	if err != nil {
+		return err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err = removePreviewEntry(ctx, tx, c, id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
