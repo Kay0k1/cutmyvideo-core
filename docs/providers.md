@@ -46,7 +46,7 @@ Encrypted keys, HLS byte ranges, low-latency parts, gap segments, changing init 
 
 ## Preview contract
 
-Uploaded/direct sources use `preview_kind:native` and an owner-protected original-file endpoint. YouTube uses `preview_kind:youtube` with a validated embed ID. Other platform sources currently use `preview_kind:none`: clients show source title, provider, full duration, available dimensions, the original page link and an optional thumbnail, then accept manual time ranges.
+Uploaded/direct sources use `preview_kind:native` and an owner-protected original-file endpoint. YouTube uses `preview_kind:youtube` with a validated embed ID. Other platform sources use `preview_kind:window`: clients request `/sources/{id}/preview?start_ms=…` for a bounded 30-second H.264/AAC MP4 interval. HLS requests download only the intersecting segments plus decoder context. The same endpoint provides a fallback for unavailable YouTube embeds or staged codecs unsupported by the browser. Upstream access restrictions still apply. Temporary media is deleted after delivery; abandoned requests expire through maintenance.
 
 `thumbnail_url` is a same-origin owner-protected endpoint. The server stages at most 2 MiB of a public JPEG/PNG and checks its dimensions; unsupported/unavailable images become null. Signed CDN image/media URLs are never returned as visible preview links. Media and thumbnails require the session cookie and expire under the source retention policy.
 

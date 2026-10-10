@@ -424,7 +424,7 @@ func TestHTTPThumbnailPresentationAndIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	loaded, err := s.Source(ctx, v.ID, owner)
-	if err != nil || loaded.Provider != "twitch" || loaded.PreviewKind != "none" || loaded.ProviderVideoID == nil || *loaded.ProviderVideoID != "v123" || loaded.SourceURL == nil || *loaded.SourceURL != v.URL || loaded.ThumbnailURL == nil {
+	if err != nil || loaded.Provider != "twitch" || loaded.PreviewKind != "window" || loaded.ProviderVideoID == nil || *loaded.ProviderVideoID != "v123" || loaded.SourceURL == nil || *loaded.SourceURL != v.URL || loaded.ThumbnailURL == nil {
 		t.Fatalf("metadata was not persisted/presented: %+v %v", loaded, err)
 	}
 	other := make([]byte, 32)

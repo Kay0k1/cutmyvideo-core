@@ -377,13 +377,13 @@ func stageHLS(ctx context.Context, c Config, g *networkGuard, f platformFormat, 
 		}
 	}()
 	if segments[0].MapURL != "" {
-		e = g.fetch(ctx, segments[0].MapURL, f.Headers, file, c.MaxSourceBytes)
+		e = g.fetch(ctx, segments[0].MapURL, f.Headers, file, remoteSourceBudget(c))
 	}
 	for _, s := range segments {
 		if e != nil {
 			break
 		}
-		e = g.fetch(ctx, s.URL, f.Headers, file, c.MaxSourceBytes)
+		e = g.fetch(ctx, s.URL, f.Headers, file, remoteSourceBudget(c))
 	}
 	closeErr := file.Close()
 	if e != nil {
@@ -396,7 +396,7 @@ func stageHLS(ctx context.Context, c Config, g *networkGuard, f platformFormat, 
 	// network or file references are not accepted by FFmpeg.
 	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-max_alloc", "268435456", "-protocol_whitelist", "file", "-format_whitelist", mediaFormats}
 	args = append(args, mediaInputBounds(c)...)
-	args = append(args, "-fflags", "+genpts", "-i", raw, "-map", "0:v:0?", "-map", "0:a:0?", "-c", "copy", "-avoid_negative_ts", "make_zero", "-map_metadata", "-1", "-fs", strconv.FormatInt(c.MaxSourceBytes, 10), out)
+	args = append(args, "-fflags", "+genpts", "-i", raw, "-map", "0:v:0?", "-map", "0:a:0?", "-c", "copy", "-avoid_negative_ts", "make_zero", "-map_metadata", "-1", "-fs", strconv.FormatInt(remoteSourceBudget(c), 10), out)
 	_, e = runCommand(ctx, c.FFmpeg, args...)
 	if e != nil {
 		return "", 0, e
@@ -407,7 +407,7 @@ func stageHLS(ctx context.Context, c Config, g *networkGuard, f platformFormat, 
 		return "", 0, errUnsupportedStream
 	}
 	stat, e := os.Stat(out)
-	if e != nil || stat.Size() >= c.MaxSourceBytes {
+	if e != nil || stat.Size() >= remoteSourceBudget(c) {
 		return "", 0, errUnsupportedStream
 	}
 	// make_zero shifts decoding timestamps (including B-frame reordering).

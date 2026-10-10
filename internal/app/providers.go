@@ -221,6 +221,8 @@ func completeSourcePresentation(v *Source) {
 		v.PreviewKind = "native"
 	} else if v.EmbedURL != nil {
 		v.PreviewKind = "youtube"
+	} else if v.Kind == "platform" || v.Kind == "youtube" {
+		v.PreviewKind = "window"
 	}
 	v.ThumbnailURL = nil
 	if v.ThumbnailPath != "" {

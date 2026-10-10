@@ -17,6 +17,7 @@ JSON request bodies have a separate ten-second read budget (or an earlier reques
 | GET | `/sources/{id}` | Source |
 | DELETE | `/sources/{id}` | HTTP 204; source, terminal jobs and outputs removed; active exports return 409 `source_in_use` |
 | GET | `/sources/{id}/media` | Authorized source bytes; Range supported |
+| GET | `/sources/{id}/preview?start_ms=…` | Up to 30 seconds of H.264/AAC MP4, no-store; source time in X-Preview-Start-MS / X-Preview-End-MS |
 | GET | `/sources/{id}/thumbnail` | Authorized, inspected PNG/JPEG; Range supported |
 | POST | `/jobs` | Job, HTTP 202 |
 | GET | `/jobs/{id}` | Job; clients may poll once per second |
@@ -42,7 +43,7 @@ and headers are never returned to clients.
 | `provider` | `upload`, `direct`, `generic`, or one of the [15 recognized providers](providers.md) |
 | `provider_video_id` | Actual extractor video identity, or null; Twitch VOD IDs may start with `v` |
 | `source_url` | Platform page URL only; null for uploaded/direct files; never an extracted CDN URL |
-| `preview_kind` | `native`, `youtube`, or `none`; `none` means manual timing with a source card |
+| `preview_kind` | `native`, `youtube`, `window`, or `none`; `window` uses short server-rendered intervals |
 | `preview_url` | Owner-protected native source endpoint, or null |
 | `embed_url` | YouTube embed, or null |
 | `thumbnail_url` | Owner-protected, bounded and inspected image endpoint, or null |
@@ -116,13 +117,13 @@ Known channel/collection URL rejections occur before source preparation: `400 un
 
 Source preparation uses a shared PostgreSQL reservation, rather than a process
 mutex alone. Four preparations globally and one per owner may be admitted.
-Uploads reserve `MAX_SOURCE_BYTES`; metadata-only platform preparations reserve only the bounded
+Uploads reserve the known body size (capped at `MAX_SOURCE_BYTES`) or `MAX_SOURCE_BYTES` for unknown sizes; metadata-only platform preparations reserve only the bounded
 2 MiB thumbnail in both the global and owner source budgets. Completed sources
 convert the reservation into actual registered file sizes atomically. An unknown
 commit outcome retains files and its reservation until safe reconciliation.
 
 Export admission reserves every unpublished output at `MAX_OUTPUT_BYTES`, plus
-up to two `MAX_SOURCE_BYTES` HLS inputs for platform jobs. This is intentionally
+up to two `min(MAX_SOURCE_BYTES, MAX_FETCH_BYTES)` HLS inputs for platform jobs. This is intentionally
 conservative: it prevents a partly published batch from waiting for space that
 its own retained results occupy. The API exposes fixed diagnostics rather than
 an unsupported promise of estimated capacity.

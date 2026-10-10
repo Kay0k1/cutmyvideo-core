@@ -119,13 +119,13 @@ The response contains the job ID in `id`. Poll `GET /api/v1/jobs/{id}` and downl
 | `DATA_DIR` / `LISTEN_ADDR` | `./data` / `:8080` |
 | `PUBLIC_ORIGIN` | Unset; set the exact public origin when deployed |
 | `COOKIE_SECURE` / `TRUST_PROXY` | `false` / `false` |
-| `MAX_SOURCE_BYTES` / `MAX_OUTPUT_BYTES` | 1 GiB / 1 GiB |
+| `MAX_SOURCE_BYTES` / `MAX_FETCH_BYTES` / `MAX_OUTPUT_BYTES` | 1 GiB / 1 GiB / 1 GiB |
 | `MAX_STORAGE_BYTES` / `MAX_OWNER_BYTES` | 10 GiB / 2 GiB |
 | `MAX_RANGES` | 12 |
 | `MAX_RANGE_MS` / `MAX_JOB_MS` | 10 minutes/range, one hour total |
 | `MAX_ACTIVE_JOBS` | 32 globally; three per session |
 | `MUTATIONS_PER_MINUTE` | 20 per IP, independent of session cookie |
-| `SOURCE_TIMEOUT` / `JOB_TIMEOUT` | `2m` / `30m` |
+| `SOURCE_TIMEOUT` / `UPLOAD_TIMEOUT` / `JOB_TIMEOUT` | `2m` / `2h` / `30m` |
 | `SOURCE_TTL` / `ARTIFACT_TTL` | `24h` / `24h` |
 | `STORAGE_SAFETY_BYTES` / `STORAGE_WAIT_TIMEOUT` | 512 MiB free-space margin / `30m` |
 | `WORKER_CONCURRENCY` | 1; allowed 1–8, subject to container CPU/RAM limits |
@@ -135,7 +135,7 @@ The response contains the job ID in `id`. Poll `GET /api/v1/jobs/{id}` and downl
 | `FFMPEG_PATH` / `FFPROBE_PATH` / `YTDLP_PATH` | Corresponding executable names |
 | `WORKER_HEALTH_PATH` | `/tmp/cutmy-worker-health`, container-local temporary file |
 
-`MAX_OWNER_BYTES` applies to staged source files and thumbnails; results count toward the global storage limit. A session allows 20 source records and one concurrent source preparation; four globally. Uploads reserve their size ceiling, and exports reserve all unpublished outputs plus bounded temporary HLS inputs. Accepted work enters `waiting_storage` with a finite deadline when space is temporarily unavailable. Worker cleanup or the independent `cutmy maintenance` command expires unused data; active jobs pin their files. The API also supports explicit deletion of unused sources and results.
+`MAX_OWNER_BYTES` applies to staged source files and thumbnails; results count toward the global storage limit. A session allows 20 source records and one concurrent source preparation; four globally. Uploads reserve their known request-body size or size ceiling, and exports reserve all unpublished outputs plus bounded temporary HLS inputs. Accepted work enters `waiting_storage` with a finite deadline when space is temporarily unavailable. Worker cleanup or the independent `cutmy maintenance` command expires unused data; active jobs pin their files. The API also supports explicit deletion of unused sources and results.
 
 The public deployment uses **one API instance** because its per-IP limiter is process-local. Disk reservations, byte counters and queue leases are shared through PostgreSQL. Each worker runs a bounded processing pool; large or unknown video inputs acquire that worker's entire local pool. Multiple API instances require a shared request limiter. PostgreSQL stores durable state; source files and artifacts use disk. An S3 adapter is not yet implemented.
 
@@ -187,3 +187,5 @@ Help fund development: [cutmy.video — support](https://cutmy.video/?panel=supp
 ## License
 
 cutmyvideo-core is [MIT licensed](LICENSE). FFmpeg, yt-dlp, Node.js, PostgreSQL, and other dependencies have their own licenses. This project's license does not replace their terms; review them when distributing builds.
+
+Platform and browser-codec fallback previews use `GET /api/v1/sources/{id}/preview?start_ms=…`: up to 30 seconds of 480p H.264/AAC MP4, capped at 16 MiB. HLS downloads only the selected segments. Temporary files are deleted after delivery; the storage reservation is 144 MiB and abandoned requests expire after five minutes. `MAX_FETCH_BYTES` bounds remote interval transfers independently of whole-file upload limits.

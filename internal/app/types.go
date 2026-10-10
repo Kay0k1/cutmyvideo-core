@@ -17,18 +17,22 @@ type Config struct {
 	FFmpegThreads                                                          int
 	WorkerConcurrency                                                      int
 	MaxSourceBytes, MaxOutputBytes, MaxStorageBytes, MaxOwnerBytes         int64
+	MaxFetchBytes                                                          int64
 	StorageSafetyBytes                                                     int64
 	MaxRanges, MaxActiveJobs                                               int
 	MutationsPerMinute                                                     int
 	MaxRangeMS, MaxJobMS                                                   int64
 	JobTimeout, SourceTimeout, SourceTTL, ArtifactTTL                      time.Duration
 	StorageWaitTimeout                                                     time.Duration
+	UploadTimeout                                                          time.Duration
 	SecureCookie, TrustProxy                                               bool
 }
 
 func ConfigFromEnv() (Config, error) {
 	c := Config{DatabaseURL: os.Getenv("DATABASE_URL"), DataDir: env("DATA_DIR", "./data"), ListenAddr: env("LISTEN_ADDR", ":8080"), FFmpeg: env("FFMPEG_PATH", "ffmpeg"), FFprobe: env("FFPROBE_PATH", "ffprobe"), YTDLP: env("YTDLP_PATH", "yt-dlp"), MaxSourceBytes: 1 << 30, MaxOutputBytes: 1 << 30, MaxRanges: 12, MaxRangeMS: 600000, MaxJobMS: 3600000, JobTimeout: 30 * time.Minute, SourceTimeout: 2 * time.Minute, ArtifactTTL: 24 * time.Hour, SecureCookie: os.Getenv("COOKIE_SECURE") == "true"}
 	c.PublicOrigin = os.Getenv("PUBLIC_ORIGIN")
+	c.MaxFetchBytes = 1 << 30
+	c.UploadTimeout = 2 * time.Hour
 	c.WorkerHealthPath = workerHealthPath(os.Getenv("WORKER_HEALTH_PATH"))
 	c.SourceTTL = 24 * time.Hour
 	c.MaxStorageBytes = 10 << 30
@@ -53,7 +57,7 @@ func ConfigFromEnv() (Config, error) {
 	}
 	// Parse process settings once, rather than reading shared environment during
 	// an export. FFmpeg's threads are separate from the Go runtime's CPU budget.
-	for key, ptr := range map[string]*int64{"MAX_SOURCE_BYTES": &c.MaxSourceBytes, "MAX_OUTPUT_BYTES": &c.MaxOutputBytes, "MAX_STORAGE_BYTES": &c.MaxStorageBytes, "MAX_OWNER_BYTES": &c.MaxOwnerBytes, "MAX_RANGE_MS": &c.MaxRangeMS, "MAX_JOB_MS": &c.MaxJobMS} {
+	for key, ptr := range map[string]*int64{"MAX_SOURCE_BYTES": &c.MaxSourceBytes, "MAX_FETCH_BYTES": &c.MaxFetchBytes, "MAX_OUTPUT_BYTES": &c.MaxOutputBytes, "MAX_STORAGE_BYTES": &c.MaxStorageBytes, "MAX_OWNER_BYTES": &c.MaxOwnerBytes, "MAX_RANGE_MS": &c.MaxRangeMS, "MAX_JOB_MS": &c.MaxJobMS} {
 		if value := os.Getenv(key); value != "" {
 			*ptr, err = strconv.ParseInt(value, 10, 64)
 			if err != nil || *ptr <= 0 {
@@ -79,7 +83,7 @@ func ConfigFromEnv() (Config, error) {
 			return c, errors.New("invalid MUTATIONS_PER_MINUTE")
 		}
 	}
-	for key, ptr := range map[string]*time.Duration{"STORAGE_WAIT_TIMEOUT": &c.StorageWaitTimeout, "JOB_TIMEOUT": &c.JobTimeout, "SOURCE_TIMEOUT": &c.SourceTimeout, "SOURCE_TTL": &c.SourceTTL, "ARTIFACT_TTL": &c.ArtifactTTL} {
+	for key, ptr := range map[string]*time.Duration{"STORAGE_WAIT_TIMEOUT": &c.StorageWaitTimeout, "JOB_TIMEOUT": &c.JobTimeout, "SOURCE_TIMEOUT": &c.SourceTimeout, "UPLOAD_TIMEOUT": &c.UploadTimeout, "SOURCE_TTL": &c.SourceTTL, "ARTIFACT_TTL": &c.ArtifactTTL} {
 		if value := os.Getenv(key); value != "" {
 			*ptr, err = time.ParseDuration(value)
 			if err != nil || *ptr <= 0 || *ptr > 30*24*time.Hour {
@@ -108,6 +112,22 @@ func env(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func uploadTimeout(c Config) time.Duration {
+	if c.UploadTimeout > 0 {
+		return c.UploadTimeout
+	}
+	return c.SourceTimeout
+}
+
+// The file upload cap and the transfer budget for a selected remote interval
+// serve different purposes. Raising one must not inflate every job reservation.
+func remoteSourceBudget(c Config) int64 {
+	if c.MaxFetchBytes > 0 {
+		return min(c.MaxSourceBytes, c.MaxFetchBytes)
+	}
+	return c.MaxSourceBytes
 }
 
 type Source struct {

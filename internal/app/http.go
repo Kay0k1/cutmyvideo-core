@@ -77,6 +77,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/sources/{id}", s.withSession(s.deleteSource))
 	mux.HandleFunc("GET /api/v1/sources/{id}", s.withSession(s.source))
 	mux.HandleFunc("GET /api/v1/sources/{id}/media", s.withSession(s.sourceMedia))
+	mux.HandleFunc("GET /api/v1/sources/{id}/preview", s.withSession(s.sourcePreview))
 	mux.HandleFunc("GET /api/v1/sources/{id}/thumbnail", s.withSession(s.sourceThumbnail))
 	mux.HandleFunc("POST /api/v1/jobs", s.withSession(s.createJob))
 	mux.HandleFunc("GET /api/v1/jobs/{id}", s.withSession(s.job))
@@ -228,6 +229,10 @@ func (s *Server) withSession(next ownerHandler) http.HandlerFunc {
 }
 
 func (s *Server) beginSource(ctx context.Context, owner string, thumbnails ...bool) error {
+	return s.beginSourceWithBytes(ctx, owner, s.Config.MaxSourceBytes, thumbnails...)
+}
+
+func (s *Server) beginSourceWithBytes(ctx context.Context, owner string, bytes int64, thumbnails ...bool) error {
 	// Reserve the owner's preparation slot before reading quota state. A second
 	// request must not carry an old count/size past the first request's completion.
 	s.mu.Lock()
@@ -252,7 +257,7 @@ func (s *Server) beginSource(ctx context.Context, owner string, thumbnails ...bo
 	}()
 	admitCtx, admitCancel := context.WithTimeout(ctx, workerDatabaseTimeout)
 	defer admitCancel()
-	if err := s.Store.reserveSource(admitCtx, s.Config, owner, s.sourceToken(owner), len(thumbnails) > 0 && thumbnails[0]); err != nil {
+	if err := s.Store.reserveSource(admitCtx, s.Config, owner, s.sourceToken(owner), len(thumbnails) > 0 && thumbnails[0], bytes); err != nil {
 		return err
 	}
 	accepted = true
@@ -328,8 +333,13 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 		writeError(w, 400, "invalid_url", "The link is too long")
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), s.Config.SourceTimeout)
+	timeout := s.Config.SourceTimeout
+	if !isPlatformHost(u.Hostname()) {
+		timeout = max(timeout, uploadTimeout(s.Config))
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(timeout + time.Minute))
 	if err = s.beginSource(ctx, owner, isPlatformHost(u.Hostname())); err != nil {
 		writeSourceAdmissionError(w, ctx, err)
 		return
@@ -561,20 +571,29 @@ func inspectCachedPlatformSource(ctx context.Context, g *networkGuard, info plat
 }
 
 func (s *Server) upload(w http.ResponseWriter, r *http.Request, owner string) {
-	ctx, cancel := context.WithTimeout(r.Context(), s.Config.SourceTimeout)
+	ctx, cancel := context.WithTimeout(r.Context(), uploadTimeout(s.Config))
 	defer cancel()
 	r = r.WithContext(ctx)
 	// Request contexts do not interrupt a server-side Body.Read. Set a socket
 	// deadline as well so a stalled multipart body cannot occupy a slot forever.
 	controller := http.NewResponseController(w)
 	deadline, _ := ctx.Deadline()
+	_ = controller.SetWriteDeadline(deadline.Add(time.Minute))
 	if err := controller.SetReadDeadline(deadline); err != nil && !errors.Is(err, http.ErrNotSupported) {
 		internalError(w, err)
 		return
 	}
 	// Handler ends any unread-body drain; clearing this deadline here would
 	// allow a rejected upload to keep a server connection occupied afterward.
-	if err := s.beginSource(ctx, owner); err != nil {
+	reserve := s.Config.MaxSourceBytes
+	if r.ContentLength > 0 {
+		reserve = min(reserve, r.ContentLength)
+	}
+	if r.ContentLength > s.Config.MaxSourceBytes+(2<<20) {
+		writeError(w, 413, "source_too_large", "The upload exceeds the file size limit")
+		return
+	}
+	if err := s.beginSourceWithBytes(ctx, owner, reserve); err != nil {
 		writeSourceAdmissionError(w, ctx, err)
 		return
 	}

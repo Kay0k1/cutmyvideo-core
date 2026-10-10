@@ -113,7 +113,7 @@ func (s *Store) cleanupStorageBatch(ctx context.Context, artifactTTL, sourceTTL 
 		return storageCleanupBatch{}, err
 	}
 	full = full || jobs.RowsAffected() == storageBatch
-	rows, err = tx.Query(ctx, `DELETE FROM sources WHERE id IN (SELECT id FROM sources WHERE created_at<now()-($1*interval '1 second') AND NOT EXISTS(SELECT 1 FROM jobs WHERE source_id=sources.id) ORDER BY created_at LIMIT $2) RETURNING path,thumbnail_path,owner`, sourceTTL.Seconds(), storageBatch)
+	rows, err = tx.Query(ctx, `DELETE FROM sources WHERE id IN (SELECT id FROM sources WHERE created_at<now()-($1*interval '1 second') AND NOT EXISTS(SELECT 1 FROM jobs WHERE source_id=sources.id) AND NOT EXISTS(SELECT 1 FROM storage_reservations WHERE kind='preview' AND job_id=sources.id) ORDER BY created_at LIMIT $2) RETURNING path,thumbnail_path,owner`, sourceTTL.Seconds(), storageBatch)
 	if err != nil {
 		return storageCleanupBatch{}, err
 	}
@@ -221,7 +221,7 @@ func (s *Store) DeleteSource(ctx context.Context, id, owner string) ([]string, e
 		return nil, err
 	}
 	var active bool
-	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM jobs WHERE source_id=$1 AND status IN ('queued','running','waiting_storage'))", id).Scan(&active); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM jobs WHERE source_id=$1 AND status IN ('queued','running','waiting_storage')) OR EXISTS(SELECT 1 FROM storage_reservations WHERE kind='preview' AND job_id=$1)", id).Scan(&active); err != nil {
 		return nil, err
 	}
 	if active {

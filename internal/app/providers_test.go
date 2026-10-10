@@ -109,7 +109,7 @@ func TestPlatformMetadataRejectsFiniteLiveCollectionsDRMAndMissingDuration(t *te
 func TestSourcePresentationNeverExposesSignedMediaOrRemoteThumbnails(t *testing.T) {
 	source := Source{ID: "src_example", Kind: "platform", URL: "https://www.twitch.tv/videos/123", ProviderID: "v123", ThumbnailURL: pointerString("https://cdn.example/image?secret=token")}
 	completeSourcePresentation(&source)
-	if source.Provider != "twitch" || source.SourceURL == nil || *source.SourceURL != source.URL || source.ProviderVideoID == nil || *source.ProviderVideoID != "v123" || source.PreviewKind != "none" || source.ThumbnailURL != nil {
+	if source.Provider != "twitch" || source.SourceURL == nil || *source.SourceURL != source.URL || source.ProviderVideoID == nil || *source.ProviderVideoID != "v123" || source.PreviewKind != "window" || source.ThumbnailURL != nil {
 		t.Fatalf("unsafe presentation %+v", source)
 	}
 	source.ThumbnailPath = "/private/source.thumbnail"

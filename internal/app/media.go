@@ -287,6 +287,9 @@ func pickStreams(info platformInfo, quality, format string) ([]platformFormat, e
 	if quality == "720p" {
 		capHeight = 720
 	}
+	if quality == "480p" {
+		capHeight = 480
+	}
 	var audio, progressiveAudio *platformFormat
 	var candidates []*platformFormat
 	for i := range info.Formats {

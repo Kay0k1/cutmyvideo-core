@@ -170,7 +170,7 @@ func observedSize(path string, fallback int64) int64 {
 func (s *Store) ReserveSource(ctx context.Context, c Config, owner string, tokens ...string) error {
 	return s.reserveSource(ctx, c, owner, sourceReservationToken(tokens), false)
 }
-func (s *Store) reserveSource(ctx context.Context, c Config, owner, token string, thumbnail bool) error {
+func (s *Store) reserveSource(ctx context.Context, c Config, owner, token string, thumbnail bool, sizes ...int64) error {
 	tx, err := s.storageTx(ctx)
 	if err != nil {
 		return err
@@ -202,6 +202,9 @@ func (s *Store) reserveSource(ctx context.Context, c Config, owner, token string
 		return errSourceLimit
 	}
 	reserve := c.MaxSourceBytes
+	if len(sizes) > 0 && sizes[0] > 0 {
+		reserve = min(reserve, sizes[0])
+	}
 	if thumbnail {
 		reserve = maxThumbnailBytes
 	}
@@ -222,7 +225,7 @@ func (s *Store) reserveSource(ctx context.Context, c Config, owner, token string
 	if c.SourceTimeout > time.Duration(math.MaxInt64)-time.Minute {
 		return errSourceStorage
 	}
-	ttl := c.SourceTimeout + time.Minute
+	ttl := max(c.SourceTimeout, uploadTimeout(c)) + time.Minute
 	if ttl < time.Minute {
 		ttl = time.Minute
 	}
@@ -296,10 +299,10 @@ func remainingJobReserve(c Config, j Job, platform bool) (int64, error) {
 		return 0, nil
 	}
 	if platform {
-		if c.MaxSourceBytes < 0 || c.MaxSourceBytes > (math.MaxInt64-size)/2 {
+		if remoteSourceBudget(c) < 0 || remoteSourceBudget(c) > (math.MaxInt64-size)/2 {
 			return 0, errStorageUnavailable
 		}
-		size += 2 * c.MaxSourceBytes
+		size += 2 * remoteSourceBudget(c)
 	}
 	return size, nil
 }

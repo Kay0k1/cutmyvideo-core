@@ -80,7 +80,7 @@ paths:
         default: {$ref: '#/components/responses/Error'}
   /api/v1/uploads:
     post:
-      description: Uploads one file within the configured SOURCE_TIMEOUT, including quota admission, multipart body transfer and media inspection. Timeout returns 504 source_timeout; interrupted uploads return 400 invalid_upload; oversize uploads return 413 source_too_large.
+      description: Uploads one file within the configured UPLOAD_TIMEOUT, including quota admission, multipart body transfer and media inspection. Timeout returns 504 source_timeout; interrupted uploads return 400 invalid_upload; oversize uploads return 413 source_too_large.
       requestBody:
         required: true
         content:
@@ -113,6 +113,25 @@ paths:
         '200': {description: Media bytes}
         '206': {description: Requested byte range}
         '304': {description: Authorized preview is unchanged; use the privately cached bytes}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/sources/{id}/preview:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    get:
+      description: Owner-protected H.264/AAC MP4 interval, up to 30 seconds and 16 MiB. Works for accessible platform recordings and staged files with browser-incompatible codecs. Original source time is supplied in response headers. Temporary media is removed after the response; no-store. A preview pins the source against deletion and uses a bounded shared storage reservation.
+      parameters:
+        - in: query
+          name: start_ms
+          required: true
+          schema: {type: integer, minimum: 0}
+      responses:
+        '200':
+          description: Preview interval
+          headers:
+            X-Preview-Start-MS: {schema: {type: integer}}
+            X-Preview-End-MS: {schema: {type: integer}}
+          content:
+            video/mp4:
+              schema: {type: string, format: binary}
         default: {$ref: '#/components/responses/Error'}
   /api/v1/sources/{id}/thumbnail:
     parameters: [{$ref: '#/components/parameters/ID'}]
@@ -218,7 +237,7 @@ components:
         source_url:
           type: [string, 'null']
           description: HTTPS platform page URL; null for uploads and direct files. Never an extracted CDN media address.
-        preview_kind: {type: string, enum: [native, youtube, none]}
+        preview_kind: {type: string, enum: [native, youtube, window, none]}
         preview_url: {type: [string, 'null']}
         embed_url: {type: [string, 'null']}
         thumbnail_url:

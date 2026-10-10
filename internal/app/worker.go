@@ -195,7 +195,7 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 		if !persist() {
 			return
 		}
-		guard, err = newNetworkGuard(c.MaxSourceBytes)
+		guard, err = newNetworkGuard(remoteSourceBudget(c))
 		if err != nil {
 			finishFailure("server_error", "Could not prepare source access")
 			return
@@ -290,10 +290,10 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 				reserve := c.MaxOutputBytes
 				for _, f := range streams {
 					if isHLS(f) {
-						if c.MaxSourceBytes > ((1<<63-1)-reserve)/2 {
+						if remoteSourceBudget(c) > ((1<<63-1)-reserve)/2 {
 							storageOK = false
 						} else {
-							reserve += 2 * c.MaxSourceBytes
+							reserve += 2 * remoteSourceBudget(c)
 						}
 						break
 					}
@@ -484,6 +484,9 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 }
 
 func cleanupFiles(ctx context.Context, c Config, s *Store) error {
+	if err := s.cleanupPreviews(ctx, c); err != nil {
+		return err
+	}
 	var problems []error
 	// Drain a busy expiry backlog within the existing maintenance deadline.
 	// Every batch releases the shared storage lock for admissions/publications;
