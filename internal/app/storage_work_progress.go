@@ -27,6 +27,8 @@ func (s *Store) cleanupWorkProgress(ctx context.Context, c Config) error {
 	// Discovery has its own slice: a large or poisoned directory must not keep
 	// already queued work from receiving a removal attempt this cycle.
 	discovery, cancel := maintenanceStageContext(ctx, 2)
+	session := newStorageScanSession()
+	defer session.close()
 	for attempt := 0; attempt < storageMaintenanceBatches; attempt++ {
 		p, err := s.nextStorageScan(discovery, c, []string{"cleanup_work"}, attempt == 0)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -36,11 +38,13 @@ func (s *Store) cleanupWorkProgress(ctx context.Context, c Config) error {
 			problems = append(problems, err)
 			break
 		}
-		if err = s.storageScanStep(discovery, c, p); err != nil {
+		if err = s.storageScanStepSession(discovery, c, p, session); err != nil {
 			problems = append(problems, err)
 			break
 		}
 	}
+	// Windows directory handles must be released before workspace removals.
+	session.close()
 	cancel()
 	if ctx.Err() != nil {
 		return errors.Join(append(problems, ctx.Err())...)

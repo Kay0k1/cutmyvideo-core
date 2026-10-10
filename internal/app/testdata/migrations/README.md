@@ -12,6 +12,7 @@ artifact and storage data before upgrading.
 | `unversioned-metadata.sql` | `schema` and `platformMetadataCacheSchema` in commit `109c64e` |
 | `v0.2.1.sql` | The exact three application schema constants from tag v0.2.1 (`f2be62c42a6a0d3d7a017b40bd683596bc578b95`), plus its historical version-table creation and marker insert |
 | `ordered-v1.sql` | The two immutable SQL migrations, markers and checksums at `f9bb68e861cafa2154e3d1e77340b30d3ab52f06`, before storage maintenance migration 3. This is a development predecessor, not a released version. |
+| `storage-maintenance-v1.sql` | The three immutable SQL migrations, markers and checksums at `91192c8dd26ac545515d93b50f63d50db121deba`, before cache retention migration 4. This is a development predecessor, not a released version. |
 
 Keep released/historical fixtures immutable. Do not replace them with the
 current schema to make upgrade tests pass.

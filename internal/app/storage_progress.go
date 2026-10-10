@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -104,89 +103,13 @@ func (s *Store) nextStorageScan(ctx context.Context, c Config, kinds []string, r
 	return p, tx.Commit(ctx)
 }
 
-// Directory cookies are not portable across the five supported platforms.
-// Replay names in fixed batches and verify a rolling digest instead. The cost
-// is O(prefix), but skipped entries do not repeat stats or database accounting;
-// no descriptor survives a call (important for Windows directory removal).
+// One-step callers still close their handles immediately. Public multi-step
+// operations use one local session to avoid replaying a committed prefix for
+// every batch; no descriptor survives the enclosing operation.
 func readStorageScanBatch(ctx context.Context, c Config, p storageScanProgress) ([]os.DirEntry, string, os.FileInfo, bool, bool, error) {
-	root := scanRoot(c, p.kind)
-	if p.kind == "cleanup_work" {
-		root = filepath.Join(c.DataDir, "work")
-	}
-	if err := safeScanPath(root, p.path); err != nil {
-		return nil, "", nil, false, false, err
-	}
-	info, err := os.Lstat(p.path)
-	if os.IsNotExist(err) {
-		return nil, p.digest, nil, true, false, nil
-	}
-	if err != nil {
-		return nil, "", nil, false, false, err
-	}
-	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return nil, "", nil, false, false, errors.New("storage scan root is not a directory")
-	}
-	reset := p.mtime == nil || p.size == nil || *p.mtime != info.ModTime().UnixNano() || *p.size != info.Size()
-	if reset {
-		p.position, p.digest = 0, ""
-	}
-	dir, err := os.Open(p.path)
-	if err != nil {
-		return nil, "", nil, false, false, err
-	}
-	defer dir.Close()
-	opened, err := dir.Stat()
-	if err != nil || !os.SameFile(info, opened) {
-		return nil, "", nil, false, false, errors.New("storage directory changed while opening")
-	}
-	var prefix storagePrefix
-	for remaining := p.position; remaining > 0; {
-		if err = ctx.Err(); err != nil {
-			return nil, "", nil, false, false, err
-		}
-		entries, e := dir.ReadDir(int(min(int64(storageScanBatchSize), remaining)))
-		for _, entry := range entries {
-			prefix.add(entry)
-		}
-		remaining -= int64(len(entries))
-		if e != nil || len(entries) == 0 {
-			if e != nil && !errors.Is(e, io.EOF) {
-				return nil, "", nil, false, false, e
-			}
-			// The persisted prefix vanished or was reordered. Never claim it
-			// as covered: reset the durable cursor without observing a tail.
-			return nil, "", info, false, true, nil
-		}
-	}
-	if prefix.encoded() != p.digest {
-		return nil, "", info, false, true, nil
-	}
-	if err = ctx.Err(); err != nil {
-		return nil, "", nil, false, false, err
-	}
-	batchLimit := storageRegistrationBatch
-	if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) < 100*time.Millisecond {
-		batchLimit = storageScanBatchSize
-	}
-	entries := make([]os.DirEntry, 0, batchLimit)
-	for len(entries) < batchLimit {
-		if err = ctx.Err(); err != nil {
-			return nil, "", nil, false, false, err
-		}
-		batch, e := dir.ReadDir(storageScanBatchSize)
-		if e != nil && !errors.Is(e, io.EOF) {
-			return nil, "", nil, false, false, e
-		}
-		for _, entry := range batch {
-			prefix.add(entry)
-		}
-		entries = append(entries, batch...)
-		if errors.Is(e, io.EOF) {
-			err = io.EOF
-			break
-		}
-	}
-	return entries, prefix.encoded(), info, errors.Is(err, io.EOF), reset, nil
+	session := newStorageScanSession()
+	defer session.close()
+	return session.read(ctx, c, p)
 }
 
 type storagePrefix struct {
@@ -259,7 +182,19 @@ func safeScanPath(root, path string) error {
 }
 
 func (s *Store) storageScanStep(ctx context.Context, c Config, p storageScanProgress) error {
-	entries, digest, info, eof, reset, err := readStorageScanBatch(ctx, c, p)
+	session := newStorageScanSession()
+	defer session.close()
+	return s.storageScanStepSession(ctx, c, p, session)
+}
+
+func (s *Store) storageScanStepSession(ctx context.Context, c Config, p storageScanProgress, session *storageScanSession) error {
+	retained := false
+	defer func() {
+		if !retained {
+			session.discard(p.kind)
+		}
+	}()
+	entries, digest, info, eof, reset, err := session.read(ctx, c, p)
 	if err != nil {
 		return err
 	}
@@ -296,11 +231,13 @@ func (s *Store) storageScanStep(ctx context.Context, c Config, p storageScanProg
 	// Detect membership changes during replay/stat/SQL. Observations remain
 	// conservatively charged, but the changed generation cannot prove coverage.
 	var mtime, size *int64
+	stable := true
 	if info != nil {
 		m, n := info.ModTime().UnixNano(), info.Size()
 		mtime, size = &m, &n
 		after, e := os.Lstat(p.path)
 		if e != nil || !os.SameFile(info, after) || after.ModTime() != info.ModTime() || after.Size() != info.Size() {
+			stable = false
 			position, digest, eof, reset = 0, "", false, true
 			mtime, size = nil, nil
 			entries = nil
@@ -310,7 +247,19 @@ func (s *Store) storageScanStep(ctx context.Context, c Config, p storageScanProg
 	if err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	if err = session.commit(ctx, tx); err != nil {
+		return err
+	}
+	// A read advances the live handle before SQL. Reuse is permitted only after
+	// the exact cursor was acknowledged by COMMIT; unknown outcomes, CAS misses
+	// and cancellation force a fresh replay from the persisted cursor.
+	if stable && !eof && ctx.Err() == nil {
+		retained = session.accept(storageScanProgress{
+			kind: p.kind, path: p.path, position: position + int64(len(entries)),
+			digest: digest, mtime: mtime, size: size, started: started,
+		})
+	}
+	return nil
 }
 
 func observeStorageBatch(ctx context.Context, tx pgx.Tx, c Config, p storageScanProgress, entries []os.DirEntry) error {
@@ -401,6 +350,8 @@ func (s *Store) bootstrapStorage(ctx context.Context, c Config) error {
 	if err := s.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM storage_state WHERE id=$1)`, c.DataDir).Scan(&initialized); err != nil || initialized {
 		return err
 	}
+	session := newStorageScanSession()
+	defer session.close()
 	for range storageProgressBatches {
 		p, err := s.nextStorageScan(ctx, c, bootstrapScanKinds, false)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -416,7 +367,7 @@ func (s *Store) bootstrapStorage(ctx context.Context, c Config) error {
 		if err != nil {
 			return err
 		}
-		if err = s.storageScanStep(ctx, c, p); err != nil {
+		if err = s.storageScanStepSession(ctx, c, p, session); err != nil {
 			return err
 		}
 	}
