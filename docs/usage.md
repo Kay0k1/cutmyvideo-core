@@ -38,8 +38,10 @@ Output JSON contains `path`, `size_bytes`, `actual_start_ms`, `actual_end_ms`.
 and symlinks are never replaced. Failed exports attempt to remove their private workspace.
 Local exports allow 24-hour intervals, with a default 10 GiB output ceiling.
 Inspection defaults to two minutes; export defaults to 30 minutes. `--timeout`
-changes the deadline. Unix interruption cancels/reaps the media process group;
-native macOS/Windows behavior is not yet verified in CI.
+changes the deadline. Current-source interruption cancels/reaps the media process
+group on Unix and the private process job on Windows. All five shipped targets
+must pass [native runtime checks](platforms.md). Published v0.2.1 archives predate
+native macOS/Windows verification.
 
 The following error/durability interface is **unreleased, available in current
 source**; the published v0.2.1 binary does not have it. Successful JSON stdout
