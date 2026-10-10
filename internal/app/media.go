@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
 )
 
 const mediaFormats = "mov,matroska,webm,mp3,wav,flac,ogg,aac,avi,mpegts"
@@ -144,13 +146,12 @@ func runCommand(ctx context.Context, path string, args ...string) ([]byte, error
 
 func runCommandOutput(ctx context.Context, path string, args []string, stdout io.Writer) error {
 	cmd := exec.CommandContext(ctx, path, args...)
-	configureProcess(cmd)
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=/nonexistent", "LANG=C.UTF-8", "LC_ALL=C.UTF-8"}
 	cmd.WaitDelay = 2 * time.Second
 	stderr := &limitedBuffer{limit: 16 << 10}
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	if err := cmd.Run(); err != nil {
+	if err := runProcess(cmd); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -624,10 +625,13 @@ func copyBounded(dst io.Writer, src io.Reader, limit int64) error {
 
 func makeSourceFile(c Config, id string) (*os.File, string, error) {
 	dir := filepath.Join(c.DataDir, "sources")
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := fsdurable.EnsureDirectory(dir, 0700); err != nil {
 		return nil, "", err
 	}
-	path := filepath.Join(dir, id+".media")
+	if err := fsdurable.Preflight(dir, dir); err != nil {
+		return nil, "", err
+	}
+	path := filepath.Join(dir, id+".media.part")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	return f, path, err
 }

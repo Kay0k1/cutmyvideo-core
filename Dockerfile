@@ -3,7 +3,10 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /cutmy ./cmd/cutmy
+ARG VERSION=dev
+ARG VCS_REF=unknown
+ARG BUILD_TIME=unknown
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${VCS_REF} -X main.buildTime=${BUILD_TIME}" -o /cutmy ./cmd/cutmy
 
 FROM node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates ffmpeg python3 curl \

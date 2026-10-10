@@ -60,16 +60,7 @@ func runArgs(args []string, stdout, stderr io.Writer) error {
 		return app.CheckWorkerHealth(os.Getenv("WORKER_HEALTH_PATH"))
 	}
 	if args[0] == "healthcheck" {
-		client := http.Client{Timeout: 3 * time.Second}
-		resp, err := client.Get("http://127.0.0.1:8080/readyz")
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != 200 {
-			return fmt.Errorf("not ready: %d", resp.StatusCode)
-		}
-		return nil
+		return checkAPIHealth(context.Background(), os.Getenv("LISTEN_ADDR"))
 	}
 	c, err := app.ConfigFromEnv()
 	if err != nil {
@@ -82,6 +73,9 @@ func runArgs(args []string, stdout, stderr io.Writer) error {
 	cancelOpen()
 	if err != nil {
 		// Parser/connection errors can include the full DSN and its password.
+		if errors.Is(err, app.ErrSchemaIncompatible) {
+			return &redactedCLIError{message: "database schema is incompatible with this binary; use a matching release or restore its coordinated backup", cause: err}
+		}
 		return &redactedCLIError{message: "could not initialize the database; check private configuration and database availability", cause: err}
 	}
 	defer s.DB.Close()

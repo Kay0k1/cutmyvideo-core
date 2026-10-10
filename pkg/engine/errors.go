@@ -46,6 +46,7 @@ const (
 	CodeOutputSyncFailed       ErrorCode = "output_sync_failed"
 	CodePublicationFailed      ErrorCode = "publication_failed"
 	CodePublicationUncertain   ErrorCode = "publication_uncertain"
+	CodeSchemaIncompatible     ErrorCode = "schema_incompatible"
 	CodeProcessingFailed       ErrorCode = "processing_failed"
 )
 
@@ -84,6 +85,9 @@ func CodeOf(err error) ErrorCode {
 	}
 	if errors.Is(err, ErrFilesystemUnsupported) {
 		return CodeFilesystemUnsupported
+	}
+	if errors.Is(err, app.ErrSchemaIncompatible) {
+		return CodeSchemaIncompatible
 	}
 	if errors.Is(err, context.Canceled) {
 		return CodeCancelled

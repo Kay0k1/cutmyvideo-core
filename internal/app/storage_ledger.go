@@ -246,44 +246,6 @@ func (s *Store) ReleaseSource(ctx context.Context, owner string, tokens ...strin
 	return tx.Commit(ctx)
 }
 
-func (s *Store) AddSource(ctx context.Context, v Source) error {
-	v.Title = normalizeSourceTitle(v.Title)
-	tx, err := s.storageTx(ctx)
-	if err != nil {
-		return err
-	}
-	defer rollbackStorage(tx)
-	_, err = tx.Exec(ctx, `INSERT INTO sources(id,owner,title,duration_ms,kind,path,url,width,height,embed_url,thumbnail_url,provider_id,provider,thumbnail_path) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, v.ID, v.Owner, v.Title, v.DurationMS, v.Kind, v.Path, v.URL, v.Width, v.Height, v.EmbedURL, v.ThumbnailURL, v.ProviderID, v.Provider, v.ThumbnailPath)
-	if err != nil {
-		return err
-	}
-	for _, path := range []string{v.Path, v.ThumbnailPath} {
-		if path == "" {
-			continue
-		}
-		if err = registerStorageFile(ctx, tx, path, v.Owner, "source", v.ID, observedSize(path, 0)); err != nil {
-			return err
-		}
-	}
-	if v.StorageToken != "" {
-		if err = adoptPreparationExtras(ctx, tx, s.storageConfig(), v.ID); err != nil {
-			return err
-		}
-	}
-	if v.StorageToken != "" {
-		tag, e := tx.Exec(ctx, "DELETE FROM storage_reservations WHERE id=$1 AND token=$2 AND expires_at>clock_timestamp()", "source:"+v.Owner, v.StorageToken)
-		if e != nil {
-			return e
-		}
-		if tag.RowsAffected() == 0 {
-			return ErrNotFound
-		}
-	}
-	if err = tx.Commit(ctx); err != nil && !publicationCommitRejected(err) {
-		return errors.Join(ErrSourceCommitUncertain, err)
-	}
-	return err
-}
 func remainingJobReserve(c Config, j Job, platform bool) (int64, error) {
 	var size, staging int64
 	for _, item := range j.Items {
@@ -386,7 +348,7 @@ func adoptPreparationExtras(ctx context.Context, tx pgx.Tx, c Config, id string)
 	if id == "" {
 		return nil
 	}
-	for _, suffix := range []string{".media", ".thumbnail"} {
+	for _, suffix := range []string{".media", ".thumbnail", ".media.part", ".thumbnail.part"} {
 		path := filepath.Join(c.DataDir, "sources", id+suffix)
 		info, err := os.Lstat(path)
 		if os.IsNotExist(err) {

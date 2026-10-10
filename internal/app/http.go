@@ -305,6 +305,10 @@ func (s *Server) endSource(owner string) {
 }
 
 func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string) {
+	s.addSourceWithClient(w, r, owner, safeClient)
+}
+
+func (s *Server) addSourceWithClient(w http.ResponseWriter, r *http.Request, owner string, sourceClient func() *http.Client) {
 	var body struct {
 		URL string `json:"url"`
 	}
@@ -354,7 +358,7 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 	if !platform {
 		req, _ := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 		req.Header.Set("User-Agent", "cutmy-core/0.1")
-		client := safeClient()
+		client := sourceClient()
 		defer client.CloseIdleConnections()
 		resp, e := client.Do(req)
 		if e != nil {
@@ -389,7 +393,7 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 			defer func() {
 				file.Close()
 				if !keep {
-					_ = os.Remove(path)
+					_ = removeSourcePreparation(path, v.Path)
 				}
 			}()
 			if e = copyBounded(file, resp.Body, s.Config.MaxSourceBytes); e != nil {
@@ -417,6 +421,10 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 				} else {
 					writeError(w, 422, "unsupported_media", "This file has no supported finite video or audio stream")
 				}
+				return
+			}
+			if e = publishSourceMedia(ctx, s.Config, &v); e != nil {
+				writeSourcePersistenceError(w, ctx, e)
 				return
 			}
 			if e = s.databaseAddSource(ctx, v); e != nil {
@@ -491,7 +499,7 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 				s.holdSourceReservation(owner)
 			}
 			if v.ThumbnailPath != "" && !errors.Is(e, ErrSourceCommitUncertain) {
-				_ = os.Remove(v.ThumbnailPath)
+				_ = removeSourcePreparation(v.ThumbnailPath)
 			}
 			writeSourcePersistenceError(w, ctx, e)
 			return
@@ -574,6 +582,10 @@ func inspectCachedPlatformSource(ctx context.Context, g *networkGuard, info plat
 }
 
 func (s *Server) upload(w http.ResponseWriter, r *http.Request, owner string) {
+	s.uploadWithPublisher(w, r, owner, s.databaseAddSource)
+}
+
+func (s *Server) uploadWithPublisher(w http.ResponseWriter, r *http.Request, owner string, publish func(context.Context, Source) error) {
 	ctx, cancel := context.WithTimeout(r.Context(), uploadTimeout(s.Config))
 	defer cancel()
 	r = r.WithContext(ctx)
@@ -630,7 +642,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request, owner string) {
 	defer func() {
 		file.Close()
 		if !keep {
-			_ = os.Remove(path)
+			_ = removeSourcePreparation(path, v.Path)
 		}
 	}()
 	if err = copyBounded(file, part, s.Config.MaxSourceBytes); err != nil {
@@ -668,7 +680,11 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request, owner string) {
 		}
 		return
 	}
-	if err = s.databaseAddSource(ctx, v); err != nil {
+	if err = publishSourceMedia(ctx, s.Config, &v); err != nil {
+		writeSourcePersistenceError(w, ctx, err)
+		return
+	}
+	if err = publish(ctx, v); err != nil {
 		keep = errors.Is(err, ErrSourceCommitUncertain)
 		if keep {
 			s.holdSourceReservation(owner)

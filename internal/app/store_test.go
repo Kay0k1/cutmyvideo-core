@@ -59,7 +59,10 @@ func testStore(t *testing.T) *Store {
 
 func storedSource(t *testing.T, s *Store, owner string) Source {
 	t.Helper()
-	v := Source{ID: newID("src"), Owner: owner, Title: "Test", Kind: "upload", DurationMS: 10000, Path: "/test/" + newID("file")}
+	v := Source{ID: newID("src"), Owner: owner, Title: "Test", Kind: "upload", DurationMS: 10000, Path: filepath.Join(t.TempDir(), "source.media")}
+	if err := os.WriteFile(v.Path, []byte("fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.AddSource(context.Background(), v); err != nil {
 		t.Fatal(err)
 	}
