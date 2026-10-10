@@ -6,10 +6,20 @@ should preserve clients. Incompatible changes need an explicit migration note an
 an appropriate version/API decision. A tag does not guarantee third-party source
 availability.
 
+Current-source library error codes, CLI JSON diagnostics/exit codes and HTTP
+schemas are public contracts. Preserve known codes and successful response
+fields; clients must tolerate additive fields and unknown error codes. Human
+diagnostic text is not a compatibility promise. An intentional incompatible
+change requires a migration note and explicit review of the
+[contract baseline](../api/COMPATIBILITY.md); passing its conservative structural
+checks is not proof of every semantic behavior or platform combination.
+
 ## Prepare
 
 1. Run `make check-full` with pinned tools and isolated PostgreSQL. Verify CLI and
-   server export behavior with synthetic media.
+   server export behavior with synthetic media. Install the pinned Python
+   [contract tooling](api.md#executable-contract-checks-current-source) in an
+   isolated environment; full checks include actual HTTP/OpenAPI fixtures.
 2. Move completed Unreleased notes under a dated heading such as
    `## 0.2.1 - 2026-10-10`, retaining Unreleased for future changes. Include known
    limitations and measured benchmark methods.

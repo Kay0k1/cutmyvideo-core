@@ -69,6 +69,14 @@ PostgreSQL pools default to four connections per process. Explicit `pool_max_con
 public hosting uses one API because IP rate limits are process-local. Multiple
 workers share durable state; processing/RAM budgets remain local.
 
+API database stages have a fixed five-second deadline, including connection-pool
+acquisition and SQL lock waits. An earlier caller deadline wins. Media transfer
+and processing retain their separate deadlines; the database deadline does not
+limit the duration of an upload, export or download. Unavailable database
+operations return HTTP 503 `database_unavailable`; this response does not prove
+that a submitted mutation was never committed. See the [API error contract](api.md)
+before retrying a mutation.
+
 For custom `LISTEN_ADDR`, probe its `/readyz` directly: `cutmy healthcheck` currently
 uses `http://127.0.0.1:8080/readyz`. Worker health validates successful queue/lease
 access within 30 seconds rather than the existence of a process.

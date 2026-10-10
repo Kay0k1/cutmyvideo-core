@@ -10,7 +10,18 @@ for behavior changes and document API changes alongside their implementation.
 Use Go 1.27.2 (the security-patched CI/release toolchain; module minimum 1.26.9),
 FFmpeg/ffprobe with libx264/AAC/libmp3lame, Python 3 and PostgreSQL 17. Platform
 imports also need Node.js. Offline metadata tests use the same checksum-pinned
-yt-dlp as the runtime:
+yt-dlp as the runtime.
+
+Install the pinned OpenAPI tooling in an isolated Python environment before
+running the checks:
+
+```sh
+python3 -m venv .venv-contract
+.venv-contract/bin/python -m pip install -r scripts/requirements-contract.txt
+export PATH="$PWD/.venv-contract/bin:$PATH"
+```
+
+Then install the offline extractor:
 
 ```sh
 curl --fail --show-error --location --proto '=https' --tlsv1.2 \
@@ -41,12 +52,14 @@ commit large videos, user uploads, credentials or downloaded third-party media.
 
 ## Checks
 
-`make check` runs formatting, vet, local documentation links, available tests and
-build. Media/database/extractor tests can skip if their dependencies are absent;
+`make check` runs formatting, vet, local documentation links, OpenAPI/schema and
+compatibility validation, available tests and build. Media/database/extractor
+tests can skip if their dependencies are absent;
 this fast check is not a complete acceptance run. `make check-full` requires the
 media tools, exact extractor pin and dedicated database, runs uncached race tests,
-workflow validation and govulncheck, and verifies third-party notices. CI does the
-same on Linux and makes no requests to public videos.
+workflow validation and govulncheck, and verifies third-party notices. It also
+requires actual HTTP/OpenAPI fixtures and their Python tooling. CI does the same
+on Linux and makes no requests to public videos.
 
 For a targeted change, run relevant tests first, then the full checks before
 release. Fetching changes need URL/redirect/byte-limit/owner-isolation tests.

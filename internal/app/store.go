@@ -33,7 +33,7 @@ func (s *Store) CreateJobLimited(ctx context.Context, owner string, r ExportRequ
 	if err != nil {
 		return Job{}, err
 	}
-	defer tx.Rollback(ctx)
+	defer rollbackStorage(tx)
 	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(736021912360105)`); err != nil {
 		return Job{}, err
 	}
@@ -108,7 +108,7 @@ func OpenStore(ctx context.Context, url string) (*Store, error) {
 		db.Close()
 		return nil, e
 	}
-	defer tx.Rollback(ctx)
+	defer rollbackStorage(tx)
 	_, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('cutmy:migrations'))`)
 	if err == nil {
 		_, err = tx.Exec(ctx, "CREATE TABLE IF NOT EXISTS app_schema_versions(version text PRIMARY KEY)")
@@ -127,6 +127,7 @@ func OpenStore(ctx context.Context, url string) (*Store, error) {
 		err = tx.Commit(ctx)
 	}
 	if err != nil {
+		rollbackStorage(tx)
 		db.Close()
 		return nil, err
 	}

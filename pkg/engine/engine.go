@@ -5,12 +5,15 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/Kay0k1/cutmyvideo-core/internal/app"
+	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
 )
 
 // Config controls external media tools and resource limits. Zero fields use
@@ -35,6 +38,8 @@ type Engine struct {
 	configErr      error
 	inspectTimeout time.Duration
 	exportTimeout  time.Duration
+	preflight      func(string, string) error
+	publish        func(context.Context, string, string) (fs.FileInfo, error)
 }
 
 // Range identifies an interval on the original source timeline in milliseconds.
@@ -88,6 +93,7 @@ func New(c Config) *Engine {
 		c.ExportTimeout = 30 * time.Minute
 	}
 	e := &Engine{config: app.Config{FFmpeg: c.FFmpegPath, FFprobe: c.FFprobePath, FFmpegProfile: c.EncodeProfile, FFmpegThreads: c.FFmpegThreads, MaxOutputBytes: c.MaxOutputBytes, MaxRanges: 1, MaxRangeMS: 24 * 3600000, MaxJobMS: 24 * 3600000}, inspectTimeout: c.InspectTimeout, exportTimeout: c.ExportTimeout}
+	e.preflight, e.publish = fsdurable.Preflight, fsdurable.Publish
 	if c.MaxOutputBytes < 0 || c.FFmpegThreads < 1 || c.FFmpegThreads > 32 || (c.EncodeProfile != "fast" && c.EncodeProfile != "compact") || c.InspectTimeout <= 0 || c.ExportTimeout <= 0 {
 		e.configErr = errors.New("invalid engine limits, profile, threads, or timeout")
 	}
@@ -96,12 +102,13 @@ func New(c Config) *Engine {
 
 // Inspect reads duration and dimensions with FFprobe within InspectTimeout.
 // Only regular local files and supported finite media formats are accepted.
-func (e *Engine) Inspect(ctx context.Context, path string) (SourceInfo, error) {
+func (e *Engine) Inspect(ctx context.Context, path string) (result SourceInfo, err error) {
+	defer func() { err = normalizeError(err) }()
 	if e.configErr != nil {
-		return SourceInfo{}, e.configErr
+		return SourceInfo{}, invalidArgument(e.configErr)
 	}
 	if path == "" {
-		return SourceInfo{}, errors.New("input path is required")
+		return SourceInfo{}, invalidArgument(errors.New("input path is required"))
 	}
 	if err := ctx.Err(); err != nil {
 		return SourceInfo{}, err
@@ -110,13 +117,16 @@ func (e *Engine) Inspect(ctx context.Context, path string) (SourceInfo, error) {
 	defer cancel()
 	// An existing relative filename beginning with '-' is not a tool option.
 	// Resolving it before ffprobe also avoids dependence on its working directory.
-	path, err := filepath.Abs(path)
+	path, err = filepath.Abs(path)
 	if err != nil {
 		return SourceInfo{}, err
 	}
 	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() {
-		return SourceInfo{}, errors.New("input must be a readable local file")
+	if err != nil {
+		return SourceInfo{}, &messageCause{message: "input must be a readable local file", cause: err}
+	}
+	if !info.Mode().IsRegular() {
+		return SourceInfo{}, invalidArgument(errors.New("input must be a readable local file"))
 	}
 	s, err := app.InspectLocal(ctx, e.config, path)
 	return SourceInfo{DurationMS: s.DurationMS, Width: s.Width, Height: s.Height}, err
@@ -124,17 +134,22 @@ func (e *Engine) Inspect(ctx context.Context, path string) (SourceInfo, error) {
 
 // Export validates the interval, writes and verifies a temporary media file,
 // then publishes it exclusively at output. The output directory must exist.
-// Cancellation and failures before publication remove temporary files.
-func (e *Engine) Export(ctx context.Context, input, output string, r Range, o Options) (Result, error) {
+// Its containing directory hierarchy must already be persistent; Export syncs
+// the output entry, not arbitrary directories recently created by the caller.
+// Cancellation and failures before publication remove temporary files. A
+// publication_uncertain error means the final output may exist; inspect it
+// before retrying. Publication requires hard links and directory sync support.
+func (e *Engine) Export(ctx context.Context, input, output string, r Range, o Options) (result Result, err error) {
+	defer func() { err = normalizeError(err) }()
 	if e.configErr != nil {
-		return Result{}, e.configErr
+		return Result{}, invalidArgument(e.configErr)
 	}
 	if input == "" || output == "" {
-		return Result{}, errors.New("input and output paths are required")
+		return Result{}, invalidArgument(errors.New("input and output paths are required"))
 	}
 	ctx, cancel := context.WithTimeout(ctx, e.exportTimeout)
 	defer cancel()
-	input, err := filepath.Abs(input)
+	input, err = filepath.Abs(input)
 	if err != nil {
 		return Result{}, err
 	}
@@ -157,18 +172,21 @@ func (e *Engine) Export(ctx context.Context, input, output string, r Range, o Op
 	}
 	req := app.ExportRequest{Ranges: []app.Range{{StartMS: r.StartMS, EndMS: r.EndMS}}, Format: o.Format, Quality: o.Quality, CutMode: o.CutMode}
 	if err = req.Validate(e.config, app.Source{DurationMS: s.DurationMS}); err != nil {
-		return Result{}, err
+		return Result{}, invalidArgument(err)
 	}
 	if _, err = os.Lstat(output); err == nil {
-		return Result{}, ErrOutputExists
+		return Result{}, &messageCause{message: ErrOutputExists.Error(), cause: errors.Join(ErrOutputExists, os.ErrExist)}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return Result{}, err
 	}
 	dir, err := os.MkdirTemp(filepath.Dir(output), ".cutmy-")
 	if err != nil {
-		return Result{}, err
+		return Result{}, fmt.Errorf("%w: create output workspace: %w", fsdurable.ErrPublicationFailed, err)
 	}
 	defer os.RemoveAll(dir)
+	if err = e.preflight(dir, filepath.Dir(output)); err != nil {
+		return Result{}, err
+	}
 	tmp := filepath.Join(dir, "output."+o.Format)
 	start, end, err := app.ExportLocal(ctx, e.config, input, tmp, req.Ranges[0], req)
 	if err != nil {
@@ -177,15 +195,13 @@ func (e *Engine) Export(ctx context.Context, input, output string, r Range, o Op
 	if err = ctx.Err(); err != nil {
 		return Result{}, err
 	}
-	// Link creates the output exclusively; an existing file is never replaced.
-	if err = os.Link(tmp, output); err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return Result{}, ErrOutputExists
-		}
-		return Result{}, err
-	}
-	info, err := os.Stat(output)
+	// Synchronize completed bytes before exclusive linking, then persist the
+	// output directory entry before reporting success.
+	info, err := e.publish(ctx, tmp, output)
 	if err != nil {
+		if errors.Is(err, os.ErrExist) && !errors.Is(err, fsdurable.ErrPublicationUncertain) {
+			return Result{}, &messageCause{message: ErrOutputExists.Error(), cause: errors.Join(ErrOutputExists, err)}
+		}
 		return Result{}, err
 	}
 	return Result{Path: output, SizeBytes: info.Size(), ActualStartMS: start, ActualEndMS: end}, nil

@@ -7,7 +7,7 @@ import "context"
 func InspectLocal(ctx context.Context, c Config, path string) (Source, error) {
 	p, duration, err := probe(ctx, c, path, false)
 	if err != nil {
-		return Source{}, err
+		return Source{}, &localInspectionFailure{cause: err}
 	}
 	s := Source{DurationMS: duration, Path: path, Kind: "upload"}
 	for _, v := range p.Streams {

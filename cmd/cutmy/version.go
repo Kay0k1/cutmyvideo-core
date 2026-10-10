@@ -26,7 +26,11 @@ Usage:
   cutmy worker-healthcheck      Check the worker health marker
   cutmy version                 Print JSON build information
 
-Use cutmy <command> --help for flags. Local inspect and clip need FFmpeg/ffprobe,
+Use cutmy <command> --help for flags. Prefix a command with --json-errors for
+a JSON terminal error on stderr; local/argument failures have one JSON envelope.
+Services retain operational stderr logs. Exit codes: 0 success, 2 invalid arguments/config,
+124 timeout, 130 cancellation, 1 other failure.
+Local inspect and clip need FFmpeg/ffprobe,
 but do not need a database. See https://github.com/Kay0k1/cutmyvideo-core
 `
 

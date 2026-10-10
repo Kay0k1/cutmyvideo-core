@@ -35,11 +35,39 @@ be within the source.
 
 Output JSON contains `path`, `size_bytes`, `actual_start_ms`, `actual_end_ms`.
 `inspect` returns `duration_ms` and video dimensions when present. Existing files
-and symlinks are never replaced. Failed exports remove their private workspace.
+and symlinks are never replaced. Failed exports attempt to remove their private workspace.
 Local exports allow 24-hour intervals, with a default 10 GiB output ceiling.
 Inspection defaults to two minutes; export defaults to 30 minutes. `--timeout`
 changes the deadline. Unix interruption cancels/reaps the media process group;
 native macOS/Windows behavior is not yet verified in CI.
+
+The following error/durability interface is **unreleased, available in current
+source**; the published v0.2.1 binary does not have it. Successful JSON stdout
+stays unchanged. Prefix a command with `--json-errors` for its JSON terminal error
+on stderr. Local `inspect`/`clip` failures and argument errors produce exactly one
+envelope, without flag usage chatter. `server`, `worker` and `maintenance` retain
+operational logs on stderr, so those logs may precede a JSON terminal diagnostic:
+
+```sh
+./cutmy --json-errors inspect --input missing.mp4 2>error.json
+```
+
+```json
+{"error":{"code":"input_not_found","message":"input must be a readable local file"}}
+```
+
+Exit codes are `0` for success/help, `2` for invalid arguments or configuration,
+`124` for a timeout, `130` for cancellation and `1` for other failures. Existing
+human diagnostics remain the default. Localize known codes and use a generic
+fallback for unknown ones; human messages are not a parsing interface.
+
+Current-source exports preflight hard-link and directory-sync capabilities,
+synchronize completed bytes, publish exclusively, and synchronize the output
+directory before success. Unsupported filesystems fail before encoding. The
+`publication_uncertain` error preserves the final path after a publication barrier
+failure: an output may already exist. Inspect it or choose a new filename before
+retrying; never assume an error means the output was removed. These barriers rely
+on the filesystem honoring sync and do not make temporary storage persistent.
 
 ## Go library
 
@@ -88,6 +116,35 @@ func main() {
 caller deadlines win. Invalid config is reported by the operation. Library calls
 do not share server quotas/queue: integrate your application's admission and
 isolation layer. The [package source](../pkg/engine/engine.go) documents the contract.
+
+The following library diagnostics are **unreleased, available in current
+source**, rather than in the v0.2.1 module installed above. Operation errors have
+type `*engine.Error`, expose a stable `Code`, and retain the original cause
+through `Unwrap`. Use `engine.CodeOf(err)` (`""` for nil) or `errors.As` to inspect
+the diagnostic; `errors.Is` still detects `context.Canceled`,
+`context.DeadlineExceeded`, `os.ErrNotExist`, permission errors and the exported
+sentinels. Invalid engine configuration is `invalid_argument`, reported by the
+operation rather than by `New`.
+
+| Codes | Meaning/action |
+|---|---|
+| `invalid_argument` | Fix options, interval, configuration or required paths |
+| `input_not_found`, `permission_denied` | Check the input/path permissions; underlying OS cause is preserved |
+| `tool_unavailable`, `unsupported_media` | Check tool installation or supply supported finite media |
+| `audio_missing`, `copy_incompatible`, `copy_quality_unsupported` | Change media/export settings; audio export needs an audio track |
+| `output_limit`, `storage_full` | Reduce the result or free storage/quota |
+| `timeout`, `cancelled` | Inspect the caller/tool budget or cancellation |
+| `output_exists` | Existing file/symlink remains intact; choose a new name |
+| `filesystem_unsupported` | Required exclusive publication/sync capability is absent |
+| `output_sync_failed`, `publication_failed` | Output synchronization/setup/publication failed; check the underlying cause |
+| `publication_uncertain` | Final output may exist; inspect it before retrying |
+| `processing_failed` | Generic failure; preserve the human diagnostic for troubleshooting |
+
+`ErrOutputExists`, `ErrFilesystemUnsupported`, `ErrOutputSyncFailed`,
+`ErrPublicationFailed` and `ErrPublicationUncertain` support `errors.Is`.
+Specific storage/permission causes can take precedence over a general sync code.
+Publication uncertainty takes precedence over cancellation and storage failures.
+Allow future codes and avoid blanket retries based on one code alone.
 
 ## HTTP API
 
