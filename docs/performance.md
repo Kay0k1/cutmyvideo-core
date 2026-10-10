@@ -204,13 +204,14 @@ resource row locks for every admission/publication/release/deletion. Initial
 migration is idempotent and versioned; routine maintenance does not repeat DDL.
 
 Uploads/direct files reserve their byte ceiling; platform metadata preparation
-reserves only 2 MiB for thumbnails (its inspection transfer budget is separate). Job admission reserves the maximum bytes of all
-unpublished results and two bounded HLS inputs for platform jobs. Each successful
-artifact publication atomically saves the item, registers actual bytes and
-releases one output ceiling from that job's reservation. Maximum reservation
-bounds are conservative and can reduce admitted concurrency for short clips.
-They provide a strict budget without bitrate predictions or self-blocking
-partially completed batches. Configuration/request arithmetic rejects overflow.
+reserves only 2 MiB for thumbnails (its inspection transfer budget is separate).
+Job admission reserves duration/mode-dependent producer ceilings for all
+unpublished results and twice the largest bounded HLS staging input for platform
+jobs. Each successful artifact publication atomically saves the item, registers
+actual bytes and releases that item's output ceiling from the job reservation.
+The producer enforces these bounds, so short clips can reserve less space while
+partially completed batches retain enough room to finish. Configuration/request
+arithmetic rejects overflow.
 
 `STORAGE_SAFETY_BYTES` defaults to 512 MiB of filesystem headroom;
 `STORAGE_WAIT_TIMEOUT` defaults to 30 minutes. Storage-pressure waiters remain

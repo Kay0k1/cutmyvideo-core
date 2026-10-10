@@ -55,7 +55,7 @@ YouTube inputs support watch, short-link, Shorts, recorded-live, and embed forms
 
 Twitch VODs/clips and finite unencrypted combined HLS recordings, including accessible Rutube videos, use bounded selected-segment staging. The worker downloads intersecting segments plus preceding decode context; FFmpeg sees only staged media bytes, never an untrusted playlist. Every manifest, init map, segment, redirect, and network address uses the guarded HTTPS/public-IP client and shared job transfer budget. Global-to-local timestamp conversion preserves presentation timing and returns artifact bounds on the original timeline.
 
-Actual live/upcoming/in-progress recordings, DRM/encrypted keys, HLS byte ranges, low-latency parts, gaps, changing init maps/discontinuities inside the selected range, separate HLS audio/video renditions, and DASH fragments are unsupported. Their errors are explicit; no full long-video/live fallback is started. Separate progressive HTTPS video/audio streams remain supported.
+Initialization-map changes and timestamp discontinuities are supported for up to 64 continuity periods per selected interval when codec configurations match. Periods are remuxed locally and joined using the manifest timeline. Actual live/upcoming/in-progress recordings, DRM/encrypted keys, HLS byte ranges, low-latency parts, gaps, incompatible codec changes, separate HLS audio/video renditions, and DASH fragments are unsupported. Their errors are explicit; no full long-video/live fallback is started. Separate progressive HTTPS video/audio streams remain supported.
 
 ## Jobs
 
@@ -125,11 +125,14 @@ Uploads reserve the known body size (capped at `MAX_SOURCE_BYTES`) or `MAX_SOURC
 convert the reservation into actual registered file sizes atomically. An unknown
 commit outcome retains files and its reservation until safe reconciliation.
 
-Export admission reserves every unpublished output at `MAX_OUTPUT_BYTES`, plus
-up to two `min(MAX_SOURCE_BYTES, MAX_FETCH_BYTES)` HLS inputs for platform jobs. This is intentionally
-conservative: it prevents a partly published batch from waiting for space that
-its own retained results occupy. The API exposes fixed diagnostics rather than
-an unsupported promise of estimated capacity.
+Export admission reserves a duration/mode-dependent byte ceiling for every
+unpublished output, bounded by `MAX_OUTPUT_BYTES`. Platform jobs also reserve
+twice the largest selected interval's staging ceiling, bounded by
+`min(MAX_SOURCE_BYTES, MAX_FETCH_BYTES)`. Producers enforce the same ceilings;
+publication replaces the corresponding output reservation with actual bytes.
+This prevents a partly published batch from waiting for space that its own
+retained results occupy without reserving the global file limit for every short
+clip. The API exposes fixed diagnostics rather than a promise of estimated capacity.
 
 `DELETE /sources/{id}` requires an explicit user confirmation in clients. It
 returns 404 for absent/foreign IDs and 409 `source_in_use` while any related job is

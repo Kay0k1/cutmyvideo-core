@@ -350,14 +350,7 @@ func selectHLSSegments(p hlsPlaylist, r Range) ([]hlsSegment, error) {
 	if first > 0 && !p.Segments[first].Discontinuity {
 		first--
 	}
-	selected := p.Segments[first:end]
-	mapURL := selected[0].MapURL
-	for i, s := range selected {
-		if s.MapURL != mapURL || i > 0 && s.Discontinuity {
-			return nil, errUnsupportedStream
-		}
-	}
-	return selected, nil
+	return p.Segments[first:end], nil
 }
 
 // Staged data contains media bytes only, never untrusted playlist references.
@@ -371,6 +364,20 @@ func stageHLSProgress(ctx context.Context, c Config, g *networkGuard, f platform
 	if e != nil {
 		return "", 0, e
 	}
+	var downloaded atomic.Int64
+	groups, e := splitHLSContinuity(segments)
+	if e != nil {
+		return "", 0, e
+	}
+	limit := remoteSourceBudget(c)
+	if len(groups) == 1 {
+		return stageHLSGroup(ctx, c, g, f, segments, dir, index, &downloaded, limit, limit, progress)
+	}
+	return stageHLSGroups(ctx, c, g, f, groups, dir, index, &downloaded, limit, progress)
+}
+
+func stageHLSGroup(ctx context.Context, c Config, g *networkGuard, f platformFormat, segments []hlsSegment, dir string, index int, downloaded *atomic.Int64, limit, muxLimit int64, progress func(int, int)) (string, int64, error) {
+	var e error
 	raw := filepath.Join(dir, fmt.Sprintf("stream-%d.media", index))
 	out := filepath.Join(dir, fmt.Sprintf("stream-%d.mkv", index))
 	file, e := os.OpenFile(raw, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
@@ -384,13 +391,11 @@ func stageHLSProgress(ctx context.Context, c Config, g *networkGuard, f platform
 			_ = os.Remove(out)
 		}
 	}()
-	var downloaded atomic.Int64
-	limit := remoteSourceBudget(c)
 	if segments[0].MapURL != "" {
-		e = g.fetch(ctx, segments[0].MapURL, f.Headers, &stagingWriter{writer: file, downloaded: &downloaded, limit: limit}, limit)
+		e = g.fetch(ctx, segments[0].MapURL, f.Headers, &stagingWriter{writer: file, downloaded: downloaded, limit: limit}, limit)
 	}
 	if e == nil {
-		e = fetchHLSSegments(ctx, g, f, segments, dir, index, file, &downloaded, limit, progress)
+		e = fetchHLSSegments(ctx, g, f, segments, dir, index, file, downloaded, limit, progress)
 	}
 	closeErr := file.Close()
 	if e != nil {
@@ -403,7 +408,7 @@ func stageHLSProgress(ctx context.Context, c Config, g *networkGuard, f platform
 	// network or file references are not accepted by FFmpeg.
 	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-max_alloc", "268435456", "-protocol_whitelist", "file", "-format_whitelist", mediaFormats}
 	args = append(args, mediaInputBounds(c)...)
-	args = append(args, "-fflags", "+genpts", "-i", raw, "-map", "0:v:0?", "-map", "0:a:0?", "-c", "copy", "-avoid_negative_ts", "make_zero", "-map_metadata", "-1", "-fs", strconv.FormatInt(remoteSourceBudget(c), 10), out)
+	args = append(args, "-fflags", "+genpts", "-i", raw, "-map", "0:v:0?", "-map", "0:a:0?", "-c", "copy", "-avoid_negative_ts", "make_zero", "-map_metadata", "-1", "-fs", strconv.FormatInt(muxLimit, 10), out)
 	_, e = runCommand(ctx, c.FFmpeg, args...)
 	if e != nil {
 		return "", 0, e
@@ -414,7 +419,7 @@ func stageHLSProgress(ctx context.Context, c Config, g *networkGuard, f platform
 		return "", 0, errUnsupportedStream
 	}
 	stat, e := os.Stat(out)
-	if e != nil || stat.Size() >= remoteSourceBudget(c) {
+	if e != nil || stat.Size() >= muxLimit {
 		return "", 0, errUnsupportedStream
 	}
 	// make_zero shifts decoding timestamps (including B-frame reordering).

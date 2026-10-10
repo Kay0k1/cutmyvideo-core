@@ -165,11 +165,15 @@ type probeInfo struct {
 		StartTime string `json:"start_time"`
 	} `json:"format"`
 	Streams []struct {
-		CodecType string `json:"codec_type"`
-		CodecName string `json:"codec_name"`
-		StartTime string `json:"start_time"`
-		Width     int    `json:"width"`
-		Height    int    `json:"height"`
+		CodecType     string `json:"codec_type"`
+		CodecName     string `json:"codec_name"`
+		SampleRate    string `json:"sample_rate"`
+		Channels      int    `json:"channels"`
+		TimeBase      string `json:"time_base"`
+		ExtradataHash string `json:"extradata_hash"`
+		StartTime     string `json:"start_time"`
+		Width         int    `json:"width"`
+		Height        int    `json:"height"`
 	} `json:"streams"`
 }
 
@@ -182,7 +186,7 @@ func probe(ctx context.Context, c Config, path string, remote bool) (probeInfo, 
 	// ffprobe only for the fields needed by inspection and output validation.
 	args := []string{"-v", "error", "-max_alloc", "268435456", "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats}
 	args = append(args, mediaInputBounds(c)...)
-	args = append(args, "-show_entries", "format=duration,start_time:stream=codec_type,codec_name,start_time,width,height", "-of", "json", path)
+	args = append(args, "-show_entries", "format=duration,start_time:stream=codec_type,codec_name,start_time,width,height,sample_rate,channels,time_base,extradata_hash", "-show_data_hash", "sha256", "-of", "json", path)
 	b, err := runCommand(ctx, c.FFprobe, args...)
 	var p probeInfo
 	if err != nil {
@@ -357,10 +361,12 @@ func pickStreams(info platformInfo, quality, format string) ([]platformFormat, e
 
 func seconds(ms int64) string { return strconv.FormatFloat(float64(ms)/1000, 'f', 3, 64) }
 
-func nearestKeyframe(ctx context.Context, c Config, path string, start int64, remote bool) (int64, error) {
-	if start == 0 {
-		return 0, nil
-	}
+type copyKeyframe struct {
+	PTS, DTS int64
+	HasDTS   bool
+}
+
+func nearestKeyframe(ctx context.Context, c Config, path string, start int64, remote bool) (copyKeyframe, error) {
 	from := start - 30000
 	if from < 0 {
 		from = 0
@@ -371,21 +377,22 @@ func nearestKeyframe(ctx context.Context, c Config, path string, start int64, re
 	}
 	args := []string{"-v", "error", "-max_alloc", "268435456", "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats}
 	args = append(args, mediaInputBounds(c)...)
-	args = append(args, "-select_streams", "v:0", "-read_intervals", seconds(from)+"%"+seconds(start+1), "-show_packets", "-show_entries", "packet=pts_time,flags", "-of", "json", path)
+	args = append(args, "-select_streams", "v:0", "-read_intervals", seconds(from)+"%"+seconds(start+1), "-show_packets", "-show_entries", "packet=pts_time,dts_time,flags", "-of", "json", path)
 	b, err := runCommand(ctx, c.FFprobe, args...)
 	if err != nil {
-		return 0, err
+		return copyKeyframe{}, err
 	}
 	var p struct {
 		Packets []struct {
 			PTS   string `json:"pts_time"`
+			DTS   string `json:"dts_time"`
 			Flags string `json:"flags"`
 		} `json:"packets"`
 	}
 	if err = json.Unmarshal(b, &p); err != nil {
-		return 0, err
+		return copyKeyframe{}, err
 	}
-	var found int64 = -1
+	found := copyKeyframe{PTS: -1}
 	for _, v := range p.Packets {
 		if !strings.Contains(v.Flags, "K") {
 			continue
@@ -395,12 +402,16 @@ func nearestKeyframe(ctx context.Context, c Config, path string, start int64, re
 			continue
 		}
 		ms := int64(math.Round(n * 1000))
-		if ms <= start && ms >= 0 && ms > found {
-			found = ms
+		if (ms <= start || start == 0 && found.PTS < 0 && ms <= 2000) && ms >= 0 && ms > found.PTS {
+			found = copyKeyframe{PTS: ms}
+			if dts, err := strconv.ParseFloat(v.DTS, 64); err == nil && !math.IsNaN(dts) && !math.IsInf(dts, 0) && math.Abs(dts-n) <= 2 {
+				// Rounding DTS upwards can discard the very keyframe we selected.
+				found.DTS, found.HasDTS = int64(math.Floor(dts*1000)), true
+			}
 		}
 	}
-	if found < 0 {
-		return 0, errors.New("no nearby keyframe found; use accurate mode")
+	if found.PTS < 0 || !found.HasDTS && found.PTS > 2000 {
+		return copyKeyframe{}, errors.New("no nearby keyframe found; use accurate mode")
 	}
 	return found, nil
 }
@@ -428,6 +439,8 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 	}
 	limit := outputBudget(c, r, request)
 	start := r.StartMS
+	copySeek, copyShift := int64(0), int64(0)
+	copyTrim := false
 	if request.CutMode == "copy" {
 		if request.Quality != "best" {
 			info, _, err := probe(ctx, c, inputs[0].Path, inputs[0].Remote)
@@ -448,7 +461,17 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 		if err != nil {
 			return 0, 0, err
 		}
-		start = local + inputs[0].OffsetMS
+		start = local.PTS + inputs[0].OffsetMS
+		if local.HasDTS {
+			copySeek = local.DTS + inputs[0].OffsetMS
+			copyShift = local.PTS - local.DTS
+			copyTrim = true
+		} else {
+			// First MKV packets can lack DTS until reordering is known. Keep
+			// that first keyframe and remove only its presentation-time offset.
+			copySeek = inputs[0].OffsetMS
+			copyShift = local.PTS
+		}
 	}
 
 	threadCount := c.FFmpegThreads
@@ -466,14 +489,22 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 			protocols = "http,tcp"
 		}
 		localStart := start - input.OffsetMS
-		if localStart < 0 {
+		if request.CutMode == "copy" {
+			localStart = copySeek - input.OffsetMS
+		}
+		if localStart < 0 && request.CutMode != "copy" {
 			return 0, 0, errUnsupportedStream
 		}
 		args = append(args, "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats)
 		args = append(args, mediaInputBounds(c)...)
 		args = append(args, "-ss", seconds(localStart), "-i", input.Path)
 	}
-	args = append(args, "-t", seconds(r.EndMS-start))
+	if request.CutMode == "copy" && copyTrim {
+		// Sparse container seek indexes may return earlier clusters. Trim at
+		// DTS after seeking, preserving the selected B-frame keyframe itself.
+		args = append(args, "-ss", "0")
+	}
+	args = append(args, "-t", seconds(r.EndMS-start+copyShift))
 	if request.Format == "mp3" {
 		args = append(args, "-map", "0:a:0", "-vn", "-c:a", "libmp3lame", "-b:a", "192k")
 	} else {
@@ -484,7 +515,7 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 			args = append(args, "-map", "0:a:0?")
 		}
 		if request.CutMode == "copy" {
-			args = append(args, "-c", "copy", "-avoid_negative_ts", "make_zero")
+			args = append(args, "-c", "copy", "-avoid_negative_ts", "disabled", "-output_ts_offset", seconds(-copyShift))
 		} else {
 			rate := exportVideoBitrate(c, r, request)
 			args = append(args, "-c:v", "libx264", "-maxrate", strconv.FormatInt(rate, 10), "-bufsize", strconv.FormatInt(rate*2, 10))

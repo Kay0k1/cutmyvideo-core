@@ -81,13 +81,13 @@ func TestHLSManifestSecurityAndBoundaries(t *testing.T) {
 		})
 	}
 	p.Segments[2].Discontinuity = true
-	if _, e := selectHLSSegments(p, Range{StartMS: 19000, EndMS: 21000}); e == nil {
-		t.Fatal("accepted a discontinuity crossing")
+	if selected, e := selectHLSSegments(p, Range{StartMS: 19000, EndMS: 21000}); e != nil || len(selected) != 3 || !selected[2].Discontinuity {
+		t.Fatal("lost a continuity boundary during interval selection")
 	}
 	p.Segments[2].Discontinuity = false
 	p.Segments[2].MapURL = "https://media.example/new-init.mp4"
-	if _, e := selectHLSSegments(p, Range{StartMS: 19000, EndMS: 21000}); e == nil {
-		t.Fatal("accepted an init-map change")
+	if selected, e := selectHLSSegments(p, Range{StartMS: 19000, EndMS: 21000}); e != nil || len(selected) != 3 || selected[2].MapURL == "" {
+		t.Fatal("lost an initialization-map boundary")
 	}
 }
 func TestHLSFetchBlocksNestedPrivateAddressesAndBudget(t *testing.T) {

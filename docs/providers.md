@@ -42,7 +42,9 @@ Supported media paths:
 
 The HLS implementation bounds manifest size 2 MiB, nesting depth 2, variants 100, segments 100000, each segment duration 300 seconds and total source duration 30 days. Manifest duration must match provider metadata within 1 second. Every redirect, variant, init map and selected segment uses the public-IP-pinned HTTPS client. A shared transfer budget covers the whole export job, including its several ranges. The worker reserves staging/output storage and removes temporary media after every fragment.
 
-Encrypted keys, HLS byte ranges, low-latency parts, gap segments, changing init maps or discontinuities inside a selected fragment, and separate HLS video/audio renditions are explicitly unsupported. Separate rendition clocks cannot be safely assumed identical; the engine refuses to silently discard original A/V delay. A master requiring an external audio rendition is also refused. DASH fragments are not supported. FFmpeg never opens these remote playlists; it only reads guarded progressive relay URLs or trusted staged media bytes.
+Selected intervals may cross up to 64 continuity periods, including changed initialization maps and timestamp resets. Each period is remuxed independently; codec configuration hashes must match before trusted local concatenation. Explicit manifest durations and packet presentation anchors preserve short bridge periods and the original timeline. Downloads, normalized periods and final staging remain within the reserved transfer and disk budgets.
+
+Encrypted keys, HLS byte ranges, low-latency parts, gap segments, incompatible codec changes, and separate HLS video/audio renditions are explicitly unsupported. Separate rendition clocks cannot be safely assumed identical; the engine refuses to silently discard original A/V delay. A master requiring an external audio rendition is also refused. DASH fragments are not supported. FFmpeg never opens these remote playlists; it only reads guarded progressive relay URLs or trusted staged media bytes.
 
 ## Preview contract
 
