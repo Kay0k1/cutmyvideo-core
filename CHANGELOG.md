@@ -5,10 +5,16 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 ## Unreleased
 
 ### Added
+- Immutable ordered database migrations with schema/checksum validation and a stable `schema_incompatible` startup diagnostic.
+- Required real v0.2.1 upgrade, interrupted-job and coordinated PostgreSQL/media backup/restore acceptance checks.
+- Native CI for every shipped Linux, macOS and Windows architecture, exercising actual media, exclusive publication, process-tree cancellation and the PostgreSQL API/worker path without skipped prerequisites.
 - Public library error codes with preserved underlying causes, optional JSON CLI diagnostics, and documented exit codes.
 - Executable HTTP/OpenAPI contract checks, including byte-length limits, preview priority, download range errors and database unavailability.
 
 ### Fixed
+- Publish uploaded/direct source files, thumbnails and window previews from private staging names; synchronize files and newly created parent directories before database acknowledgement, retaining uncertain commits for recovery.
+- Contain Windows media tools in a private process job before they can spawn children and cancel the complete descendant tree. Open Windows directory handles with the write access required for synchronization.
+- Honor `LISTEN_ADDR` in API health checks and accept version/revision/build-time metadata in Docker builds.
 - Bound API database stages, including connection-pool acquisition and SQL lock waits, without shortening media uploads, exports or downloads. Report unavailable database operations with a stable HTTP 503 diagnostic.
 - Synchronize completed output data and required directory entries before acknowledging local exports or registering server artifacts. Preserve exclusive output publication and uncertain database commit recovery.
 - Check required filesystem publication capabilities before local encoding rather than discovering unsupported hard links after processing.

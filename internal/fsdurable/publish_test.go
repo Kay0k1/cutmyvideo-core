@@ -24,7 +24,7 @@ func publicationFiles(t *testing.T) (string, string) {
 func requirePublicationSupport(t *testing.T, source, destination string) {
 	t.Helper()
 	if err := Preflight(filepath.Dir(source), filepath.Dir(destination)); err != nil {
-		if errors.Is(err, ErrUnsupportedFilesystem) {
+		if errors.Is(err, ErrUnsupportedFilesystem) && os.Getenv("CUTMY_REQUIRE_DURABLE_FS") != "1" {
 			t.Skip("filesystem lacks required durable exclusive publication capabilities")
 		}
 		t.Fatal(err)

@@ -177,6 +177,14 @@ func TestArtifactPublicationConvertsReservationAtomically(t *testing.T) {
 	s.ConfigureStorage(c)
 	ctx := context.Background()
 	source := storedSource(t, s, "owner")
+	sourceFile, err := os.Stat(source.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceBytes, initialReserved := ledgerBytes(t, s)
+	if sourceFile.Size() <= 0 || sourceBytes != sourceFile.Size() || initialReserved != 0 {
+		t.Fatal("completed source is not charged exactly once", sourceBytes, sourceFile.Size(), initialReserved)
+	}
 	req := requestFor(source)
 	req.Ranges = append(req.Ranges, req.Ranges[0])
 	if _, err := s.CreateJob(ctx, source.Owner, req, ""); err != nil {
@@ -192,8 +200,8 @@ func TestArtifactPublicationConvertsReservationAtomically(t *testing.T) {
 		t.Fatal(err)
 	}
 	files, reserved := ledgerBytes(t, s)
-	if files != 4096 || reserved != c.MaxOutputBytes {
-		t.Fatal("publication lost or double-counted storage", files, reserved)
+	if files-sourceBytes != 4096 || reserved != c.MaxOutputBytes {
+		t.Fatal("publication lost or double-counted storage", sourceBytes, files, reserved)
 	}
 	// The expiry is hidden while its parent job pins the result.
 	loaded, err := s.Job(ctx, j.ID, j.Owner)

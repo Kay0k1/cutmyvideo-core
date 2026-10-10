@@ -6,12 +6,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"time"
 
+	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -28,10 +30,15 @@ const previewCacheEntries = 64
 const previewOwnerCacheEntries = 16
 
 var errPreviewPending = errors.New("this preview is being prepared")
+var ErrPreviewCommitUncertain = errors.New("preview publication commit outcome unknown")
 
 // Small, reusable intervals keep seeking independent of recording length.
 // Cached files remain private and charged to the durable storage ledger.
 func (s *Server) sourcePreview(w http.ResponseWriter, r *http.Request, owner string) {
+	s.sourcePreviewWithPublisher(w, r, owner, s.Store.publishPreview)
+}
+
+func (s *Server) sourcePreviewWithPublisher(w http.ResponseWriter, r *http.Request, owner string, publish func(context.Context, Config, Source, string, *os.File) error) {
 	ctx, cancel := context.WithTimeout(r.Context(), previewTimeout)
 	defer cancel()
 	v, err := s.databaseSource(ctx, r.PathValue("id"), owner)
@@ -92,17 +99,21 @@ func (s *Server) sourcePreview(w http.ResponseWriter, r *http.Request, owner str
 		cleanupCtx, stop := context.WithTimeout(context.Background(), workerDatabaseTimeout)
 		defer stop()
 		// Keep the reservation if removal failed; maintenance retries it.
-		if removeStorageTree(cleanupCtx, dir) == nil {
+		if removeStorageTree(cleanupCtx, dir) == nil && fsdurable.SyncDirectories(filepath.Dir(dir)) == nil {
 			_, _ = s.Store.DB.Exec(cleanupCtx, "DELETE FROM storage_reservations WHERE id=$1 AND kind='preview'", id)
 		}
 	}()
-	if err = os.MkdirAll(dir, 0700); err != nil {
+	if err = fsdurable.EnsureDirectory(dir, 0700); err != nil {
+		internalError(w, err)
+		return
+	}
+	if err = fsdurable.Preflight(dir, dir); err != nil {
 		internalError(w, err)
 		return
 	}
 	c := s.Config
 	c.MaxSourceBytes, c.MaxFetchBytes, c.MaxOutputBytes = previewInputBytes, previewInputBytes, previewOutputBytes
-	out := filepath.Join(dir, "preview.mp4")
+	out := filepath.Join(dir, "preview.part.mp4")
 	inputs := []mediaInput{{Path: v.Path}}
 	if v.Path == "" {
 		guard, e := newNetworkGuard(previewInputBytes)
@@ -149,10 +160,15 @@ func (s *Server) sourcePreview(w http.ResponseWriter, r *http.Request, owner str
 		writeError(w, 422, problem.code, problem.message)
 		return
 	}
+	final := filepath.Join(dir, "preview.mp4")
+	if _, err = fsdurable.Publish(ctx, out, final); err != nil {
+		internalError(w, err)
+		return
+	}
 	// Release staged inputs before turning the processing reservation into a
 	// cache entry charged at the actual MP4 size. Keep a file descriptor open:
 	// eviction/source deletion can unlink the file without interrupting a read.
-	file, err := os.Open(out)
+	file, err := os.Open(final)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -164,13 +180,12 @@ func (s *Server) sourcePreview(w http.ResponseWriter, r *http.Request, owner str
 	}
 	// A failed COMMIT can have succeeded remotely. Preserve the bounded lease
 	// until maintenance decides its state instead of deleting a published file.
-	retain = true
-	if err = apiDatabaseExec(ctx, func(dbCtx context.Context) error {
-		return s.Store.publishPreview(dbCtx, s.Config, v, id, file)
-	}); err != nil {
+	if err = publish(ctx, s.Config, v, id, file); err != nil {
+		retain = errors.Is(err, ErrPreviewCommitUncertain)
 		internalError(w, err)
 		return
 	}
+	retain = true
 	servePreview(w, r, file, rangeMS, "miss")
 }
 
@@ -362,26 +377,63 @@ func (s *Store) acquirePreview(ctx context.Context, c Config, source Source, id,
 }
 
 func (s *Store) publishPreview(ctx context.Context, c Config, source Source, id string, file *os.File) error {
-	info, err := file.Stat()
+	return s.publishPreviewWithSync(ctx, c, source, id, file, fsdurable.Sync)
+}
+
+func (s *Store) publishPreviewWithSync(ctx context.Context, c Config, source Source, id string, file *os.File, synchronize func(string, ...string) (fs.FileInfo, error)) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	dir, err := previewDirectory(c, id)
 	if err != nil {
 		return err
 	}
-	tx, err := s.storageTx(ctx)
+	path := filepath.Join(dir, "preview.mp4")
+	if filepath.Clean(file.Name()) != filepath.Clean(path) {
+		return errors.New("preview descriptor does not name its reserved output")
+	}
+	info, err := synchronize(path, filepath.Dir(dir), c.DataDir, filepath.Dir(c.DataDir))
 	if err != nil {
 		return err
 	}
+	descriptor, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(info, descriptor) || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() >= previewOutputBytes {
+		return errors.New("invalid completed preview file")
+	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	return apiDatabaseExec(ctx, func(databaseCtx context.Context) error {
+		tx, err := s.storageTx(databaseCtx)
+		if err != nil {
+			return err
+		}
+		return publishPreviewTransaction(databaseCtx, tx, c, source, id, info.Size())
+	})
+}
+
+func publishPreviewTransaction(ctx context.Context, tx pgx.Tx, c Config, source Source, id string, size int64) error {
 	defer rollbackStorage(tx)
-	if err = prunePreviewCache(ctx, tx, c, source.Owner, info.Size(), false); err != nil {
+	if err := prunePreviewCache(ctx, tx, c, source.Owner, size, false); err != nil {
 		return err
 	}
-	tag, err := tx.Exec(ctx, "UPDATE storage_reservations SET kind='preview_cache',size_bytes=$2,expires_at=clock_timestamp()+($3*interval '1 second') WHERE id=$1 AND kind='preview' AND expires_at>clock_timestamp()", id, info.Size(), previewCacheTTL.Seconds())
+	tag, err := tx.Exec(ctx, `UPDATE storage_reservations SET kind='preview_cache',size_bytes=$2,expires_at=clock_timestamp()+($3*interval '1 second') WHERE id=$1 AND kind='preview' AND owner=$4 AND job_id=$5 AND expires_at>clock_timestamp() AND EXISTS(SELECT 1 FROM sources WHERE id=$5 AND owner=$4)`, id, size, previewCacheTTL.Seconds(), source.Owner, source.ID)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() != 1 {
 		return errors.New("preview lease expired")
 	}
-	return tx.Commit(ctx)
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	if err = tx.Commit(ctx); err != nil && !publicationCommitRejected(err) {
+		return errors.Join(ErrPreviewCommitUncertain, err)
+	}
+	return err
 }
 
 type previewCacheEntry struct {
@@ -452,6 +504,9 @@ func removePreviewEntry(ctx context.Context, tx pgx.Tx, c Config, id string) err
 		return err
 	}
 	if err = removeStorageTree(ctx, dir); err != nil {
+		return err
+	}
+	if err = fsdurable.SyncDirectories(filepath.Dir(dir)); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	_, err = tx.Exec(ctx, "DELETE FROM storage_reservations WHERE id=$1 AND kind IN ('preview','preview_cache')", id)

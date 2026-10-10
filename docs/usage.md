@@ -38,8 +38,10 @@ Output JSON contains `path`, `size_bytes`, `actual_start_ms`, `actual_end_ms`.
 and symlinks are never replaced. Failed exports attempt to remove their private workspace.
 Local exports allow 24-hour intervals, with a default 10 GiB output ceiling.
 Inspection defaults to two minutes; export defaults to 30 minutes. `--timeout`
-changes the deadline. Unix interruption cancels/reaps the media process group;
-native macOS/Windows behavior is not yet verified in CI.
+changes the deadline. Current-source interruption cancels/reaps the media process
+group on Unix and the private process job on Windows. All five shipped targets
+must pass [native runtime checks](platforms.md). Published v0.2.1 archives predate
+native macOS/Windows verification.
 
 The following error/durability interface is **unreleased, available in current
 source**; the published v0.2.1 binary does not have it. Successful JSON stdout
@@ -60,6 +62,9 @@ Exit codes are `0` for success/help, `2` for invalid arguments or configuration,
 `124` for a timeout, `130` for cancellation and `1` for other failures. Existing
 human diagnostics remain the default. Localize known codes and use a generic
 fallback for unknown ones; human messages are not a parsing interface.
+Service startup uses `schema_incompatible` when the migration guard refuses an
+unknown, future or inconsistent database schema. Do not reset the database to
+retry; deploy a matching release or restore its coordinated backup.
 
 Current-source exports preflight hard-link and directory-sync capabilities,
 synchronize completed bytes, publish exclusively, and synchronize the output

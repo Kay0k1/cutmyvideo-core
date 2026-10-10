@@ -67,7 +67,8 @@ func (s *Server) databaseSource(ctx context.Context, id, owner string) (Source, 
 }
 
 func (s *Server) databaseAddSource(ctx context.Context, source Source) error {
-	return apiDatabaseExec(ctx, func(ctx context.Context) error { return s.Store.AddSource(ctx, source) })
+	// AddSource bounds only its SQL phase, after its filesystem barrier.
+	return s.Store.AddSource(ctx, source)
 }
 
 func writeSourcePersistenceError(w http.ResponseWriter, ctx context.Context, err error) {

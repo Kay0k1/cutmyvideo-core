@@ -17,6 +17,99 @@ permissions:
   contents: read
 
 jobs:
+  native:
+    name: Native media (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]
+    env:
+      GOTOOLCHAIN: local
+      CUTMY_REQUIRE_DURABLE_FS: '1'
+      CUTMY_REQUIRE_NATIVE_SERVICE: '1'
+      TEST_DATABASE_URL: postgres://cutmy:native-test-only@127.0.0.1:55439/cutmy_native?sslmode=disable
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - name: Linux media dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg python3
+      - name: macOS media dependencies
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg postgresql@17
+      - name: Windows media dependencies (pinned archive and checksum)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'ffmpeg.zip'
+          Invoke-WebRequest 'https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-10-13-04/ffmpeg-n8.1.3-17-gc389840894-win64-gpl-8.1.zip' -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '2a7921874ac122ba731c181c2f235542ab9de790a67c08ec58fe0b54ff763647') { throw 'FFmpeg checksum mismatch' }
+          $media = Join-Path $env:RUNNER_TEMP 'cutmy-media'
+          Expand-Archive $archive -DestinationPath $media
+          (Get-ChildItem $media -Recurse -Filter ffmpeg.exe | Select-Object -First 1).DirectoryName >> $env:GITHUB_PATH
+      - name: Isolated Linux PostgreSQL
+        if: runner.os == 'Linux'
+        run: |
+          docker run --rm --detach --name cutmy-native-db -e POSTGRES_USER=cutmy -e POSTGRES_PASSWORD=native-test-only -e POSTGRES_DB=cutmy_native -p 127.0.0.1:55439:5432 postgres:17.11-bookworm
+          for attempt in $(seq 1 30); do
+            if docker exec cutmy-native-db pg_isready -U cutmy -d cutmy_native; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Isolated macOS PostgreSQL
+        if: runner.os == 'macOS'
+        run: |
+          pg_bin="$(brew --prefix postgresql@17)/bin"
+          "$pg_bin/initdb" -D "$RUNNER_TEMP/cutmy-pg" -U cutmy -A trust --encoding=UTF8
+          "$pg_bin/pg_ctl" -D "$RUNNER_TEMP/cutmy-pg" -l "$RUNNER_TEMP/cutmy-pg.log" -o '-h 127.0.0.1 -p 55439' -w start
+          "$pg_bin/createdb" -h 127.0.0.1 -p 55439 -U cutmy cutmy_native
+      - name: Isolated Windows PostgreSQL
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $data = Join-Path $env:RUNNER_TEMP 'cutmy-pg'
+          & (Join-Path $env:PGBIN 'initdb.exe') -D $data -U cutmy -A trust --encoding=UTF8
+          if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL initialization failed' }
+          & (Join-Path $env:PGBIN 'pg_ctl.exe') -D $data -l (Join-Path $env:RUNNER_TEMP 'cutmy-pg.log') -o '-h 127.0.0.1 -p 55439' -w start
+          if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL startup failed' }
+          & (Join-Path $env:PGBIN 'createdb.exe') -h 127.0.0.1 -p 55439 -U cutmy cutmy_native
+          if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL database creation failed' }
+      - name: Runtime media, publication, errors and process-tree cancellation
+        shell: bash
+        run: |
+          ffmpeg -version | tee ffmpeg-version.txt
+          ffprobe -version | tee ffprobe-version.txt
+          go test -json -race -count=1 -timeout=8m ./pkg/engine ./internal/fsdurable ./cmd/cutmy | tee native-media-tests.jsonl
+          go test -json -race -count=1 -timeout=3m ./internal/app -run '^(TestProcess.*|TestDiagnosticCopyCannotBypassMemoryBound)$' | tee native-process-tests.jsonl
+          go test -json -race -count=1 -timeout=3m ./internal/app -run '^TestNativeServiceUploadExportAndDownload$' | tee native-service-tests.jsonl
+          binary=cutmy-native
+          python_command=python3
+          if [ "$RUNNER_OS" = Windows ]; then binary=cutmy-native.exe; python_command=python; fi
+          go build -trimpath -o "$binary" ./cmd/cutmy
+          "./$binary" version | tee native-version.json
+          "./$binary" --json-errors inspect --input absent.mp4 >success.txt 2>error.json && exit 1 || test "$?" -eq 1
+          "$python_command" -c 'import json; d=json.load(open("error.json")); assert d["error"]["code"] == "input_not_found"'
+          test ! -s success.txt
+          "$python_command" scripts/check-native-results.py native-media-tests.jsonl native-process-tests.jsonl native-service-tests.jsonl
+      - name: Retain native runtime evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-${{ matrix.runner }}
+          path: |
+            native-*-tests.jsonl
+            native-version.json
+            ffmpeg-version.txt
+            ffprobe-version.txt
+          if-no-files-found: warn
+          retention-days: 14
   bookworm-media:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -64,6 +157,7 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: '1.27.2'
@@ -87,3 +181,18 @@ jobs:
           bin/cutmy clip --help
           bin/cutmy inspect --help
           bin/cutmy version
+      - name: Actual v0.2.1 upgrade, interrupted exports and backup restoration
+        env:
+          RECOVERY_DATABASE_URL: postgres://cutmy:test-only-password@localhost:5432/cutmy_test?sslmode=disable
+          RECOVERY_PG_CONTAINER: ${{ job.services.postgres.id }}
+          RECOVERY_WORK_DIR: ${{ runner.temp }}/cutmy-recovery
+          RECOVERY_REPORT_PATH: ${{ runner.temp }}/recovery-verification.json
+        run: make recovery-check
+      - name: Retain redacted upgrade and recovery evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: recovery-verification
+          path: ${{ runner.temp }}/recovery-verification.json
+          if-no-files-found: warn
+          retention-days: 14

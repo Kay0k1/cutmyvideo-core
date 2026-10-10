@@ -90,6 +90,8 @@ func (s *Store) CreateJobLimited(ctx context.Context, owner string, r ExportRequ
 }
 
 func OpenStore(ctx context.Context, url string) (*Store, error) {
+	ctx, cancel := context.WithTimeout(ctx, storeStartupTimeout)
+	defer cancel()
 	config, err := storePoolConfig(url)
 	if err != nil {
 		return nil, err
@@ -102,36 +104,11 @@ func OpenStore(ctx context.Context, url string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	s := &Store{DB: db}
-	tx, e := db.Begin(ctx)
-	if e != nil {
-		db.Close()
-		return nil, e
-	}
-	defer rollbackStorage(tx)
-	_, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('cutmy:migrations'))`)
-	if err == nil {
-		_, err = tx.Exec(ctx, "CREATE TABLE IF NOT EXISTS app_schema_versions(version text PRIMARY KEY)")
-		if err == nil {
-			var applied bool
-			err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM app_schema_versions WHERE version=$1)", schemaVersion).Scan(&applied)
-			if err == nil && !applied {
-				_, err = tx.Exec(ctx, schema+platformMetadataCacheSchema+storageSchema)
-				if err == nil {
-					_, err = tx.Exec(ctx, "INSERT INTO app_schema_versions(version) VALUES($1)", schemaVersion)
-				}
-			}
-		}
-	}
-	if err == nil {
-		err = tx.Commit(ctx)
-	}
-	if err != nil {
-		rollbackStorage(tx)
+	if err = migrateStore(ctx, db); err != nil {
 		db.Close()
 		return nil, err
 	}
-	return s, nil
+	return &Store{DB: db}, nil
 }
 
 func storePoolConfig(raw string) (*pgxpool.Config, error) {
@@ -154,42 +131,6 @@ func storePoolConfig(raw string) (*pgxpool.Config, error) {
 	}
 	return config, nil
 }
-
-// Bump this version whenever the idempotent schema batch changes. Routine
-// maintenance opens must not repeatedly acquire DDL table locks.
-const schemaVersion = "20261005-storage-queue-v3"
-
-const schema = `
-CREATE TABLE IF NOT EXISTS sources (
- id text PRIMARY KEY, owner text NOT NULL, title text NOT NULL,
- duration_ms bigint NOT NULL, kind text NOT NULL, path text NOT NULL DEFAULT '',
- url text NOT NULL DEFAULT '', width integer NOT NULL DEFAULT 0, height integer NOT NULL DEFAULT 0,
- embed_url text, thumbnail_url text, created_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS sources_owner_idx ON sources(owner);
-ALTER TABLE sources ADD COLUMN IF NOT EXISTS provider_id text NOT NULL DEFAULT '';
-ALTER TABLE sources ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT '';
-ALTER TABLE sources ADD COLUMN IF NOT EXISTS thumbnail_path text NOT NULL DEFAULT '';
-CREATE TABLE IF NOT EXISTS jobs (
- id text PRIMARY KEY, owner text NOT NULL, source_id text NOT NULL REFERENCES sources(id),
- request jsonb NOT NULL, items jsonb NOT NULL, status text NOT NULL DEFAULT 'queued',
- stage text NOT NULL DEFAULT 'queued', message text NOT NULL DEFAULT '',
- cancel_requested boolean NOT NULL DEFAULT false,
- lease_until timestamptz, lease_token text, attempts integer NOT NULL DEFAULT 0,
- idempotency_key text, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
- UNIQUE(owner, idempotency_key)
-);
-CREATE INDEX IF NOT EXISTS jobs_claim_idx ON jobs(status, created_at);
-CREATE INDEX IF NOT EXISTS jobs_source_idx ON jobs(source_id);
-CREATE TABLE IF NOT EXISTS artifacts (
- id text PRIMARY KEY, owner text NOT NULL, job_id text NOT NULL REFERENCES jobs(id),
- path text NOT NULL, filename text NOT NULL, size_bytes bigint NOT NULL,
- actual_start_ms bigint NOT NULL, actual_end_ms bigint NOT NULL,
- created_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS artifacts_owner_idx ON artifacts(owner);
-CREATE INDEX IF NOT EXISTS artifacts_job_idx ON artifacts(job_id);
-`
 
 func newID(prefix string) string {
 	b := make([]byte, 16)

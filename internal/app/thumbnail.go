@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
 )
 
 const maxThumbnailBytes int64 = 2 << 20
@@ -35,23 +37,35 @@ func fetchThumbnail(ctx context.Context, c Config, id, raw string) (string, erro
 	if resp.StatusCode != http.StatusOK || resp.ContentLength > maxThumbnailBytes {
 		return "", errors.New("thumbnail unavailable")
 	}
+	return stageThumbnail(ctx, c, id, resp.Body, fsdurable.Publish)
+}
+
+func stageThumbnail(ctx context.Context, c Config, id string, body io.Reader, publish func(context.Context, string, string) (os.FileInfo, error)) (string, error) {
 	dir := filepath.Join(c.DataDir, "sources")
-	if err = os.MkdirAll(dir, 0700); err != nil {
+	if err := fsdurable.EnsureDirectory(dir, 0700); err != nil {
+		return "", err
+	}
+	if err := fsdurable.Preflight(dir, dir); err != nil {
 		return "", err
 	}
 	path := filepath.Join(dir, id+".thumbnail")
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+	stage := path + ".part"
+	f, err := os.OpenFile(stage, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
 	if err != nil {
 		return "", err
 	}
 	keep := false
+	linked := false
 	defer func() {
 		f.Close()
+		_ = removeSourcePreparation(stage)
 		if !keep {
-			_ = os.Remove(path)
+			if linked {
+				_ = removeSourcePreparation(path)
+			}
 		}
 	}()
-	if err = copyBounded(f, resp.Body, maxThumbnailBytes); err != nil {
+	if err = copyBounded(f, body, maxThumbnailBytes); err != nil {
 		return "", errors.New("thumbnail exceeds limit")
 	}
 	if _, err = f.Seek(0, io.SeekStart); err != nil {
@@ -60,6 +74,25 @@ func fetchThumbnail(ctx context.Context, c Config, id, raw string) (string, erro
 	config, format, err := image.DecodeConfig(f)
 	if err != nil || (format != "jpeg" && format != "png") || config.Width <= 0 || config.Height <= 0 || config.Width > 8192 || config.Height > 8192 || int64(config.Width)*int64(config.Height) > 20_000_000 {
 		return "", errors.New("unsupported thumbnail")
+	}
+	if _, err = f.Seek(0, io.SeekStart); err != nil {
+		return "", err
+	}
+	// DecodeConfig alone accepts a truncated image with an intact header.
+	// Decode only after the dimension bound limits allocation.
+	if _, _, err = image.Decode(f); err != nil {
+		return "", errors.New("unsupported thumbnail")
+	}
+	if err = f.Close(); err != nil {
+		return "", err
+	}
+	_, err = publish(ctx, stage, path)
+	linked = err == nil || errors.Is(err, fsdurable.ErrPublicationUncertain)
+	if err != nil {
+		return "", err
+	}
+	if err = removeSourcePreparation(stage); err != nil {
+		return "", err
 	}
 	keep = true
 	return path, nil

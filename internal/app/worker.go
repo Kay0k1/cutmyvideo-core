@@ -24,10 +24,10 @@ func RunWorker(ctx context.Context, c Config, s *Store) error {
 		return err
 	}
 	defer health.Close()
-	if err := os.MkdirAll(filepath.Join(c.DataDir, "artifacts"), 0700); err != nil {
+	if err := fsdurable.EnsureDirectory(filepath.Join(c.DataDir, "artifacts"), 0700); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Join(c.DataDir, "work"), 0700); err != nil {
+	if err := fsdurable.EnsureDirectory(filepath.Join(c.DataDir, "work"), 0700); err != nil {
 		return err
 	}
 	if err := fsdurable.Preflight(filepath.Join(c.DataDir, "work"), filepath.Join(c.DataDir, "artifacts")); err != nil {

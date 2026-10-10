@@ -7,7 +7,7 @@ An open tool for manually trimming video and audio: choose a source and interval
 [![Core checks](https://github.com/Kay0k1/cutmyvideo-core/actions/workflows/ci.yml/badge.svg)](https://github.com/Kay0k1/cutmyvideo-core/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-The project is **0.x**. Local trimming, durable exports, recovery, bounded previews and long exports are implemented; individual platforms can restrict access. CI exercises real media on Linux. macOS and Windows archives are cross-built; native runtime verification is not yet claimed. See the [changelog](CHANGELOG.md) and [source catalogue](docs/providers.md) for changes and boundaries.
+The project is **0.x**. Local trimming, recovery, bounded previews and long exports are implemented; individual providers can restrict access. Current-source CI requires real media, durable publication, process cancellation and API/worker operation on Linux, macOS and Windows across all five shipped architectures. Published v0.2.1 was runtime-tested on Linux; new guarantees apply to current source and must pass CI before the next release. See [platform support](docs/platforms.md), the [changelog](CHANGELOG.md) and [source catalogue](docs/providers.md).
 
 ## Features
 

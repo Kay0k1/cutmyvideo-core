@@ -37,6 +37,14 @@ func testStore(t *testing.T) *Store {
 		admin.Close()
 		t.Fatal(err)
 	}
+	// Register schema/admin cleanup before startup: a migration failure must
+	// not retain a pool and exhaust PostgreSQL while later fixtures execute.
+	t.Cleanup(func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, _ = admin.Exec(cleanup, "DROP SCHEMA "+schema+" CASCADE")
+		admin.Close()
+	})
 	u, err := url.Parse(raw)
 	if err != nil {
 		t.Fatal(err)
@@ -49,17 +57,16 @@ func testStore(t *testing.T) *Store {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		s.DB.Close()
-		_, _ = admin.Exec(context.Background(), "DROP SCHEMA "+schema+" CASCADE")
-		admin.Close()
-	})
+	t.Cleanup(s.DB.Close)
 	return s
 }
 
 func storedSource(t *testing.T, s *Store, owner string) Source {
 	t.Helper()
-	v := Source{ID: newID("src"), Owner: owner, Title: "Test", Kind: "upload", DurationMS: 10000, Path: "/test/" + newID("file")}
+	v := Source{ID: newID("src"), Owner: owner, Title: "Test", Kind: "upload", DurationMS: 10000, Path: filepath.Join(t.TempDir(), "source.media")}
+	if err := os.WriteFile(v.Path, []byte("fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.AddSource(context.Background(), v); err != nil {
 		t.Fatal(err)
 	}

@@ -7,7 +7,7 @@ import (
 	"syscall"
 )
 
-func configureProcess(cmd *exec.Cmd) {
+func runProcess(cmd *exec.Cmd) error {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
 		if cmd.Process == nil {
@@ -15,4 +15,5 @@ func configureProcess(cmd *exec.Cmd) {
 		}
 		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	}
+	return cmd.Run()
 }
