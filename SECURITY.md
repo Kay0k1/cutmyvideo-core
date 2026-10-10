@@ -1,18 +1,33 @@
-# Security
+# Security policy
 
-Media sources and files are untrusted. The server must not access loopback,
-private networks, cloud metadata, or arbitrary local paths on behalf of a URL
-request. Source validation also applies after redirects and to extracted media
-URLs. Media processes run with bounded time, transfer, output size, and resources.
+The latest 0.x release and current main branch are the target for security fixes.
+Older revisions should be upgraded; there is no guaranteed response-time SLA or
+independent security-audit claim. Keep the Go toolchain, media dependencies,
+extractor and container base images updated as well as this repository.
 
-Session ownership is checked for source metadata, previews, jobs, and downloads.
-An identifier alone is not authorization. Production deployments must use HTTPS
-and secure session cookies.
+## Report privately
 
-Please report vulnerabilities using GitHub's private vulnerability reporting on
-this repository. Include reproducible steps with synthetic data. Do not place
-working credentials or other users' media in reports.
+Use [GitHub private vulnerability reporting](https://github.com/Kay0k1/cutmyvideo-core/security/advisories/new)
+when the repository's private form is available. Include the affected release or
+commit, reproducible steps, a synthetic fixture and the expected security
+boundary. If private reporting is unavailable, open an issue asking for a private
+contact channel **without exploit details or sensitive data**.
 
-The initial MVP is under active development. Supported source protocols and
-operational limitations are listed in the README; unsupported streaming formats
-must fail clearly rather than silently bypass the configured limits.
+Do not include working credentials, session cookies, private source/CDN URLs,
+other users' media or production environment files. Do not probe a public service
+with destructive workloads; reproduce against an isolated installation.
+
+## Boundaries
+
+Files and URLs are untrusted. URL validation applies after redirects and to
+extracted media destinations. Session ownership applies to metadata, previews,
+jobs and downloads; an identifier alone does not authorize access. Media
+processes have bounded transfer/output/time settings, with deployment resource
+and network isolation as an additional boundary.
+
+Public hosting requires HTTPS, secure cookies, trusted-proxy configuration,
+persistent storage and measured CPU/RAM/PID/disk limits. Current API IP limiting
+is process-local, so multiple API replicas need a shared limiter. Application
+storage admission does not replace a filesystem quota. See the detailed
+[security model](docs/security-model.md), [configuration](docs/configuration.md)
+and [operator guide](docs/operations.md).

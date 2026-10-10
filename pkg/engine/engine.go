@@ -13,6 +13,8 @@ import (
 	"github.com/Kay0k1/cutmyvideo-core/internal/app"
 )
 
+// Config controls external media tools and resource limits. Zero fields use
+// the documented defaults; invalid values fail Inspect and Export.
 type Config struct {
 	FFmpegPath, FFprobePath string
 	MaxOutputBytes          int64
@@ -25,19 +27,32 @@ type Config struct {
 	// Zero uses 2 minutes for inspection and 30 minutes for a whole export.
 	InspectTimeout, ExportTimeout time.Duration
 }
+
+// Engine is immutable after New and safe to share between callers. Each
+// operation has its own deadline and temporary output workspace.
 type Engine struct {
 	config         app.Config
 	configErr      error
 	inspectTimeout time.Duration
 	exportTimeout  time.Duration
 }
+
+// Range identifies an interval on the original source timeline in milliseconds.
 type Range struct{ StartMS, EndMS int64 }
+
+// Options selects mp4/mp3, best/1080p/720p and accurate/copy respectively.
+// Empty fields infer the format from the output suffix and use best/accurate.
 type Options struct{ Format, Quality, CutMode string }
+
+// SourceInfo describes a finite local media file. Audio files omit dimensions.
 type SourceInfo struct {
 	DurationMS int64 `json:"duration_ms"`
 	Width      int   `json:"width,omitempty"`
 	Height     int   `json:"height,omitempty"`
 }
+
+// Result describes an exclusively published output. Copy mode can move its
+// actual bounds to packet/keyframe boundaries.
 type Result struct {
 	Path          string `json:"path"`
 	SizeBytes     int64  `json:"size_bytes"`
@@ -45,6 +60,11 @@ type Result struct {
 	ActualEndMS   int64  `json:"actual_end_ms"`
 }
 
+// ErrOutputExists means an existing output file or symlink was preserved.
+// Callers can detect it with errors.Is, including concurrent publication races.
+var ErrOutputExists = errors.New("output already exists")
+
+// New constructs a local engine without opening a database or spawning tools.
 func New(c Config) *Engine {
 	if c.FFmpegPath == "" {
 		c.FFmpegPath = "ffmpeg"
@@ -74,6 +94,8 @@ func New(c Config) *Engine {
 	return e
 }
 
+// Inspect reads duration and dimensions with FFprobe within InspectTimeout.
+// Only regular local files and supported finite media formats are accepted.
 func (e *Engine) Inspect(ctx context.Context, path string) (SourceInfo, error) {
 	if e.configErr != nil {
 		return SourceInfo{}, e.configErr
@@ -100,6 +122,9 @@ func (e *Engine) Inspect(ctx context.Context, path string) (SourceInfo, error) {
 	return SourceInfo{DurationMS: s.DurationMS, Width: s.Width, Height: s.Height}, err
 }
 
+// Export validates the interval, writes and verifies a temporary media file,
+// then publishes it exclusively at output. The output directory must exist.
+// Cancellation and failures before publication remove temporary files.
 func (e *Engine) Export(ctx context.Context, input, output string, r Range, o Options) (Result, error) {
 	if e.configErr != nil {
 		return Result{}, e.configErr
@@ -135,7 +160,7 @@ func (e *Engine) Export(ctx context.Context, input, output string, r Range, o Op
 		return Result{}, err
 	}
 	if _, err = os.Lstat(output); err == nil {
-		return Result{}, errors.New("output already exists")
+		return Result{}, ErrOutputExists
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return Result{}, err
 	}
@@ -154,6 +179,9 @@ func (e *Engine) Export(ctx context.Context, input, output string, r Range, o Op
 	}
 	// Link creates the output exclusively; an existing file is never replaced.
 	if err = os.Link(tmp, output); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return Result{}, ErrOutputExists
+		}
 		return Result{}, err
 	}
 	info, err := os.Stat(output)

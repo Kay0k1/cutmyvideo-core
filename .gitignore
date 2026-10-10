@@ -3,6 +3,9 @@
 !.env.example
 /data/
 /bin/
+/dist/
+__pycache__/
+/backups/
 *.log
 coverage.out
 *.cookies

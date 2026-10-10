@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-10",
+  "baseline_revision": "c9f339550ae3b6507cfb9d2c9f526d39be33c815",
+  "runtime_change": "pool gzip.BestSpeed writers in internal/app/metadata_payload.go",
+  "go_version": "go version go1.27.1 linux/amd64",
+  "platform": "Linux-5.15.0-190-generic-x86_64-with-glibc2.35",
+  "cpu": "AMD Ryzen 9 5950X 16-Core Processor",
+  "cpu_count_visible": 4,
+  "gomaxprocs": 2,
+  "benchmark": "go test ./internal/app -run ^$ -bench ^BenchmarkMetadataPayloadEncode$ -benchmem -benchtime=1s -count=10 -cpu=2",
+  "fixture": "offline metadata: 777B small JSON, 182 formats with repeated or independently generated 2000-character URL tokens",
+  "scope": "metadata cache fill encoding only; excludes extractor, PostgreSQL and FFmpeg",
+  "baseline_harness": "same encode benchmark added before runtime changes; before test binary retained for alternating long measurements",
+  "caveat": "shared KVM host; timing includes Go garbage collection and normal host variability",
+  "steady_state_command": "alternating before/after test binaries, each -test.run=^$ -test.bench=^BenchmarkMetadataPayloadEncode/(repeated_tokens|unique_tokens)$ -test.benchmem -test.benchtime=5s -test.count=1 -test.cpu=2, three pairs"
+}

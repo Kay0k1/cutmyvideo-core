@@ -1,0 +1,324 @@
+{
+  "1s_10_repeats": {
+    "before": {
+      "small_JSON": {
+        "samples": 10,
+        "median": {
+          "ns_per_op": 4589.5,
+          "stored_bytes_per_op": 777.0,
+          "allocated_bytes_per_op": 1380.0,
+          "allocations_per_op": 10.0
+        },
+        "range": {
+          "ns_per_op": [
+            4309.0,
+            4994.0
+          ],
+          "stored_bytes_per_op": [
+            777.0,
+            777.0
+          ],
+          "allocated_bytes_per_op": [
+            1380.0,
+            1380.0
+          ],
+          "allocations_per_op": [
+            10.0,
+            10.0
+          ]
+        }
+      },
+      "repeated_tokens": {
+        "samples": 10,
+        "median": {
+          "ns_per_op": 1753492.0,
+          "stored_bytes_per_op": 5126.0,
+          "allocated_bytes_per_op": 1666372.5,
+          "allocations_per_op": 581.0
+        },
+        "range": {
+          "ns_per_op": [
+            1625826.0,
+            1903544.0
+          ],
+          "stored_bytes_per_op": [
+            5126.0,
+            5126.0
+          ],
+          "allocated_bytes_per_op": [
+            1600223.0,
+            1676485.0
+          ],
+          "allocations_per_op": [
+            580.0,
+            581.0
+          ]
+        }
+      },
+      "unique_tokens": {
+        "samples": 10,
+        "median": {
+          "ns_per_op": 4013303.0,
+          "stored_bytes_per_op": 410809.0,
+          "allocated_bytes_per_op": 3014134.0,
+          "allocations_per_op": 594.0
+        },
+        "range": {
+          "ns_per_op": [
+            3799713.0,
+            5796164.0
+          ],
+          "stored_bytes_per_op": [
+            410809.0,
+            410809.0
+          ],
+          "allocated_bytes_per_op": [
+            2928423.0,
+            3085893.0
+          ],
+          "allocations_per_op": [
+            592.0,
+            595.0
+          ]
+        }
+      }
+    },
+    "after": {
+      "small_JSON": {
+        "samples": 10,
+        "median": {
+          "ns_per_op": 4430.0,
+          "stored_bytes_per_op": 777.0,
+          "allocated_bytes_per_op": 1380.0,
+          "allocations_per_op": 10.0
+        },
+        "range": {
+          "ns_per_op": [
+            4137.0,
+            5896.0
+          ],
+          "stored_bytes_per_op": [
+            777.0,
+            777.0
+          ],
+          "allocated_bytes_per_op": [
+            1380.0,
+            1380.0
+          ],
+          "allocations_per_op": [
+            10.0,
+            10.0
+          ]
+        }
+      },
+      "repeated_tokens": {
+        "samples": 10,
+        "median": {
+          "ns_per_op": 1320854.5,
+          "stored_bytes_per_op": 5126.0,
+          "allocated_bytes_per_op": 581909.0,
+          "allocations_per_op": 561.0
+        },
+        "range": {
+          "ns_per_op": [
+            1243819.0,
+            2165272.0
+          ],
+          "stored_bytes_per_op": [
+            5126.0,
+            5126.0
+          ],
+          "allocated_bytes_per_op": [
+            526497.0,
+            600323.0
+          ],
+          "allocations_per_op": [
+            560.0,
+            561.0
+          ]
+        }
+      },
+      "unique_tokens": {
+        "samples": 10,
+        "median": {
+          "ns_per_op": 3575785.0,
+          "stored_bytes_per_op": 410809.0,
+          "allocated_bytes_per_op": 2171925.0,
+          "allocations_per_op": 579.0
+        },
+        "range": {
+          "ns_per_op": [
+            3319758.0,
+            3874608.0
+          ],
+          "stored_bytes_per_op": [
+            410809.0,
+            410809.0
+          ],
+          "allocated_bytes_per_op": [
+            2096275.0,
+            2519192.0
+          ],
+          "allocations_per_op": [
+            578.0,
+            585.0
+          ]
+        }
+      }
+    },
+    "change_percent": {
+      "small_JSON": {
+        "ns_per_op": -3.475324109380107,
+        "stored_bytes_per_op": 0.0,
+        "allocated_bytes_per_op": 0.0,
+        "allocations_per_op": 0.0
+      },
+      "repeated_tokens": {
+        "ns_per_op": -24.67290982793192,
+        "stored_bytes_per_op": 0.0,
+        "allocated_bytes_per_op": -65.0792964958315,
+        "allocations_per_op": -3.4423407917383853
+      },
+      "unique_tokens": {
+        "ns_per_op": -10.901693692203152,
+        "stored_bytes_per_op": 0.0,
+        "allocated_bytes_per_op": -27.941989307708283,
+        "allocations_per_op": -2.5252525252525304
+      }
+    }
+  },
+  "5s_3_alternating_pairs": {
+    "before": {
+      "repeated_tokens": {
+        "samples": 3,
+        "median": {
+          "ns_per_op": 1800136.0,
+          "stored_bytes_per_op": 5126.0,
+          "allocated_bytes_per_op": 1656990.0,
+          "allocations_per_op": 581.0
+        },
+        "range": {
+          "ns_per_op": [
+            1760438.0,
+            3433656.0
+          ],
+          "stored_bytes_per_op": [
+            5126.0,
+            5126.0
+          ],
+          "allocated_bytes_per_op": [
+            1499046.0,
+            1682045.0
+          ],
+          "allocations_per_op": [
+            578.0,
+            581.0
+          ]
+        }
+      },
+      "unique_tokens": {
+        "samples": 3,
+        "median": {
+          "ns_per_op": 4272779.0,
+          "stored_bytes_per_op": 410809.0,
+          "allocated_bytes_per_op": 3045548.0,
+          "allocations_per_op": 594.0
+        },
+        "range": {
+          "ns_per_op": [
+            3822546.0,
+            7770140.0
+          ],
+          "stored_bytes_per_op": [
+            410809.0,
+            410809.0
+          ],
+          "allocated_bytes_per_op": [
+            2794672.0,
+            3062811.0
+          ],
+          "allocations_per_op": [
+            589.0,
+            595.0
+          ]
+        }
+      }
+    },
+    "after": {
+      "repeated_tokens": {
+        "samples": 3,
+        "median": {
+          "ns_per_op": 1293195.0,
+          "stored_bytes_per_op": 5126.0,
+          "allocated_bytes_per_op": 574725.0,
+          "allocations_per_op": 561.0
+        },
+        "range": {
+          "ns_per_op": [
+            1175682.0,
+            1724925.0
+          ],
+          "stored_bytes_per_op": [
+            5126.0,
+            5126.0
+          ],
+          "allocated_bytes_per_op": [
+            558124.0,
+            582701.0
+          ],
+          "allocations_per_op": [
+            561.0,
+            561.0
+          ]
+        }
+      },
+      "unique_tokens": {
+        "samples": 3,
+        "median": {
+          "ns_per_op": 3374962.0,
+          "stored_bytes_per_op": 410809.0,
+          "allocated_bytes_per_op": 2246297.0,
+          "allocations_per_op": 580.0
+        },
+        "range": {
+          "ns_per_op": [
+            3167006.0,
+            3834522.0
+          ],
+          "stored_bytes_per_op": [
+            410809.0,
+            410809.0
+          ],
+          "allocated_bytes_per_op": [
+            2229086.0,
+            2253340.0
+          ],
+          "allocations_per_op": [
+            580.0,
+            580.0
+          ]
+        }
+      }
+    },
+    "change_percent": {
+      "repeated_tokens": {
+        "ns_per_op": -28.161261149157625,
+        "stored_bytes_per_op": 0.0,
+        "allocated_bytes_per_op": -65.31511958430649,
+        "allocations_per_op": -3.4423407917383853
+      },
+      "unique_tokens": {
+        "ns_per_op": -21.01248391269476,
+        "stored_bytes_per_op": 0.0,
+        "allocated_bytes_per_op": -26.243257371087235,
+        "allocations_per_op": -2.3569023569023573
+      }
+    }
+  },
+  "limits": [
+    "Synthetic metadata encoding only; no FFmpeg, extractor, network or PostgreSQL latency measured.",
+    "Allocations are cumulative per operation, not peak or resident memory.",
+    "sync.Pool may discard idle writers after garbage collection; first or infrequent fills may see no benefit.",
+    "Shared KVM host. The third 5s pair overlapped another race-test compilation; raw measurements retain this outlier."
+  ]
+}

@@ -1,5 +1,11 @@
 # Performance and recovery
 
+Current optimization evidence: [metadata cache encoding, 2026-10-10](../benchmarks/2026-10-10-metadata-compression/README.md)
+includes raw before/after measurements, environment, medians/ranges and limits.
+Repeated compressible metadata fills allocated 65.1% fewer bytes and took 24.7%
+less time in that synthetic fixture. This does not measure whole-video export
+speed or resident memory; pooled writers can be discarded during GC.
+
 The core spends most export time in network inspection and FFmpeg, rather than
 Go function calls. Defaults prioritize short, accurate clips on a CPU-only
 server. Stream copy retains its documented keyframe boundary adjustment.
@@ -294,8 +300,11 @@ worker cgroup memory peaked at 378.11 MiB. These short synthetic exports measure
 this workload, not user capacity, platform extraction availability or sustained
 8K throughput. Cgroup memory includes more than process RSS. The measured
 snapshot predates the final dimension-based semaphore; these 1080p inputs use
-one slot in both versions. Reproduce with the web repository's
-`scripts/load-profile.py`; keep its input, limits and revision with the results.
+one slot in both versions. These historical throughput runs used an operator-specific
+load harness that is not distributed with the core; the figures provide workload
+context rather than a reproducible public load benchmark. The current
+[metadata encoding comparison](../benchmarks/2026-10-10-metadata-compression/README.md)
+includes its public harness, raw runs and environment.
 
 ## Storage maintenance and source listing, 2026-10-08
 

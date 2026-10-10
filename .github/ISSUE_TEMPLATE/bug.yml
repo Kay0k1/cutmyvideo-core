@@ -5,7 +5,14 @@ body:
     id: version
     attributes:
       label: Version
-      placeholder: Commit or release tag
+      placeholder: Output of cutmy version, or commit/release tag
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS/architecture, FFmpeg version, CLI/library/API, and sanitized deployment limits. Never paste environment files or a database DSN.
     validations:
       required: true
   - type: textarea

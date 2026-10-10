@@ -1,0 +1,32 @@
+cutmyvideo-core CLI
+
+Install FFmpeg and ffprobe with libx264, AAC and libmp3lame support; put both on PATH.
+Extract this archive and run its cutmy executable (cutmy.exe on Windows).
+
+  cutmy --help
+  cutmy version
+  cutmy inspect --input interview.mp4
+  cutmy clip --input interview.mp4 --start 10 --end 40 --output moment.mp4
+  cutmy clip --input interview.mp4 --start 10 --end 40 --mode copy --output original.mp4
+
+Existing outputs are never overwritten. Accurate mode re-encodes; copy mode may
+move the beginning to a preceding keyframe. The JSON result reports actual bounds.
+For slow/long local exports, set --timeout (default 30m); FFmpeg is a separate process.
+
+BUILD.json records source revision, target and binary checksum. Verify the archive
+against SHA256SUMS from the same GitHub release before installation.
+
+Linux is exercised with real media in CI. macOS/Windows archives are cross-built;
+their runtime and cancellation behavior still need native-platform verification.
+
+The executable also includes server, worker and maintenance commands. Hosting
+requires PostgreSQL and persistent media storage; platform import additionally
+requires the pinned yt-dlp and Node.js runtime. Use the Docker quick start and
+operator guide rather than exposing a bare server with default settings.
+
+Documentation: https://github.com/Kay0k1/cutmyvideo-core
+Issues: https://github.com/Kay0k1/cutmyvideo-core/issues
+Security: https://github.com/Kay0k1/cutmyvideo-core/security/advisories/new
+
+cutmyvideo-core uses the MIT license included here. External media tools and
+other dependencies retain their own licenses.

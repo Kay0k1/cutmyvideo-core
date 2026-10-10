@@ -1,0 +1,10 @@
+# Add to compose.example.yml when Caddy runs directly on the same host.
+# Keep the API's existing 127.0.0.1-only port binding.
+services:
+  api:
+    environment: &https-env
+      PUBLIC_ORIGIN: https://${CUTMY_DOMAIN:?Set CUTMY_DOMAIN to the hostname served by Caddy}
+      COOKIE_SECURE: "true"
+      TRUST_PROXY: "true"
+  worker:
+    environment: *https-env

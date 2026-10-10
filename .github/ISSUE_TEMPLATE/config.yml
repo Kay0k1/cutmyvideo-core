@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security reports
+    url: https://github.com/Kay0k1/cutmyvideo-core/blob/main/SECURITY.md
+    about: Follow the private reporting instructions; do not post exploit details publicly.

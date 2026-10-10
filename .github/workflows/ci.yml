@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit or tag to check
+        required: false
+        default: ''
+        type: string
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -11,6 +19,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:17.11-bookworm
@@ -29,9 +38,11 @@ jobs:
       CUTMY_TEST_YTDLP: /tmp/cutmy-yt-dlp
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: '1.27.1'
+          go-version: '1.27.2'
           cache: true
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg python3
       - name: Install pinned extractor for offline metadata regressions
@@ -39,13 +50,11 @@ jobs:
           curl --fail --show-error --location --proto '=https' --tlsv1.2 https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp -o /tmp/cutmy-yt-dlp
           echo '1fa6733c37ea6fb51c99ad8fe785e7b7e5f3246c9b980230329d4fb72ed8d4d6  /tmp/cutmy-yt-dlp' | sha256sum --check
           chmod 755 /tmp/cutmy-yt-dlp
-      - name: Formatting
-        run: test -z "$(gofmt -l cmd internal pkg)"
-      - name: Static checks
-        run: go vet ./...
-      - name: Unit, media, and PostgreSQL integration tests
-        run: go test -race -count=1 ./...
-      - name: Reachable vulnerability scan
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
-      - name: Build
-        run: go build -trimpath ./cmd/cutmy
+      - name: Full checks (media, PostgreSQL, docs, workflows, race and vulnerabilities)
+        run: make check-full
+      - name: CLI help and build information
+        run: |
+          bin/cutmy --help
+          bin/cutmy clip --help
+          bin/cutmy inspect --help
+          bin/cutmy version

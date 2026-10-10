@@ -12,6 +12,36 @@ import (
 )
 
 var metadataPayloadBenchmarkInfo platformInfo
+var metadataPayloadBenchmarkBytes []byte
+
+// Encoding happens on each cache fill, so include both the highly repetitive
+// and independent signed-URL cases; the latter intentionally keeps raw JSON.
+func BenchmarkMetadataPayloadEncode(b *testing.B) {
+	_, small := metadataCacheFixture()
+	_, repeated := metadataPayloadFixture(false)
+	_, unique := metadataPayloadFixture(true)
+	for _, tt := range []struct {
+		name string
+		info platformInfo
+	}{{"small_JSON", small}, {"repeated_tokens", repeated}, {"unique_tokens", unique}} {
+		b.Run(tt.name, func(b *testing.B) {
+			raw, err := json.Marshal(tt.info)
+			if err != nil {
+				b.Fatal(err)
+			}
+			b.ReportAllocs()
+			b.SetBytes(int64(len(raw)))
+			b.ResetTimer()
+			for range b.N {
+				metadataPayloadBenchmarkBytes, err = encodePlatformMetadata(tt.info)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+			b.ReportMetric(float64(len(metadataPayloadBenchmarkBytes)), "stored-B/op")
+		})
+	}
+}
 
 func metadataPayloadFixture(unique bool) (Source, platformInfo) {
 	source, info := benchmarkMetadata()

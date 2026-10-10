@@ -1,6 +1,6 @@
 # Security model and operational limits
 
-This MVP handles untrusted URLs and media. The engine includes application protections, and deployment provides another boundary.
+The engine handles untrusted URLs and media. The engine includes application protections, and deployment provides another boundary.
 
 ## Network
 
@@ -15,7 +15,7 @@ This MVP handles untrusted URLs and media. The engine includes application prote
 - Finite HLS is parsed by Go, with bounded size, nesting, variants, segment count/durations and a mandatory completed media playlist. Each selected segment, relative URL, init map and redirect uses the same public-IP-pinned HTTPS client and aggregate job budget. Encrypted keys and unsupported tags/rendition clocks fail explicitly; no key URL is fetched. Only bounded selected media bytes are staged and remuxed locally.
 - FFmpeg/ffprobe input protocol and demuxer allowlists refuse untrusted playlists/network manifests and arbitrary format protocols. Local inputs permit the file protocol; remote media inputs permit HTTP/TCP to the relay and an explicit media-container allowlist. MOV external data references are not enabled.
 
-The proxy settings are a contract with yt-dlp. The production deployment adds a separate Docker egress policy: API/worker traffic may reach their PostgreSQL instance, public DNS and public HTTPS, while private/metadata destinations and other ports are refused. A systemd dependency installs this policy before starting the processing containers, including after a Docker restart. See the web repository's deployment guide for installation and verification. Running the engine outside that deployment requires equivalent isolation. Keep dependencies updated.
+The proxy settings are a contract with yt-dlp. Public deployments should add an independent container/host egress policy: allow the service's own PostgreSQL, public DNS and public HTTPS, and refuse private/metadata destinations and other outbound ports. The standalone Compose example does not install that firewall; configure and verify it separately, including after Docker/host restarts. See the independent [operator guide](operations.md), and keep dependencies updated.
 
 ## Ownership and browser requests
 

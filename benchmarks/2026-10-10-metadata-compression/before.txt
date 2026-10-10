@@ -1,0 +1,36 @@
+goos: linux
+goarch: amd64
+pkg: github.com/Kay0k1/cutmyvideo-core/internal/app
+cpu: AMD Ryzen 9 5950X 16-Core Processor            
+BenchmarkMetadataPayloadEncode/small_JSON-2         	  287514	      4524 ns/op	 171.74 MB/s	       777.0 stored-B/op	    1380 B/op	      10 allocs/op
+BenchmarkMetadataPayloadEncode/small_JSON-2         	  227014	      4632 ns/op	 167.73 MB/s	       777.0 stored-B/op	    1380 B/op	      10 allocs/op
+BenchmarkMetadataPayloadEncode/small_JSON-2         	  274393	      4684 ns/op	 165.89 MB/s	       777.0 stored-B/op	    1380 B/op	      10 allocs/op
+BenchmarkMetadataPayloadEncode/small_JSON-2         	  248215	      4309 ns/op	 180.31 MB/s	       777.0 stored-B/op	    1380 B/op	      10 allocs/op
+BenchmarkMetadataPayloadEncode/small_JSON-2         	  301784	      4309 ns/op	 180.34 MB/s	       777.0 stored-B/op	    1380 B/op	      10 allocs/op
+BenchmarkMetadataPayloadEncode/small_JSON-2         	  274749	      4547 ns/op	 170.88 MB/s	       777.0 stored-B/op	    1380 B/op	      10 allocs/op
+BenchmarkMetadataPayloadEncode/small_JSON-2         	  274986	      4388 ns/op	 177.08 MB/s	       777.0 stored-B/op	    1380 B/op	      10 allocs/op
+BenchmarkMetadataPayloadEncode/small_JSON-2         	  281833	      4759 ns/op	 163.29 MB/s	       777.0 stored-B/op	    1380 B/op	      10 allocs/op
+BenchmarkMetadataPayloadEncode/small_JSON-2         	  260524	      4994 ns/op	 155.59 MB/s	       777.0 stored-B/op	    1380 B/op	      10 allocs/op
+BenchmarkMetadataPayloadEncode/small_JSON-2         	  250335	      4669 ns/op	 166.41 MB/s	       777.0 stored-B/op	    1380 B/op	      10 allocs/op
+BenchmarkMetadataPayloadEncode/repeated_tokens-2    	     782	   1752803 ns/op	 234.62 MB/s	      5126 stored-B/op	 1659023 B/op	     581 allocs/op
+BenchmarkMetadataPayloadEncode/repeated_tokens-2    	     764	   1754181 ns/op	 234.44 MB/s	      5126 stored-B/op	 1673670 B/op	     581 allocs/op
+BenchmarkMetadataPayloadEncode/repeated_tokens-2    	     628	   1903544 ns/op	 216.04 MB/s	      5126 stored-B/op	 1600223 B/op	     580 allocs/op
+BenchmarkMetadataPayloadEncode/repeated_tokens-2    	     705	   1750784 ns/op	 234.89 MB/s	      5126 stored-B/op	 1669278 B/op	     581 allocs/op
+BenchmarkMetadataPayloadEncode/repeated_tokens-2    	     674	   1815555 ns/op	 226.51 MB/s	      5126 stored-B/op	 1676485 B/op	     581 allocs/op
+BenchmarkMetadataPayloadEncode/repeated_tokens-2    	     790	   1659818 ns/op	 247.77 MB/s	      5126 stored-B/op	 1674970 B/op	     581 allocs/op
+BenchmarkMetadataPayloadEncode/repeated_tokens-2    	     754	   1625826 ns/op	 252.95 MB/s	      5126 stored-B/op	 1663467 B/op	     581 allocs/op
+BenchmarkMetadataPayloadEncode/repeated_tokens-2    	     600	   1721138 ns/op	 238.94 MB/s	      5126 stored-B/op	 1675512 B/op	     581 allocs/op
+BenchmarkMetadataPayloadEncode/repeated_tokens-2    	     732	   1794355 ns/op	 229.19 MB/s	      5126 stored-B/op	 1648676 B/op	     581 allocs/op
+BenchmarkMetadataPayloadEncode/repeated_tokens-2    	     610	   1850534 ns/op	 222.23 MB/s	      5126 stored-B/op	 1652468 B/op	     581 allocs/op
+BenchmarkMetadataPayloadEncode/unique_tokens-2      	     268	   4092596 ns/op	 100.38 MB/s	    410809 stored-B/op	 3085893 B/op	     595 allocs/op
+BenchmarkMetadataPayloadEncode/unique_tokens-2      	     286	   4178262 ns/op	  98.32 MB/s	    410809 stored-B/op	 2945954 B/op	     593 allocs/op
+BenchmarkMetadataPayloadEncode/unique_tokens-2      	     314	   4259253 ns/op	  96.45 MB/s	    410809 stored-B/op	 3051043 B/op	     594 allocs/op
+BenchmarkMetadataPayloadEncode/unique_tokens-2      	     266	   5796164 ns/op	  70.88 MB/s	    410809 stored-B/op	 2928423 B/op	     592 allocs/op
+BenchmarkMetadataPayloadEncode/unique_tokens-2      	     236	   4240732 ns/op	  96.87 MB/s	    410809 stored-B/op	 2967780 B/op	     593 allocs/op
+BenchmarkMetadataPayloadEncode/unique_tokens-2      	     330	   3808955 ns/op	 107.85 MB/s	    410809 stored-B/op	 3014144 B/op	     594 allocs/op
+BenchmarkMetadataPayloadEncode/unique_tokens-2      	     280	   3934010 ns/op	 104.43 MB/s	    410809 stored-B/op	 3023550 B/op	     594 allocs/op
+BenchmarkMetadataPayloadEncode/unique_tokens-2      	     338	   3799713 ns/op	 108.12 MB/s	    410809 stored-B/op	 2944384 B/op	     593 allocs/op
+BenchmarkMetadataPayloadEncode/unique_tokens-2      	     320	   3919365 ns/op	 104.82 MB/s	    410809 stored-B/op	 3036782 B/op	     594 allocs/op
+BenchmarkMetadataPayloadEncode/unique_tokens-2      	     330	   3908063 ns/op	 105.12 MB/s	    410809 stored-B/op	 3014124 B/op	     594 allocs/op
+PASS
+ok  	github.com/Kay0k1/cutmyvideo-core/internal/app	45.423s

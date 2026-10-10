@@ -7,8 +7,10 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -105,6 +107,59 @@ func TestMetadataPayloadKeepsHighEntropyURLsUncompressed(t *testing.T) {
 	got, ok := decodePlatformMetadata(payload)
 	if !ok || got.Formats[0].URL != info.Formats[0].URL || len(got.Formats) != len(info.Formats) {
 		t.Fatal("uncompressed high-entropy metadata changed")
+	}
+}
+
+func TestMetadataPayloadParallelEncodingKeepsRetainedPayloadsIndependent(t *testing.T) {
+	const workers = 12
+	retained := make(chan []byte, workers)
+	var writers sync.WaitGroup
+	for worker := range workers {
+		writers.Add(1)
+		go func() {
+			defer writers.Done()
+			_, info := benchmarkMetadata()
+			info.ID = fmt.Sprintf("session-%d", worker)
+			info.Title = fmt.Sprintf("private recording %d", worker)
+			payload, err := encodePlatformMetadata(info)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			snapshot := bytes.Clone(payload)
+			// Keep the original alive while later calls reuse compressors.
+			for iteration := range 5 {
+				info.Title = fmt.Sprintf("replacement %d/%d", worker, iteration)
+				if _, err := encodePlatformMetadata(info); err != nil {
+					t.Error(err)
+					return
+				}
+			}
+			if !bytes.Equal(payload, snapshot) {
+				t.Error("a later encode overwrote a retained payload")
+			}
+			got, ok := decodePlatformMetadata(payload)
+			if !ok || got.ID != fmt.Sprintf("session-%d", worker) || got.Title != fmt.Sprintf("private recording %d", worker) {
+				t.Error("concurrent cache fills mixed metadata between sessions")
+			}
+			retained <- payload
+		}()
+	}
+	writers.Wait()
+	close(retained)
+	if len(retained) != workers {
+		t.Fatal("a concurrent cache fill failed")
+	}
+	// Exercise a raw JSON cache fill after the compressors have been reused,
+	// and verify all earlier compressed outputs remain valid afterward.
+	_, unique := metadataPayloadFixture(true)
+	if _, err := encodePlatformMetadata(unique); err != nil {
+		t.Fatal(err)
+	}
+	for payload := range retained {
+		if _, ok := decodePlatformMetadata(payload); !ok {
+			t.Fatal("retained metadata was damaged by a later raw JSON fill")
+		}
 	}
 }
 

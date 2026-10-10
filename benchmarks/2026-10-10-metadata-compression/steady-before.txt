@@ -1,0 +1,21 @@
+goos: linux
+goarch: amd64
+pkg: github.com/Kay0k1/cutmyvideo-core/internal/app
+cpu: AMD Ryzen 9 5950X 16-Core Processor            
+BenchmarkMetadataPayloadEncode/repeated_tokens-2         	    3574	   1800136 ns/op	 228.45 MB/s	      5126 stored-B/op	 1656990 B/op	     581 allocs/op
+BenchmarkMetadataPayloadEncode/unique_tokens-2           	    1449	   4272779 ns/op	  96.15 MB/s	    410809 stored-B/op	 3062811 B/op	     595 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Kay0k1/cutmyvideo-core/internal/app
+cpu: AMD Ryzen 9 5950X 16-Core Processor            
+BenchmarkMetadataPayloadEncode/repeated_tokens-2         	    3326	   1760438 ns/op	 233.60 MB/s	      5126 stored-B/op	 1682045 B/op	     581 allocs/op
+BenchmarkMetadataPayloadEncode/unique_tokens-2           	    1686	   3822546 ns/op	 107.47 MB/s	    410809 stored-B/op	 3045548 B/op	     594 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Kay0k1/cutmyvideo-core/internal/app
+cpu: AMD Ryzen 9 5950X 16-Core Processor            
+BenchmarkMetadataPayloadEncode/repeated_tokens-2         	    2721	   3433656 ns/op	 119.77 MB/s	      5126 stored-B/op	 1499046 B/op	     578 allocs/op
+BenchmarkMetadataPayloadEncode/unique_tokens-2           	     661	   7770140 ns/op	  52.87 MB/s	    410809 stored-B/op	 2794672 B/op	     589 allocs/op
+PASS

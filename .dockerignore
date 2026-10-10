@@ -6,5 +6,8 @@
 *.cookies
 /data
 /bin
+/dist
+/backups
+__pycache__
 *.log
 coverage.out

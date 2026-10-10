@@ -6,9 +6,21 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"io"
+	"sync"
 )
 
 const platformMetadataCompressionThreshold = 4 << 10
+
+// BestSpeed retains substantial scratch tables. Reuse those tables across
+// cache fills without pooling the output buffers that callers own. sync.Pool
+// lets the runtime discard idle compressors under memory pressure.
+var platformMetadataWriters = sync.Pool{New: func() any {
+	writer, err := gzip.NewWriterLevel(io.Discard, gzip.BestSpeed)
+	if err != nil {
+		panic(err) // The compression level is a fixed supported constant.
+	}
+	return writer
+}}
 
 // Short-lived metadata contains repeated signed URLs and request headers.
 // Compress only substantial payloads, keeping legacy JSON readable across a
@@ -22,10 +34,14 @@ func encodePlatformMetadata(info platformInfo) ([]byte, error) {
 		return payload, nil
 	}
 	var compressed bytes.Buffer
-	writer, err := gzip.NewWriterLevel(&compressed, gzip.BestSpeed)
-	if err != nil {
-		return nil, errMetadataNotCacheable
-	}
+	writer := platformMetadataWriters.Get().(*gzip.Writer)
+	writer.Reset(&compressed)
+	defer func() {
+		// Drop the destination before release: pooled compressors must not keep
+		// returned payloads or another session's output buffer reachable.
+		writer.Reset(io.Discard)
+		platformMetadataWriters.Put(writer)
+	}()
 	if _, err = writer.Write(payload); err != nil {
 		return nil, errMetadataNotCacheable
 	}

@@ -60,8 +60,8 @@ func TestEngineInspectAndExportActualMedia(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err = e.Export(context.Background(), input, output, Range{StartMS: 0, EndMS: 1000}, Options{}); err == nil {
-				t.Fatal("overwrote existing output")
+			if _, err = e.Export(context.Background(), input, output, Range{StartMS: 0, EndMS: 1000}, Options{}); !errors.Is(err, ErrOutputExists) {
+				t.Fatal("existing output not reported correctly", err)
 			}
 			unchanged, _ := os.ReadFile(output)
 			if string(unchanged) != string(after) {
@@ -115,8 +115,8 @@ func TestEngineOutputPublicationIsExclusiveIncludingDanglingSymlink(t *testing.T
 	if err := os.Symlink(filepath.Join(dir, "absent"), output); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.Export(context.Background(), input, output, Range{EndMS: 1000}, Options{}); err == nil {
-		t.Fatal("replaced dangling symlink")
+	if _, err := e.Export(context.Background(), input, output, Range{EndMS: 1000}, Options{}); !errors.Is(err, ErrOutputExists) {
+		t.Fatal("existing symlink not reported correctly", err)
 	}
 	if _, err := os.Lstat(output); err != nil {
 		t.Fatal("deleted preexisting output")
@@ -140,6 +140,8 @@ func TestEngineOutputPublicationIsExclusiveIncludingDanglingSymlink(t *testing.T
 	for err := range results {
 		if err == nil {
 			successes++
+		} else if !errors.Is(err, ErrOutputExists) {
+			t.Fatal("concurrent existing output not reported correctly", err)
 		}
 	}
 	if successes != 1 {

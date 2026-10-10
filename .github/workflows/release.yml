@@ -1,0 +1,68 @@
+name: CLI release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing release tag to rebuild (does not publish)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cli-release-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+  packages:
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      RELEASE_VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ env.RELEASE_VERSION }}
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - name: Require release notes for this version
+        run: python3 scripts/release-notes.py "$RELEASE_VERSION" > /tmp/cutmy-release-notes.md
+      - name: Build twice and verify deterministic archives
+        run: |
+          scripts/release.sh "$RELEASE_VERSION" "$RUNNER_TEMP/release-first"
+          scripts/release.sh "$RELEASE_VERSION" "$RUNNER_TEMP/release-second"
+          cmp "$RUNNER_TEMP/release-first/SHA256SUMS" "$RUNNER_TEMP/release-second/SHA256SUMS"
+          cd "$RUNNER_TEMP/release-first"
+          sha256sum --check SHA256SUMS
+      - name: Save verified archives
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cutmyvideo-core-${{ env.RELEASE_VERSION }}
+          path: ${{ runner.temp }}/release-first/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Create draft GitHub release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          extra_flags=()
+          if [[ "$RELEASE_VERSION" == *-* ]]; then extra_flags+=(--prerelease); fi
+          gh release create "$RELEASE_VERSION" "$RUNNER_TEMP"/release-first/* \
+            --verify-tag --draft "${extra_flags[@]}" \
+            --title "cutmyvideo-core $RELEASE_VERSION" --notes-file /tmp/cutmy-release-notes.md

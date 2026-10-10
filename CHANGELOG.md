@@ -4,14 +4,23 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 
 ## Unreleased
 
+## 0.2.0 - 2026-10-10
+
 ### Added
+- CLI `inspect`, JSON `version`/`--version` build information, usable command help, configurable local operation deadlines, and typed `engine.ErrOutputExists` for safe output handling.
+- Reproducible tagged CLI archives for Linux/macOS amd64/arm64 and Windows amd64, embedded build metadata, SHA256 checksums and included Go/dependency license notices. Tag CI creates a draft release after full checks and a two-build reproducibility comparison.
+- `make check` / `make check-full`, documentation-link and workflow validation, current RU/EN quick starts, library/API usage, complete configuration, operator backup/restore and contributor/release guides.
+- Independent HTTPS API hosting example with a loopback-only Compose overlay and Caddy reverse proxy; the core does not depend on the private product UI repository.
+- Bounded 30-second 480p H.264/AAC preview windows for platform sources and browser-codec fallback; a private owner-checked 30-minute idle cache with byte/entry limits, same-window render coalescing and foreground seek priority.
+- Long export defaults (12 hours per interval, 24 hours total), separate upload and remote-transfer budgets, duration/mode-based storage reservations and bounded accurate-export bitrate.
+- Codec-compatible HLS continuity-period joins preserve long recording timelines across timestamp resets and initialization-map changes.
 - Reproducible HLS parsing/window-selection, storage admission and saturated rate-limit benchmarks with measured CPU/allocation results.
 - Fast CPU encoding profile (ultrafast/CRF 18 with CABAC), configurable compact profile, bounded thread settings, CLI profile/thread options and a 128 MiB soft Go runtime memory limit in Docker; measured speed/file-size tradeoffs are documented.
 - Optional measured `items[].progress_ms` during encoding, bounded/redacted progress parsing and safe per-stage timing logs.
 - Private, owner-specific five-minute platform metadata cache with signed-expiry safety margins, database-backed miss coalescing and repeated-import reuse without extending the original deadline.
 - Optional fixed `items[].error_code` export diagnostics, including absent audio, source changes, transfer failures, timeouts, output/storage limits and incompatible copy settings; legacy items remain readable and private subprocess output stays redacted.
 - Independent `cutmy worker-healthcheck` based on successful queue/lease access within 30 seconds and a private, empty container-local marker; the deployment example checks the worker separately from the API.
-- Recognized page adapters for15 platforms, including Twitch VODs/clips, Rutube, TikTok, Instagram Reels and YouTube Shorts, with secure HTTP/schemeless normalization on known hosts and preserved access-essential parameters.
+- Recognized page adapters for 15 platforms, including Twitch VODs/clips, Rutube, TikTok, Instagram Reels and YouTube Shorts, with secure HTTP/schemeless normalization on known hosts and preserved access-essential parameters.
 - Additive provider identity, source-page and preview-kind metadata, plus bounded owner-protected JPEG/PNG thumbnails with source retention.
 - Finite unencrypted HLS range staging for combined MPEG-TS/fMP4 streams and audio-only export. Every manifest/variant/map/segment uses guarded HTTPS/public-IP checks, a shared byte budget and bounded parsing.
 - Original-timeline HLS exports account for presentation timestamps after local remux; tests verify first decoded frames, nonzero keyframe-copy bounds and an intentional audio delay against original source samples.
@@ -29,6 +38,9 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 - Bounded private subprocess diagnostics classify failures into fixed categories without logging raw CDN URLs, credentials, or media paths; an unexplained nonzero exit is not automatically retried.
 
 ### Fixed
+- Drain in-flight HTTP requests during shutdown, with a ten-second bound and forced connection close after the deadline; database access remains available until handlers settle.
+- Reject stray CLI arguments and malformed timestamp forms before media processing; expose existing-output errors through `errors.Is` even when concurrent publication wins.
+- Reuse bounded gzip encoder workspaces during repeated metadata-cache fills, reducing CPU/allocation cost while retaining byte-identical payloads, independent output ownership and existing corruption/size checks; before/after raw results are included.
 - Preserve live HTTP connection contexts after fully consumed JSON and multipart bodies; close connections with unread bodies before sending a rejection, avoiding intermittent preview failures and false storage-limit errors behind a keep-alive proxy.
 - Parse HLS playlists with one validated base URL and bounded preallocation; locate selected segments with binary search while preserving network and timeline validation.
 - Read storage directories in bounded unsorted batches; continue quota scans after individual files disappear.
@@ -52,6 +64,7 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 - Enforce explicit resolution caps for copy exports without silent re-encoding or oversized-resolution results; detect output-size truncation before reporting malformed media.
 
 ### Security
+- Updated CI/release/runtime builds to Go 1.27.2, module minimum to Go 1.26.9, `golang.org/x/text` to 0.41.0 and `golang.org/x/sync` to 0.22.0 after reachable vulnerability scanning.
 - Bound rate-table growth and expiry-scan frequency; apply IP admission before owner allocation and preserve existing users at capacity.
 - Limit JSON reads to ten seconds and stop unread request-body draining after rejection, including stalled multipart and early authentication/origin/rate failures.
 - Limit upstream response headers to 64 KiB and exclude local environment variants/cookie files from build context.
@@ -59,6 +72,7 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 - Require nonempty authenticated proxy credentials for Python urllib compatibility; regression verifies that private destinations remain blocked after authentication.
 - Reject malformed YouTube IDs, spoofed or unsupported YouTube hosts, embedded credentials, and nonstandard ports before source preparation or network access.
 
-### Scope
-- First release supports one API and one worker with local disk storage.
-- AI, MCP, Telegram, Mini Apps, live capture, DASH fragments, encrypted/separate-rendition HLS, DRM, authenticated sources, distributed quotas, and S3 are outside this MVP.
+### Operational boundaries
+- Public hosting uses one API with PostgreSQL-coordinated queue/storage state and local shared media storage; each worker has a bounded pool of 1–8 jobs. Multiple API instances require a shared IP limiter.
+- Linux media/runtime behavior is verified in CI. macOS/Windows CLI archives are cross-built; native runtime behavior is not yet verified.
+- Live capture, DASH fragments, encrypted/separate-rendition HLS, DRM, authenticated sources and S3 are not implemented. Source-provider recognition does not guarantee access to every video.
