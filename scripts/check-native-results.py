@@ -18,7 +18,15 @@ required = [
      "TestStorageDeleteDirectorySyncFailureKeepsChargeUntilDurableRetry", "TestStorageDeleteLockAndCancellationFencePhysicalRemoval",
      "TestStorageDeleteStaleListCannotRemoveRegisteredReplacement", "TestStorageDeleteSerializesConcurrentReplacementRegistration",
      "TestStorageDeletePreservesAnotherSourceSharingTheFile", "TestStorageDeleteBackoffIsBoundedAndRetombstonePreservesSchedule",
-     "TestStorageDeleteDuePickerUsesBoundedIndexBeforeFuturePoison"},
+     "TestStorageDeleteDuePickerUsesBoundedIndexBeforeFuturePoison",
+     "TestStorageScanSessionReadsNamesLinearlyAcrossFairClasses", "TestStorageScanSessionRestartReplaysPrefixOnce",
+     "TestStorageScanSessionDiscardsCanceledAndRacedBatches", "TestStorageScanSessionDiscardsUnknownCommitOutcome",
+     "TestStorageScanSessionMembershipChangeRestartsCoverage", "TestStorageScanSessionRejectsStaleDirectoryIdentity",
+     "TestStorageScanSessionWorkPathSwitchClosesReader", "TestStorageScanSessionPartialOperationsReleaseDirectories",
+     "TestMetadataRetentionBatchesPreserveLiveCacheAndIdentity", "TestMetadataRetentionSkipsConcurrentRefreshLocks",
+     "TestMetadataRetentionConcurrentCleanersPreserveFreshRows", "TestMetadataRetentionCacheFailureKeepsCommittedMediaPaths",
+     "TestMetadataRetentionPreservesCancellationAndDatabaseErrors", "TestMetadataRetentionWorkerDrainsMediaAfterCacheFailure",
+     "TestMigrationsUpgradeMaintenancePredecessorPreservesProgressRetriesAndCache"},
 ]
 for filename, names in zip(sys.argv[1:], required):
     events = [json.loads(line) for line in Path(filename).read_text(encoding="utf-8").splitlines() if line.strip()]

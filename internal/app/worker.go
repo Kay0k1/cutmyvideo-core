@@ -525,6 +525,10 @@ func cleanupFiles(ctx context.Context, c Config, s *Store) error {
 	// reconciliation receives its own budget after this bounded retention work.
 	for range 8 {
 		batch, err := s.cleanupStorageBatch(retentionCtx, c.ArtifactTTL, c.SourceTTL)
+		if batch.cacheErr != nil {
+			slog.Warn("metadata cache cleanup pending", "error", batch.cacheErr)
+			problems = append(problems, batch.cacheErr)
+		}
 		if err != nil {
 			slog.Error("cleanup failed", "error", err)
 			problems = append(problems, err)

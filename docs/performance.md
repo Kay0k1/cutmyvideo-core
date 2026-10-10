@@ -267,8 +267,17 @@ increase candidate-probe work. See the reproducible storage-capacity measurement
 for both improvements and regressions at different retained sizes: the
 [2026-10-10 before/after report](../benchmarks/2026-10-10-storage-maintenance/README.md)
 includes complete raw plans, ordinary service-budget progress, failed artificial
-five-millisecond gates and slower full scans. Cache expiry remains an unbounded
-DELETE on both measured versions.
+five-millisecond gates and slower full scans. Cache expiry was an unbounded
+DELETE on both versions in that comparison.
+
+The current runtime uses migration 004's expiry/source index to delete at most
+200 unlocked cache entries per query, rechecking expiry and owner identity.
+A blocked cache stage keeps its own small deadline and reports its error while
+committed media deletion continues. Public multi-batch scans retain at most
+three directory readers for the duration of a call, advancing only after an
+acknowledged batch commit. A stable flat directory's names are read once within
+that call. Calls, restarts and work-directory switches still replay O(prefix)
+names to verify a saved cursor; frequent interruptions can repeat that work.
 
 Job polling fetches all artifact expiry records with one aggregate SQL query,
 removing the previous potential twelve extra round trips. Source listing is

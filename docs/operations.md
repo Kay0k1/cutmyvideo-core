@@ -232,13 +232,22 @@ Initial accounting finishes before new source/preview/worker disk admission.
 Large restored trees may return `503 storage_initializing` with `Retry-After: 2`;
 the worker and retrying admissions advance the same stored progress. Directory
 membership changes reset that directory's coverage, and completed roots are
-checked again before admission opens. Resume verifies previously read names in
-fixed batches; it does not retain directory handles or a complete file list.
-Prefix verification takes time proportional to the saved prefix, so large or
-constantly changing directories can still require several cycles. A full pass
-through a directory with N entries can replay O(N² / batch size) names; batches
-bound memory and transactions, not total traversal time. Keep media
+checked again before admission opens. A call retains at most three directory
+readers and advances each reader after its database batch commits. An unchanged
+directory is read once during that call, with bounded names/stat/SQL batches.
+Readers close on exit, cancellation, changed membership or uncertain commit;
+workspace readers close before physical removal, including on Windows.
+Across calls and restarts, resume verifies the saved prefix in fixed chunks.
+That verification remains O(prefix); frequent interruptions, path switches or
+constantly changing directories can still repeat work. Batches bound memory
+and transactions, not total traversal time. Keep media
 directories private and finish restoration before starting writers.
+
+Expired metadata cache cleanup deletes at most 200 entries per statement in
+expiry/source order and skips locked rows. It receives at most 250 milliseconds
+and a small share of the remaining retention deadline. A cache-stage failure is
+reported while successfully committed media deletions still proceed; cache-only
+backlogs can use the worker's existing eight-batch retention limit.
 
 Failed physical deletion remains charged. Its persisted retry delay increases
 from 30 seconds to one hour, allowing other due files to proceed. The row is

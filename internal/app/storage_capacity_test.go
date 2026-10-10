@@ -617,10 +617,10 @@ func capacityConcurrent(t *testing.T, f capacityFixture) map[string]any {
 		for range operations {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			begin := time.Now()
-			batch, err := f.maintenance.cleanupStorageBatch(ctx, time.Hour, time.Hour)
-			if err == nil {
-				err = f.maintenance.DrainStorageDeletes(ctx, f.c, batch.paths)
-			}
+			paths, err := f.maintenance.Cleanup(ctx, time.Hour, time.Hour)
+			// Cleanup can return committed paths together with a cache-stage
+			// failure. Drain those paths before reporting either cause.
+			err = errors.Join(err, f.maintenance.DrainStorageDeletes(ctx, f.c, paths))
 			elapsed := float64(time.Since(begin).Microseconds()) / 1000
 			cancel()
 			mu.Lock()
@@ -788,6 +788,70 @@ func monitorCapacityMemory() func() capacityMemory {
 	}
 }
 
+// Run last so a large expired cache cannot change the earlier retained-row
+// plans or contention fixture. Fresh dedicated sources prevent cascade deletion
+// from masquerading as cache expiry progress. Public Cleanup exists on both
+// compared versions and preserves all stage failures on the revised runtime.
+func capacityCacheBacklog(t *testing.T, f capacityFixture) map[string]any {
+	capacityExec(t, f.api.DB, `INSERT INTO sources(id,owner,title,duration_ms,kind,url,provider_id,created_at)
+ SELECT 'cache-capacity-'||lpad(i::text,8,'0'),'cache-owner-'||(i%2),'cache capacity fixture',1000,
+ 'platform','https://www.youtube.com/watch?v=fixture'||i,'fixture'||i,now()
+ FROM generate_series(1,$1::integer+23) i`, f.retained)
+	capacityExec(t, f.api.DB, `INSERT INTO source_metadata_cache(source_id,owner,payload,expires_at)
+ SELECT id,owner,convert_to('payload-'||id,'UTF8'),
+ CASE WHEN substring(id from '[0-9]+$')::integer<=$1 THEN now()-interval '2 hours' ELSE now()+interval '1 day' END
+ FROM sources WHERE id LIKE 'cache-capacity-%'`, f.retained)
+	liveSnapshot := func() string {
+		var value string
+		if err := f.api.DB.QueryRow(context.Background(), `SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(c),'xmin',c.xmin::text) ORDER BY source_id)::text
+ FROM source_metadata_cache c WHERE source_id LIKE 'cache-capacity-%' AND expires_at>statement_timestamp()`).Scan(&value); err != nil {
+			t.Fatal(err)
+		}
+		return value
+	}
+	beforeLive := liveSnapshot()
+	expiredCount := func() int64 {
+		return capacityCount(t, f.api.DB, `SELECT count(*) FROM source_metadata_cache WHERE source_id LIKE 'cache-capacity-%' AND expires_at<=statement_timestamp()`)
+	}
+	before := expiredCount()
+	if before != int64(f.retained) {
+		t.Fatal("cache backlog fixture did not create the exact expired row count", before)
+	}
+	var calls []map[string]any
+	var latencies []float64
+	var failures []string
+	previous := before
+	maxRemoved := int64(0)
+	for cycle := 1; cycle <= 8; cycle++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		start := time.Now()
+		_, err := f.maintenance.Cleanup(ctx, f.c.ArtifactTTL, f.c.SourceTTL)
+		elapsed := float64(time.Since(start).Microseconds()) / 1000
+		cancel()
+		remaining := expiredCount()
+		removed := previous - remaining
+		maxRemoved = max(maxRemoved, removed)
+		call := map[string]any{"cycle": cycle, "elapsed_ms": elapsed, "expired_remaining": remaining, "removed": removed}
+		if err != nil {
+			call["error"] = err.Error()
+			failures = append(failures, err.Error())
+		}
+		calls = append(calls, call)
+		latencies = append(latencies, elapsed)
+		previous = remaining
+	}
+	sources := capacityCount(t, f.api.DB, `SELECT count(*) FROM sources WHERE id LIKE 'cache-capacity-%'`)
+	liveUnchanged := beforeLive == liveSnapshot()
+	removed := before - previous
+	return map[string]any{
+		"pass":            len(failures) == 0 && maxRemoved <= storageBatch && removed == min(before, 8*storageBatch) && liveUnchanged && sources == before+23,
+		"initial_expired": before, "final_expired": previous, "total_removed": removed, "max_removed_per_call": maxRemoved,
+		"fresh_control_rows": 23, "fresh_identity_payload_deadline_xmin_unchanged": liveUnchanged, "dedicated_sources_remaining": sources,
+		"batch_limit": storageBatch, "calls": calls, "latency": summarizeCapacityLatency(latencies), "errors": failures,
+		"scope": "Eight public Cleanup calls; fresh dedicated sources protect cache rows from source cascades. Does not require draining the complete backlog.",
+	}
+}
+
 func TestStorageCapacityEvidence(t *testing.T) {
 	if os.Getenv("CUTMY_STORAGE_CAPACITY") != "1" {
 		t.Skip("opt in with make storage-capacity-check using a dedicated PostgreSQL database")
@@ -833,7 +897,7 @@ func TestStorageCapacityEvidence(t *testing.T) {
 			for _, workload := range []struct {
 				name string
 				run  func(*testing.T, capacityFixture) map[string]any
-			}{{"poison_deletion", capacityPoisonDeletes}, {"short_reconciliation", capacityShortReconciliation}, {"progressive_bootstrap", capacityBootstrap}, {"concurrent_admission_publication", capacityConcurrent}, {"legacy_null_deadline_admission", capacityLegacyNullDeadlines}} {
+			}{{"poison_deletion", capacityPoisonDeletes}, {"short_reconciliation", capacityShortReconciliation}, {"progressive_bootstrap", capacityBootstrap}, {"concurrent_admission_publication", capacityConcurrent}, {"legacy_null_deadline_admission", capacityLegacyNullDeadlines}, {"bounded_cache_backlog", capacityCacheBacklog}} {
 				result := workload.run(t, f)
 				report.Workloads[workload.name] = result
 				if result["pass"] != true {

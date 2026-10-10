@@ -1,0 +1,1162 @@
+{
+  "Functions": {
+    "update_storage_counter": "plpgsql\ntrigger\nv\nfalse\n\n\nDECLARE delta numeric; BEGIN\n IF TG_OP='INSERT' THEN SELECT COALESCE(sum(size_bytes),0) INTO delta FROM storage_new;\n ELSIF TG_OP='DELETE' THEN SELECT -COALESCE(sum(size_bytes),0) INTO delta FROM storage_old;\n ELSE SELECT COALESCE((SELECT sum(size_bytes) FROM storage_new),0)-COALESCE((SELECT sum(size_bytes) FROM storage_old),0) INTO delta; END IF;\n IF delta<>0 THEN\n  IF TG_TABLE_NAME='storage_files' THEN UPDATE storage_counters SET stored_bytes=stored_bytes+delta WHERE id=1;\n  ELSE UPDATE storage_counters SET reserved_bytes=reserved_bytes+delta WHERE id=1; END IF;\n END IF;\n RETURN NULL; END "
+  },
+  "Tables": {
+    "app_schema_migrations": {
+      "Columns": {
+        "applied_at": {
+          "Default": "clock_timestamp()",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "timestamp with time zone"
+        },
+        "checksum": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "position": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "integer"
+        },
+        "version": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        }
+      },
+      "Constraints": [
+        "CHECK (\"position\" > 0)",
+        "CHECK (checksum ~ '^[0-9a-f]{64}$'::text)",
+        "PRIMARY KEY (\"position\")",
+        "UNIQUE (version)"
+      ],
+      "Indexes": {
+        "app_schema_migrations_pkey": {
+          "Columns": [
+            "\"position\""
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": true,
+          "Valid": true
+        },
+        "app_schema_migrations_version_key": {
+          "Columns": [
+            "version"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": true,
+          "Valid": true
+        }
+      },
+      "Kind": "r",
+      "Triggers": {}
+    },
+    "app_schema_versions": {
+      "Columns": {
+        "version": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        }
+      },
+      "Constraints": [
+        "PRIMARY KEY (version)"
+      ],
+      "Indexes": {
+        "app_schema_versions_pkey": {
+          "Columns": [
+            "version"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": true,
+          "Valid": true
+        }
+      },
+      "Kind": "r",
+      "Triggers": {}
+    },
+    "artifacts": {
+      "Columns": {
+        "actual_end_ms": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "bigint"
+        },
+        "actual_start_ms": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "bigint"
+        },
+        "created_at": {
+          "Default": "now()",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "timestamp with time zone"
+        },
+        "expires_at": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": false,
+          "Type": "timestamp with time zone"
+        },
+        "filename": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "id": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "job_id": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "owner": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "path": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "size_bytes": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "bigint"
+        }
+      },
+      "Constraints": [
+        "FOREIGN KEY (job_id) REFERENCES jobs(id)",
+        "PRIMARY KEY (id)"
+      ],
+      "Indexes": {
+        "artifacts_job_idx": {
+          "Columns": [
+            "job_id"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        },
+        "artifacts_missing_expiry_idx": {
+          "Columns": [
+            "id"
+          ],
+          "Predicate": "expires_at IS NULL",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        },
+        "artifacts_owner_idx": {
+          "Columns": [
+            "owner"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        },
+        "artifacts_path_idx": {
+          "Columns": [
+            "path"
+          ],
+          "Predicate": "path <> ''::text",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        },
+        "artifacts_pkey": {
+          "Columns": [
+            "id"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": true,
+          "Valid": true
+        },
+        "artifacts_retention_expiry_idx": {
+          "Columns": [
+            "expires_at",
+            "created_at",
+            "id"
+          ],
+          "Predicate": "expires_at IS NOT NULL",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        },
+        "artifacts_retention_legacy_idx": {
+          "Columns": [
+            "created_at",
+            "id"
+          ],
+          "Predicate": "expires_at IS NULL",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        }
+      },
+      "Kind": "r",
+      "Triggers": {}
+    },
+    "jobs": {
+      "Columns": {
+        "attempts": {
+          "Default": "0",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "integer"
+        },
+        "cancel_requested": {
+          "Default": "false",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "boolean"
+        },
+        "created_at": {
+          "Default": "now()",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "timestamp with time zone"
+        },
+        "id": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "idempotency_key": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": false,
+          "Type": "text"
+        },
+        "items": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "jsonb"
+        },
+        "lease_token": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": false,
+          "Type": "text"
+        },
+        "lease_until": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": false,
+          "Type": "timestamp with time zone"
+        },
+        "message": {
+          "Default": "''::text",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "owner": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "request": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "jsonb"
+        },
+        "source_id": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "stage": {
+          "Default": "'queued'::text",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "status": {
+          "Default": "'queued'::text",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "storage_wait_until": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": false,
+          "Type": "timestamp with time zone"
+        },
+        "updated_at": {
+          "Default": "now()",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "timestamp with time zone"
+        }
+      },
+      "Constraints": [
+        "FOREIGN KEY (source_id) REFERENCES sources(id)",
+        "PRIMARY KEY (id)",
+        "UNIQUE (owner, idempotency_key)"
+      ],
+      "Indexes": {
+        "jobs_claim_idx": {
+          "Columns": [
+            "status",
+            "created_at"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        },
+        "jobs_owner_idempotency_key_key": {
+          "Columns": [
+            "owner",
+            "idempotency_key"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": true,
+          "Valid": true
+        },
+        "jobs_pkey": {
+          "Columns": [
+            "id"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": true,
+          "Valid": true
+        },
+        "jobs_retention_terminal_idx": {
+          "Columns": [
+            "updated_at",
+            "id"
+          ],
+          "Predicate": "status <> ALL (ARRAY['queued'::text, 'running'::text, 'waiting_storage'::text])",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        },
+        "jobs_source_idx": {
+          "Columns": [
+            "source_id"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        }
+      },
+      "Kind": "r",
+      "Triggers": {}
+    },
+    "queue_owners": {
+      "Columns": {
+        "last_claimed": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": false,
+          "Type": "timestamp with time zone"
+        },
+        "last_considered": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": false,
+          "Type": "timestamp with time zone"
+        },
+        "owner": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        }
+      },
+      "Constraints": [
+        "PRIMARY KEY (owner)"
+      ],
+      "Indexes": {
+        "queue_owners_pkey": {
+          "Columns": [
+            "owner"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": true,
+          "Valid": true
+        }
+      },
+      "Kind": "r",
+      "Triggers": {}
+    },
+    "source_metadata_cache": {
+      "Columns": {
+        "expires_at": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "timestamp with time zone"
+        },
+        "owner": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "payload": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "bytea"
+        },
+        "source_id": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        }
+      },
+      "Constraints": [
+        "CHECK (octet_length(payload) <= 1048576)",
+        "FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE CASCADE",
+        "PRIMARY KEY (source_id)"
+      ],
+      "Indexes": {
+        "source_metadata_cache_pkey": {
+          "Columns": [
+            "source_id"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": true,
+          "Valid": true
+        },
+        "source_metadata_cache_retention_idx": {
+          "Columns": [
+            "expires_at",
+            "source_id"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        }
+      },
+      "Kind": "r",
+      "Triggers": {}
+    },
+    "sources": {
+      "Columns": {
+        "created_at": {
+          "Default": "now()",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "timestamp with time zone"
+        },
+        "duration_ms": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "bigint"
+        },
+        "embed_url": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": false,
+          "Type": "text"
+        },
+        "height": {
+          "Default": "0",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "integer"
+        },
+        "id": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "kind": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "owner": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "path": {
+          "Default": "''::text",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "provider": {
+          "Default": "''::text",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "provider_id": {
+          "Default": "''::text",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "thumbnail_path": {
+          "Default": "''::text",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "thumbnail_url": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": false,
+          "Type": "text"
+        },
+        "title": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "url": {
+          "Default": "''::text",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "width": {
+          "Default": "0",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "integer"
+        }
+      },
+      "Constraints": [
+        "PRIMARY KEY (id)"
+      ],
+      "Indexes": {
+        "sources_owner_created_idx": {
+          "Columns": [
+            "owner",
+            "created_at"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        },
+        "sources_owner_idx": {
+          "Columns": [
+            "owner"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        },
+        "sources_path_idx": {
+          "Columns": [
+            "path"
+          ],
+          "Predicate": "path <> ''::text",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        },
+        "sources_pkey": {
+          "Columns": [
+            "id"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": true,
+          "Valid": true
+        },
+        "sources_thumbnail_path_idx": {
+          "Columns": [
+            "thumbnail_path"
+          ],
+          "Predicate": "thumbnail_path <> ''::text",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        }
+      },
+      "Kind": "r",
+      "Triggers": {}
+    },
+    "storage_counters": {
+      "Columns": {
+        "id": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "integer"
+        },
+        "reserved_bytes": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "numeric"
+        },
+        "stored_bytes": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "numeric"
+        }
+      },
+      "Constraints": [
+        "CHECK (id = 1)",
+        "CHECK (reserved_bytes >= 0::numeric)",
+        "CHECK (stored_bytes >= 0::numeric)",
+        "PRIMARY KEY (id)"
+      ],
+      "Indexes": {
+        "storage_counters_pkey": {
+          "Columns": [
+            "id"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": true,
+          "Valid": true
+        }
+      },
+      "Kind": "r",
+      "Triggers": {}
+    },
+    "storage_files": {
+      "Columns": {
+        "delete_failures": {
+          "Default": "0",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "integer"
+        },
+        "delete_pending": {
+          "Default": "false",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "boolean"
+        },
+        "delete_retry_at": {
+          "Default": "'-infinity'::timestamp with time zone",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "timestamp with time zone"
+        },
+        "kind": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "observed_at": {
+          "Default": "now()",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "timestamp with time zone"
+        },
+        "owner": {
+          "Default": "''::text",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "path": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "resource_id": {
+          "Default": "''::text",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "size_bytes": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "bigint"
+        }
+      },
+      "Constraints": [
+        "CHECK (delete_failures >= 0)",
+        "CHECK (size_bytes >= 0)",
+        "PRIMARY KEY (path)"
+      ],
+      "Indexes": {
+        "storage_files_delete_due_idx": {
+          "Columns": [
+            "delete_retry_at",
+            "path"
+          ],
+          "Predicate": "delete_pending",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        },
+        "storage_files_orphan_retention_idx": {
+          "Columns": [
+            "observed_at",
+            "path"
+          ],
+          "Predicate": "kind = 'orphan'::text AND NOT delete_pending",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        },
+        "storage_files_owner_idx": {
+          "Columns": [
+            "owner",
+            "kind"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        },
+        "storage_files_pkey": {
+          "Columns": [
+            "path"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": true,
+          "Valid": true
+        }
+      },
+      "Kind": "r",
+      "Triggers": {
+        "storage_file_delete": {
+          "Enabled": "O",
+          "Function": "update_storage_counter",
+          "NewTable": "",
+          "OldTable": "storage_old",
+          "Type": 8
+        },
+        "storage_file_insert": {
+          "Enabled": "O",
+          "Function": "update_storage_counter",
+          "NewTable": "storage_new",
+          "OldTable": "",
+          "Type": 4
+        },
+        "storage_file_update": {
+          "Enabled": "O",
+          "Function": "update_storage_counter",
+          "NewTable": "storage_new",
+          "OldTable": "storage_old",
+          "Type": 16
+        }
+      }
+    },
+    "storage_reservations": {
+      "Columns": {
+        "abandoned_at": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": false,
+          "Type": "timestamp with time zone"
+        },
+        "expires_at": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "timestamp with time zone"
+        },
+        "id": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "job_id": {
+          "Default": "''::text",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "kind": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "owner": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "size_bytes": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "bigint"
+        },
+        "token": {
+          "Default": "''::text",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        }
+      },
+      "Constraints": [
+        "CHECK (size_bytes >= 0)",
+        "PRIMARY KEY (id)"
+      ],
+      "Indexes": {
+        "storage_reservations_expiry_idx": {
+          "Columns": [
+            "expires_at"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        },
+        "storage_reservations_job_idx": {
+          "Columns": [
+            "job_id"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        },
+        "storage_reservations_pkey": {
+          "Columns": [
+            "id"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": true,
+          "Valid": true
+        }
+      },
+      "Kind": "r",
+      "Triggers": {
+        "storage_reservation_delete": {
+          "Enabled": "O",
+          "Function": "update_storage_counter",
+          "NewTable": "",
+          "OldTable": "storage_old",
+          "Type": 8
+        },
+        "storage_reservation_insert": {
+          "Enabled": "O",
+          "Function": "update_storage_counter",
+          "NewTable": "storage_new",
+          "OldTable": "",
+          "Type": 4
+        },
+        "storage_reservation_update": {
+          "Enabled": "O",
+          "Function": "update_storage_counter",
+          "NewTable": "storage_new",
+          "OldTable": "storage_old",
+          "Type": 16
+        }
+      }
+    },
+    "storage_scan_progress": {
+      "Columns": {
+        "completed_at": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": false,
+          "Type": "timestamp with time zone"
+        },
+        "data_dir": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "generation_mtime_ns": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": false,
+          "Type": "bigint"
+        },
+        "generation_size": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": false,
+          "Type": "bigint"
+        },
+        "last_visited_at": {
+          "Default": "'-infinity'::timestamp with time zone",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "timestamp with time zone"
+        },
+        "path": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "position": {
+          "Default": "0",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "bigint"
+        },
+        "prefix_digest": {
+          "Default": "''::text",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "scan_kind": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "started_at": {
+          "Default": "clock_timestamp()",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "timestamp with time zone"
+        }
+      },
+      "Constraints": [
+        "CHECK (\"position\" >= 0)",
+        "CHECK (prefix_digest = ''::text OR prefix_digest ~ '^[0-9a-f]{64}$'::text)",
+        "PRIMARY KEY (data_dir, scan_kind, path)"
+      ],
+      "Indexes": {
+        "storage_scan_pending_idx": {
+          "Columns": [
+            "data_dir",
+            "scan_kind",
+            "last_visited_at",
+            "path"
+          ],
+          "Predicate": "completed_at IS NULL",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        },
+        "storage_scan_progress_pkey": {
+          "Columns": [
+            "data_dir",
+            "scan_kind",
+            "path"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": true,
+          "Valid": true
+        }
+      },
+      "Kind": "r",
+      "Triggers": {}
+    },
+    "storage_state": {
+      "Columns": {
+        "id": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        }
+      },
+      "Constraints": [
+        "PRIMARY KEY (id)"
+      ],
+      "Indexes": {
+        "storage_state_pkey": {
+          "Columns": [
+            "id"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": true,
+          "Valid": true
+        }
+      },
+      "Kind": "r",
+      "Triggers": {}
+    },
+    "storage_work_cleanup": {
+      "Columns": {
+        "data_dir": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        },
+        "last_attempt_at": {
+          "Default": "'-infinity'::timestamp with time zone",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "timestamp with time zone"
+        },
+        "path": {
+          "Default": "",
+          "Generated": "",
+          "Identity": "",
+          "NotNull": true,
+          "Type": "text"
+        }
+      },
+      "Constraints": [
+        "PRIMARY KEY (data_dir, path)"
+      ],
+      "Indexes": {
+        "storage_work_cleanup_attempt_idx": {
+          "Columns": [
+            "data_dir",
+            "last_attempt_at",
+            "path"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": false,
+          "Valid": true
+        },
+        "storage_work_cleanup_pkey": {
+          "Columns": [
+            "data_dir",
+            "path"
+          ],
+          "Predicate": "",
+          "Ready": true,
+          "Unique": true,
+          "Valid": true
+        }
+      },
+      "Kind": "r",
+      "Triggers": {}
+    }
+  }
+}

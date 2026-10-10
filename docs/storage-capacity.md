@@ -67,13 +67,19 @@ The gate records:
   Reservations must clear, all publications must appear, and stored/reserved
   counters must equal actual ledger sums. A five-millisecond sampler records
   observed advisory-lock waiters; sampling cannot count every brief wait.
-- A final legacy fixture with exactly 10,000/100,000 artifact deadlines set to
+- A late legacy fixture with exactly 10,000/100,000 artifact deadlines set to
   NULL and fresh owned bootstrap metadata. Real source admissions retry within
   their five-second database budget and a two-minute aggregate budget. The
   runtime must commit all deadline backfill and open admission while keeping
   the byte counters consistent. The test does not perform the backfill in SQL.
   This stage follows the timed contention phase so it cannot alter that phase's
   retained-row fixture.
+- Eight public cleanup calls against exactly 10,000/100,000 additional expired
+  cache rows. Dedicated fresh sources prevent cascade deletion from contributing
+  to the count. Every call must remove at most 200 of these entries and the eight
+  calls must remove 1,600, preserving all sources and 23 fresh cache controls
+  (including payloads, owners, deadlines and tuple xmin). This workload runs
+  last and does not require draining the entire backlog.
 
 Raw `rows-*.json` includes all plans, client round-trip and PostgreSQL execution
 samples, nearest-rank p50/p95, workload invariants, registration curves and Go
