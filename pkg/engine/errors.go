@@ -24,6 +24,9 @@ var (
 	ErrPublicationUncertain = fsdurable.ErrPublicationUncertain
 	// ErrSchemaIncompatible reports a service startup schema guard refusal.
 	ErrSchemaIncompatible = app.ErrSchemaIncompatible
+	// ErrStorageInitializing reports incomplete initial storage accounting.
+	// Retry after bootstrap progresses; admissions have not been accepted.
+	ErrStorageInitializing = app.ErrStorageInitializing
 )
 
 // ErrorCode is a stable machine-readable diagnostic. Consumers must allow
@@ -49,6 +52,7 @@ const (
 	CodePublicationFailed      ErrorCode = "publication_failed"
 	CodePublicationUncertain   ErrorCode = "publication_uncertain"
 	CodeSchemaIncompatible     ErrorCode = "schema_incompatible"
+	CodeStorageInitializing    ErrorCode = "storage_initializing"
 	CodeProcessingFailed       ErrorCode = "processing_failed"
 )
 
@@ -96,6 +100,9 @@ func CodeOf(err error) ErrorCode {
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return CodeTimeout
+	}
+	if errors.Is(err, ErrStorageInitializing) {
+		return CodeStorageInitializing
 	}
 	if errors.Is(err, ErrOutputExists) {
 		return CodeOutputExists

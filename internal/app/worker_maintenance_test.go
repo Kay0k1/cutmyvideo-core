@@ -64,16 +64,22 @@ func blockArtifactCleanup(t *testing.T, s *Store) (pgx.Tx, uint32) {
 	return tx, relation
 }
 
+const cleanupLockWaitSQL = `SELECT COALESCE(min(mode),'') FROM pg_locks WHERE locktype='relation' AND relation=$1 AND NOT granted AND pid<>pg_backend_pid()`
+
 func waitForCleanupLock(t *testing.T, tx pgx.Tx, relation uint32) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	for ctx.Err() == nil {
-		var waiting bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_locks WHERE relation=$1 AND mode='RowExclusiveLock' AND NOT granted)`, relation).Scan(&waiting); err != nil {
+		var mode string
+		// A materialized retention selector may read the relation before the
+		// DELETE requests its write lock. Observe the actual blocked relation
+		// access, rather than depending on that query's planning order.
+		if err := tx.QueryRow(ctx, cleanupLockWaitSQL, relation).Scan(&mode); err != nil {
 			t.Fatal(err)
 		}
-		if waiting {
+		if mode != "" {
+			t.Logf("maintenance reached cleanup barrier: mode=%s", mode)
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -153,38 +159,95 @@ func TestMaintenanceDoesNotRefreshWorkerHealth(t *testing.T) {
 }
 
 func TestMaintenanceCycleStopsBlockedCleanupAtDeadline(t *testing.T) {
-	s := testStore(t)
-	tx, relation := blockArtifactCleanup(t, s)
-	c := maintenanceConfig(t)
-	orphan := filepath.Join(c.DataDir, "sources", "orphan.mp4")
-	if err := os.MkdirAll(filepath.Dir(orphan), 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(orphan, []byte("media"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	old := time.Now().Add(-3 * time.Hour)
-	if err := os.Chtimes(orphan, old, old); err != nil {
-		t.Fatal(err)
-	}
-	stop := startWorkerMaintenance(context.Background(), c, s)
-	t.Cleanup(stop)
-	waitForCleanupLock(t, tx, relation)
-	ctx, cancel := context.WithTimeout(context.Background(), workerMaintenanceTimeout+2*time.Second)
-	defer cancel()
-	for {
-		var waiting bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_locks WHERE relation=$1 AND mode='RowExclusiveLock' AND NOT granted)`, relation).Scan(&waiting); err != nil {
-			t.Fatal("blocked cleanup did not leave the database at its deadline", err)
-		}
-		if !waiting {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	stop()
-	if _, err := os.Stat(orphan); err != nil {
-		t.Fatal("expired maintenance continued orphan deletion after its deadline", err)
+	for _, stopBy := range []string{"deadline", "cancel"} {
+		t.Run(stopBy, func(t *testing.T) {
+			s := testStore(t)
+			c := maintenanceConfig(t)
+			old := time.Now().Add(-3 * time.Hour)
+			write := func(kind, name string) string {
+				t.Helper()
+				path := filepath.Join(c.DataDir, kind, name)
+				if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte("media"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Chtimes(path, old, old); err != nil {
+					t.Fatal(err)
+				}
+				return path
+			}
+			known := write("sources", "active.mp4")
+			source := Source{ID: newID("src"), Owner: "owner", Kind: "upload", Path: known, DurationMS: 10000}
+			if err := s.AddSource(context.Background(), source); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.CreateJob(context.Background(), source.Owner, requestFor(source), ""); err != nil {
+				t.Fatal(err)
+			}
+			job, token, err := s.Claim(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			artifactPath := write("artifacts", "active.mp4")
+			artifact := Artifact{ID: newID("art"), Filename: "active.mp4", SizeBytes: 5}
+			if err := s.AddArtifact(context.Background(), source.Owner, job.ID, artifactPath, token, artifact); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.DB.Exec(context.Background(), "UPDATE sources SET created_at=$2 WHERE id=$1", source.ID, old); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.DB.Exec(context.Background(), "UPDATE artifacts SET created_at=$2,expires_at=$2 WHERE id=$1", artifact.ID, old); err != nil {
+				t.Fatal(err)
+			}
+			// Remaining stages may legitimately clean an expired orphan after the
+			// retention stage times out. Active data must remain pinned throughout.
+			write("sources", "orphan.mp4")
+			tx, relation := blockArtifactCleanup(t, s)
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+			started := time.Now()
+			done := make(chan error, 1)
+			go func() { done <- cleanupFiles(ctx, c, s) }()
+			waitForCleanupLock(t, tx, relation)
+			want := error(context.DeadlineExceeded)
+			if stopBy == "cancel" {
+				want = context.Canceled
+				cancel()
+			}
+			select {
+			case err := <-done:
+				t.Logf("blocked cleanup stop=%s elapsed=%s error=%v", stopBy, time.Since(started), err)
+				if !errors.Is(err, want) {
+					t.Fatal("blocked maintenance did not report its deadline/cancellation", err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("blocked maintenance exceeded its cancellation/deadline budget")
+			}
+			probe, probeCancel := context.WithTimeout(context.Background(), time.Second)
+			defer probeCancel()
+			for {
+				var mode string
+				if err := tx.QueryRow(probe, cleanupLockWaitSQL, relation).Scan(&mode); err != nil {
+					t.Fatal("blocked cleanup retained a relation waiter", err)
+				}
+				if mode == "" {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			var pinned bool
+			var accounted int
+			if err := tx.QueryRow(probe, `SELECT EXISTS(SELECT 1 FROM sources WHERE id=$1) AND EXISTS(SELECT 1 FROM artifacts WHERE id=$2) AND EXISTS(SELECT 1 FROM jobs WHERE id=$3 AND status='running'),(SELECT count(*) FROM storage_files WHERE path=ANY($4) AND NOT delete_pending)`, source.ID, artifact.ID, job.ID, []string{known, artifactPath}).Scan(&pinned, &accounted); err != nil || !pinned || accounted != 2 {
+				t.Fatal("bounded maintenance changed active metadata or accounting", pinned, accounted, err)
+			}
+			for _, path := range []string{known, artifactPath} {
+				if data, err := os.ReadFile(path); err != nil || string(data) != "media" {
+					t.Fatal("bounded maintenance removed or changed active media", path, err)
+				}
+			}
+		})
 	}
 }
 
@@ -276,7 +339,7 @@ func TestCleanupFilesDrainsBacklogInBoundedBatches(t *testing.T) {
 		{name: "media", count: storageBatch*2 + 7, files: true},
 		{name: "metadata_only", count: storageBatch*2 + 7},
 		{name: "eight_batch_limit", count: storageBatch*9 + 1, remaining: storageBatch + 1},
-		{name: "deletion_error", count: storageBatch*2 + 7, blockedDelete: true, remaining: storageBatch + 7},
+		{name: "deletion_error", count: storageBatch*2 + 7, blockedDelete: true},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			s := testStore(t)

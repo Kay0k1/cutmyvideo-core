@@ -223,7 +223,29 @@ docker compose --env-file .env -f deploy/compose.example.yml run --rm -T --no-de
 ```
 
 Each cycle has a ten-second budget; backlogs may need multiple cycles. Active jobs
-pin inputs/results. Failed physical deletion remains charged and retries later.
+pin inputs/results. Retention, file reconciliation and workspace cleanup receive
+separate budgets, so an error or long scan in one stage does not consume every
+stage's time. Completed directory batches and workspace scheduling positions
+are persisted in PostgreSQL and survive API/worker restarts.
+
+Initial accounting finishes before new source/preview/worker disk admission.
+Large restored trees may return `503 storage_initializing` with `Retry-After: 2`;
+the worker and retrying admissions advance the same stored progress. Directory
+membership changes reset that directory's coverage, and completed roots are
+checked again before admission opens. Resume verifies previously read names in
+fixed batches; it does not retain directory handles or a complete file list.
+Prefix verification takes time proportional to the saved prefix, so large or
+constantly changing directories can still require several cycles. A full pass
+through a directory with N entries can replay O(N² / batch size) names; batches
+bound memory and transactions, not total traversal time. Keep media
+directories private and finish restoration before starting writers.
+
+Failed physical deletion remains charged. Its persisted retry delay increases
+from 30 seconds to one hour, allowing other due files to proceed. The row is
+released only after the file is absent and the parent directory has synchronized.
+Filesystem, database or acknowledgement failures preserve the charge for retry;
+an uncertain acknowledgement may already have committed and is reconciled from
+the authoritative database state on the next attempt.
 Prefer owner-safe API deletion to manually removing live media trees. Waiting
 jobs have finite persisted deadlines and remain cancellable. See
 [configuration](configuration.md) and

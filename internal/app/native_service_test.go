@@ -187,4 +187,62 @@ func TestNativeServiceUploadExportAndDownload(t *testing.T) {
 	if _, err := runCommand(ctx, c.FFmpeg, "-v", "error", "-i", downloaded, "-map", "0:v:0", "-map", "0:a:0", "-f", "null", "-"); err != nil {
 		t.Fatal("native downloaded output cannot be decoded", err)
 	}
+	// Startup maintenance may purge the earlier cached window while the export
+	// runs. Recreate it so explicit deletion also exercises a retained preview.
+	request(http.MethodGet, previewURL, nil, nil, cookie, http.StatusOK)
+	// Exercise the physical deletion and directory barrier on each supported
+	// OS, after the worker has acknowledged real source, preview and export files.
+	rows, err := s.DB.Query(ctx, "SELECT path FROM storage_files ORDER BY path")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var retainedPaths []string
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			rows.Close()
+			t.Fatal(err)
+		}
+		retainedPaths = append(retainedPaths, path)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil || len(retainedPaths) < 2 {
+		t.Fatal("native service did not account for source and export", len(retainedPaths), err)
+	}
+	rows, err = s.DB.Query(ctx, "SELECT id FROM storage_reservations WHERE kind='preview_cache'")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var previewPaths []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			t.Fatal(err)
+		}
+		dir, err := previewDirectory(c, id)
+		if err != nil {
+			rows.Close()
+			t.Fatal(err)
+		}
+		previewPaths = append(previewPaths, dir)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil || len(previewPaths) == 0 {
+		t.Fatal("native service did not retain a preview before explicit deletion", err)
+	}
+	request(http.MethodDelete, "/api/v1/sources/"+source.ID, nil, nil, cookie, http.StatusNoContent)
+	for _, path := range []string{jobURL, artifact.DownloadURL, *source.PreviewURL, previewURL} {
+		request(http.MethodGet, path, nil, nil, cookie, http.StatusNotFound)
+	}
+	for _, path := range append(retainedPaths, previewPaths...) {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatal("acknowledged native deletion retained a physical file", path, err)
+		}
+	}
+	stored, reserved := ledgerBytes(t, s)
+	var ledgerRows int
+	if err := s.DB.QueryRow(ctx, "SELECT count(*) FROM storage_files").Scan(&ledgerRows); err != nil || stored != 0 || reserved != 0 || ledgerRows != 0 {
+		t.Fatal("native deletion did not release the confirmed bytes", stored, reserved, ledgerRows, err)
+	}
 }

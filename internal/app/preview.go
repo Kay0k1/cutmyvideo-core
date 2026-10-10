@@ -279,14 +279,14 @@ func (s *Store) reservePreview(ctx context.Context, c Config, source Source, id 
 // never render the same interval concurrently. Cached descriptors remain valid
 // after eviction; no source is pinned by a completed cache entry.
 func (s *Store) acquirePreview(ctx context.Context, c Config, source Source, id, key string, background bool) (*os.File, error) {
+	if err := s.bootstrapStorage(ctx, c); err != nil {
+		return nil, err
+	}
 	tx, err := s.storageTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer rollbackStorage(tx)
-	if err = s.bootstrapStorage(ctx, tx, c); err != nil {
-		return nil, err
-	}
 	var exists bool
 	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM sources WHERE id=$1 AND owner=$2)", source.ID, source.Owner).Scan(&exists); err != nil {
 		return nil, err

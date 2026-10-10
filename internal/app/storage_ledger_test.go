@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func ledgerConfig(t *testing.T) Config {
@@ -247,6 +250,9 @@ func TestTombstoneChargesFailedDeleteUntilPhysicalRemoval(t *testing.T) {
 	if err = os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = s.DB.Exec(ctx, "UPDATE storage_files SET delete_retry_at=clock_timestamp() WHERE path=$1", path); err != nil {
+		t.Fatal(err)
+	}
 	if err = s.DrainStorageDeletes(ctx, c, paths); err != nil {
 		t.Fatal(err)
 	}
@@ -292,17 +298,11 @@ func TestStorageDeleteAcknowledgementFailureKeepsBytesForRetry(t *testing.T) {
 	if _, err := s.DB.Exec(ctx, `INSERT INTO storage_files(path,kind,size_bytes,delete_pending) VALUES($1,'tombstone',19,true)`, path); err != nil {
 		t.Fatal(err)
 	}
-	lock, err := s.storageTx(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rollbackStorage(lock)
-	bounded, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
-	err = s.DrainStorageDeletes(bounded, c, []string{path})
-	cancel()
-	rollbackStorage(lock)
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatal("blocked acknowledgement must return its deadline", err)
+	ops := systemStorageDeleteOperations()
+	ops.commit = func(context.Context, pgx.Tx) error { return io.ErrUnexpectedEOF }
+	err := s.drainStorageDeletes(ctx, c, []string{path}, ops)
+	if !errors.Is(err, io.ErrUnexpectedEOF) || storageDeletionRetryOnly(err) {
+		t.Fatal("lost acknowledgement must stop the database batch", err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatal("test did not reach the physical removal before acknowledgement", err)
