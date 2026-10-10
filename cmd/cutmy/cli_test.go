@@ -67,11 +67,13 @@ func TestCLIInspectAndClipActualMedia(t *testing.T) {
 		t.Fatal(err)
 	}
 	var inspected struct {
-		Duration int64 `json:"duration_ms"`
-		Width    int   `json:"width"`
-		Height   int   `json:"height"`
+		Duration      int64 `json:"duration_ms"`
+		Width         int   `json:"width"`
+		Height        int   `json:"height"`
+		DisplayWidth  int   `json:"display_width"`
+		DisplayHeight int   `json:"display_height"`
 	}
-	if err := json.Unmarshal(stdout.Bytes(), &inspected); err != nil || inspected.Duration != 2000 || inspected.Width != 160 || inspected.Height != 90 {
+	if err := json.Unmarshal(stdout.Bytes(), &inspected); err != nil || inspected.Duration != 2000 || inspected.Width != 160 || inspected.Height != 90 || inspected.DisplayWidth != 160 || inspected.DisplayHeight != 90 {
 		t.Fatalf("inspection: %s, %v", &stdout, err)
 	}
 	stdout.Reset()

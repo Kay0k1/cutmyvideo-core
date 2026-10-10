@@ -19,6 +19,15 @@ unsupported publication or skipped required tests fail the gate. JSON test
 reports and tool versions are retained as CI artifacts. The Linux full suite
 also covers fault injection, HTTP contracts and historical upgrade/restore.
 
+Current-source checks additionally require a separate media-contract report on
+each target: rotation and sample-aspect-ratio normalization, variable-frame-rate
+timestamps, known-signal PQ/HLG tone mapping and compatible copy, default-audio
+selection, attached-picture exclusion, selected-video copy caps and fresh SDK
+coded/display dimensions. The production-family Bookworm/FFmpeg 5.1 job requires
+the same media-contract tests, including actual HLS staging/continuity metadata
+and subprocess capability/cancellation diagnostics, alongside the existing
+copy/HLS timeline checks. The gate rejects missing tests and skipped subtests.
+
 These are the tested OS baselines, not a promise for every older release,
 network filesystem, external provider or hardware controller. Official
 v0.2.1 archives predate native macOS/Windows verification. New source changes
@@ -28,7 +37,10 @@ must pass all native checks before publishing a release with these guarantees.
 
 Extract the Windows archive and install FFmpeg and ffprobe from the
 [FFmpeg download page](https://ffmpeg.org/download.html). Put both executables
-on `PATH`; MP4/MP3 encoding requires libx264, AAC and libmp3lame. FFmpeg is not
+on `PATH`; MP4/MP3 encoding requires libx264, AAC and libmp3lame. Current-source
+HDR accurate exports and previews also need zscale/libzimg and tonemap; missing
+conversion capabilities have the fixed `hdr_conversion_unavailable` diagnostic.
+See the [media policy](media.md). FFmpeg is not
 included in CLI archives. In PowerShell:
 
 ```powershell

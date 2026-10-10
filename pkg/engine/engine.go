@@ -22,8 +22,9 @@ type Config struct {
 	FFmpegPath, FFprobePath string
 	MaxOutputBytes          int64
 	// EncodeProfile accepts "fast" (default) or "compact"; both preserve
-	// requested resolution/frame rate. Fast spends fewer CPU cycles and yields
-	// larger files. FFmpegThreads defaults to 2 and is limited to 32.
+	// selected display resolution and source frame cadence. Fast spends fewer
+	// CPU cycles and yields larger files. FFmpegThreads defaults to 2 and is
+	// limited to 32.
 	EncodeProfile string
 	FFmpegThreads int
 	// Timeout bounds include inspection; an earlier caller deadline wins.
@@ -49,11 +50,16 @@ type Range struct{ StartMS, EndMS int64 }
 // Empty fields infer the format from the output suffix and use best/accurate.
 type Options struct{ Format, Quality, CutMode string }
 
-// SourceInfo describes a finite local media file. Audio files omit dimensions.
+// SourceInfo describes a finite local media file. Width and Height are the
+// selected video's coded dimensions; DisplayWidth and DisplayHeight account
+// for supported sample aspect ratio and display rotation. Unsupported display
+// geometry omits display dimensions; audio files omit all dimensions.
 type SourceInfo struct {
-	DurationMS int64 `json:"duration_ms"`
-	Width      int   `json:"width,omitempty"`
-	Height     int   `json:"height,omitempty"`
+	DurationMS    int64 `json:"duration_ms"`
+	Width         int   `json:"width,omitempty"`
+	Height        int   `json:"height,omitempty"`
+	DisplayWidth  int   `json:"display_width,omitempty"`
+	DisplayHeight int   `json:"display_height,omitempty"`
 }
 
 // Result describes an exclusively published output. Copy mode can move its
@@ -129,7 +135,7 @@ func (e *Engine) Inspect(ctx context.Context, path string) (result SourceInfo, e
 		return SourceInfo{}, invalidArgument(errors.New("input must be a readable local file"))
 	}
 	s, err := app.InspectLocal(ctx, e.config, path)
-	return SourceInfo{DurationMS: s.DurationMS, Width: s.Width, Height: s.Height}, err
+	return SourceInfo{DurationMS: s.DurationMS, Width: s.Width, Height: s.Height, DisplayWidth: s.DisplayWidth, DisplayHeight: s.DisplayHeight}, err
 }
 
 // Export validates the interval, writes and verifies a temporary media file,

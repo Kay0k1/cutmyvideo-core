@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -31,31 +32,82 @@ func splitHLSContinuity(segments []hlsSegment) ([][]hlsSegment, error) {
 }
 
 func sameHLSCodecs(a, b probeInfo) bool {
-	if len(a.Streams) != len(b.Streams) {
-		return false
+	return sameHLSStream(a.selectedVideo(), b.selectedVideo()) && sameHLSStream(a.selectedAudio(), b.selectedAudio())
+}
+
+func sameHLSStream(a, b *probeStream) bool {
+	if a == nil || b == nil {
+		return a == b
 	}
-	for i, first := range a.Streams {
-		next := b.Streams[i]
-		if first.CodecType != next.CodecType || first.CodecName != next.CodecName || first.Width != next.Width || first.Height != next.Height || first.SampleRate != next.SampleRate || first.Channels != next.Channels || first.TimeBase != next.TimeBase || first.ExtradataHash != next.ExtradataHash {
+	// Index and disposition can change during remuxing. Only the selected
+	// streams' codec, presentation geometry and colour properties must agree.
+	return a.CodecType == b.CodecType && a.CodecName == b.CodecName && a.Width == b.Width && a.Height == b.Height && a.SampleRate == b.SampleRate && a.Channels == b.Channels && a.TimeBase == b.TimeBase && a.ExtradataHash == b.ExtradataHash && a.SampleAspectRatio == b.SampleAspectRatio && a.rotation() == b.rotation() && a.PixelFormat == b.PixelFormat && a.ColorPrimaries == b.ColorPrimaries && a.ColorTransfer == b.ColorTransfer && a.ColorSpace == b.ColorSpace && a.ColorRange == b.ColorRange
+}
+
+func hlsStageExtension(video *probeStream) string {
+	if video != nil && math.Abs(math.Remainder(video.rotation(), 360)) > 0.001 {
+		return "mp4"
+	}
+	return "mkv"
+}
+
+func hlsRemuxFailure(err error, video *probeStream) error {
+	var failure *mediaProcessFailure
+	if hlsStageExtension(video) == "mp4" && errors.As(err, &failure) && (failure.category == "copy_incompatible" || failure.category == "unsupported_media") {
+		return fmt.Errorf("%w: %w", errUnsupportedStream, err)
+	}
+	return err
+}
+
+// Remuxing may renumber selected streams and change their time bases. It must
+// retain their coded geometry, display matrix, sample aspect and colour signal.
+func sameHLSPresentation(before, after probeInfo) bool {
+	a, b := before.selectedVideo(), after.selectedVideo()
+	if a == nil || b == nil {
+		if a != b {
 			return false
 		}
+	} else if a.CodecName != b.CodecName || a.Width != b.Width || a.Height != b.Height || !sameHLSSAR(a.SampleAspectRatio, b.SampleAspectRatio) || math.Abs(math.Remainder(a.rotation()-b.rotation(), 360)) > 0.001 || a.PixelFormat != b.PixelFormat || a.ColorPrimaries != b.ColorPrimaries || a.ColorTransfer != b.ColorTransfer || a.ColorSpace != b.ColorSpace || a.ColorRange != b.ColorRange {
+		return false
 	}
-	return true
+	a, b = before.selectedAudio(), after.selectedAudio()
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.CodecName == b.CodecName && a.SampleRate == b.SampleRate && a.Channels == b.Channels
+}
+
+func sameHLSSAR(a, b string) bool {
+	parse := func(value string) (int64, int64, bool) {
+		if value == "" || value == "N/A" || value == "0:1" {
+			return 1, 1, true
+		}
+		numerator, denominator, ok := strings.Cut(value, ":")
+		if !ok {
+			return 0, 0, false
+		}
+		n, err := strconv.ParseInt(numerator, 10, 32)
+		d, denomErr := strconv.ParseInt(denominator, 10, 32)
+		return n, d, err == nil && denomErr == nil && n > 0 && d > 0
+	}
+	an, ad, aok := parse(a)
+	bn, bd, bok := parse(b)
+	return aok && bok && an*bd == bn*ad
 }
 
 // A Matroska stream header can round its start to zero while its first packet
 // still carries encoder delay. Anchor each period to a real presentation time.
 func hlsPacketAnchor(ctx context.Context, c Config, path string, info probeInfo) (int64, error) {
-	selector := "a:0"
-	for _, stream := range info.Streams {
-		if stream.CodecType == "video" {
-			selector = "v:0"
-			break
-		}
+	stream := info.selectedVideo()
+	if stream == nil {
+		stream = info.selectedAudio()
 	}
-	args := []string{"-v", "error", "-max_alloc", "268435456", "-protocol_whitelist", "file", "-format_whitelist", "matroska,webm"}
+	if stream == nil {
+		return 0, errUnsupportedStream
+	}
+	args := []string{"-v", "error", "-max_alloc", "268435456", "-protocol_whitelist", "file", "-format_whitelist", "matroska,webm,mov"}
 	args = append(args, mediaInputBounds(c)...)
-	args = append(args, "-select_streams", selector, "-read_intervals", "%+#1", "-show_packets", "-show_entries", "packet=pts_time", "-of", "json", path)
+	args = append(args, "-select_streams", strconv.Itoa(stream.Index), "-read_intervals", "%+#1", "-show_packets", "-show_entries", "packet=pts_time", "-of", "json", path)
 	raw, err := runCommand(ctx, c.FFprobe, args...)
 	if err != nil {
 		return 0, err
@@ -140,7 +192,7 @@ func stageHLSGroups(ctx context.Context, c Config, guard *networkGuard, format p
 		}
 		// Only generated ASCII basenames reach this manifest. FFmpeg is never
 		// given upstream URLs, playlists or user-controlled filesystem paths.
-		fmt.Fprintf(&list, "file %s/stream-%d.mkv\ninpoint %s\nduration %s\n", name, stream, seconds(anchor), seconds(group[len(group)-1].EndMS-group[0].StartMS))
+		fmt.Fprintf(&list, "file %s/%s\ninpoint %s\nduration %s\n", name, filepath.Base(path), seconds(anchor), seconds(group[len(group)-1].EndMS-group[0].StartMS))
 		processed += len(group)
 	}
 	manifest := filepath.Join(dir, fmt.Sprintf("periods-%d.ffconcat", stream))
@@ -148,23 +200,29 @@ func stageHLSGroups(ctx context.Context, c Config, guard *networkGuard, format p
 		return "", 0, err
 	}
 	temporary = append(temporary, manifest)
-	output := filepath.Join(dir, fmt.Sprintf("stream-%d.mkv", stream))
+	output := filepath.Join(dir, fmt.Sprintf("stream-%d.%s", stream, hlsStageExtension(firstInfo.selectedVideo())))
 	keep := false
 	defer func() {
 		if !keep {
 			_ = os.Remove(output)
 		}
 	}()
-	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-max_alloc", "268435456", "-protocol_whitelist", "file", "-format_whitelist", "concat,matroska,webm"}
+	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-max_alloc", "268435456", "-protocol_whitelist", "file", "-format_whitelist", "concat,matroska,webm,mov"}
 	args = append(args, mediaInputBounds(c)...)
-	args = append(args, "-f", "concat", "-safe", "1", "-i", manifest, "-map", "0:v:0?", "-map", "0:a:0?", "-c", "copy", "-avoid_negative_ts", "make_zero", "-map_metadata", "-1", "-fs", strconv.FormatInt(limit, 10), output)
+	args = append(args, "-f", "concat", "-safe", "1", "-i", manifest)
+	selection := mediaSelection{Video: firstInfo.selectedVideo(), Audio: firstInfo.selectedAudio()}
+	args = append(args, selection.mapArgs("mp4")...)
+	args = append(args, "-c", "copy", "-avoid_negative_ts", "make_zero", "-map_metadata", "-1", "-fs", strconv.FormatInt(limit, 10), output)
 	if _, err := runCommand(ctx, c.FFmpeg, args...); err != nil {
-		return "", 0, err
+		return "", 0, hlsRemuxFailure(err, selection.Video)
 	}
 	info, duration, err := probe(ctx, c, output, false)
+	if err != nil {
+		return "", 0, err
+	}
 	last := groups[len(groups)-1]
 	expected := last[len(last)-1].EndMS - groups[0][0].StartMS
-	if err != nil || math.Abs(float64(duration-expected)) > 1000 || !sameHLSCodecs(firstInfo, info) {
+	if math.Abs(float64(duration-expected)) > 1000 || !sameHLSCodecs(firstInfo, info) || !sameHLSPresentation(firstInfo, info) {
 		return "", 0, errUnsupportedStream
 	}
 	stat, err := os.Stat(output)

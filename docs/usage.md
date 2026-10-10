@@ -9,9 +9,17 @@ streams in MP4 and begins at a preceding keyframe. Check `actual_start_ms` and
 accurate mode when downscaling.
 
 `fast` favors CPU time; `compact` favors smaller video files. Both retain the
-selected resolution cap and frame cadence, without upscaling. Long accurate
+selected display-resolution cap and source frame cadence, without enlarging
+the displayed image. Long accurate
 exports use bounded bitrates when needed to fit the output ceiling, which can
 affect quality. Time, size, storage and transfer limits still apply.
+
+Current-source exports select at most one playable video and one audio stream:
+default audio, otherwise first audio. MP3 exports the selected audio only.
+Accurate video normalizes SAR/orientation and converts known
+PQ/HLG HDR to SDR when re-encoding video. Copy preserves compatible selected
+streams. See the [media policy](media.md) for display dimensions, preview cadence,
+color conversion and fixed diagnostics; v0.2.1 archives predate this policy.
 
 ## CLI
 
@@ -34,7 +42,10 @@ exponents and fractional hours/minutes are rejected. End must follow start and
 be within the source.
 
 Output JSON contains `path`, `size_bytes`, `actual_start_ms`, `actual_end_ms`.
-`inspect` returns `duration_ms` and video dimensions when present. Existing files
+`inspect` returns `duration_ms` and coded video `width`/`height` when present.
+Current-source inspection adds `display_width`/`display_height` after SAR and
+supported display rotation. Unsupported geometry omits the display fields while
+preserving coded dimensions; audio-only files omit all dimensions. Existing files
 and symlinks are never replaced. Failed exports attempt to remove their private workspace.
 Local exports allow 24-hour intervals, with a default 10 GiB output ceiling.
 Inspection defaults to two minutes; export defaults to 30 minutes. `--timeout`
@@ -137,6 +148,7 @@ operation rather than by `New`.
 | `input_not_found`, `permission_denied` | Check the input/path permissions; underlying OS cause is preserved |
 | `tool_unavailable`, `unsupported_media` | Check tool installation or supply supported finite media |
 | `audio_missing`, `copy_incompatible`, `copy_quality_unsupported` | Change media/export settings; audio export needs an audio track |
+| `hdr_conversion_unavailable` | Current-source HDR-to-SDR conversion needs capabilities absent from the configured tools; configure zscale/libzimg and tonemap, or use compatible copy/audio output |
 | `output_limit`, `storage_full` | Reduce the result or free storage/quota |
 | `timeout`, `cancelled` | Inspect the caller/tool budget or cancellation |
 | `output_exists` | Existing file/symlink remains intact; choose a new name |

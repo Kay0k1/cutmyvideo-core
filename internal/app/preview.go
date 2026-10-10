@@ -30,6 +30,7 @@ const previewCacheEntries = 64
 const previewOwnerCacheEntries = 16
 
 var errPreviewPending = errors.New("this preview is being prepared")
+var errPreviewNeedsInspection = errors.New("preview admission needs selected local dimensions")
 var ErrPreviewCommitUncertain = errors.New("preview publication commit outcome unknown")
 
 // Small, reusable intervals keep seeking independent of recording length.
@@ -60,10 +61,33 @@ func (s *Server) sourcePreviewWithPublisher(w http.ResponseWriter, r *http.Reque
 	key := previewCacheKey(v, start)
 	id := newID("preview")
 	var cached *os.File
+	inspected := v.Path == ""
 	for {
 		cached, err = apiDatabase(ctx, func(dbCtx context.Context) (*os.File, error) {
-			return s.Store.acquirePreview(dbCtx, s.Config, v, id, key, r.URL.Query().Get("priority") == "background")
+			return s.Store.acquirePreviewAfterCacheLookup(dbCtx, s.Config, v, id, key, r.URL.Query().Get("priority") == "background", !inspected)
 		})
+		if errors.Is(err, errPreviewNeedsInspection) {
+			// Cache hits need neither tool. A miss releases the storage fence
+			// before inspecting, then repeats cache lookup and admission with
+			// fresh persisted dimensions for every active preview's weight.
+			v, err = s.Store.refreshLocalMediaDimensions(ctx, s.Config, v)
+			if err != nil {
+				if r.Context().Err() != nil {
+					return
+				}
+				if errors.Is(err, ErrNotFound) {
+					lookupError(w, err)
+				} else if errors.Is(err, errDatabaseUnavailable) || sourceTimedOut(ctx, err) {
+					writeSourceAdmissionError(w, ctx, err)
+				} else {
+					problem := exportProblem(err)
+					writeError(w, 422, problem.code, problem.message)
+				}
+				return
+			}
+			inspected = true
+			continue
+		}
 		if !errors.Is(err, errPreviewPending) {
 			break
 		}
@@ -190,7 +214,9 @@ func (s *Server) sourcePreviewWithPublisher(w http.ResponseWriter, r *http.Reque
 }
 
 func previewCacheKey(source Source, start int64) string {
-	sum := sha256.Sum256([]byte(source.ID + ":" + strconv.FormatInt(start, 10)))
+	// A prior rendition may have selected different tracks or display/color
+	// handling. Leave its charged cache entry to expire, without reusing it.
+	sum := sha256.Sum256([]byte("media-contract-v1:" + source.ID + ":" + strconv.FormatInt(start, 10)))
 	return hex.EncodeToString(sum[:])
 }
 
@@ -227,6 +253,17 @@ func trimPreviewWorkspace(ctx context.Context, dir string) error {
 }
 
 func renderPreview(ctx context.Context, c Config, inputs []mediaInput, r Range, out string) error {
+	selection, err := probeInputSelection(ctx, c, inputs)
+	if err != nil {
+		return err
+	}
+	if selection.Video == nil {
+		return errUnsupportedStream
+	}
+	filter, hdr, err := videoRenderFilter(selection.Video, "best", true)
+	if err != nil {
+		return err
+	}
 	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-max_alloc", "268435456", "-filter_threads", "1"}
 	for _, input := range inputs {
 		if r.StartMS < input.OffsetMS {
@@ -240,15 +277,13 @@ func renderPreview(ctx context.Context, c Config, inputs []mediaInput, r Range, 
 		args = append(args, mediaInputBounds(c)...)
 		args = append(args, "-ss", seconds(r.StartMS-input.OffsetMS), "-i", input.Path)
 	}
-	args = append(args, "-t", seconds(r.EndMS-r.StartMS), "-map", "0:v:0")
-	if len(inputs) > 1 {
-		args = append(args, "-map", "1:a:0")
-	} else {
-		args = append(args, "-map", "0:a:0?")
-	}
-	args = append(args, "-vf", "scale=w='min(854,iw)':h='min(480,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,fps=24", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-maxrate", "1400k", "-bufsize", "2800k", "-pix_fmt", "yuv420p", "-threads", "2", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", "-map_metadata", "-1", "-map_chapters", "-1", "-fs", strconv.FormatInt(previewOutputBytes, 10), out)
+	args = append(args, "-t", seconds(r.EndMS-r.StartMS))
+	args = append(args, selection.mapArgs("mp4")...)
+	args = append(args, "-vf", filter, "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-maxrate", "1400k", "-bufsize", "2800k", "-pix_fmt", "yuv420p", "-threads", "2", "-c:a", "aac", "-b:a", "96k")
+	args = append(args, hdrOutputColorArgs(hdr)...)
+	args = append(args, "-movflags", "+faststart", "-map_metadata", "-1", "-map_chapters", "-1", "-fs", strconv.FormatInt(previewOutputBytes, 10), out)
 	if _, err := runCommand(ctx, c.FFmpeg, args...); err != nil {
-		return err
+		return renderedMediaFailure(err, hdr)
 	}
 	stat, err := os.Stat(out)
 	if err != nil {
@@ -257,9 +292,15 @@ func renderPreview(ctx context.Context, c Config, inputs []mediaInput, r Range, 
 	if stat.Size() >= previewOutputBytes {
 		return errOutputLimit
 	}
-	_, duration, err := probe(ctx, c, out, false)
+	info, duration, err := probe(ctx, c, out, false)
 	if err != nil {
 		return err
+	}
+	if err := validateRenderedVideo(info, selection.Video, "best", true, hdr); err != nil {
+		return err
+	}
+	if selection.Audio != nil && info.selectedAudio() == nil {
+		return errors.New("preview has no selected audio stream")
 	}
 	if delta := duration - (r.EndMS - r.StartMS); delta > 350 || delta < -350 {
 		return errors.New("preview duration does not match requested interval")
@@ -279,6 +320,10 @@ func (s *Store) reservePreview(ctx context.Context, c Config, source Source, id 
 // never render the same interval concurrently. Cached descriptors remain valid
 // after eviction; no source is pinned by a completed cache entry.
 func (s *Store) acquirePreview(ctx context.Context, c Config, source Source, id, key string, background bool) (*os.File, error) {
+	return s.acquirePreviewAfterCacheLookup(ctx, c, source, id, key, background, false)
+}
+
+func (s *Store) acquirePreviewAfterCacheLookup(ctx context.Context, c Config, source Source, id, key string, background, needsLocalInspection bool) (*os.File, error) {
 	if err := s.bootstrapStorage(ctx, c); err != nil {
 		return nil, err
 	}
@@ -335,6 +380,9 @@ func (s *Store) acquirePreview(ctx context.Context, c Config, source Source, id,
 	}
 	if pending {
 		return nil, errPreviewPending
+	}
+	if needsLocalInspection && source.Path != "" {
+		return nil, errPreviewNeedsInspection
 	}
 	// Large/unknown inputs can use much more decoder RAM than the 480p
 	// result. Platforms can also fall back to a larger rendition. Give those

@@ -351,8 +351,12 @@ components:
         thumbnail_url:
           type: [string, 'null']
           description: Relative owner-protected thumbnail endpoint, or null. Never a raw external image URL.
-        width: {type: integer}
-        height: {type: integer}
+        width:
+          type: integer
+          description: Coded width of the selected playable video for local files; omitted for audio-only files. Platform sources use provider format metadata. Persisted source responses do not expose fresh SDK/CLI display dimensions.
+        height:
+          type: integer
+          description: Coded height of the selected playable video for local files, before sample-aspect-ratio/display-rotation normalization; omitted for audio-only files.
     Range:
       type: object
       additionalProperties: false
@@ -402,7 +406,7 @@ components:
         error_code:
           type: string
           description: Optional fixed public diagnostic on failed/cancelled items. Legacy items can omit it. Localize known codes and use a safe generic fallback for unknown ones; never display raw subprocess output.
-          examples: [audio_missing, output_limit, platform_access_required, platform_unavailable, unsupported_stream, live_not_supported, unsupported_collection, media_upstream_denied, media_upstream_unavailable, media_network_timeout, media_network_reset, copy_incompatible, copy_quality_unsupported, media_processing_failed, source_expired, source_changed, source_timeline_changed, source_timeout, job_timeout, storage_full, storage_timeout, storage_limit, server_error, cancelled]
+          examples: [audio_missing, hdr_conversion_unavailable, output_limit, platform_access_required, platform_unavailable, unsupported_stream, live_not_supported, unsupported_collection, media_upstream_denied, media_upstream_unavailable, media_network_timeout, media_network_reset, copy_incompatible, copy_quality_unsupported, media_processing_failed, source_expired, source_changed, source_timeline_changed, source_timeout, job_timeout, storage_full, storage_timeout, storage_limit, server_error, cancelled]
         artifact:
           oneOf:
             - {$ref: '#/components/schemas/Artifact'}

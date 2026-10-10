@@ -33,7 +33,7 @@ func TestEngineInspectAndExportActualMedia(t *testing.T) {
 	input := fixture(t)
 	e := New(Config{MaxOutputBytes: 10 << 20, FFmpegThreads: 1})
 	info, err := e.Inspect(context.Background(), input)
-	if err != nil || info.DurationMS < 3900 || info.Width != 160 || info.Height != 90 {
+	if err != nil || info.DurationMS < 3900 || info.Width != 160 || info.Height != 90 || info.DisplayWidth != 160 || info.DisplayHeight != 90 {
 		t.Fatalf("inspect: %+v %v", info, err)
 	}
 	before, err := os.ReadFile(input)

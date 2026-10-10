@@ -24,6 +24,20 @@ func waitForWorkerFile(t *testing.T, path string) {
 	t.Fatal("worker did not reach the media process")
 }
 
+func workerSourceFixture(t *testing.T, s *Store, c Config) Source {
+	t.Helper()
+	media := mediaConfig(t)
+	path := filepath.Join(c.DataDir, newID("worker-input")+".mp4")
+	if _, err := runCommand(context.Background(), media.FFmpeg, "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=25", "-f", "lavfi", "-i", "sine=frequency=800:sample_rate=48000", "-t", "4", "-c:v", "libx264", "-threads", "1", "-c:a", "aac", path); err != nil {
+		t.Fatal(err)
+	}
+	source := Source{ID: newID("src"), Owner: "owner", Title: "Worker fixture", Kind: "upload", Path: path, DurationMS: 4000, Width: 160, Height: 90}
+	if err := s.AddSource(context.Background(), source); err != nil {
+		t.Fatal(err)
+	}
+	return source
+}
+
 func TestWorkerShutdownKeepsJobRecoverableAndResumesActualExport(t *testing.T) {
 	s := testStore(t)
 	c := mediaConfig(t)
@@ -106,12 +120,12 @@ func TestWorkerOwnDeadlineIsTerminalAndStoresSafeCode(t *testing.T) {
 	c := mediaConfig(t)
 	c.MaxStorageBytes, c.JobTimeout = 100<<20, 150*time.Millisecond
 	c.WorkerHealthPath = filepath.Join(c.DataDir, "health")
+	source := workerSourceFixture(t, s, c)
 	c.FFmpeg = filepath.Join(c.DataDir, "blocked-ffmpeg")
 	if err := os.WriteFile(c.FFmpeg, []byte("#!/bin/sh\nsleep 60\n"), 0700); err != nil {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	source := storedSource(t, s, "owner")
 	if _, err := s.CreateJob(ctx, "owner", requestFor(source), ""); err != nil {
 		t.Fatal(err)
 	}
@@ -131,6 +145,7 @@ func TestWorkerUserCancellationStopsProcessAndStoresCancelledItem(t *testing.T) 
 	c := mediaConfig(t)
 	c.MaxStorageBytes, c.JobTimeout = 100<<20, 20*time.Second
 	c.WorkerHealthPath = filepath.Join(c.DataDir, "health")
+	source := workerSourceFixture(t, s, c)
 	marker := filepath.Join(c.DataDir, "started")
 	c.FFmpeg = filepath.Join(c.DataDir, "blocked-ffmpeg")
 	quoted := "'" + strings.ReplaceAll(marker, "'", "'\"'\"'") + "'"
@@ -139,7 +154,6 @@ func TestWorkerUserCancellationStopsProcessAndStoresCancelledItem(t *testing.T) 
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	source := storedSource(t, s, "owner")
 	if _, err := s.CreateJob(ctx, "owner", requestFor(source), ""); err != nil {
 		t.Fatal(err)
 	}
@@ -305,7 +319,7 @@ func TestRunWorkerHealthCoversIdleBusyAndCancellation(t *testing.T) {
 	if CheckWorkerHealth(c.WorkerHealthPath) == nil {
 		t.Fatal("cancelled idle worker remained healthy")
 	}
-	source := storedSource(t, s, "owner")
+	source := workerSourceFixture(t, s, c)
 	if _, err := s.CreateJob(context.Background(), "owner", requestFor(source), ""); err != nil {
 		t.Fatal(err)
 	}

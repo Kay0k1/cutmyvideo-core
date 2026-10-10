@@ -231,6 +231,28 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 		}
 		slog.Info("source_streams_resolved", "job_id", j.ID, "cache_hit", cachedMetadata, "elapsed_ms", time.Since(resolvedAt).Milliseconds())
 	}
+	if source.Path != "" {
+		source, err = s.refreshLocalMediaDimensions(ctx, c, source)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				finishFailure("source_expired", "Source is unavailable or has expired")
+			} else if errors.Is(err, errDatabaseUnavailable) {
+				finishFailure("server_error", "Could not refresh source metadata; try exporting again")
+			} else if storagePressureError(err) {
+				if !waitForJobStorage(parent, c, s, &j, token, work) {
+					finishFailure("server_error", "Could not wait for storage")
+				}
+			} else if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+				finishFailure("source_timeout", "Source inspection timed out; try exporting again")
+			} else if ctx.Err() != nil {
+				finishFailure("job_timeout", "Processing stopped or exceeded the time limit")
+			} else {
+				problem := exportProblem(err)
+				finishFailure(problem.code, problem.message)
+			}
+			return
+		}
+	}
 
 	var mediaPermit mediaProcessingPermit
 	if budgetErr := mediaPermit.Acquire(ctx, source, streams, j.Request); budgetErr != nil {

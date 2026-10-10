@@ -1,0 +1,284 @@
+{
+  "format": 1,
+  "origin": "Original synthetic signal, generated for cutmyvideo-core; repository license applies.",
+  "signal_reference": "https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.2100-3-202502-I!!PDF-E.pdf",
+  "neutral_bar_luminance_nits": [
+    0,
+    5,
+    20,
+    80,
+    203,
+    400,
+    1000
+  ],
+  "hlg_reference_peak_nits": 1000,
+  "hlg_system_gamma": 1.2,
+  "color_bar_display_rgb_nits": [
+    100,
+    10,
+    5
+  ],
+  "width": 128,
+  "height": 80,
+  "duration_seconds": 2,
+  "generator_sha256": "07b1e1b2b7c704314dc855c96a4798d74ade78f8f3dfdc140b5cd7ae1bc95c34",
+  "ffmpeg_version": "ffmpeg version N-127083-g65a3870462-20261001 Copyright (c) 2000-2026 the FFmpeg developers",
+  "fixtures": [
+    {
+      "name": "pq-10bit.mp4",
+      "transfer": "smpte2084",
+      "sha256": "e275a7469a340cfb96a5fb42165b132cf25cb2b43a7fcb4122dfc8f0e4066d30",
+      "bytes": 28053,
+      "luma10": [
+        64,
+        281,
+        377,
+        490,
+        573,
+        636,
+        723,
+        372
+      ],
+      "yuv10": [
+        [
+          64,
+          512,
+          512
+        ],
+        [
+          281,
+          512,
+          512
+        ],
+        [
+          377,
+          512,
+          512
+        ],
+        [
+          490,
+          512,
+          512
+        ],
+        [
+          573,
+          512,
+          512
+        ],
+        [
+          636,
+          512,
+          512
+        ],
+        [
+          723,
+          512,
+          512
+        ],
+        [
+          372,
+          463,
+          607
+        ]
+      ],
+      "generation_command": [
+        "ffmpeg",
+        "-v",
+        "error",
+        "-nostdin",
+        "-y",
+        "-stream_loop",
+        "-1",
+        "-f",
+        "rawvideo",
+        "-pixel_format",
+        "yuv420p10le",
+        "-video_size",
+        "128x80",
+        "-framerate",
+        "5",
+        "-color_primaries",
+        "bt2020",
+        "-color_trc",
+        "smpte2084",
+        "-colorspace",
+        "bt2020nc",
+        "-color_range",
+        "tv",
+        "-i",
+        "signal.yuv",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=440:sample_rate=48000",
+        "-t",
+        "2",
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-qp",
+        "0",
+        "-threads",
+        "1",
+        "-g",
+        "5",
+        "-bf",
+        "0",
+        "-vf",
+        "setsar=1",
+        "-pix_fmt",
+        "yuv420p10le",
+        "-x264-params",
+        "colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc",
+        "-color_primaries",
+        "bt2020",
+        "-color_trc",
+        "smpte2084",
+        "-colorspace",
+        "bt2020nc",
+        "-color_range",
+        "tv",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "96k",
+        "-movflags",
+        "+faststart",
+        "pq-10bit.mp4"
+      ]
+    },
+    {
+      "name": "hlg-10bit.mp4",
+      "transfer": "arib-std-b67",
+      "sha256": "a36d13140dc638496f8d92b93c7e4d004c1c8a09d590bcf60cd60f4aea5309a5",
+      "bytes": 28073,
+      "luma10": [
+        64,
+        231,
+        361,
+        580,
+        721,
+        816,
+        940,
+        363
+      ],
+      "yuv10": [
+        [
+          64,
+          512,
+          512
+        ],
+        [
+          231,
+          512,
+          512
+        ],
+        [
+          361,
+          512,
+          512
+        ],
+        [
+          580,
+          512,
+          512
+        ],
+        [
+          721,
+          512,
+          512
+        ],
+        [
+          816,
+          512,
+          512
+        ],
+        [
+          940,
+          512,
+          512
+        ],
+        [
+          363,
+          427,
+          711
+        ]
+      ],
+      "generation_command": [
+        "ffmpeg",
+        "-v",
+        "error",
+        "-nostdin",
+        "-y",
+        "-stream_loop",
+        "-1",
+        "-f",
+        "rawvideo",
+        "-pixel_format",
+        "yuv420p10le",
+        "-video_size",
+        "128x80",
+        "-framerate",
+        "5",
+        "-color_primaries",
+        "bt2020",
+        "-color_trc",
+        "arib-std-b67",
+        "-colorspace",
+        "bt2020nc",
+        "-color_range",
+        "tv",
+        "-i",
+        "signal.yuv",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=440:sample_rate=48000",
+        "-t",
+        "2",
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-qp",
+        "0",
+        "-threads",
+        "1",
+        "-g",
+        "5",
+        "-bf",
+        "0",
+        "-vf",
+        "setsar=1",
+        "-pix_fmt",
+        "yuv420p10le",
+        "-x264-params",
+        "colorprim=bt2020:transfer=arib-std-b67:colormatrix=bt2020nc",
+        "-color_primaries",
+        "bt2020",
+        "-color_trc",
+        "arib-std-b67",
+        "-colorspace",
+        "bt2020nc",
+        "-color_range",
+        "tv",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "96k",
+        "-movflags",
+        "+faststart",
+        "hlg-10bit.mp4"
+      ]
+    }
+  ]
+}

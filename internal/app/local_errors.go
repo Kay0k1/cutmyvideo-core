@@ -8,7 +8,7 @@ func LocalErrorCode(err error) string {
 	var problem *sourceProblem
 	if errors.As(err, &problem) {
 		switch problem.code {
-		case "audio_missing", "output_limit", "copy_incompatible", "copy_quality_unsupported":
+		case "audio_missing", "output_limit", "copy_incompatible", "copy_quality_unsupported", "hdr_conversion_unavailable":
 			return problem.code
 		case "unsupported_stream":
 			return "unsupported_media"
@@ -19,7 +19,7 @@ func LocalErrorCode(err error) string {
 		switch process.category {
 		case "missing_audio":
 			return "audio_missing"
-		case "storage_full", "copy_incompatible", "unsupported_media":
+		case "storage_full", "copy_incompatible", "unsupported_media", "hdr_conversion_unavailable":
 			return process.category
 		default:
 			return "processing_failed"

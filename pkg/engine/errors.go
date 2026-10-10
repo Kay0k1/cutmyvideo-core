@@ -34,26 +34,30 @@ var (
 type ErrorCode string
 
 const (
-	CodeInvalidArgument        ErrorCode = "invalid_argument"
-	CodeInputNotFound          ErrorCode = "input_not_found"
-	CodePermissionDenied       ErrorCode = "permission_denied"
-	CodeToolUnavailable        ErrorCode = "tool_unavailable"
-	CodeUnsupportedMedia       ErrorCode = "unsupported_media"
-	CodeAudioMissing           ErrorCode = "audio_missing"
-	CodeOutputLimit            ErrorCode = "output_limit"
-	CodeCopyIncompatible       ErrorCode = "copy_incompatible"
-	CodeCopyQualityUnsupported ErrorCode = "copy_quality_unsupported"
-	CodeStorageFull            ErrorCode = "storage_full"
-	CodeTimeout                ErrorCode = "timeout"
-	CodeCancelled              ErrorCode = "cancelled"
-	CodeOutputExists           ErrorCode = "output_exists"
-	CodeFilesystemUnsupported  ErrorCode = "filesystem_unsupported"
-	CodeOutputSyncFailed       ErrorCode = "output_sync_failed"
-	CodePublicationFailed      ErrorCode = "publication_failed"
-	CodePublicationUncertain   ErrorCode = "publication_uncertain"
-	CodeSchemaIncompatible     ErrorCode = "schema_incompatible"
-	CodeStorageInitializing    ErrorCode = "storage_initializing"
-	CodeProcessingFailed       ErrorCode = "processing_failed"
+	CodeInvalidArgument  ErrorCode = "invalid_argument"
+	CodeInputNotFound    ErrorCode = "input_not_found"
+	CodePermissionDenied ErrorCode = "permission_denied"
+	CodeToolUnavailable  ErrorCode = "tool_unavailable"
+	CodeUnsupportedMedia ErrorCode = "unsupported_media"
+	CodeAudioMissing     ErrorCode = "audio_missing"
+	// CodeHDRConversionUnavailable means accurate HDR video conversion requires
+	// capabilities absent from the configured tools; repeating that export does
+	// not add those capabilities. Compatible copy and audio-only export may work.
+	CodeHDRConversionUnavailable ErrorCode = "hdr_conversion_unavailable"
+	CodeOutputLimit              ErrorCode = "output_limit"
+	CodeCopyIncompatible         ErrorCode = "copy_incompatible"
+	CodeCopyQualityUnsupported   ErrorCode = "copy_quality_unsupported"
+	CodeStorageFull              ErrorCode = "storage_full"
+	CodeTimeout                  ErrorCode = "timeout"
+	CodeCancelled                ErrorCode = "cancelled"
+	CodeOutputExists             ErrorCode = "output_exists"
+	CodeFilesystemUnsupported    ErrorCode = "filesystem_unsupported"
+	CodeOutputSyncFailed         ErrorCode = "output_sync_failed"
+	CodePublicationFailed        ErrorCode = "publication_failed"
+	CodePublicationUncertain     ErrorCode = "publication_uncertain"
+	CodeSchemaIncompatible       ErrorCode = "schema_incompatible"
+	CodeStorageInitializing      ErrorCode = "storage_initializing"
+	CodeProcessingFailed         ErrorCode = "processing_failed"
 )
 
 // Error describes an operation failure without losing its underlying cause.

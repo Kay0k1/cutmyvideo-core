@@ -1,0 +1,191 @@
+{
+  "format": 1,
+  "scope": "Complete matched functional media-contract proof. Not a performance benchmark or an assertion of overall1.0 readiness.",
+  "same_helper_and_fixtures": true,
+  "same_tools": true,
+  "helper_sha256": "2ef78e50f4c3885806abbab01c1789866116d6c67b083cdab10e24c691b30fe1",
+  "fixture_files": [
+    {
+      "path": "internal/app/testdata/media-contract/README.md",
+      "sha256": "37979e7f716bc24d9f4453f399f870f0b6ed3844955ad150d912e35cd38b18a2",
+      "bytes": 2206
+    },
+    {
+      "path": "internal/app/testdata/media-contract/generate.py",
+      "sha256": "07b1e1b2b7c704314dc855c96a4798d74ade78f8f3dfdc140b5cd7ae1bc95c34",
+      "bytes": 4485
+    },
+    {
+      "path": "internal/app/testdata/media-contract/hlg-10bit.mp4",
+      "sha256": "a36d13140dc638496f8d92b93c7e4d004c1c8a09d590bcf60cd60f4aea5309a5",
+      "bytes": 28073
+    },
+    {
+      "path": "internal/app/testdata/media-contract/manifest.json",
+      "sha256": "79e0e44c499f7930fb578535daebb51219b9362d4ed717290778ca61119fbe07",
+      "bytes": 5181
+    },
+    {
+      "path": "internal/app/testdata/media-contract/mono-silence-vfr.json",
+      "sha256": "86cf92dfba131d4ea0f5d49ef7c8389dd45a17bb8c355ddc8461f259e330de39",
+      "bytes": 1957
+    },
+    {
+      "path": "internal/app/testdata/media-contract/mono-silence-vfr.mp4",
+      "sha256": "6f9635f4d829595a1d5882b49a3788c09e7c80ee5bf708402164929928491afa",
+      "bytes": 4769
+    },
+    {
+      "path": "internal/app/testdata/media-contract/pq-10bit.mp4",
+      "sha256": "e275a7469a340cfb96a5fb42165b132cf25cb2b43a7fcb4122dfc8f0e4066d30",
+      "bytes": 28053
+    }
+  ],
+  "tools": {
+    "go": "go version go1.27.2 linux/amd64",
+    "ffmpeg": "ffmpeg version N-127083-g65a3870462-20261001 Copyright (c) 2000-2026 the FFmpeg developers"
+  },
+  "command": [
+    "go",
+    "test",
+    "-json",
+    "-race",
+    "-count=1",
+    "-timeout=5m",
+    "./internal/app",
+    "-run",
+    "^TestMediaContract"
+  ],
+  "before": {
+    "source_head": "b59e1d22adc3f20533bf3b54243bd6c28e6c6b48",
+    "source_dirty": true,
+    "dependency_sha256": {
+      "go.mod": "d200d8c9e25d6b64ef8cda6bbfdb4fda8e6dcf774b847bd3ce8f1627148e0eb9",
+      "go.sum": "33e140fee2bda380c73cc0be9314c676ccc848e864fc0f4741907283459994ba"
+    },
+    "started_at": "2026-10-10T23:26:30.922795+00:00",
+    "finished_at": "2026-10-10T23:26:51.230469+00:00",
+    "exit_code": 1,
+    "raw": "final-seven-before-b59.jsonl",
+    "raw_sha256": "0d4121975bafe8b9726a2d8d1aa7d0beddceed5abcabe2dced7265925aad785b",
+    "gzip": "final-seven-before-b59.jsonl.gz",
+    "gzip_sha256": "b8e19162a39700f2a6b917ca50ab2ad998f4d696d6930bec2a60f75cee666fd9",
+    "stderr": "final-seven-before-b59.stderr.log",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "top_level_results": [
+      {
+        "Test": "TestMediaContractRotationDisplayGeometry",
+        "Action": "fail",
+        "Elapsed": 2.65
+      },
+      {
+        "Test": "TestMediaContractSampleAspectNormalization",
+        "Action": "fail",
+        "Elapsed": 0.87
+      },
+      {
+        "Test": "TestMediaContractDefaultAudioSelection",
+        "Action": "fail",
+        "Elapsed": 1.53
+      },
+      {
+        "Test": "TestMediaContractAttachedPicturesAreNotVideo",
+        "Action": "pass",
+        "Elapsed": 0.28
+      },
+      {
+        "Test": "TestMediaContractCopyQualityUsesSelectedVideo",
+        "Action": "fail",
+        "Elapsed": 0.2
+      },
+      {
+        "Test": "TestMediaContractHDRToneMappingAndCopy",
+        "Action": "fail",
+        "Elapsed": 0.96
+      },
+      {
+        "Test": "TestMediaContractVariableFrameTimestamps",
+        "Action": "fail",
+        "Elapsed": 8.93
+      }
+    ],
+    "runtime_source_sha256": "b2e63149d468b7a35cde3e930f19fa6438adf801462947aaf8f72a3e8cbde0b0",
+    "production_only_sha256": "a69e36776391de545a3b9e11402c1e28a86287fa802deedb3625f7d05bcbe7b5",
+    "runtime_digest_protocol": "sorted pathlib.Path of cmd/internal/pkg .go/.sql/.json, except *_test.go; relativepath + NUL + bytes + NUL; production-only additionally excludes testdata path components",
+    "runtime_unchanged_during_run": true,
+    "run_metadata": "final-seven-before-b59-run.json",
+    "run_metadata_sha256": "76d47fe78868addfe22dd1664f24c744fee7717d293db6c5a6c29e63b3fb668c"
+  },
+  "after": {
+    "source_head": "b59e1d22adc3f20533bf3b54243bd6c28e6c6b48",
+    "source_dirty": true,
+    "dependency_sha256": {
+      "go.mod": "d200d8c9e25d6b64ef8cda6bbfdb4fda8e6dcf774b847bd3ce8f1627148e0eb9",
+      "go.sum": "33e140fee2bda380c73cc0be9314c676ccc848e864fc0f4741907283459994ba"
+    },
+    "started_at": "2026-10-10T23:26:13.178391+00:00",
+    "finished_at": "2026-10-10T23:26:30.908330+00:00",
+    "exit_code": 0,
+    "raw": "final-seven-after.jsonl",
+    "raw_sha256": "f15657efb114912d447483af5511ead90d9d61e04c8f9b2c2bdf4f6495c9481a",
+    "gzip": "final-seven-after.jsonl.gz",
+    "gzip_sha256": "f3fd464394a1033291b8be08eb27442a2e7e4d03b073ff00de53c446b95e0381",
+    "stderr": "final-seven-after.stderr.log",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "top_level_results": [
+      {
+        "Test": "TestMediaContractRotationDisplayGeometry",
+        "Action": "pass",
+        "Elapsed": 3
+      },
+      {
+        "Test": "TestMediaContractSampleAspectNormalization",
+        "Action": "pass",
+        "Elapsed": 1.07
+      },
+      {
+        "Test": "TestMediaContractDefaultAudioSelection",
+        "Action": "pass",
+        "Elapsed": 1.68
+      },
+      {
+        "Test": "TestMediaContractAttachedPicturesAreNotVideo",
+        "Action": "pass",
+        "Elapsed": 0.23
+      },
+      {
+        "Test": "TestMediaContractCopyQualityUsesSelectedVideo",
+        "Action": "pass",
+        "Elapsed": 0.35
+      },
+      {
+        "Test": "TestMediaContractHDRToneMappingAndCopy",
+        "Action": "pass",
+        "Elapsed": 1.99
+      },
+      {
+        "Test": "TestMediaContractVariableFrameTimestamps",
+        "Action": "pass",
+        "Elapsed": 1.32
+      }
+    ],
+    "runtime_source_sha256": "311473c2757c8436c238cde2d1a6df5eca09197bc5fe1d0f91415a68ea1d6280",
+    "production_only_sha256": "817e475ec50cc932613ff8142eb49c66ce57145c2bced526227186cd565b7e9a",
+    "runtime_digest_protocol": "sorted pathlib.Path of cmd/internal/pkg .go/.sql/.json, except *_test.go; relativepath + NUL + bytes + NUL; production-only additionally excludes testdata path components",
+    "runtime_unchanged_during_run": true,
+    "run_metadata": "final-seven-after-run.json",
+    "run_metadata_sha256": "bafa08ef98420e9217e4ed3ca2aae4c4e437feb14551e4c95bfa45ed8dd8d729"
+  },
+  "baseline_failures": {
+    "geometry": "Copy720pacceptsrotateddisplayheight800; SAR accurate720x576/16:15 instead768x576/1:1 and preview600x480/16:15 instead640x480/1:1.",
+    "selection": "Defaultaudio880Hz wrongly selectsfirst440Hz; unselected722-pxvideo wrongly blockscopyselected96-pxvideo.",
+    "hdr": "Accurate/preview emit8-bit video stilltaggedPQorHLG/BT2020 insteadtone-mappedSDRBT709.",
+    "vfr": "Bothaccurateprofilesround207ms\u2192200ms; original25Hz/.600pulsemonosignal exhausts independent8-secondexportcontext.",
+    "unchanged_control": "Audio-only MP3 attachedpicturecontractpassedbothversions."
+  },
+  "aac_deadline_interpretation": "OriginalAACmono192kfailure is a tool/build-specific functional boundeddeadlinecontrol, not a speed comparison; current completes within the same8-secondcontext and validates outputPTS, frame identity, PCM position.",
+  "remaining_limits": [
+    "Onlysynthetic known-signal SDR/PQ/HLG; noDolbyVision,dynamicHDR,arbitrarymasteringmetadata certificate.",
+    "Fullnativefive-platform/Bookworm/service/recovery/CI evidence is separately parent-owned."
+  ]
+}

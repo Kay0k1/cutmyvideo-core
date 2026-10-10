@@ -530,18 +530,11 @@ func validVideoID(id string) bool {
 }
 
 func (s *Server) completeLocalSource(ctx context.Context, v *Source) error {
-	p, duration, err := probe(ctx, s.Config, v.Path, false)
+	inspected, err := InspectLocal(ctx, s.Config, v.Path)
 	if err != nil {
 		return err
 	}
-	v.DurationMS = duration
-	for _, stream := range p.Streams {
-		if stream.CodecType == "video" {
-			v.Width = stream.Width
-			v.Height = stream.Height
-			break
-		}
-	}
+	v.DurationMS, v.Width, v.Height = inspected.DurationMS, inspected.Width, inspected.Height
 	return nil
 }
 

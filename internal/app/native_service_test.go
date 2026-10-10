@@ -40,9 +40,23 @@ func TestNativeServiceUploadExportAndDownload(t *testing.T) {
 	c.MaxStorageBytes, c.MaxOwnerBytes, c.MaxActiveJobs, c.MutationsPerMinute = 1<<30, 1<<30, 32, 100
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
+	// Exercise the same track/geometry contract through the HTTP upload,
+	// preview cache, worker and private download paths on each native OS.
+	image := filepath.Join(base, "corners.ppm")
+	mcCorners(t, image, 160, 96)
+	plain := filepath.Join(base, "synthetic-unrotated.mp4")
+	mcRun(t, ctx, c, "-loop", "1", "-i", image,
+		"-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000",
+		"-f", "lavfi", "-i", "sine=frequency=880:sample_rate=48000",
+		"-t", "4", "-r", "25", "-map", "0:v:0", "-map", "1:a:0", "-map", "2:a:0",
+		"-c:v", "libx264", "-threads", "1", "-pix_fmt", "yuv420p", "-g", "25", "-bf", "0", "-c:a", "aac",
+		"-disposition:a:0", "0", "-disposition:a:1", "default", "-movflags", "+faststart", plain)
 	fixture := filepath.Join(base, "synthetic.mp4")
-	if _, err := runCommand(ctx, c.FFmpeg, "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=25", "-f", "lavfi", "-i", "sine=frequency=733:sample_rate=48000", "-t", "4", "-c:v", "libx264", "-threads", "1", "-c:a", "aac", "-movflags", "+faststart", fixture); err != nil {
-		t.Fatal(err)
+	mcRotateFixture(t, ctx, c, plain, fixture, 90)
+	inputStreams := mcProbe(t, ctx, c, fixture)
+	if len(inputStreams) != 3 || mcRotation(mcVideo(t, inputStreams)) != 90 ||
+		inputStreams[1].Disposition.Default != 0 || inputStreams[2].Disposition.Default != 1 {
+		t.Fatalf("native service fixture lost rotation or multiple audio tracks: %+v", inputStreams)
 	}
 	media, err := os.ReadFile(fixture)
 	if err != nil {
@@ -105,6 +119,14 @@ func TestNativeServiceUploadExportAndDownload(t *testing.T) {
 	if err := json.Unmarshal(uploaded, &source); err != nil || source.ID == "" || source.PreviewURL == nil {
 		t.Fatalf("upload returned an incomplete source: %s (%v)", uploaded, err)
 	}
+	if source.Width != 160 || source.Height != 96 || source.DurationMS < 3900 || source.DurationMS > 4100 {
+		t.Fatalf("upload changed coded source metadata: %+v", source)
+	}
+	storedMetadata, _ := request(http.MethodGet, "/api/v1/sources/"+source.ID, nil, nil, cookie, http.StatusOK)
+	var storedSource Source
+	if err := json.Unmarshal(storedMetadata, &storedSource); err != nil || storedSource.Width != source.Width || storedSource.Height != source.Height {
+		t.Fatalf("stored source changed the upload geometry: %s (%v)", storedMetadata, err)
+	}
 	retained, _ := request(http.MethodGet, *source.PreviewURL, nil, nil, cookie, http.StatusOK)
 	if !bytes.Equal(retained, media) {
 		t.Fatal("acknowledged upload changed its bytes")
@@ -118,6 +140,14 @@ func TestNativeServiceUploadExportAndDownload(t *testing.T) {
 	if !bytes.Equal(cached, preview) || cacheHeaders.Get("X-Preview-Cache") != "hit" {
 		t.Fatal("native service did not recover its completed preview cache")
 	}
+	previewFile := filepath.Join(base, "downloaded-preview.mp4")
+	if err := os.WriteFile(previewFile, preview, 0600); err != nil {
+		t.Fatal(err)
+	}
+	mcSquareGeometry(t, ctx, c, previewFile, 96, 160)
+	previewFrame, pw, ph := mcFrame(t, ctx, c, previewFile, true)
+	mcCheckCorners(t, previewFrame, pw, ph, [4]int{1, 3, 0, 2})
+	mcTone(t, mcPCM(t, ctx, c, previewFile, .2, .2, mcAudioIndex(t, mcProbe(t, ctx, c, previewFile))), 880)
 	export := ExportRequest{SourceID: source.ID, Ranges: []Range{{StartMS: 1000, EndMS: 3000, Label: "Native export"}}, Format: "mp4", Quality: "720p", CutMode: "accurate"}
 	encoded, err := json.Marshal(export)
 	if err != nil {
@@ -187,6 +217,10 @@ func TestNativeServiceUploadExportAndDownload(t *testing.T) {
 	if _, err := runCommand(ctx, c.FFmpeg, "-v", "error", "-i", downloaded, "-map", "0:v:0", "-map", "0:a:0", "-f", "null", "-"); err != nil {
 		t.Fatal("native downloaded output cannot be decoded", err)
 	}
+	mcSquareGeometry(t, ctx, c, downloaded, 96, 160)
+	frame, width, height := mcFrame(t, ctx, c, downloaded, true)
+	mcCheckCorners(t, frame, width, height, [4]int{1, 3, 0, 2})
+	mcTone(t, mcPCM(t, ctx, c, downloaded, .2, .2, mcAudioIndex(t, mcProbe(t, ctx, c, downloaded))), 880)
 	// Startup maintenance may purge the earlier cached window while the export
 	// runs. Recreate it so explicit deletion also exercises a retained preview.
 	request(http.MethodGet, previewURL, nil, nil, cookie, http.StatusOK)

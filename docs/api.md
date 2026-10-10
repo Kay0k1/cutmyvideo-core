@@ -86,7 +86,15 @@ Request:
 {"source_id":"src_...","ranges":[{"start_ms":10000,"end_ms":40000,"label":"Quote"}],"format":"mp4","quality":"1080p","cut_mode":"accurate"}
 ```
 
-`format`: `mp4` or `mp3`. `quality`: `best`, `1080p`, `720p`. `cut_mode`: `accurate` or `copy`. MP3 requires accurate mode. Copy mode preserves source resolution: `best` means original quality. A source above an explicitly selected resolution cap returns `copy_quality_unsupported`; it is never silently resized or exported above the cap. Each range exports separately in request order. Optional `Idempotency-Key` replays the original submission for this owner; use a fresh key when changing the request.
+`format`: `mp4` or `mp3`. `quality`: `best`, `1080p`, `720p`. `cut_mode`: `accurate` or `copy`. MP3 requires accurate mode. Copy mode preserves the selected source stream: `best` means original quality. A selected video above an explicitly selected displayed-height cap returns `copy_quality_unsupported`; it is never silently resized or exported above the cap. Each range exports separately in request order. Optional `Idempotency-Key` replays the original submission for this owner; use a fresh key when changing the request.
+
+Current-source media selection, display geometry, variable-frame-rate export and
+HDR conversion follow the [shared media policy](media.md). Outputs contain at
+most one playable video and one audio stream: default audio, otherwise first
+audio. MP3 exports the selected audio only. HTTP source `width`/`height` remain
+persisted coded dimensions
+for local files and provider format metadata for platforms. Only fresh SDK/CLI
+inspection exposes additive display dimensions; metadata reads do not re-probe.
 
 The source URL is bounded to 8192 UTF-8 bytes both before and after normalization;
 normalization can percent-encode Unicode and expand its byte size. An idempotency
@@ -118,7 +126,7 @@ Changing `ARTIFACT_TTL` affects newly published outputs, while existing stored
 deadlines remain stable. Legacy results without a stored deadline use the current
 TTL. Cleanup may lag a deadline by the maintenance interval.
 
-Failed/cancelled items have an additive optional `error_code`, stored with the item without a schema migration. Older jobs can omit this field. Codes are fixed public diagnostics, not signed media addresses or raw subprocess stderr. Clients should localize known codes and use a safe generic fallback for unknown or absent diagnostics. Codes include missing audio (`audio_missing`), unsupported stream/copy settings, platform access/availability, transfer errors, changed/expired sources, source/job timeouts, storage/output limits and server failure; known examples are in [OpenAPI](../api/openapi.yaml), rather than a closed vocabulary. `audio_missing` permits an MP4 retry with the same video and time range.
+Failed/cancelled items have an additive optional `error_code`, stored with the item without a schema migration. Older jobs can omit this field. Codes are fixed public diagnostics, not signed media addresses or raw subprocess stderr. Clients should localize known codes and use a safe generic fallback for unknown or absent diagnostics. Codes include missing audio (`audio_missing`), unsupported stream/copy settings, platform access/availability, transfer errors, changed/expired sources, source/job timeouts, storage/output limits and server failure; known examples are in [OpenAPI](../api/openapi.yaml), rather than a closed vocabulary. `audio_missing` permits an MP4 retry with the same video and time range. Current-source `hdr_conversion_unavailable` means the configured tools cannot perform required HDR-to-SDR conversion; repeating the same accurate export is not a recovery step. Compatible copy or MP3 avoids video-color conversion.
 
 Worker shutdown and lost lease/database access keep unfinished work recoverable through the existing bounded lease attempts. A job's own processing timeout remains terminal. Explicit cancellation wins a concurrent failure for pending items while already finished items keep their results and diagnostics. Final worker database reads/writes are bounded to five seconds.
 

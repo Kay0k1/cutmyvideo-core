@@ -678,9 +678,10 @@ func TestWaitingStorageHTTPExposesFiniteDeadlineAndSourceListIsolation(t *testin
 func TestWorkerStorageFailureWaitsInsteadOfFailingAcceptedJob(t *testing.T) {
 	s := testStore(t)
 	c := ledgerConfig(t)
+	c.FFprobe = mediaConfig(t).FFprobe
 	s.ConfigureStorage(c)
 	ctx := context.Background()
-	source := storedSource(t, s, "owner")
+	source := workerSourceFixture(t, s, c)
 	c.FFmpeg = filepath.Join(c.DataDir, "ffmpeg-no-space")
 	if err := os.WriteFile(c.FFmpeg, []byte("#!/bin/sh\nprintf 'No space left on device\\n' >&2\nexit 1\n"), 0700); err != nil {
 		t.Fatal(err)
