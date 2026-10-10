@@ -6,6 +6,11 @@ to create/drop schemas. Each size uses a new namespace and two real Store pools
 (four connections per pool), then removes its namespace. No production service,
 live provider, real recording or FFmpeg process is used.
 
+The [2026-10-10 before/after report](../benchmarks/2026-10-10-storage-maintenance/README.md)
+preserves complete results at both sizes, including regressions and the overall
+failed workload gate. Use its recorded runtime/harness hashes and configuration
+when reproducing that comparison.
+
 ```sh
 export TEST_DATABASE_URL='postgres://cutmy_test:test-only@127.0.0.1:55440/cutmy_storage_test?sslmode=disable'
 export GOMAXPROCS=2

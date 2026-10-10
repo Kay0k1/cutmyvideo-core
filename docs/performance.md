@@ -264,7 +264,11 @@ rows and is O(N); bounding the final DELETE does not bound that selection cost.
 Explicit-expiry artifact selection may read and sort all expired candidates
 before choosing the oldest eligible batch. A large pinned backlog can also
 increase candidate-probe work. See the reproducible storage-capacity measurements
-for both improvements and regressions at different retained sizes.
+for both improvements and regressions at different retained sizes: the
+[2026-10-10 before/after report](../benchmarks/2026-10-10-storage-maintenance/README.md)
+includes complete raw plans, ordinary service-budget progress, failed artificial
+five-millisecond gates and slower full scans. Cache expiry remains an unbounded
+DELETE on both measured versions.
 
 Job polling fetches all artifact expiry records with one aggregate SQL query,
 removing the previous potential twelve extra round trips. Source listing is
