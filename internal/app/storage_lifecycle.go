@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/jackc/pgx/v5"
 	"io"
 	"os"
@@ -63,19 +64,40 @@ func pendingStoragePaths(ctx context.Context, tx pgx.Tx) ([]string, error) {
 }
 
 type storageCleanupBatch struct {
-	paths []string
-	full  bool
+	paths    []string
+	full     bool
+	cacheErr error
 }
 
 func (s *Store) Cleanup(ctx context.Context, artifactTTL, sourceTTL time.Duration) ([]string, error) {
 	batch, err := s.cleanupStorageBatch(ctx, artifactTTL, sourceTTL)
-	return batch.paths, err
+	return batch.paths, errors.Join(batch.cacheErr, err)
 }
 
-func (s *Store) cleanupStorageBatch(ctx context.Context, artifactTTL, sourceTTL time.Duration) (storageCleanupBatch, error) {
-	cacheCtx, cancel := context.WithTimeout(ctx, platformMetadataDBTimeout)
-	_, _ = s.DB.Exec(cacheCtx, "DELETE FROM source_metadata_cache WHERE expires_at<=now()")
+func (s *Store) cleanupStorageBatch(ctx context.Context, artifactTTL, sourceTTL time.Duration) (batch storageCleanupBatch, err error) {
+	// Cache expiry has its own small slice of the retention budget and does not
+	// hold the storage fence. A blocked cache must leave time for media cleanup.
+	cacheBudget := 250 * time.Millisecond
+	if deadline, ok := ctx.Deadline(); ok {
+		cacheBudget = min(cacheBudget, max(0, time.Until(deadline)/16))
+	}
+	cacheCtx, cancel := context.WithTimeout(ctx, cacheBudget)
+	cacheRows, cacheErr := s.DB.Exec(cacheCtx, `WITH metadata_retention_candidates AS MATERIALIZED (
+ SELECT source_id,owner FROM source_metadata_cache
+ WHERE expires_at<=statement_timestamp()
+ ORDER BY expires_at,source_id LIMIT 200 FOR UPDATE SKIP LOCKED
+)
+DELETE FROM source_metadata_cache AS cache
+WHERE cache.source_id=ANY(ARRAY(SELECT source_id FROM metadata_retention_candidates))
+ AND cache.expires_at<=statement_timestamp()
+ AND EXISTS(SELECT 1 FROM metadata_retention_candidates candidate WHERE candidate.source_id=cache.source_id AND candidate.owner=cache.owner)`)
+	if cacheErr != nil {
+		cacheErr = fmt.Errorf("metadata cache retention: %w", errors.Join(cacheCtx.Err(), cacheErr))
+	}
 	cancel()
+	// Preserve the cache-stage failure even if media retention fails later.
+	// Workers can still drain successfully committed media paths.
+	defer func() { batch.cacheErr = cacheErr }()
 	tx, err := s.storageTx(ctx)
 	if err != nil {
 		return storageCleanupBatch{}, err
@@ -127,7 +149,7 @@ RETURNING a.path,a.owner,a.size_bytes`, artifactTTL.Seconds(), storageBatch)
 	if err = rows.Err(); err != nil {
 		return storageCleanupBatch{}, err
 	}
-	full := len(files) == storageBatch
+	full := cacheRows.RowsAffected() == storageBatch || len(files) == storageBatch
 	if err = tombstoneStorageFiles(ctx, tx, files); err != nil {
 		return storageCleanupBatch{}, err
 	}
