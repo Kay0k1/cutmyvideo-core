@@ -274,6 +274,8 @@ func (s *Store) ReconcileStorage(ctx context.Context, c Config) error {
 }
 
 func (s *Store) reconcileStorageProgress(ctx context.Context, c Config, batches int) error {
+	session := newStorageScanSession()
+	defer session.close()
 	var problems []error
 	for attempt := 0; attempt < batches; attempt++ {
 		p, err := s.nextStorageScan(ctx, c, reconcileScanKinds, attempt == 0)
@@ -283,7 +285,7 @@ func (s *Store) reconcileStorageProgress(ctx context.Context, c Config, batches 
 		if err != nil {
 			return errors.Join(append(problems, err)...)
 		}
-		if err = s.storageScanStep(ctx, c, p); err != nil {
+		if err = s.storageScanStepSession(ctx, c, p, session); err != nil {
 			problems = append(problems, err)
 			if ctx.Err() != nil {
 				return errors.Join(problems...)
