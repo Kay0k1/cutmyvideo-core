@@ -23,7 +23,7 @@ import (
 var ErrSchemaIncompatible = errors.New("database schema is incompatible with this binary")
 
 const storeStartupTimeout = 30 * time.Second
-const schemaVersion = "20261010-ordered-migrations-v1"
+const schemaVersion = "20261010-storage-maintenance-v1"
 
 // Migration SQL is immutable. Append a migration and update the expected shape;
 // never edit a shipped file or reinterpret an existing marker/checksum.
@@ -40,7 +40,8 @@ type schemaMigration struct {
 
 var schemaMigrations = []schemaMigration{
 	{"20261005-storage-queue-v3", "migrations/001_20261005_storage_queue_v3.sql", "migrations/001_schema.json"},
-	{schemaVersion, "migrations/002_20261010_ordered_migrations_v1.sql", "migrations/002_schema.json"},
+	{"20261010-ordered-migrations-v1", "migrations/002_20261010_ordered_migrations_v1.sql", "migrations/002_schema.json"},
+	{schemaVersion, "migrations/003_20261010_storage_maintenance_v1.sql", "migrations/003_schema.json"},
 }
 
 func migrationSQL(m schemaMigration) string {

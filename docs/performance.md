@@ -1,5 +1,10 @@
 # Performance and recovery
 
+For retained database rows, interrupted directory scans, failed-deletion fairness
+and concurrent storage admission, use the separate
+[storage capacity workload](storage-capacity.md). It measures synthetic metadata
+and filesystem entries; media encoding results below have a different scope.
+
 Current optimization evidence: [metadata cache encoding, 2026-10-10](../benchmarks/2026-10-10-metadata-compression/README.md)
 includes raw before/after measurements, environment, medians/ranges and limits.
 Repeated compressible metadata fills allocated 65.1% fewer bytes and took 24.7%
@@ -239,16 +244,31 @@ Retention deletes at most 200 resources/tombstones per batch. PostgreSQL removes
 metadata and creates tombstones together; filesystem failures remain retryable
 and do not release byte counters. A maintenance cycle drains up to eight such
 batches within its existing ten-second deadline, releasing the storage lock
-between batches and stopping when no full batch remains or physical deletion
-fails. This also drains metadata-only source backlogs. Orphan reconciliation reads directories in
+between batches and stopping when no full batch remains or the database/context
+fails. Per-file failures receive persisted retry delays while other due files
+continue. This also drains metadata-only source backlogs. Orphan reconciliation reads directories in
 128-entry batches, looks up known paths in one SQL batch, stats only unknown or
 mutable orphan files and registers them in bounded transactions. It never builds
 a whole-disk membership map. Young unregistered files have a safety floor of the
 job timeout plus source timeout plus one hour (and at least the configured TTL).
 Temporary-tree deletion checks its deadline between entries and never follows
 symlinks. Initial bootstrap adopts old sources, thumbnails and results without
-removing them. External `cutmy maintenance` runs independently of the worker with
+removing them, committing bounded progress between attempts. It defers new disk
+admission until accounting completes. See [maintenance progress and retry
+limits](operations.md#retention-and-storage-pressure). External `cutmy maintenance` runs independently of the worker with
 a ten-second budget, enabling cleanup even when the worker is stopped.
+
+Current retention query improvements require the indexes installed by migration
+003. Source candidate selection still reads retained source/job/preview dependency
+rows and is O(N); bounding the final DELETE does not bound that selection cost.
+Explicit-expiry artifact selection may read and sort all expired candidates
+before choosing the oldest eligible batch. A large pinned backlog can also
+increase candidate-probe work. See the reproducible storage-capacity measurements
+for both improvements and regressions at different retained sizes: the
+[2026-10-10 before/after report](../benchmarks/2026-10-10-storage-maintenance/README.md)
+includes complete raw plans, ordinary service-budget progress, failed artificial
+five-millisecond gates and slower full scans. Cache expiry remains an unbounded
+DELETE on both measured versions.
 
 Job polling fetches all artifact expiry records with one aggregate SQL query,
 removing the previous potential twelve extra round trips. Source listing is
@@ -345,8 +365,8 @@ acknowledgement fell from 4,203 to 837. Batched tombstone creation uses about
 allocations and database round trips. Storage quotas, retained-media TTLs,
 active-job pinning and the physical headroom check remain unchanged.
 
-Integration tests cover multi-batch backlogs, the eight-batch ceiling, early
-stop after physical removal errors, active-source preservation, retry after
+Integration tests cover multi-batch backlogs, the eight-batch ceiling, progress
+past physical removal errors, active-source preservation, retry after
 failed database acknowledgement, duplicate paths and changing orphan sizes.
 Reproduce with `BenchmarkSourceList20`, `BenchmarkStorageDeleteBatch200`,
 `BenchmarkStorageReconcileUnchanged128` and `BenchmarkStorageRetentionSources200`

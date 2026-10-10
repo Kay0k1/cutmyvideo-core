@@ -42,11 +42,11 @@ func tombstoneStorageFiles(ctx context.Context, tx pgx.Tx, files []storageDeleti
 	if len(paths) == 0 {
 		return nil
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO storage_files(path,owner,kind,size_bytes,delete_pending) SELECT path,owner,'tombstone',size,true FROM unnest($1::text[],$2::text[],$3::bigint[]) AS f(path,owner,size) ON CONFLICT(path) DO UPDATE SET delete_pending=true,size_bytes=GREATEST(storage_files.size_bytes,excluded.size_bytes)`, paths, owners, sizes)
+	_, err := tx.Exec(ctx, `INSERT INTO storage_files(path,owner,kind,size_bytes,delete_pending,delete_retry_at) SELECT path,owner,'tombstone',size,true,statement_timestamp() FROM unnest($1::text[],$2::text[],$3::bigint[]) AS f(path,owner,size) ON CONFLICT(path) DO UPDATE SET delete_pending=true,size_bytes=GREATEST(storage_files.size_bytes,excluded.size_bytes),delete_retry_at=CASE WHEN storage_files.delete_pending THEN storage_files.delete_retry_at ELSE excluded.delete_retry_at END,delete_failures=CASE WHEN storage_files.delete_pending THEN storage_files.delete_failures ELSE 0 END`, paths, owners, sizes)
 	return err
 }
 func pendingStoragePaths(ctx context.Context, tx pgx.Tx) ([]string, error) {
-	rows, err := tx.Query(ctx, `SELECT path FROM storage_files WHERE delete_pending ORDER BY path LIMIT $1`, storageBatch)
+	rows, err := tx.Query(ctx, `SELECT path FROM storage_files WHERE delete_pending AND delete_retry_at<=statement_timestamp() ORDER BY delete_retry_at,path LIMIT $1`, storageBatch)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,30 @@ func (s *Store) cleanupStorageBatch(ctx context.Context, artifactTTL, sourceTTL 
 		return storageCleanupBatch{}, err
 	}
 
-	rows, err := tx.Query(ctx, `DELETE FROM artifacts WHERE id IN (SELECT a.id FROM artifacts a WHERE COALESCE(a.expires_at,a.created_at+($1*interval '1 second'))<=now() AND NOT EXISTS(SELECT 1 FROM jobs j WHERE j.id=a.job_id AND j.status IN ('queued','running','waiting_storage')) ORDER BY a.created_at LIMIT $2) RETURNING path,owner,size_bytes`, artifactTTL.Seconds(), storageBatch)
+	// Materialize at most one deletion batch, then match its IDs directly through
+	// the primary key instead of scanning the table again in a semi join. OFFSET 0
+	// keeps artifact/job pin probes correlated: the small expired candidate set
+	// must not require hashing all retained dependency rows. Sources intentionally
+	// retain their set-based pin checks; an old, mostly pinned source backlog can
+	// make per-source indexed probes substantially slower than one hash anti join.
+	// Either expiry partition can contribute at most the whole batch. Taking its
+	// oldest eligible batch first preserves the global created_at order while
+	// allowing the legacy NULL-expiry index to stop without sorting every row.
+	rows, err := tx.Query(ctx, `WITH artifact_retention_candidates AS MATERIALIZED (
+ SELECT id FROM (
+  (SELECT a.id,a.created_at FROM artifacts a
+   WHERE a.expires_at<=now()
+   AND NOT EXISTS(SELECT 1 FROM jobs j WHERE j.id=a.job_id AND j.status IN ('queued','running','waiting_storage') OFFSET 0)
+   ORDER BY a.created_at LIMIT $2)
+  UNION ALL
+  (SELECT a.id,a.created_at FROM artifacts a
+   WHERE a.expires_at IS NULL AND a.created_at<=now()-($1*interval '1 second')
+   AND NOT EXISTS(SELECT 1 FROM jobs j WHERE j.id=a.job_id AND j.status IN ('queued','running','waiting_storage') OFFSET 0)
+   ORDER BY a.created_at LIMIT $2)
+ ) expired ORDER BY created_at LIMIT $2
+)
+DELETE FROM artifacts AS a WHERE a.id=ANY(ARRAY(SELECT id FROM artifact_retention_candidates))
+RETURNING a.path,a.owner,a.size_bytes`, artifactTTL.Seconds(), storageBatch)
 	if err != nil {
 		return storageCleanupBatch{}, err
 	}
@@ -108,12 +131,27 @@ func (s *Store) cleanupStorageBatch(ctx context.Context, artifactTTL, sourceTTL 
 	if err = tombstoneStorageFiles(ctx, tx, files); err != nil {
 		return storageCleanupBatch{}, err
 	}
-	jobs, err := tx.Exec(ctx, `DELETE FROM jobs WHERE id IN (SELECT id FROM jobs WHERE status NOT IN ('queued','running','waiting_storage') AND updated_at<now()-($1*interval '1 second') AND NOT EXISTS(SELECT 1 FROM artifacts WHERE job_id=jobs.id) ORDER BY updated_at LIMIT $2)`, artifactTTL.Seconds(), storageBatch)
+	jobs, err := tx.Exec(ctx, `WITH job_retention_candidates AS MATERIALIZED (
+ SELECT j.id FROM jobs j
+ WHERE j.status NOT IN ('queued','running','waiting_storage')
+ AND j.updated_at<now()-($1*interval '1 second')
+ AND NOT EXISTS(SELECT 1 FROM artifacts WHERE job_id=j.id OFFSET 0)
+ ORDER BY j.updated_at LIMIT $2
+)
+DELETE FROM jobs AS j WHERE j.id=ANY(ARRAY(SELECT id FROM job_retention_candidates))`, artifactTTL.Seconds(), storageBatch)
 	if err != nil {
 		return storageCleanupBatch{}, err
 	}
 	full = full || jobs.RowsAffected() == storageBatch
-	rows, err = tx.Query(ctx, `DELETE FROM sources WHERE id IN (SELECT id FROM sources WHERE created_at<now()-($1*interval '1 second') AND NOT EXISTS(SELECT 1 FROM jobs WHERE source_id=sources.id) AND NOT EXISTS(SELECT 1 FROM storage_reservations WHERE kind='preview' AND job_id=sources.id) ORDER BY created_at LIMIT $2) RETURNING path,thumbnail_path,owner`, sourceTTL.Seconds(), storageBatch)
+	rows, err = tx.Query(ctx, `WITH source_retention_candidates AS MATERIALIZED (
+ SELECT source.id FROM sources source
+ WHERE source.created_at<now()-($1*interval '1 second')
+ AND NOT EXISTS(SELECT 1 FROM jobs WHERE source_id=source.id)
+ AND NOT EXISTS(SELECT 1 FROM storage_reservations WHERE kind='preview' AND job_id=source.id)
+ ORDER BY source.created_at LIMIT $2
+)
+DELETE FROM sources AS source WHERE source.id=ANY(ARRAY(SELECT id FROM source_retention_candidates))
+RETURNING source.path,source.thumbnail_path,source.owner`, sourceTTL.Seconds(), storageBatch)
 	if err != nil {
 		return storageCleanupBatch{}, err
 	}
@@ -149,64 +187,6 @@ func (s *Store) cleanupStorageBatch(ctx context.Context, artifactTTL, sourceTTL 
 	return storageCleanupBatch{paths: paths, full: full || sourceCount == storageBatch || len(paths) == storageBatch}, nil
 }
 
-// Metadata deletion is atomic; physical deletion is retryable. Failed removal
-// keeps the tombstone and its bytes charged, including after process restarts.
-func (s *Store) DrainStorageDeletes(ctx context.Context, c Config, paths []string) error {
-	var first error
-	removed := make([]string, 0, min(len(paths), storageBatch))
-	acknowledge := func() error {
-		if len(removed) == 0 {
-			return nil
-		}
-		tx, err := s.storageTx(ctx)
-		if err != nil {
-			return err
-		}
-		defer rollbackStorage(tx)
-		if _, err = tx.Exec(ctx, "DELETE FROM storage_files WHERE path=ANY($1) AND delete_pending=true", removed); err != nil {
-			return err
-		}
-		if err = tx.Commit(ctx); err != nil {
-			return err
-		}
-		removed = removed[:0]
-		return nil
-	}
-	for _, path := range paths {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if !storagePathInside(c.DataDir, path) {
-			if first == nil {
-				first = errors.New("refusing storage path outside data directory")
-			}
-			continue
-		}
-		info, err := os.Lstat(path)
-		if err == nil && !info.Mode().IsRegular() {
-			if first == nil {
-				first = errors.New("refusing non-regular persistent media path")
-			}
-			continue
-		}
-		if err == nil {
-			err = os.Remove(path)
-		}
-		if err != nil && !os.IsNotExist(err) {
-			if first == nil {
-				first = err
-			}
-			continue
-		}
-		removed = append(removed, path)
-		if len(removed) == storageBatch {
-			if err := acknowledge(); err != nil {
-				return errors.Join(first, err)
-			}
-		}
-	}
-	return errors.Join(first, acknowledge())
-}
 func (s *Store) DeleteSource(ctx context.Context, id, owner string) ([]string, error) {
 	tx, err := s.storageTx(ctx)
 	if err != nil {
@@ -268,43 +248,56 @@ func (s *Store) DeleteSource(ctx context.Context, id, owner string) ([]string, e
 }
 
 func (s *Store) ReconcileStorage(ctx context.Context, c Config) error {
-	// File iteration uses fixed directory batches and a context deadline. No
-	// in-memory set grows with the number of retained files.
-	for _, kind := range []string{"sources", "artifacts"} {
-		if err := s.reconcileDirectory(ctx, filepath.Join(c.DataDir, kind)); err != nil && !os.IsNotExist(err) {
-			return err
+	return s.reconcileStorageProgress(ctx, c, storageMaintenanceBatches)
+}
+
+func (s *Store) reconcileStorageProgress(ctx context.Context, c Config, batches int) error {
+	var problems []error
+	for attempt := 0; attempt < batches; attempt++ {
+		p, err := s.nextStorageScan(ctx, c, reconcileScanKinds, attempt == 0)
+		if errors.Is(err, pgx.ErrNoRows) {
+			break
+		}
+		if err != nil {
+			return errors.Join(append(problems, err)...)
+		}
+		if err = s.storageScanStep(ctx, c, p); err != nil {
+			problems = append(problems, err)
+			if ctx.Err() != nil {
+				return errors.Join(problems...)
+			}
 		}
 	}
 	tx, err := s.storageTx(ctx)
 	if err != nil {
-		return err
+		return errors.Join(append(problems, err)...)
 	}
 	defer rollbackStorage(tx)
 	if _, err = tx.Exec(ctx, "SET LOCAL lock_timeout='750ms'"); err != nil {
-		return err
-	}
-
-	// Protect the rename -> COMMIT window even when clocks or file mtimes differ.
-	_, err = tx.Exec(ctx, `UPDATE storage_files f SET owner=s.owner,resource_id=s.id,kind='source',delete_pending=false FROM sources s WHERE f.kind='orphan' AND (f.path=s.path OR f.path=s.thumbnail_path);
- UPDATE storage_files f SET owner=a.owner,resource_id=a.id,kind='artifact',delete_pending=false FROM artifacts a WHERE f.kind='orphan' AND f.path=a.path;`)
-	if err != nil {
-		return err
+		return errors.Join(append(problems, err)...)
 	}
 	floor := c.JobTimeout + c.SourceTimeout + time.Hour
 	ttl := max(c.SourceTTL, c.ArtifactTTL, floor)
-	if _, err = tx.Exec(ctx, `UPDATE storage_files SET delete_pending=true WHERE path IN (SELECT path FROM storage_files WHERE kind='orphan' AND NOT delete_pending AND observed_at<clock_timestamp()-($1*interval '1 second') ORDER BY observed_at LIMIT $2)`, ttl.Seconds(), storageBatch); err != nil {
-		return err
+	if _, err = tx.Exec(ctx, `WITH orphan_retention_candidates AS MATERIALIZED (
+ SELECT path FROM storage_files
+ WHERE kind='orphan' AND NOT delete_pending AND observed_at<statement_timestamp()-($1*interval '1 second')
+ ORDER BY observed_at LIMIT $2
+)
+UPDATE storage_files AS file SET delete_pending=true,delete_retry_at=statement_timestamp(),delete_failures=0
+FROM orphan_retention_candidates AS candidate WHERE file.path=candidate.path`, ttl.Seconds(), storageBatch); err != nil {
+		return errors.Join(append(problems, err)...)
 	}
-	// The scan above charged all files abandoned by expired preparations before
-	// removing their reservation. Job reservations require workspace cleanup first.
-	if _, err = tx.Exec(ctx, "DELETE FROM storage_reservations WHERE kind='source' AND expires_at<clock_timestamp()"); err != nil {
-		return err
+	// A completed sources generation proves only preparations already expired
+	// when that pass began. Partial coverage and expirations during a pass retain
+	// their full reservation until a later complete, committed generation.
+	if _, err = tx.Exec(ctx, `DELETE FROM storage_reservations WHERE id IN (SELECT id FROM storage_reservations WHERE kind='source' AND expires_at<=(SELECT started_at FROM storage_scan_progress WHERE data_dir=$1 AND scan_kind='reconcile_sources' AND path=$2 AND completed_at IS NOT NULL) ORDER BY expires_at,id LIMIT $3)`, c.DataDir, filepath.Join(c.DataDir, "sources"), storageBatch); err != nil {
+		return errors.Join(append(problems, err)...)
 	}
-	_, err = tx.Exec(ctx, `DELETE FROM queue_owners q WHERE NOT EXISTS(SELECT 1 FROM jobs j WHERE j.owner=q.owner)`)
-	if err != nil {
-		return err
+	_, err = tx.Exec(ctx, `DELETE FROM queue_owners WHERE owner IN (SELECT q.owner FROM queue_owners q WHERE NOT EXISTS(SELECT 1 FROM jobs j WHERE j.owner=q.owner) LIMIT $1)`, storageBatch)
+	if err == nil {
+		err = tx.Commit(ctx)
 	}
-	return tx.Commit(ctx)
+	return errors.Join(append(problems, err)...)
 }
 
 // Remove one temporary tree with fixed directory batches and cancellation

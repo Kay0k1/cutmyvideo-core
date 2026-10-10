@@ -15,14 +15,14 @@ func (s *Store) Claim(ctx context.Context) (Job, string, error) {
 	if c.MaxStorageBytes <= 0 {
 		return s.claimLegacy(ctx)
 	}
+	if err := s.bootstrapStorage(ctx, c); err != nil {
+		return Job{}, "", err
+	}
 	tx, err := s.storageTx(ctx)
 	if err != nil {
 		return Job{}, "", err
 	}
 	defer rollbackStorage(tx)
-	if err = s.bootstrapStorage(ctx, tx, c); err != nil {
-		return Job{}, "", err
-	}
 	// A storage wait does not consume worker attempts. Its separate deadline is
 	// finite even across restarts and retries, and includes periods without workers.
 	if _, err = tx.Exec(ctx, `UPDATE jobs SET status='failed',stage='finished',message='Storage did not become available before the deadline',items=(SELECT jsonb_agg(CASE WHEN item->>'status' IN ('queued','running') THEN item||'{"status":"failed","message":"Storage wait timed out","error_code":"storage_timeout"}'::jsonb ELSE item END) FROM jsonb_array_elements(items) item),updated_at=now() WHERE status IN ('queued','waiting_storage') AND storage_wait_until<=clock_timestamp()`); err != nil {

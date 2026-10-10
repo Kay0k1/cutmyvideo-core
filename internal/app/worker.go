@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/jackc/pgx/v5"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -515,40 +514,49 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 }
 
 func cleanupFiles(ctx context.Context, c Config, s *Store) error {
-	if err := s.cleanupPreviews(ctx, c); err != nil {
-		return err
-	}
 	var problems []error
+	retentionCtx, retentionCancel := maintenanceStageContext(ctx, 2)
+	defer retentionCancel()
+	if err := s.cleanupPreviews(retentionCtx, c); err != nil {
+		problems = append(problems, err)
+	}
 	// Drain a busy expiry backlog within the existing maintenance deadline.
 	// Every batch releases the shared storage lock for admissions/publications;
-	// reconciliation still traverses the directories only once per cycle.
+	// reconciliation receives its own budget after this bounded retention work.
 	for range 8 {
-		batch, err := s.cleanupStorageBatch(ctx, c.ArtifactTTL, c.SourceTTL)
+		batch, err := s.cleanupStorageBatch(retentionCtx, c.ArtifactTTL, c.SourceTTL)
 		if err != nil {
 			slog.Error("cleanup failed", "error", err)
-			return err
-		}
-		if err = s.DrainStorageDeletes(ctx, c, batch.paths); err != nil {
-			slog.Warn("media deletion pending", "error", err)
 			problems = append(problems, err)
 			break
+		}
+		if err = s.DrainStorageDeletes(retentionCtx, c, batch.paths); err != nil {
+			slog.Warn("media deletion pending", "error", err)
+			problems = append(problems, err)
+			if !storageDeletionRetryOnly(err) {
+				break
+			}
 		}
 		if !batch.full {
 			break
 		}
 	}
-	if err := s.ReconcileStorage(ctx, c); err != nil {
+	retentionCancel()
+	reconcileCtx, reconcileCancel := maintenanceStageContext(ctx, 2)
+	if err := s.ReconcileStorage(reconcileCtx, c); err != nil {
 		slog.Error("storage reconciliation failed", "error", err)
-		return errors.Join(append(problems, err)...)
+		problems = append(problems, err)
 	}
+	reconcileCancel()
 	// Pick up orphan tombstones created by reconciliation in the same cycle.
-	tx, err := s.storageTx(ctx)
+	deletionCtx, deletionCancel := maintenanceStageContext(ctx, 2)
+	tx, err := s.storageTx(deletionCtx)
 	if err == nil {
 		var paths []string
-		paths, err = pendingStoragePaths(ctx, tx)
+		paths, err = pendingStoragePaths(deletionCtx, tx)
 		rollbackStorage(tx)
 		if err == nil {
-			if deletionErr := s.DrainStorageDeletes(ctx, c, paths); deletionErr != nil {
+			if deletionErr := s.DrainStorageDeletes(deletionCtx, c, paths); deletionErr != nil {
 				problems = append(problems, deletionErr)
 			}
 		}
@@ -556,100 +564,9 @@ func cleanupFiles(ctx context.Context, c Config, s *Store) error {
 	if err != nil {
 		problems = append(problems, err)
 	}
-	cutoff := time.Now().Add(-max(c.ArtifactTTL, c.JobTimeout+time.Hour))
-	scanErr := scanStorageDirectory(ctx, filepath.Join(c.DataDir, "work"), func(path string, entry os.DirEntry) error {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		info, e := entry.Info()
-		if e != nil {
-			return nil
-		}
-		var active bool
-		if e = s.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM jobs WHERE status='running' AND lease_until>clock_timestamp() AND id||'-'||lease_token=$1)`, entry.Name()).Scan(&active); e != nil {
-			return e
-		}
-		if active {
-			return nil
-		}
-		var reservationID string
-		var abandoned *time.Time
-		leaseTx, txErr := s.storageTx(ctx)
-		if txErr != nil {
-			return txErr
-		}
-		e = leaseTx.QueryRow(ctx, `UPDATE storage_reservations SET abandoned_at=COALESCE(abandoned_at,clock_timestamp()) WHERE kind='job' AND job_id||'-'||token=$1 RETURNING id,abandoned_at`, entry.Name()).Scan(&reservationID, &abandoned)
-		if e == nil {
-			e = leaseTx.Commit(ctx)
-		}
-		rollbackStorage(leaseTx)
-		if e != nil && !errors.Is(e, pgx.ErrNoRows) {
-			return e
-		}
-		staleLease := abandoned != nil && time.Since(*abandoned) > time.Minute
-		if !staleLease && !info.ModTime().Before(cutoff) {
-			return nil
-		}
-		if e = removeStorageTree(ctx, path); e != nil {
-			return e
-		}
-		// Bootstrap-accounted legacy work bytes remain charged until this
-		// removal succeeds, including when no lease reservation exists.
-		orphanTx, orphanErr := s.storageTx(ctx)
-		if orphanErr != nil {
-			return orphanErr
-		}
-		_, orphanErr = orphanTx.Exec(ctx, "DELETE FROM storage_files WHERE kind='work_orphan' AND starts_with(path,$1)", path+string(os.PathSeparator))
-		if orphanErr == nil {
-			orphanErr = orphanTx.Commit(ctx)
-		}
-		rollbackStorage(orphanTx)
-		if orphanErr != nil {
-			return orphanErr
-		}
-		if reservationID != "" {
-			releaseTx, releaseErr := s.storageTx(ctx)
-			if releaseErr != nil {
-				return releaseErr
-			}
-			_, e = releaseTx.Exec(ctx, "DELETE FROM storage_reservations WHERE id=$1", reservationID)
-			if e == nil {
-				e = releaseTx.Commit(ctx)
-			}
-			rollbackStorage(releaseTx)
-		}
-		return e
-	})
-	if scanErr != nil && !os.IsNotExist(scanErr) {
-		problems = append(problems, scanErr)
-	}
-	// Missing workspaces prove that no retained temporary file needs its lease
-	// reservation. Keep reservations for failed removals and still-active leases.
-	rows, err := s.DB.Query(ctx, `SELECT r.job_id,r.token FROM storage_reservations r WHERE r.kind='job' AND NOT EXISTS(SELECT 1 FROM jobs j WHERE j.id=r.job_id AND j.status='running' AND j.lease_token=r.token AND j.lease_until>clock_timestamp()) LIMIT $1`, storageBatch)
-	if err != nil {
-		return errors.Join(append(problems, err)...)
-	}
-	type reservation struct{ id, token string }
-	var abandoned []reservation
-	for rows.Next() {
-		var r reservation
-		if err = rows.Scan(&r.id, &r.token); err != nil {
-			rows.Close()
-			return err
-		}
-		abandoned = append(abandoned, r)
-	}
-	rows.Close()
-	if err = rows.Err(); err != nil {
-		return err
-	}
-	for _, r := range abandoned {
-		path := filepath.Join(c.DataDir, "work", r.id+"-"+r.token)
-		if _, err = os.Lstat(path); os.IsNotExist(err) {
-			if releaseErr := s.ReleaseJobStorage(ctx, r.id, r.token); releaseErr != nil {
-				problems = append(problems, releaseErr)
-			}
-		}
+	deletionCancel()
+	if err := s.cleanupWorkProgress(ctx, c); err != nil {
+		problems = append(problems, err)
 	}
 
 	return errors.Join(problems...)

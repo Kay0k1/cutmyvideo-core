@@ -24,6 +24,7 @@ There are no invented `v1`/`v2` markers for those unversioned installations.
 | --- | --- | --- |
 | 1 | `20261005-storage-queue-v3` | Frozen application/storage schema captured from v0.2.1. Creates a fresh installation or upgrades a recognized unversioned schema. |
 | 2 | `20261010-ordered-migrations-v1` | Adds the ordered migration ledger and records the verified baseline and its checksums. Existing versioned application rows and tables are not rewritten. |
+| 3 | `20261010-storage-maintenance-v1` | Adds persisted directory scan progress, a workspace cleanup queue, and deletion retry times/failure counts. Pending files stay charged and are immediately eligible after upgrade. |
 
 SQL files and expected catalog layouts live in
 [`internal/app/migrations`](../internal/app/migrations). `app_schema_versions`

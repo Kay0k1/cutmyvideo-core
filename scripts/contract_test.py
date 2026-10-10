@@ -111,6 +111,20 @@ class ContractChecks(unittest.TestCase):
         with self.assertRaises(ValidationError):
             contract.sample_check(self.document, sample)
 
+    def test_storage_initialization_is_retryable_and_bounded(self):
+        sample = {"name": "initializing", "route": "/api/v1/uploads", "method": "POST", "status": 503,
+                  "headers": {"Content-Type": "application/json", "Retry-After": "2"},
+                  "body": {"error": {"code": "storage_initializing", "message": "Try again shortly"}}}
+        contract.sample_check(self.document, sample)
+        for code in ("storage_limit", "internal"):
+            changed = copy.deepcopy(sample)
+            changed["body"]["error"]["code"] = code
+            with self.subTest(code=code), self.assertRaises(ValidationError):
+                contract.sample_check(self.document, changed)
+        sample["headers"]["Retry-After"] = "soon"
+        with self.assertRaises(ValidationError):
+            contract.sample_check(self.document, sample)
+
     def test_range_errors_are_text(self):
         sample = {"name": "range", "route": "/api/v1/sources/{id}/media", "method": "GET", "status": 416,
                   "headers": {"Content-Type": "text/plain; charset=utf-8", "Content-Range": "bytes */32"}, "body": "invalid range\n"}

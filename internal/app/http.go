@@ -901,6 +901,11 @@ func internalError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusRequestTimeout, "request_timeout", "The request timed out; try again")
 		return
 	}
+	if errors.Is(err, ErrStorageInitializing) {
+		w.Header().Set("Retry-After", "2")
+		writeError(w, http.StatusServiceUnavailable, "storage_initializing", "Storage accounting is being prepared; try again shortly")
+		return
+	}
 	slog.Error("request failed", "error", fmt.Sprintf("%T", err))
 	writeError(w, 500, "internal", "The operation could not be completed; try again")
 }

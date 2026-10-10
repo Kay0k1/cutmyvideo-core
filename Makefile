@@ -1,8 +1,11 @@
 GO ?= go
 PYTHON ?= python3
 VERSION ?=
+STORAGE_REPORT_DIR ?=
+STORAGE_SIZES ?= 10000,100000
+STORAGE_SAMPLES ?= 20
 
-.PHONY: help build fmt fmt-check vet test test-full docs-check api-check contract-check recovery-check notices-check workflows-check vuln check check-full release
+.PHONY: help build fmt fmt-check vet test test-full docs-check api-check contract-check recovery-check storage-capacity-check notices-check workflows-check vuln check check-full release
 
 help:
 	@printf '%s\n' 'make build       Build bin/cutmy' 'make check       Format, vet, docs, tests and build (integration tests may skip)' 'make check-full  Require media/extractor/PostgreSQL tools, race tests, workflows and vulnerability scan' 'make release VERSION=vX.Y.Z  Package CLI binaries from a clean tagged checkout'
@@ -37,7 +40,12 @@ contract-check: api-check
 	CUTMY_REQUIRE_CONTRACT=1 CUTMY_CONTRACT_PYTHON=$(PYTHON) $(GO) test -count=1 ./internal/app -run '^TestHTTPPublicContract$$'
 
 recovery-check:
+	$(PYTHON) -m unittest discover -s scripts -p recovery_test.py
 	$(PYTHON) scripts/recovery-acceptance.py --go "$(GO)"
+
+storage-capacity-check:
+	@test -n "$(STORAGE_REPORT_DIR)" || { printf '%s\n' 'Set STORAGE_REPORT_DIR to a new evidence directory.' >&2; exit 1; }
+	$(PYTHON) scripts/storage-capacity.py --go "$(GO)" --output "$(STORAGE_REPORT_DIR)" --sizes "$(STORAGE_SIZES)" --samples "$(STORAGE_SAMPLES)"
 
 notices-check:
 	$(PYTHON) scripts/update-notices.py --check

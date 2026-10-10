@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"image"
 	"image/png"
 	"io"
@@ -41,6 +43,7 @@ func TestHTTPPublicContract(t *testing.T) {
 		MaxRanges: 12, MaxActiveJobs: 16, MutationsPerMinute: 200,
 		MaxRangeMS: 600000, MaxJobMS: 3600000, SourceTimeout: time.Minute,
 		SourceTTL: time.Hour, ArtifactTTL: time.Hour,
+		MaxStorageBytes: 1 << 30,
 	}
 	server := NewServer(c, store)
 	handler := server.Handler()
@@ -116,6 +119,49 @@ func TestHTTPPublicContract(t *testing.T) {
 	}
 	request("source", "GET", "/api/v1/sources/{id}", "/api/v1/sources/"+source.ID, nil, nil, 200)
 	request("owned-sources", "GET", "/api/v1/sources", "/api/v1/sources", nil, nil, 200)
+	// More legacy directories than three admission attempts can account for.
+	// Exercise genuine partial accounting through each public write path, with
+	// no encoder or remote request and no test-only error injected into handlers.
+	for i := range storageProgressBatches * 4 {
+		if err := os.MkdirAll(filepath.Join(c.DataDir, "work", fmt.Sprintf("legacy-%03d", i)), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	warming := request("source-storage-initializing", "POST", "/api/v1/sources", "/api/v1/sources", map[string]any{"url": "https://cdn.example.com/fixture.mp4"}, nil, 503)
+	assertInitializing := func(sample map[string]any) {
+		t.Helper()
+		if sample["body"].(map[string]any)["error"].(map[string]any)["code"] != "storage_initializing" || sample["headers"].(map[string]string)["Retry-After"] != "2" {
+			t.Fatal("partial accounting did not return its retryable contract", sample)
+		}
+	}
+	assertInitializing(warming)
+	// Database readiness lets the dependent worker start during accounting.
+	request("ready-during-storage-warmup", "GET", "/readyz", "/readyz", nil, nil, 200)
+	upload := httptest.NewRequest("POST", "https://example.com/api/v1/uploads", nil)
+	upload.AddCookie(cookie)
+	upload.Header.Set("Content-Type", "multipart/form-data; boundary=unread")
+	uploadBody := &contractUnreadBody{}
+	upload.Body = uploadBody
+	warmingUpload := httptest.NewRecorder()
+	handler.ServeHTTP(warmingUpload, upload)
+	if warmingUpload.Code != 503 || uploadBody.reads != 0 {
+		t.Fatal("partial accounting read the upload body or reported the wrong status", warmingUpload.Code, uploadBody.reads)
+	}
+	assertInitializing(record("upload-storage-initializing", "POST", "/api/v1/uploads", warmingUpload))
+	assertInitializing(request("preview-storage-initializing", "GET", "/api/v1/sources/{id}/preview", "/api/v1/sources/"+source.ID+"/preview?start_ms=0", nil, nil, 503))
+	_, reserved := ledgerBytes(t, store)
+	if reserved != 0 {
+		t.Fatal("rejected warming admissions retained storage reservations", reserved)
+	}
+	for attempts := 0; ; attempts++ {
+		err := store.bootstrapStorage(context.Background(), c)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, ErrStorageInitializing) || attempts > 10 {
+			t.Fatal("HTTP fixture could not finish persisted accounting", err)
+		}
+	}
 	for _, kind := range []string{"direct", "platform", "youtube"} {
 		variant := Source{ID: newID("src"), Owner: owner, Title: "Metadata variant", Kind: kind, DurationMS: 10000}
 		if kind == "direct" {
@@ -277,3 +323,11 @@ func TestHTTPPublicContract(t *testing.T) {
 		t.Log(strings.TrimSpace(string(output)))
 	}
 }
+
+type contractUnreadBody struct{ reads int }
+
+func (b *contractUnreadBody) Read([]byte) (int, error) {
+	b.reads++
+	return 0, errors.New("rejected upload body must remain unread")
+}
+func (*contractUnreadBody) Close() error { return nil }

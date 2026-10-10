@@ -5,6 +5,7 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 ## Unreleased
 
 ### Added
+- Persisted storage scan/workspace progress and fair deletion retries, with a retryable `storage_initializing` admission diagnostic and an upgrade from the ordered migration predecessor.
 - Immutable ordered database migrations with schema/checksum validation and a stable `schema_incompatible` startup diagnostic.
 - Required real v0.2.1 upgrade, interrupted-job and coordinated PostgreSQL/media backup/restore acceptance checks.
 - Native CI for every shipped Linux, macOS and Windows architecture, exercising actual media, exclusive publication, process-tree cancellation and the PostgreSQL API/worker path without skipped prerequisites.
@@ -12,6 +13,7 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 - Executable HTTP/OpenAPI contract checks, including byte-length limits, preview priority, download range errors and database unavailability.
 
 ### Fixed
+- Keep interrupted storage accounting batches across restarts; separate retention, reconciliation and workspace-cleanup budgets, and schedule source/artifact/work scan classes fairly. Fence physical deletion against live references, synchronize parent directories before releasing charged bytes, and defer failed paths so they cannot block healthy files.
 - Publish uploaded/direct source files, thumbnails and window previews from private staging names; synchronize files and newly created parent directories before database acknowledgement, retaining uncertain commits for recovery.
 - Contain Windows media tools in a private process job before they can spawn children and cancel the complete descendant tree. Open Windows directory handles with the write access required for synchronization.
 - Honor `LISTEN_ADDR` in API health checks and accept version/revision/build-time metadata in Docker builds.

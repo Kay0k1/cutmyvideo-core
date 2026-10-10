@@ -145,6 +145,14 @@ Common codes: `session_required`, `invalid_request`, `request_timeout`, `invalid
 
 Source admission returns distinct `429` codes: `source_limit` for the session's source count, `source_busy` for another preparation by the same owner, `server_busy` for all preparation slots being occupied, and `storage_limit` for disk/session storage admission. Current-source database unavailability returns `503 database_unavailable`; integrity/unclassified internal failures retain `500 internal`. Owner preparation is reserved before reading quota state, and unsuccessful admission releases its reservation.
 
+Source preparation, upload and preview admission can return `503 storage_initializing`
+with `Retry-After: 2` while a retained media directory is being accounted for.
+Retry after that delay; completed accounting batches survive process restarts.
+Rejected uploads leave their body unread and do not retain a reservation.
+`/readyz` continues to report database readiness so the dependent worker can
+start and finish accounting. Existing metadata and downloads remain available;
+accepted queued jobs wait for their worker to complete storage initialization.
+
 ## Executable contract checks (current source)
 
 Install the pinned tooling in an isolated Python environment and use a dedicated
@@ -179,7 +187,9 @@ mutex alone. Four preparations globally and one per owner may be admitted.
 Uploads reserve the known body size (capped at `MAX_SOURCE_BYTES`) or `MAX_SOURCE_BYTES` for unknown sizes; metadata-only platform preparations reserve only the bounded
 2 MiB thumbnail in both the global and owner source budgets. Completed sources
 convert the reservation into actual registered file sizes atomically. An unknown
-commit outcome retains files and its reservation until safe reconciliation.
+commit outcome retains files and does not proactively release an unresolved
+reservation. Recovery consults the authoritative database state: a successful
+commit may already have converted that reservation into registered file charges.
 
 Export admission reserves a duration/mode-dependent byte ceiling for every
 unpublished output, bounded by `MAX_OUTPUT_BYTES`. Platform jobs also reserve
@@ -193,8 +203,11 @@ clip. The API exposes fixed diagnostics rather than a promise of estimated capac
 `DELETE /sources/{id}` requires an explicit user confirmation in clients. It
 returns 404 for absent/foreign IDs and 409 `source_in_use` while any related job is
 queued, running or waiting for storage. Terminal metadata is deleted atomically;
-file tombstones keep actual bytes charged until physical deletion succeeds.
-Failures are retried by periodic maintenance. Deletion and job admission take the
+file tombstones keep actual bytes charged until physical deletion and parent
+directory synchronization are confirmed. Failures use persisted exponential
+retry delays from 30 seconds to one hour; healthy due files can proceed while
+failed paths wait. A repeated metadata deletion does not reset a pending file's
+retry schedule. Deletion and job admission take the
 same advisory lock before resource row locks, so concurrent submissions cannot
 create dangling or accidentally deleted sources. Results copied to a user's
 computer are outside server retention.

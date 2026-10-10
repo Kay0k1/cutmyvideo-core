@@ -36,6 +36,37 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
+def verify_upgrade_snapshot(before, after):
+    """Preserve every historical value while checking migration 003 defaults."""
+    failure = "Upgrade changed existing sources/jobs/items/leases/storage records"
+    require(set(before) == set(after) and "storage_files" in before, failure)
+    historical_after = {}
+    for table, rows in after.items():
+        historical_after[table] = []
+        for row in rows:
+            require(isinstance(row, dict), failure)
+            if table == "storage_files":
+                require(row.get("delete_retry_at") == "-infinity"
+                        and type(row.get("delete_failures")) is int
+                        and row["delete_failures"] == 0,
+                        "Upgrade added invalid storage deletion defaults")
+                # Only these two explicitly introduced columns may differ.
+                # Unknown additions and missing/changed historical fields still
+                # participate in the complete comparison below.
+                row = {key: value for key, value in row.items()
+                       if key not in ("delete_retry_at", "delete_failures")}
+            historical_after[table].append(row)
+
+    def records(snapshot):
+        # SQL's whole-row ordering can change after columns are added. Compare
+        # complete historical records as a multiset, retaining duplicate counts.
+        return {table: sorted(json.dumps(row, sort_keys=True, separators=(",", ":"))
+                              for row in rows) for table, rows in snapshot.items()}
+
+    require(records(before) == records(historical_after), failure)
+    return len(after["storage_files"])
+
+
 def digest(path):
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest() if hasattr(hashlib, "file_digest") else hashlib.sha256(stream.read()).hexdigest()
@@ -412,7 +443,8 @@ class Acceptance:
         self.stop(api)
         before_upgrade = self.pg.snapshot(original)
         api = self.server(self.current, original, port, "upgraded-api")
-        require(self.pg.snapshot(original) == before_upgrade, "Upgrade changed existing sources/jobs/items/leases/storage records")
+        self.report["upgrade_storage_defaults_checked"] = verify_upgrade_snapshot(
+            before_upgrade, self.pg.snapshot(original))
         require(a.job(source_a, "same-key-separate-owner", ranges)["id"] == batch["id"], "Upgrade lost idempotency")
         self.ownership(a, b, source_a, batch)
         worker = self.start(self.current, "worker", original, port, "upgraded-worker")

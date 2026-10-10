@@ -1,0 +1,2058 @@
+{
+  "format": 1,
+  "status": "complete measurements; overall workload gate failed",
+  "scope": "Synthetic retained-row, filesystem metadata and tiny-file storage workload. No video processing, large-media I/O, live providers, network transfer, 4K capacity or production memory guarantee.",
+  "percentiles": "Nearest rank from 20 samples per query; first sample retained. No confidence interval or independent run series.",
+  "baseline_runtime_revision": "f9bb68e861cafa2154e3d1e77340b30d3ab52f06",
+  "baseline_harness_revision_note": "Observed bf86faf is a local harness leaf; reproduce by using the two frozen harness files from public 718f4a7 or its final descendant on runtime f9bb68e.",
+  "runs": {
+    "baseline": {
+      "revision": "bf86faf3f989efd7509ab368fb78719261d41a89",
+      "runtime_source_sha256": "2ca55b30d40781804fa655921ef406da4b36ae1f34a20e14d5e3e72adbd1ffe8",
+      "harness_sha256": "76c4ac7c0deae20083d4599e22d94992c1346985914ce29584ba78336b46115c",
+      "test_binary_sha256": "fba8fd08c11f0e41ed7f9f87a29fa9bd2347bfe3de79c1b114887a685c284840",
+      "go_version": "go version go1.27.2 linux/amd64",
+      "sizes": {
+        "10000": {
+          "postgresql": "PostgreSQL 17.11 (Debian 17.11-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+          "postgresql_settings": {
+            "jit": "on",
+            "fsync": "on",
+            "work_mem": "8192",
+            "max_wal_size": "128",
+            "min_wal_size": "32",
+            "shared_buffers": "4096",
+            "max_connections": "100",
+            "full_page_writes": "on",
+            "random_page_cost": "4",
+            "checkpoint_timeout": "30",
+            "synchronous_commit": "on",
+            "effective_cache_size": "524288"
+          },
+          "owned_schema_relation_bytes": 25755648,
+          "final_owned_schema_relation_bytes": 41041920,
+          "duration_ms": 7983.12,
+          "go_process_memory": {
+            "peak_heap_alloc_bytes": 5474400,
+            "peak_go_sys_bytes": 18192648,
+            "sampled_peak_process_rss_bytes": 24260608,
+            "total_alloc_delta_bytes": 118519168,
+            "gc_delta": 57
+          },
+          "failures": [
+            "poison_deletion",
+            "short_reconciliation",
+            "progressive_bootstrap"
+          ],
+          "workloads": {
+            "concurrent_admission_publication": {
+              "admission_workers": 4,
+              "advisory_lock_samples": 102,
+              "counters_match_actual_ledger": true,
+              "durable_source_publication": {
+                "sample_count": 80,
+                "p50_ms": 9.295,
+                "p95_ms": 21.741,
+                "max_ms": 56.06
+              },
+              "duration_ms": 521.78,
+              "errors": null,
+              "max_observed_waiters": 4,
+              "operations_per_worker": 20,
+              "pass": true,
+              "persisted_metadata_hit": {
+                "sample_count": 80,
+                "p50_ms": 1.827,
+                "p95_ms": 12.088,
+                "max_ms": 53.329
+              },
+              "published_sources": 80,
+              "reserve_source": {
+                "sample_count": 80,
+                "p50_ms": 13.532,
+                "p95_ms": 24.231,
+                "max_ms": 77.169
+              },
+              "retention_batch": {
+                "sample_count": 20,
+                "p50_ms": 15.075,
+                "p95_ms": 35.81,
+                "max_ms": 79.05
+              },
+              "samples_with_waiters": 102,
+              "sampling_interval_ms": 5,
+              "source_reservations_remaining": 0
+            },
+            "legacy_null_deadline_admission": {
+              "admission_calls": 1,
+              "admission_latency": {
+                "sample_count": 1,
+                "p50_ms": 763.536,
+                "p95_ms": 763.536,
+                "max_ms": 763.536
+              },
+              "aggregate_budget_ms": 120000,
+              "call_budget_ms": 5000,
+              "counters_match_actual_ledger": true,
+              "duration_ms": 770.982,
+              "initial_null_deadlines": 10000,
+              "initialization_markers": 1,
+              "initializing_deferrals": 0,
+              "pass": true,
+              "remaining_after_each_admission": [
+                0
+              ],
+              "remaining_null_deadlines": 0,
+              "timeouts": 0
+            },
+            "poison_deletion": {
+              "cycles": 3,
+              "latency": {
+                "sample_count": 3,
+                "p50_ms": 1.92,
+                "p95_ms": 3.641,
+                "max_ms": 3.641
+              },
+              "pass": false,
+              "poison_bytes_still_charged": 1800,
+              "poison_count": 200,
+              "poison_rows_preserved": 200,
+              "safe_count": 200,
+              "safe_physical_files_remaining": 200,
+              "safe_rows_remaining": 200
+            },
+            "progressive_bootstrap": {
+              "cycle_budget_ms": 5,
+              "cycles": 32,
+              "deferrals": 32,
+              "final_pass_ms": 889.753,
+              "final_registered_files": 11024,
+              "final_retry_calls": 1,
+              "initialization_markers": 1,
+              "latency": {
+                "sample_count": 32,
+                "p50_ms": 5.517,
+                "p95_ms": 6.144,
+                "max_ms": 6.178
+              },
+              "pass": false,
+              "registered_after_each_cycle": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "registered_before_final_pass": 0
+            },
+            "short_reconciliation": {
+              "cycle_budget_ms": 5,
+              "cycles": 32,
+              "final_full_scan_calls": 1,
+              "final_full_scan_ms": 891.586,
+              "latency": {
+                "sample_count": 32,
+                "p50_ms": 5.657,
+                "p95_ms": 6.05,
+                "max_ms": 6.117
+              },
+              "pass": false,
+              "physical_files": 11024,
+              "physical_small_files": 1024,
+              "physical_zero_byte_entries": 10000,
+              "registered_after_each_cycle": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "registered_before_full_scan": 0,
+              "timeouts": 32,
+              "unchanged_full_scan_calls": 1,
+              "unchanged_full_scan_ms": 316.23,
+              "unchanged_scan_preserves_tuple_xmin": true
+            }
+          },
+          "queries": {
+            "artifact_retention": {
+              "sql_sha256": "41fe7c04935996a8cd360c21c21fec96e0f48fc1b2937d814cda32ecf3b29a98",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 3.479,
+                "p95_ms": 3.878,
+                "max_ms": 4.437
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 2.944,
+                "p95_ms": 3.217,
+                "max_ms": 3.249
+              },
+              "median_root_statistics": {
+                "Actual Rows": 100.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 992.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "job_retention": {
+              "sql_sha256": "7cc730b535612643d77cba69e8284a6cc9ebe7a9825ac877ba44e8aafe8d9970",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 6.427,
+                "p95_ms": 8.294,
+                "max_ms": 9.476
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 5.916,
+                "p95_ms": 7.481,
+                "max_ms": 8.544
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 1488.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "source_retention": {
+              "sql_sha256": "3f92477fce7b0f04aec4f57386ce8d336cec26a501dcf5cad90c3c4630248c6c",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 9.918,
+                "p95_ms": 15.269,
+                "max_ms": 16.565
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 9.055,
+                "p95_ms": 14.115,
+                "max_ms": 14.879
+              },
+              "median_root_statistics": {
+                "Actual Rows": 200.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 1300.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "pending_tombstones": {
+              "sql_sha256": "65f9c5f577fbcba58bb556b07fa2b77d36eb95bc278195822c5abe5c025450c1",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.17,
+                "p95_ms": 0.242,
+                "max_ms": 0.805
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.005,
+                "p95_ms": 0.008,
+                "max_ms": 0.017
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 1.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "orphan_retention": {
+              "sql_sha256": "19fdcb23b1178815d62278b03e2f516c1b12fa619fa918e134b3954d4ec66ca7",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 9.945,
+                "p95_ms": 11.857,
+                "max_ms": 15.849
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 9.348,
+                "p95_ms": 11.108,
+                "max_ms": 15.062
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 3168.5,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 4.0,
+                "Shared Written Blocks": 4.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "cache_retention": {
+              "sql_sha256": "88d1e8ad276ac437e0b147a34b39668657757ae412baf0b3c81f7271a84b27f1",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.356,
+                "p95_ms": 0.49,
+                "max_ms": 0.855
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.125,
+                "p95_ms": 0.206,
+                "max_ms": 0.228
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 202.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "cache_recent_hit": {
+              "sql_sha256": "cf7af00ee73b833bd862df5cf6386deed9381175b3dccccb92b52bcced5b0da9",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.347,
+                "p95_ms": 1.143,
+                "max_ms": 1.454
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.021,
+                "p95_ms": 0.052,
+                "max_ms": 0.058
+              },
+              "median_root_statistics": {
+                "Actual Rows": 1.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 6.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "cache_recent_miss": {
+              "sql_sha256": "cf7af00ee73b833bd862df5cf6386deed9381175b3dccccb92b52bcced5b0da9",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.402,
+                "p95_ms": 0.509,
+                "max_ms": 0.533
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.016,
+                "p95_ms": 0.029,
+                "max_ms": 0.033
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 3.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "storage_admission_totals": {
+              "sql_sha256": "8aab8656b2ebac51ae20e92b927da726530cf1f46c13a41c0005aadd097acd95",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.31,
+                "p95_ms": 0.357,
+                "max_ms": 0.784
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.058,
+                "p95_ms": 0.066,
+                "max_ms": 0.072
+              },
+              "median_root_statistics": {
+                "Actual Rows": 1.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 7.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "active_source_reservations": {
+              "sql_sha256": "baf110c5e0caa7d88c8e46dddecfa1a849e5a3e7cbdec5914b33b64b59cbc75e",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.234,
+                "p95_ms": 0.465,
+                "max_ms": 0.592
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.034,
+                "p95_ms": 0.038,
+                "max_ms": 0.038
+              },
+              "median_root_statistics": {
+                "Actual Rows": 1.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 3.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            }
+          }
+        },
+        "100000": {
+          "postgresql": "PostgreSQL 17.11 (Debian 17.11-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+          "postgresql_settings": {
+            "jit": "on",
+            "fsync": "on",
+            "work_mem": "8192",
+            "max_wal_size": "128",
+            "min_wal_size": "32",
+            "shared_buffers": "4096",
+            "max_connections": "100",
+            "full_page_writes": "on",
+            "random_page_cost": "4",
+            "checkpoint_timeout": "30",
+            "synchronous_commit": "on",
+            "effective_cache_size": "524288"
+          },
+          "owned_schema_relation_bytes": 254033920,
+          "final_owned_schema_relation_bytes": 404398080,
+          "duration_ms": 174808.237,
+          "go_process_memory": {
+            "peak_heap_alloc_bytes": 13812440,
+            "peak_go_sys_bytes": 26843400,
+            "sampled_peak_process_rss_bytes": 34484224,
+            "total_alloc_delta_bytes": 4578692096,
+            "gc_delta": 2158
+          },
+          "failures": [
+            "poison_deletion",
+            "short_reconciliation",
+            "progressive_bootstrap",
+            "legacy_null_deadline_admission"
+          ],
+          "workloads": {
+            "concurrent_admission_publication": {
+              "admission_workers": 4,
+              "advisory_lock_samples": 492,
+              "counters_match_actual_ledger": true,
+              "durable_source_publication": {
+                "sample_count": 80,
+                "p50_ms": 92.94,
+                "p95_ms": 186.386,
+                "max_ms": 197.169
+              },
+              "duration_ms": 2508.917,
+              "errors": null,
+              "max_observed_waiters": 4,
+              "operations_per_worker": 20,
+              "pass": true,
+              "persisted_metadata_hit": {
+                "sample_count": 80,
+                "p50_ms": 1.649,
+                "p95_ms": 152.222,
+                "max_ms": 183.653
+              },
+              "published_sources": 80,
+              "reserve_source": {
+                "sample_count": 80,
+                "p50_ms": 7.912,
+                "p95_ms": 104.255,
+                "max_ms": 212.394
+              },
+              "retention_batch": {
+                "sample_count": 20,
+                "p50_ms": 96.689,
+                "p95_ms": 203.63,
+                "max_ms": 216.164
+              },
+              "samples_with_waiters": 489,
+              "sampling_interval_ms": 5,
+              "source_reservations_remaining": 0
+            },
+            "legacy_null_deadline_admission": {
+              "admission_calls": 24,
+              "admission_latency": {
+                "sample_count": 24,
+                "p50_ms": 5000.644,
+                "p95_ms": 5001.101,
+                "max_ms": 5001.161
+              },
+              "aggregate_budget_ms": 120000,
+              "call_budget_ms": 5000,
+              "counters_match_actual_ledger": true,
+              "duration_ms": 120085.577,
+              "initial_null_deadlines": 100000,
+              "initialization_markers": 0,
+              "initializing_deferrals": 0,
+              "pass": false,
+              "remaining_after_each_admission": [
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000
+              ],
+              "remaining_null_deadlines": 100000,
+              "timeouts": 24
+            },
+            "poison_deletion": {
+              "cycles": 3,
+              "latency": {
+                "sample_count": 3,
+                "p50_ms": 1.469,
+                "p95_ms": 2.932,
+                "max_ms": 2.932
+              },
+              "pass": false,
+              "poison_bytes_still_charged": 1800,
+              "poison_count": 200,
+              "poison_rows_preserved": 200,
+              "safe_count": 200,
+              "safe_physical_files_remaining": 200,
+              "safe_rows_remaining": 200
+            },
+            "progressive_bootstrap": {
+              "cycle_budget_ms": 5,
+              "cycles": 32,
+              "deferrals": 32,
+              "final_pass_ms": 10912.255,
+              "final_registered_files": 101024,
+              "final_retry_calls": 1,
+              "initialization_markers": 1,
+              "latency": {
+                "sample_count": 32,
+                "p50_ms": 5.407,
+                "p95_ms": 6.088,
+                "max_ms": 6.131
+              },
+              "pass": false,
+              "registered_after_each_cycle": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "registered_before_final_pass": 0
+            },
+            "short_reconciliation": {
+              "cycle_budget_ms": 5,
+              "cycles": 32,
+              "final_full_scan_calls": 1,
+              "final_full_scan_ms": 9642.985,
+              "latency": {
+                "sample_count": 32,
+                "p50_ms": 5.2,
+                "p95_ms": 5.925,
+                "max_ms": 6.095
+              },
+              "pass": false,
+              "physical_files": 101024,
+              "physical_small_files": 1024,
+              "physical_zero_byte_entries": 100000,
+              "registered_after_each_cycle": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "registered_before_full_scan": 0,
+              "timeouts": 32,
+              "unchanged_full_scan_calls": 1,
+              "unchanged_full_scan_ms": 3221.598,
+              "unchanged_scan_preserves_tuple_xmin": true
+            }
+          },
+          "queries": {
+            "artifact_retention": {
+              "sql_sha256": "41fe7c04935996a8cd360c21c21fec96e0f48fc1b2937d814cda32ecf3b29a98",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 21.884,
+                "p95_ms": 25.162,
+                "max_ms": 35.647
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 21.034,
+                "p95_ms": 24.29,
+                "max_ms": 33.388
+              },
+              "median_root_statistics": {
+                "Actual Rows": 200.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 3542.0,
+                "Shared Read Blocks": 2611.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 29.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "job_retention": {
+              "sql_sha256": "7cc730b535612643d77cba69e8284a6cc9ebe7a9825ac877ba44e8aafe8d9970",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 42.71,
+                "p95_ms": 55.27,
+                "max_ms": 56.318
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 41.952,
+                "p95_ms": 54.39,
+                "max_ms": 55.576
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 4180.0,
+                "Shared Read Blocks": 1971.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "source_retention": {
+              "sql_sha256": "3f92477fce7b0f04aec4f57386ce8d336cec26a501dcf5cad90c3c4630248c6c",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 63.889,
+                "p95_ms": 87.137,
+                "max_ms": 91.171
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 63.002,
+                "p95_ms": 85.977,
+                "max_ms": 89.991
+              },
+              "median_root_statistics": {
+                "Actual Rows": 200.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 3563.0,
+                "Shared Read Blocks": 2217.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "pending_tombstones": {
+              "sql_sha256": "65f9c5f577fbcba58bb556b07fa2b77d36eb95bc278195822c5abe5c025450c1",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.2,
+                "p95_ms": 0.226,
+                "max_ms": 0.763
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.006,
+                "p95_ms": 0.009,
+                "max_ms": 0.021
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 1.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "orphan_retention": {
+              "sql_sha256": "19fdcb23b1178815d62278b03e2f516c1b12fa619fa918e134b3954d4ec66ca7",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 16.443,
+                "p95_ms": 24.395,
+                "max_ms": 24.422
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 15.643,
+                "p95_ms": 23.525,
+                "max_ms": 23.597
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 4467.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 4.0,
+                "Shared Written Blocks": 4.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "cache_retention": {
+              "sql_sha256": "88d1e8ad276ac437e0b147a34b39668657757ae412baf0b3c81f7271a84b27f1",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 1.033,
+                "p95_ms": 1.282,
+                "max_ms": 7.9
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.772,
+                "p95_ms": 1.069,
+                "max_ms": 7.089
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 2002.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "cache_recent_hit": {
+              "sql_sha256": "cf7af00ee73b833bd862df5cf6386deed9381175b3dccccb92b52bcced5b0da9",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.368,
+                "p95_ms": 0.499,
+                "max_ms": 0.832
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.025,
+                "p95_ms": 0.045,
+                "max_ms": 0.052
+              },
+              "median_root_statistics": {
+                "Actual Rows": 1.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 8.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "cache_recent_miss": {
+              "sql_sha256": "cf7af00ee73b833bd862df5cf6386deed9381175b3dccccb92b52bcced5b0da9",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.374,
+                "p95_ms": 0.57,
+                "max_ms": 0.687
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.017,
+                "p95_ms": 0.028,
+                "max_ms": 0.03
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 4.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "storage_admission_totals": {
+              "sql_sha256": "8aab8656b2ebac51ae20e92b927da726530cf1f46c13a41c0005aadd097acd95",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.282,
+                "p95_ms": 0.363,
+                "max_ms": 1.141
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.021,
+                "p95_ms": 0.035,
+                "max_ms": 0.063
+              },
+              "median_root_statistics": {
+                "Actual Rows": 1.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 5.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "active_source_reservations": {
+              "sql_sha256": "baf110c5e0caa7d88c8e46dddecfa1a849e5a3e7cbdec5914b33b64b59cbc75e",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.252,
+                "p95_ms": 0.363,
+                "max_ms": 0.733
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.094,
+                "p95_ms": 0.134,
+                "max_ms": 0.167
+              },
+              "median_root_statistics": {
+                "Actual Rows": 1.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 16.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            }
+          }
+        }
+      },
+      "samples_per_query": 20,
+      "race": false,
+      "environment": {
+        "GOMAXPROCS": "2",
+        "GOFLAGS": "-p=2",
+        "GOTOOLCHAIN": "local",
+        "GOGC": null,
+        "GOMEMLIMIT": null
+      },
+      "host": {
+        "kernel": "5.15.0-190-generic",
+        "machine": "x86_64",
+        "cpu_affinity_count": 4
+      },
+      "elapsed_ms": 183704.919,
+      "test_exit_code": 1,
+      "postgres_sampled_peak_cgroup_bytes": 816078848,
+      "status": "complete baseline with expected failing workload gates",
+      "postgres_container": {
+        "name": "cutmy-storage-readiness-db",
+        "image": "postgres:17.11-bookworm",
+        "image_id": "sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826",
+        "memory_limit": 1073741824,
+        "nano_cpus": 2000000000,
+        "shm_size": 134217728,
+        "tmpfs": {
+          "/var/lib/postgresql/data": "size=768m"
+        }
+      }
+    },
+    "after": {
+      "revision": "718f4a7be2d4f9f3662d518ccfd1da1ec867413e",
+      "runtime_source_sha256": "f0d2e7daa0cf7288899c8403057c88772d59ef49d5d086eaaa3491c5292047e0",
+      "harness_sha256": "76c4ac7c0deae20083d4599e22d94992c1346985914ce29584ba78336b46115c",
+      "test_binary_sha256": "6f1516164d84dec985a07a327a80f8d2280eb905c7eb54fa973bc8de19a57d4d",
+      "go_version": "go version go1.27.2 linux/amd64",
+      "sizes": {
+        "10000": {
+          "postgresql": "PostgreSQL 17.11 (Debian 17.11-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+          "postgresql_settings": {
+            "jit": "on",
+            "fsync": "on",
+            "work_mem": "8192",
+            "max_wal_size": "128",
+            "min_wal_size": "32",
+            "shared_buffers": "4096",
+            "max_connections": "100",
+            "full_page_writes": "on",
+            "random_page_cost": "4",
+            "checkpoint_timeout": "30",
+            "synchronous_commit": "on",
+            "effective_cache_size": "524288"
+          },
+          "owned_schema_relation_bytes": 30212096,
+          "final_owned_schema_relation_bytes": 46891008,
+          "duration_ms": 10578.515,
+          "go_process_memory": {
+            "peak_heap_alloc_bytes": 5832088,
+            "peak_go_sys_bytes": 18454792,
+            "sampled_peak_process_rss_bytes": 25141248,
+            "total_alloc_delta_bytes": 168049224,
+            "gc_delta": 85
+          },
+          "failures": [
+            "short_reconciliation",
+            "progressive_bootstrap"
+          ],
+          "workloads": {
+            "concurrent_admission_publication": {
+              "admission_workers": 4,
+              "advisory_lock_samples": 99,
+              "counters_match_actual_ledger": true,
+              "durable_source_publication": {
+                "sample_count": 80,
+                "p50_ms": 11.287,
+                "p95_ms": 38.436,
+                "max_ms": 50.732
+              },
+              "duration_ms": 513.256,
+              "errors": null,
+              "max_observed_waiters": 5,
+              "operations_per_worker": 20,
+              "pass": true,
+              "persisted_metadata_hit": {
+                "sample_count": 80,
+                "p50_ms": 1.104,
+                "p95_ms": 13.36,
+                "max_ms": 40.904
+              },
+              "published_sources": 80,
+              "reserve_source": {
+                "sample_count": 80,
+                "p50_ms": 10.896,
+                "p95_ms": 18.717,
+                "max_ms": 70.979
+              },
+              "retention_batch": {
+                "sample_count": 20,
+                "p50_ms": 12.579,
+                "p95_ms": 58.049,
+                "max_ms": 99.349
+              },
+              "samples_with_waiters": 99,
+              "sampling_interval_ms": 5,
+              "source_reservations_remaining": 0
+            },
+            "legacy_null_deadline_admission": {
+              "admission_calls": 3,
+              "admission_latency": {
+                "sample_count": 3,
+                "p50_ms": 285.154,
+                "p95_ms": 970.144,
+                "max_ms": 970.144
+              },
+              "aggregate_budget_ms": 120000,
+              "call_budget_ms": 5000,
+              "counters_match_actual_ledger": true,
+              "duration_ms": 1453.843,
+              "initial_null_deadlines": 10000,
+              "initialization_markers": 1,
+              "initializing_deferrals": 2,
+              "pass": true,
+              "remaining_after_each_admission": [
+                7800,
+                3000,
+                0
+              ],
+              "remaining_null_deadlines": 0,
+              "timeouts": 0
+            },
+            "poison_deletion": {
+              "cycles": 3,
+              "latency": {
+                "sample_count": 3,
+                "p50_ms": 50.792,
+                "p95_ms": 61.402,
+                "max_ms": 61.402
+              },
+              "pass": true,
+              "poison_bytes_still_charged": 1800,
+              "poison_count": 200,
+              "poison_rows_preserved": 200,
+              "safe_count": 200,
+              "safe_physical_files_remaining": 0,
+              "safe_rows_remaining": 0
+            },
+            "progressive_bootstrap": {
+              "cycle_budget_ms": 5,
+              "cycles": 32,
+              "deferrals": 32,
+              "final_pass_ms": 1274.907,
+              "final_registered_files": 11024,
+              "final_retry_calls": 1,
+              "initialization_markers": 1,
+              "latency": {
+                "sample_count": 32,
+                "p50_ms": 5.129,
+                "p95_ms": 5.256,
+                "max_ms": 6.065
+              },
+              "pass": false,
+              "registered_after_each_cycle": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "registered_before_final_pass": 0
+            },
+            "short_reconciliation": {
+              "cycle_budget_ms": 5,
+              "cycles": 32,
+              "final_full_scan_calls": 1,
+              "final_full_scan_ms": 1368.629,
+              "latency": {
+                "sample_count": 32,
+                "p50_ms": 5.18,
+                "p95_ms": 5.513,
+                "max_ms": 5.96
+              },
+              "pass": false,
+              "physical_files": 11024,
+              "physical_small_files": 1024,
+              "physical_zero_byte_entries": 10000,
+              "registered_after_each_cycle": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "registered_before_full_scan": 0,
+              "timeouts": 32,
+              "unchanged_full_scan_calls": 1,
+              "unchanged_full_scan_ms": 898.573,
+              "unchanged_scan_preserves_tuple_xmin": true
+            }
+          },
+          "queries": {
+            "artifact_retention": {
+              "sql_sha256": "6717d3836c37a7f8632f1d3f62db045a25584e454ed92239afba77d7599e0a78",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 2.23,
+                "p95_ms": 3.308,
+                "max_ms": 3.338
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 1.588,
+                "p95_ms": 2.561,
+                "max_ms": 2.574
+              },
+              "median_root_statistics": {
+                "Actual Rows": 100.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 868.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "job_retention": {
+              "sql_sha256": "aaab6e6002bf053d4ad48ffb44e6d3d7e4199b8da877f741e35b8fcfd04f2d13",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 3.352,
+                "p95_ms": 5.718,
+                "max_ms": 6.659
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 2.787,
+                "p95_ms": 5.038,
+                "max_ms": 5.577
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 851.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "source_retention": {
+              "sql_sha256": "f24b6db8d33ec3b30ac7f26c21fb5874add71f26ea128b1d0468fd20d841b474",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 9.942,
+                "p95_ms": 14.679,
+                "max_ms": 14.816
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 9.055,
+                "p95_ms": 13.441,
+                "max_ms": 13.57
+              },
+              "median_root_statistics": {
+                "Actual Rows": 200.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 1088.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "pending_tombstones": {
+              "sql_sha256": "af683bc273684606a190dfa2d79b30b74e6d04ea5db4e0bb29b3f13ecf4583c1",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.225,
+                "p95_ms": 0.774,
+                "max_ms": 2.805
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.009,
+                "p95_ms": 0.013,
+                "max_ms": 0.02
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 1.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "orphan_retention": {
+              "sql_sha256": "d26d855931007c238fa243ce259100cd0b09ac1b43c3cd889840fc431578a241",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 11.179,
+                "p95_ms": 12.856,
+                "max_ms": 13.037
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 10.55,
+                "p95_ms": 11.936,
+                "max_ms": 12.171
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 3296.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 8.0,
+                "Shared Written Blocks": 8.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "cache_retention": {
+              "sql_sha256": "88d1e8ad276ac437e0b147a34b39668657757ae412baf0b3c81f7271a84b27f1",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.349,
+                "p95_ms": 0.542,
+                "max_ms": 0.564
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.131,
+                "p95_ms": 0.184,
+                "max_ms": 0.337
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 202.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "cache_recent_hit": {
+              "sql_sha256": "cf7af00ee73b833bd862df5cf6386deed9381175b3dccccb92b52bcced5b0da9",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.377,
+                "p95_ms": 0.495,
+                "max_ms": 0.854
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.023,
+                "p95_ms": 0.031,
+                "max_ms": 0.035
+              },
+              "median_root_statistics": {
+                "Actual Rows": 1.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 6.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "cache_recent_miss": {
+              "sql_sha256": "cf7af00ee73b833bd862df5cf6386deed9381175b3dccccb92b52bcced5b0da9",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.35,
+                "p95_ms": 0.41,
+                "max_ms": 0.411
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.016,
+                "p95_ms": 0.022,
+                "max_ms": 0.024
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 3.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "storage_admission_totals": {
+              "sql_sha256": "8aab8656b2ebac51ae20e92b927da726530cf1f46c13a41c0005aadd097acd95",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.333,
+                "p95_ms": 0.65,
+                "max_ms": 0.755
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.049,
+                "p95_ms": 0.07,
+                "max_ms": 0.077
+              },
+              "median_root_statistics": {
+                "Actual Rows": 1.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 7.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "active_source_reservations": {
+              "sql_sha256": "baf110c5e0caa7d88c8e46dddecfa1a849e5a3e7cbdec5914b33b64b59cbc75e",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.222,
+                "p95_ms": 0.287,
+                "max_ms": 0.707
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.031,
+                "p95_ms": 0.041,
+                "max_ms": 0.048
+              },
+              "median_root_statistics": {
+                "Actual Rows": 1.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 3.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            }
+          }
+        },
+        "100000": {
+          "postgresql": "PostgreSQL 17.11 (Debian 17.11-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+          "postgresql_settings": {
+            "jit": "on",
+            "fsync": "on",
+            "work_mem": "8192",
+            "max_wal_size": "128",
+            "min_wal_size": "32",
+            "shared_buffers": "4096",
+            "max_connections": "100",
+            "full_page_writes": "on",
+            "random_page_cost": "4",
+            "checkpoint_timeout": "30",
+            "synchronous_commit": "on",
+            "effective_cache_size": "524288"
+          },
+          "owned_schema_relation_bytes": 297762816,
+          "final_owned_schema_relation_bytes": 439967744,
+          "duration_ms": 100940.81,
+          "go_process_memory": {
+            "peak_heap_alloc_bytes": 10103224,
+            "peak_go_sys_bytes": 26843400,
+            "sampled_peak_process_rss_bytes": 29732864,
+            "total_alloc_delta_bytes": 3420089448,
+            "gc_delta": 1702
+          },
+          "failures": [
+            "short_reconciliation",
+            "progressive_bootstrap"
+          ],
+          "workloads": {
+            "concurrent_admission_publication": {
+              "admission_workers": 4,
+              "advisory_lock_samples": 393,
+              "counters_match_actual_ledger": true,
+              "durable_source_publication": {
+                "sample_count": 80,
+                "p50_ms": 56.896,
+                "p95_ms": 115.817,
+                "max_ms": 147.893
+              },
+              "duration_ms": 2006.456,
+              "errors": null,
+              "max_observed_waiters": 4,
+              "operations_per_worker": 20,
+              "pass": true,
+              "persisted_metadata_hit": {
+                "sample_count": 80,
+                "p50_ms": 1.235,
+                "p95_ms": 99.829,
+                "max_ms": 137.316
+              },
+              "published_sources": 80,
+              "reserve_source": {
+                "sample_count": 80,
+                "p50_ms": 35.784,
+                "p95_ms": 105.125,
+                "max_ms": 163.857
+              },
+              "retention_batch": {
+                "sample_count": 20,
+                "p50_ms": 86.454,
+                "p95_ms": 156.716,
+                "max_ms": 201.297
+              },
+              "samples_with_waiters": 391,
+              "sampling_interval_ms": 5,
+              "source_reservations_remaining": 0
+            },
+            "legacy_null_deadline_admission": {
+              "admission_calls": 26,
+              "admission_latency": {
+                "sample_count": 26,
+                "p50_ms": 363.003,
+                "p95_ms": 3043.251,
+                "max_ms": 3275.135
+              },
+              "aggregate_budget_ms": 120000,
+              "call_budget_ms": 5000,
+              "counters_match_actual_ledger": true,
+              "duration_ms": 19158.308,
+              "initial_null_deadlines": 100000,
+              "initialization_markers": 1,
+              "initializing_deferrals": 25,
+              "pass": true,
+              "remaining_after_each_admission": [
+                100000,
+                100000,
+                100000,
+                100000,
+                96200,
+                91400,
+                86600,
+                81800,
+                77000,
+                72200,
+                67400,
+                62600,
+                57800,
+                53000,
+                48200,
+                43400,
+                38600,
+                33800,
+                29000,
+                24200,
+                19400,
+                14600,
+                9800,
+                5000,
+                200,
+                0
+              ],
+              "remaining_null_deadlines": 0,
+              "timeouts": 0
+            },
+            "poison_deletion": {
+              "cycles": 3,
+              "latency": {
+                "sample_count": 3,
+                "p50_ms": 58.472,
+                "p95_ms": 87.924,
+                "max_ms": 87.924
+              },
+              "pass": true,
+              "poison_bytes_still_charged": 1800,
+              "poison_count": 200,
+              "poison_rows_preserved": 200,
+              "safe_count": 200,
+              "safe_physical_files_remaining": 0,
+              "safe_rows_remaining": 0
+            },
+            "progressive_bootstrap": {
+              "cycle_budget_ms": 5,
+              "cycles": 32,
+              "deferrals": 32,
+              "final_pass_ms": 16180.122,
+              "final_registered_files": 101024,
+              "final_retry_calls": 5,
+              "initialization_markers": 1,
+              "latency": {
+                "sample_count": 32,
+                "p50_ms": 5.13,
+                "p95_ms": 5.511,
+                "max_ms": 6.008
+              },
+              "pass": false,
+              "registered_after_each_cycle": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "registered_before_final_pass": 0
+            },
+            "short_reconciliation": {
+              "cycle_budget_ms": 5,
+              "cycles": 32,
+              "final_full_scan_calls": 1,
+              "final_full_scan_ms": 16442.034,
+              "latency": {
+                "sample_count": 32,
+                "p50_ms": 5.134,
+                "p95_ms": 5.759,
+                "max_ms": 5.781
+              },
+              "pass": false,
+              "physical_files": 101024,
+              "physical_small_files": 1024,
+              "physical_zero_byte_entries": 100000,
+              "registered_after_each_cycle": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "registered_before_full_scan": 0,
+              "timeouts": 32,
+              "unchanged_full_scan_calls": 1,
+              "unchanged_full_scan_ms": 11779.549,
+              "unchanged_scan_preserves_tuple_xmin": true
+            }
+          },
+          "queries": {
+            "artifact_retention": {
+              "sql_sha256": "6717d3836c37a7f8632f1d3f62db045a25584e454ed92239afba77d7599e0a78",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 12.687,
+                "p95_ms": 18.86,
+                "max_ms": 25.621
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 11.894,
+                "p95_ms": 17.532,
+                "max_ms": 23.734
+              },
+              "median_root_statistics": {
+                "Actual Rows": 200.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 6106.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "job_retention": {
+              "sql_sha256": "aaab6e6002bf053d4ad48ffb44e6d3d7e4199b8da877f741e35b8fcfd04f2d13",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 3.232,
+                "p95_ms": 4.467,
+                "max_ms": 5.023
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 2.795,
+                "p95_ms": 3.434,
+                "max_ms": 4.587
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 1092.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "source_retention": {
+              "sql_sha256": "f24b6db8d33ec3b30ac7f26c21fb5874add71f26ea128b1d0468fd20d841b474",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 65.516,
+                "p95_ms": 76.845,
+                "max_ms": 85.865
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 64.568,
+                "p95_ms": 75.944,
+                "max_ms": 84.773
+              },
+              "median_root_statistics": {
+                "Actual Rows": 200.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 2347.0,
+                "Shared Read Blocks": 2695.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "pending_tombstones": {
+              "sql_sha256": "af683bc273684606a190dfa2d79b30b74e6d04ea5db4e0bb29b3f13ecf4583c1",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.241,
+                "p95_ms": 0.317,
+                "max_ms": 0.982
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.01,
+                "p95_ms": 0.011,
+                "max_ms": 0.016
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 1.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "orphan_retention": {
+              "sql_sha256": "d26d855931007c238fa243ce259100cd0b09ac1b43c3cd889840fc431578a241",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 12.934,
+                "p95_ms": 21.493,
+                "max_ms": 23.871
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 12.116,
+                "p95_ms": 20.374,
+                "max_ms": 23.072
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 4369.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 8.0,
+                "Shared Written Blocks": 8.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "cache_retention": {
+              "sql_sha256": "88d1e8ad276ac437e0b147a34b39668657757ae412baf0b3c81f7271a84b27f1",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 1.092,
+                "p95_ms": 1.622,
+                "max_ms": 8.376
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.816,
+                "p95_ms": 1.355,
+                "max_ms": 7.797
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 2002.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "cache_recent_hit": {
+              "sql_sha256": "cf7af00ee73b833bd862df5cf6386deed9381175b3dccccb92b52bcced5b0da9",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.44,
+                "p95_ms": 0.718,
+                "max_ms": 0.887
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.028,
+                "p95_ms": 0.068,
+                "max_ms": 0.085
+              },
+              "median_root_statistics": {
+                "Actual Rows": 1.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 8.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "cache_recent_miss": {
+              "sql_sha256": "cf7af00ee73b833bd862df5cf6386deed9381175b3dccccb92b52bcced5b0da9",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.44,
+                "p95_ms": 0.561,
+                "max_ms": 0.564
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.02,
+                "p95_ms": 0.026,
+                "max_ms": 0.032
+              },
+              "median_root_statistics": {
+                "Actual Rows": 0.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 4.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "storage_admission_totals": {
+              "sql_sha256": "8aab8656b2ebac51ae20e92b927da726530cf1f46c13a41c0005aadd097acd95",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.37,
+                "p95_ms": 0.433,
+                "max_ms": 1.424
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.026,
+                "p95_ms": 0.047,
+                "max_ms": 0.086
+              },
+              "median_root_statistics": {
+                "Actual Rows": 1.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 5.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            },
+            "active_source_reservations": {
+              "sql_sha256": "baf110c5e0caa7d88c8e46dddecfa1a849e5a3e7cbdec5914b33b64b59cbc75e",
+              "client_round_trip": {
+                "sample_count": 20,
+                "p50_ms": 0.371,
+                "p95_ms": 0.519,
+                "max_ms": 0.781
+              },
+              "postgres_execution": {
+                "sample_count": 20,
+                "p50_ms": 0.105,
+                "p95_ms": 0.128,
+                "max_ms": 0.166
+              },
+              "median_root_statistics": {
+                "Actual Rows": 1.0,
+                "Actual Loops": 1.0,
+                "Shared Hit Blocks": 16.0,
+                "Shared Read Blocks": 0.0,
+                "Shared Dirtied Blocks": 0.0,
+                "Shared Written Blocks": 0.0,
+                "Temp Read Blocks": 0.0,
+                "Temp Written Blocks": 0.0
+              },
+              "note": "Root statistics include descendant buffers; do not sum them again. Full per-node rows/loops/buffers and triggers are in the raw plans."
+            }
+          }
+        }
+      },
+      "samples_per_query": 20,
+      "race": false,
+      "environment": {
+        "GOMAXPROCS": "2",
+        "GOFLAGS": "-p=2",
+        "GOTOOLCHAIN": "local",
+        "GOGC": null,
+        "GOMEMLIMIT": null
+      },
+      "host": {
+        "kernel": "5.15.0-190-generic",
+        "machine": "x86_64",
+        "cpu_affinity_count": 4
+      },
+      "elapsed_ms": 113188.74,
+      "test_exit_code": 1,
+      "postgres_sampled_peak_cgroup_bytes": 798175232,
+      "status": "final runtime candidate; five-millisecond progress gates failed",
+      "postgres_container": {
+        "name": "cutmy-storage-readiness-db",
+        "image": "postgres:17.11-bookworm",
+        "image_id": "sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826",
+        "memory_limit": 1073741824,
+        "nano_cpus": 2000000000,
+        "shm_size": 134217728,
+        "tmpfs": {
+          "/var/lib/postgresql/data": "size=768m"
+        }
+      }
+    }
+  },
+  "comparability": {
+    "after": {
+      "harness_sha256": true,
+      "go_version": true,
+      "samples_per_query": true,
+      "race": true,
+      "environment": true,
+      "host": true,
+      "postgres_container": true
+    }
+  }
+}

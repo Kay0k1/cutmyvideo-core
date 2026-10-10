@@ -242,6 +242,46 @@ INSERT INTO source_metadata_cache(source_id,owner,payload,expires_at) VALUES('sr
 	}
 }
 
+func TestMigrationsUpgradeOrderedPredecessorPreservesPendingBytesAndHistory(t *testing.T) {
+	f := newMigrationFixture(t)
+	installHistoricalSchema(t, f, "ordered-v1")
+	migrationExec(t, f.db, historicalRows+`
+INSERT INTO storage_files(path,owner,resource_id,kind,size_bytes,delete_pending) VALUES
+ ('/fixture/source','legacy_owner','src_legacy','source',100,false),
+ ('/fixture/pending','legacy_owner','','tombstone',8,true);
+INSERT INTO storage_reservations(id,owner,kind,size_bytes,expires_at) VALUES('pending-preparation','legacy_owner','source',99,now()+interval '1 hour');`)
+	before := historicalRowsSnapshot(t, f.db)
+	snapshot := func() string {
+		t.Helper()
+		var value string
+		if err := f.db.QueryRow(context.Background(), `SELECT jsonb_build_object(
+ 'files',(SELECT jsonb_agg(to_jsonb(f)-'delete_retry_at'-'delete_failures' ORDER BY path) FROM storage_files f),
+ 'reservations',(SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM storage_reservations r),
+ 'history',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(m),'xmin',xmin::text) ORDER BY position) FROM app_schema_migrations m WHERE position<=2))::text`).Scan(&value); err != nil {
+			t.Fatal(err)
+		}
+		return value
+	}
+	accounting := snapshot()
+	s := openMigrationStore(t, f)
+	assertMigrationLedger(t, s)
+	if historicalRowsSnapshot(t, f.db) != before || snapshot() != accounting {
+		t.Fatal("maintenance migration rewrote predecessor data, accounting or migration history")
+	}
+	var stored, reserved int64
+	if err := s.DB.QueryRow(context.Background(), "SELECT stored_bytes,reserved_bytes FROM storage_counters WHERE id=1").Scan(&stored, &reserved); err != nil || stored != 108 || reserved != 99 {
+		t.Fatal("maintenance upgrade released pending or reserved bytes", stored, reserved, err)
+	}
+	var pending, failures int
+	if err := s.DB.QueryRow(context.Background(), "SELECT count(*),COALESCE(sum(delete_failures),0) FROM storage_files WHERE delete_pending AND delete_retry_at<=statement_timestamp()").Scan(&pending, &failures); err != nil || pending != 1 || failures != 0 {
+		t.Fatal("historical pending deletion was not immediately eligible", pending, failures, err)
+	}
+	migrationExec(t, f.db, "UPDATE storage_files SET size_bytes=105 WHERE path='/fixture/source'")
+	if err := s.DB.QueryRow(context.Background(), "SELECT stored_bytes FROM storage_counters WHERE id=1").Scan(&stored); err != nil || stored != 113 {
+		t.Fatal("maintenance migration changed counter triggers", stored, err)
+	}
+}
+
 func TestMigrationsUpgradeRecognizedUnversionedHistory(t *testing.T) {
 	for _, fixture := range []string{"unversioned-initial", "unversioned-provider-id", "unversioned-platform", "unversioned-metadata"} {
 		t.Run(fixture, func(t *testing.T) {
@@ -275,7 +315,7 @@ func TestMigrationsRejectUnknownFutureOrCorruptSchemaWithoutChanges(t *testing.T
 		{"missing-predecessor", "DELETE FROM app_schema_versions WHERE version='20261005-storage-queue-v3'", true},
 		{"bad-checksum", "UPDATE app_schema_migrations SET checksum=repeat('0',64) WHERE position=1", true},
 		{"missing-ledger-record", "DELETE FROM app_schema_migrations WHERE position=1", true},
-		{"wrong-ordinal", "UPDATE app_schema_migrations SET position=3 WHERE position=2", true},
+		{"wrong-ordinal", "UPDATE app_schema_migrations SET position=(SELECT max(position)+1 FROM app_schema_migrations) WHERE position=2", true},
 		{"missing-required-column", "ALTER TABLE jobs DROP COLUMN storage_wait_until", false},
 		{"wrong-column-type", "ALTER TABLE storage_files ALTER COLUMN size_bytes TYPE integer", false},
 		{"missing-accounting-trigger", "DROP TRIGGER storage_file_insert ON storage_files", false},
@@ -424,8 +464,9 @@ func TestMigrationSQLChecksumsArePinnedAcrossWindowsNewlines(t *testing.T) {
 	// shipped with the first ordered migration ledger. The baseline is also
 	// compared with the separately captured actual v0.2.1 fixture above.
 	pinned := map[string]string{
-		"20261005-storage-queue-v3":      "8630cebd9bf2bb2c038519d807f75456a60d8dea24cc1114304551270b3e949f",
-		"20261010-ordered-migrations-v1": "17caf6f352044a62dd4bbfee154d02965d9c411ca6783422b96db5eed6b40e57",
+		"20261005-storage-queue-v3":       "8630cebd9bf2bb2c038519d807f75456a60d8dea24cc1114304551270b3e949f",
+		"20261010-ordered-migrations-v1":  "17caf6f352044a62dd4bbfee154d02965d9c411ca6783422b96db5eed6b40e57",
+		"20261010-storage-maintenance-v1": "1c06b5c041a45201496d20655078515b5ca4b7896e2a43c3c848d51b2aa00627",
 	}
 	for _, migration := range schemaMigrations {
 		t.Run(migration.version, func(t *testing.T) {

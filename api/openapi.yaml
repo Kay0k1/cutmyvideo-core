@@ -83,7 +83,7 @@ paths:
                   description: Maximum 8192 UTF-8 bytes, both before and after URL normalization. Public HTTPS media URL or recognized platform recording/clip link. Known platform hosts accept HTTP/schemeless pastes and normalize to HTTPS before fetching. YouTube watch, short-link, Shorts, recorded-live and embed URLs become a canonical watch link; access-essential parameters for other platforms are preserved. Actual live and collection links are rejected.
                   examples: ['https://www.youtube.com/watch?v=aqz-KE-bpKQ', 'youtu.be/aqz-KE-bpKQ', 'https://cdn.example.com/interview.mp4']
       responses:
-        '503': {$ref: '#/components/responses/DatabaseUnavailable'}
+        '503': {$ref: '#/components/responses/StorageUnavailable'}
         '201': {$ref: '#/components/responses/Source'}
         '408': {$ref: '#/components/responses/Error'}
         default: {$ref: '#/components/responses/Error'}
@@ -100,7 +100,7 @@ paths:
               properties:
                 file: {type: string, format: binary}
       responses:
-        '503': {$ref: '#/components/responses/DatabaseUnavailable'}
+        '503': {$ref: '#/components/responses/StorageUnavailable'}
         '201': {$ref: '#/components/responses/Source'}
         default: {$ref: '#/components/responses/Error'}
   /api/v1/sources/{id}:
@@ -143,7 +143,7 @@ paths:
           schema: {type: string, default: foreground, examples: [foreground, background]}
           description: background prefetch yields rendering capacity to foreground requests; omission or any other value uses foreground priority.
       responses:
-        '503': {$ref: '#/components/responses/DatabaseUnavailable'}
+        '503': {$ref: '#/components/responses/StorageUnavailable'}
         '200':
           description: Preview interval
           headers:
@@ -285,6 +285,22 @@ components:
                   error:
                     properties:
                       code: {const: database_unavailable}
+    StorageUnavailable:
+      description: A bounded database failure or incomplete initial storage accounting. storage_initializing rejects admission before media preparation; Retry-After gives seconds before another attempt. database_unavailable retains its uncertain-mutation guidance.
+      headers:
+        Retry-After:
+          description: Present for storage_initializing; seconds before retrying the rejected admission.
+          schema: {type: string, pattern: '^[0-9]+$'}
+      content:
+        application/json:
+          schema:
+            allOf:
+              - {$ref: '#/components/schemas/Error'}
+              - type: object
+                properties:
+                  error:
+                    properties:
+                      code: {enum: [database_unavailable, storage_initializing]}
     Error:
       description: Structured error
       content:

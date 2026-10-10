@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -91,43 +90,6 @@ func (s *Store) storageTx(ctx context.Context) (pgx.Tx, error) {
 	return tx, nil
 }
 
-// Bootstrap adopts existing media once. It never deletes data, and retries the
-// whole transaction if interrupted. Normal admissions then read indexed totals.
-func (s *Store) bootstrapStorage(ctx context.Context, tx pgx.Tx, c Config) error {
-	if c.MaxStorageBytes <= 0 {
-		return nil
-	}
-	var initialized bool
-	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM storage_state WHERE id=$1)", c.DataDir).Scan(&initialized); err != nil {
-		return err
-	}
-	if initialized {
-		return nil
-	}
-	for _, kind := range []string{"sources", "artifacts"} {
-		if err := bootstrapStorageDirectory(ctx, tx, filepath.Join(c.DataDir, kind)); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-	}
-	// Legacy workspaces had no durable reservation. Charge their actual files
-	// until fenced cleanup removes the workspace; never delete them at bootstrap.
-	if err := bootstrapLegacyWork(ctx, tx, filepath.Join(c.DataDir, "work")); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	// Adopt ownership for files from the previous release, including thumbnails.
-	_, err := tx.Exec(ctx, `UPDATE storage_files f SET owner=s.owner,resource_id=s.id,kind='source' FROM sources s WHERE f.path=s.path OR f.path=s.thumbnail_path;
- UPDATE storage_files f SET owner=a.owner,resource_id=a.id,kind='artifact' FROM artifacts a WHERE f.path=a.path;`)
-	if err != nil {
-		return err
-	}
-	if c.ArtifactTTL > 0 {
-		if _, err = tx.Exec(ctx, "UPDATE artifacts SET expires_at=created_at+($1*interval '1 second') WHERE expires_at IS NULL", c.ArtifactTTL.Seconds()); err != nil {
-			return err
-		}
-	}
-	_, err = tx.Exec(ctx, "INSERT INTO storage_state(id) VALUES($1) ON CONFLICT DO NOTHING", c.DataDir)
-	return err
-}
 func storageFits(ctx context.Context, tx pgx.Tx, c Config, additional int64, exclude string) (bool, error) {
 	if additional < 0 || c.StorageSafetyBytes < 0 || additional > c.MaxStorageBytes {
 		return false, nil
@@ -157,7 +119,7 @@ func registerStorageFile(ctx context.Context, tx pgx.Tx, path, owner, kind, id s
 	if size < 0 {
 		return errors.New("negative stored file size")
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO storage_files(path,owner,kind,resource_id,size_bytes) VALUES($1,$2,$3,$4,$5) ON CONFLICT(path) DO UPDATE SET owner=excluded.owner,kind=excluded.kind,resource_id=excluded.resource_id,size_bytes=excluded.size_bytes,delete_pending=false`, path, owner, kind, id, size)
+	_, err := tx.Exec(ctx, `INSERT INTO storage_files(path,owner,kind,resource_id,size_bytes) VALUES($1,$2,$3,$4,$5) ON CONFLICT(path) DO UPDATE SET owner=excluded.owner,kind=excluded.kind,resource_id=excluded.resource_id,size_bytes=excluded.size_bytes,delete_pending=false,delete_retry_at='-infinity'::timestamptz,delete_failures=0`, path, owner, kind, id, size)
 	return err
 }
 func observedSize(path string, fallback int64) int64 {
@@ -171,14 +133,14 @@ func (s *Store) ReserveSource(ctx context.Context, c Config, owner string, token
 	return s.reserveSource(ctx, c, owner, sourceReservationToken(tokens), false)
 }
 func (s *Store) reserveSource(ctx context.Context, c Config, owner, token string, thumbnail bool, sizes ...int64) error {
+	if err := s.bootstrapStorage(ctx, c); err != nil {
+		return err
+	}
 	tx, err := s.storageTx(ctx)
 	if err != nil {
 		return err
 	}
 	defer rollbackStorage(tx)
-	if err = s.bootstrapStorage(ctx, tx, c); err != nil {
-		return err
-	}
 	// Expired preparations may still have files: reconciliation adopts these
 	// before releasing their reservation in maintenance, never here.
 	var busy bool
@@ -321,7 +283,7 @@ func storagePathInside(dir, path string) bool {
 		return false
 	}
 	rel, err := filepath.Rel(base, target)
-	return err == nil && rel != "." && rel != ".." && len(rel) > 0 && rel[:min(3, len(rel))] != "../"
+	return err == nil && rel != "." && filepath.IsLocal(rel)
 }
 func storageFailureItems(j Job, code, message string) []byte {
 	for i := range j.Items {
@@ -379,76 +341,6 @@ func (s *Store) FinishSource(ctx context.Context, c Config, owner, token, id str
 		return err
 	}
 	return tx.Commit(ctx)
-}
-
-func bootstrapStorageDirectory(ctx context.Context, tx pgx.Tx, path string) error {
-	dir, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer dir.Close()
-	for {
-		if err = ctx.Err(); err != nil {
-			return err
-		}
-		entries, readErr := dir.ReadDir(storageScanBatchSize)
-		var paths []string
-		var sizes []int64
-		var modified []time.Time
-		for _, entry := range entries {
-			if !entry.Type().IsRegular() {
-				continue
-			}
-			info, e := entry.Info()
-			if os.IsNotExist(e) {
-				continue
-			}
-			if e != nil {
-				return e
-			}
-			paths = append(paths, filepath.Join(path, entry.Name()))
-			sizes = append(sizes, info.Size())
-			modified = append(modified, info.ModTime())
-		}
-		if len(paths) > 0 {
-			if _, err = tx.Exec(ctx, `INSERT INTO storage_files(path,kind,size_bytes,observed_at) SELECT path,'orphan',size,modified FROM unnest($1::text[],$2::bigint[],$3::timestamptz[]) AS f(path,size,modified) ON CONFLICT(path) DO NOTHING`, paths, sizes, modified); err != nil {
-				return err
-			}
-		}
-		if readErr == io.EOF {
-			return nil
-		}
-		if readErr != nil {
-			return readErr
-		}
-	}
-}
-
-func bootstrapLegacyWork(ctx context.Context, tx pgx.Tx, dir string) error {
-	return scanStorageDirectory(ctx, dir, func(path string, entry os.DirEntry) error {
-		if entry.IsDir() {
-			var reserved bool
-			if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM storage_reservations WHERE kind='job' AND job_id||'-'||token=$1)", entry.Name()).Scan(&reserved); err != nil {
-				return err
-			}
-			if reserved {
-				return nil
-			}
-			return bootstrapLegacyWork(ctx, tx, path)
-		}
-		if !entry.Type().IsRegular() {
-			return nil
-		}
-		info, err := entry.Info()
-		if os.IsNotExist(err) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		_, err = tx.Exec(ctx, `INSERT INTO storage_files(path,kind,size_bytes,observed_at) VALUES($1,'work_orphan',$2,$3) ON CONFLICT(path) DO NOTHING`, path, info.Size(), info.ModTime())
-		return err
-	})
 }
 
 func workspaceRemoved(c Config, id, token string) error {
