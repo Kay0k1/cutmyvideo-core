@@ -26,7 +26,8 @@ required = [
      "TestMetadataRetentionBatchesPreserveLiveCacheAndIdentity", "TestMetadataRetentionSkipsConcurrentRefreshLocks",
      "TestMetadataRetentionConcurrentCleanersPreserveFreshRows", "TestMetadataRetentionCacheFailureKeepsCommittedMediaPaths",
      "TestMetadataRetentionPreservesCancellationAndDatabaseErrors", "TestMetadataRetentionWorkerDrainsMediaAfterCacheFailure",
-     "TestMigrationsUpgradeMaintenancePredecessorPreservesProgressRetriesAndCache"},
+     "TestMigrationsUpgradeMaintenancePredecessorPreservesProgressRetriesAndCache",
+     "TestMetadataCacheExpiryCorruptionAndFailureFallback"},
 ]
 for filename, names in zip(sys.argv[1:], required):
     events = [json.loads(line) for line in Path(filename).read_text(encoding="utf-8").splitlines() if line.strip()]
