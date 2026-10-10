@@ -60,6 +60,9 @@ Exit codes are `0` for success/help, `2` for invalid arguments or configuration,
 `124` for a timeout, `130` for cancellation and `1` for other failures. Existing
 human diagnostics remain the default. Localize known codes and use a generic
 fallback for unknown ones; human messages are not a parsing interface.
+Service startup uses `schema_incompatible` when the migration guard refuses an
+unknown, future or inconsistent database schema. Do not reset the database to
+retry; deploy a matching release or restore its coordinated backup.
 
 Current-source exports preflight hard-link and directory-sync capabilities,
 synchronize completed bytes, publish exclusively, and synchronize the output

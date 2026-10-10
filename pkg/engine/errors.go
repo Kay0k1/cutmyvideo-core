@@ -22,6 +22,8 @@ var (
 	// ErrPublicationUncertain means the final path may exist after a failed
 	// publication/cleanup sync. Inspect that path before deciding to retry.
 	ErrPublicationUncertain = fsdurable.ErrPublicationUncertain
+	// ErrSchemaIncompatible reports a service startup schema guard refusal.
+	ErrSchemaIncompatible = app.ErrSchemaIncompatible
 )
 
 // ErrorCode is a stable machine-readable diagnostic. Consumers must allow
@@ -86,7 +88,7 @@ func CodeOf(err error) ErrorCode {
 	if errors.Is(err, ErrFilesystemUnsupported) {
 		return CodeFilesystemUnsupported
 	}
-	if errors.Is(err, app.ErrSchemaIncompatible) {
+	if errors.Is(err, ErrSchemaIncompatible) {
 		return CodeSchemaIncompatible
 	}
 	if errors.Is(err, context.Canceled) {

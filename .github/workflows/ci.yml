@@ -84,19 +84,32 @@ jobs:
       - name: Runtime media, publication, errors and process-tree cancellation
         shell: bash
         run: |
-          ffmpeg -version
-          ffprobe -version
-          go test -race -count=1 -timeout=8m ./pkg/engine ./internal/fsdurable ./cmd/cutmy
-          go test -race -count=1 -timeout=3m ./internal/app -run '^(TestProcess.*|TestDiagnosticCopyCannotBypassMemoryBound)$'
-          go test -race -count=1 -timeout=3m ./internal/app -run '^TestNativeServiceUploadExportAndDownload$'
+          ffmpeg -version | tee ffmpeg-version.txt
+          ffprobe -version | tee ffprobe-version.txt
+          go test -json -race -count=1 -timeout=8m ./pkg/engine ./internal/fsdurable ./cmd/cutmy | tee native-media-tests.jsonl
+          go test -json -race -count=1 -timeout=3m ./internal/app -run '^(TestProcess.*|TestDiagnosticCopyCannotBypassMemoryBound)$' | tee native-process-tests.jsonl
+          go test -json -race -count=1 -timeout=3m ./internal/app -run '^TestNativeServiceUploadExportAndDownload$' | tee native-service-tests.jsonl
           binary=cutmy-native
           python_command=python3
           if [ "$RUNNER_OS" = Windows ]; then binary=cutmy-native.exe; python_command=python; fi
           go build -trimpath -o "$binary" ./cmd/cutmy
-          "./$binary" version
+          "./$binary" version | tee native-version.json
           "./$binary" --json-errors inspect --input absent.mp4 >success.txt 2>error.json && exit 1 || test "$?" -eq 1
           "$python_command" -c 'import json; d=json.load(open("error.json")); assert d["error"]["code"] == "input_not_found"'
           test ! -s success.txt
+          "$python_command" scripts/check-native-results.py native-media-tests.jsonl native-process-tests.jsonl native-service-tests.jsonl
+      - name: Retain native runtime evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-${{ matrix.runner }}
+          path: |
+            native-*-tests.jsonl
+            native-version.json
+            ffmpeg-version.txt
+            ffprobe-version.txt
+          if-no-files-found: warn
+          retention-days: 14
   bookworm-media:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -173,4 +186,13 @@ jobs:
           RECOVERY_DATABASE_URL: postgres://cutmy:test-only-password@localhost:5432/cutmy_test?sslmode=disable
           RECOVERY_PG_CONTAINER: ${{ job.services.postgres.id }}
           RECOVERY_WORK_DIR: ${{ runner.temp }}/cutmy-recovery
+          RECOVERY_REPORT_PATH: ${{ runner.temp }}/recovery-verification.json
         run: make recovery-check
+      - name: Retain redacted upgrade and recovery evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: recovery-verification
+          path: ${{ runner.temp }}/recovery-verification.json
+          if-no-files-found: warn
+          retention-days: 14

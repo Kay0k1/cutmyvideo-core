@@ -253,7 +253,18 @@ func expectedSchemaShape(file string) schemaShape {
 	if err = json.Unmarshal(data, &shape); err != nil {
 		panic(err)
 	}
+	normalizeSchemaShape(shape)
 	return shape
+}
+
+// Catalog constraint order follows the database collation. Compare the same
+// definitions in Go byte order so locale changes cannot reject an identical
+// schema (for example Alpine C versus Debian en_US.UTF-8).
+func normalizeSchemaShape(shape schemaShape) {
+	for name, table := range shape.Tables {
+		slices.Sort(table.Constraints)
+		shape.Tables[name] = table
+	}
 }
 
 func baselineSchemaShape() schemaShape { return expectedSchemaShape(schemaMigrations[0].shape) }
@@ -311,7 +322,7 @@ func checkTableShape(name string, actual, expected schemaTable, legacy bool) err
 	}
 	for index, shape := range expected.Indexes {
 		found, ok := actual.Indexes[index]
-		if !ok && legacy && (index == "jobs_source_idx" || index == "artifacts_job_idx") {
+		if !ok && legacy && (index == "jobs_source_idx" || index == "artifacts_job_idx" || index == "sources_owner_created_idx") {
 			continue
 		}
 		if !ok || !reflect.DeepEqual(found, shape) {

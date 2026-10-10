@@ -10,7 +10,9 @@ import (
 
 // EnsureDirectory creates the missing portion of an application-owned directory
 // hierarchy and persists each new directory and its entry in the known parent.
-// Existing ancestors are assumed to have been persisted by their owner.
+// It also persists the closest existing ancestor and its entry, so retrying an
+// interrupted creation completes that barrier. Older ancestors remain the
+// responsibility of their owner.
 func EnsureDirectory(path string, mode fs.FileMode) error {
 	return ensureDirectory(path, mode, SyncDirectories)
 }
@@ -18,12 +20,14 @@ func EnsureDirectory(path string, mode fs.FileMode) error {
 func ensureDirectory(path string, mode fs.FileMode, synchronize func(...string) error) error {
 	path = filepath.Clean(path)
 	var missing []string
+	var ancestor string
 	for current := path; ; current = filepath.Dir(current) {
 		info, err := os.Stat(current)
 		if err == nil {
 			if !info.IsDir() {
 				return fmt.Errorf("%w: publication parent is not a directory", ErrPublicationFailed)
 			}
+			ancestor = current
 			break
 		}
 		if !errors.Is(err, os.ErrNotExist) {
@@ -33,6 +37,9 @@ func ensureDirectory(path string, mode fs.FileMode, synchronize func(...string) 
 		if filepath.Dir(current) == current {
 			return fmt.Errorf("%w: publication hierarchy has no existing ancestor", ErrPublicationFailed)
 		}
+	}
+	if err := synchronize(ancestor, filepath.Dir(ancestor)); err != nil {
+		return err
 	}
 	for i := len(missing) - 1; i >= 0; i-- {
 		dir := missing[i]

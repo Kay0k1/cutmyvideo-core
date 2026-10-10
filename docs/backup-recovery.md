@@ -69,14 +69,18 @@ two minutes after compilation.
    SIGKILL. The harness then terminates only its known tool process group,
    modelling loss of the whole worker container. This distinction matters:
    killing a parent process alone does not guarantee its child tools exit.
+   A separate real job is also interrupted with SIGKILL during its first item,
+   before any artifact is registered or returned. Both unfinished leases remain
+   intact; another submitted job is still queued when backup begins.
 4. With both API and worker stopped and their owned tools reaped, the harness
    makes an actual custom-format PostgreSQL dump and a complete media archive.
    It restores the dump into a freshly created database and the media into a
    newly created physical directory. Database rows and all file hashes must
    match the coordinated snapshot.
 5. Current processes open the restored state using the original session
-   cookies. Idempotency, ownership, queued work, the partial result and the
-   remaining lease survive. The worker resumes remaining items without
+   cookies. Idempotency, ownership, queued work, the partial result and both
+   unfinished leases survive. The worker resumes the job with no completed
+   items and the remaining partial-batch item without duplicating artifacts or
    replacing acknowledged results. Restored downloads must match their byte
    counts, support byte ranges and pass independent ffprobe and FFmpeg decode.
 6. A fresh upload and new MP3/MP4 copy exports must work after restore. All final

@@ -71,6 +71,43 @@ func sourceTransactionWithLostAcknowledgement(ctx context.Context, s *Store, v S
 	return s.addSourceTransaction(ctx, publicationUncommittedAcknowledgement{tx}, v, sizes, c)
 }
 
+func TestSourceMetadataOnlyRegistrationRequiresRemoteKind(t *testing.T) {
+	for _, kind := range []string{"upload", "direct", "platform", "youtube"} {
+		t.Run(kind, func(t *testing.T) {
+			s := testStore(t)
+			s.ConfigureStorage(ledgerConfig(t))
+			source := Source{ID: newID("src"), Owner: "owner", Kind: kind, DurationMS: 1000, URL: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
+			err := s.AddSource(context.Background(), source)
+			local := kind == "upload" || kind == "direct"
+			if local && (err == nil || errors.Is(err, ErrSourceCommitUncertain)) {
+				t.Fatal("local source without a completed file was registered", err)
+			}
+			if !local && err != nil {
+				t.Fatal("metadata-only remote source was rejected", err)
+			}
+			var sources, files int
+			if err := s.DB.QueryRow(context.Background(), "SELECT (SELECT count(*) FROM sources),(SELECT count(*) FROM storage_files)").Scan(&sources, &files); err != nil {
+				t.Fatal(err)
+			}
+			wantSources := 1
+			if local {
+				wantSources = 0
+			}
+			charged, reserved := ledgerBytes(t, s)
+			if sources != wantSources || files != 0 || charged != 0 || reserved != 0 {
+				t.Fatal("metadata-only source produced invalid registration or charge", sources, files, charged, reserved)
+			}
+			loaded, err := s.Source(context.Background(), source.ID, source.Owner)
+			if local && !errors.Is(err, ErrNotFound) {
+				t.Fatal("rejected local source is still readable", err)
+			}
+			if !local && (err != nil || loaded.Kind != kind || loaded.Path != "" || loaded.URL != source.URL) {
+				t.Fatal("metadata-only remote source did not retain its identity", loaded, err)
+			}
+		})
+	}
+}
+
 func TestSourceMissingOrUnsynchronizedFilesNeverRegister(t *testing.T) {
 	for _, fault := range []string{"missing-source", "missing-thumbnail", "thumbnail-sync", "cancel-during-sync"} {
 		t.Run(fault, func(t *testing.T) {

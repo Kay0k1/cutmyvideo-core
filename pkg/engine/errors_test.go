@@ -26,6 +26,7 @@ func TestPublicErrorCodesPreserveCauses(t *testing.T) {
 		{"quota", errors.Join(ErrOutputSyncFailed, syscall.EDQUOT), CodeStorageFull, syscall.EDQUOT},
 		{"missing-tool", &exec.Error{Name: "absent-tool", Err: exec.ErrNotFound}, CodeToolUnavailable, exec.ErrNotFound},
 		{"exists", ErrOutputExists, CodeOutputExists, ErrOutputExists},
+		{"schema", fmt.Errorf("wrapped: %w", ErrSchemaIncompatible), CodeSchemaIncompatible, ErrSchemaIncompatible},
 		{"uncertain-wins", errors.Join(ErrPublicationUncertain, context.Canceled, syscall.ENOSPC), CodePublicationUncertain, context.Canceled},
 		{"unsupported-wins", errors.Join(ErrFilesystemUnsupported, ErrPublicationFailed), CodeFilesystemUnsupported, ErrFilesystemUnsupported},
 		{"sync-storage", errors.Join(ErrOutputSyncFailed, syscall.ENOSPC), CodeStorageFull, syscall.ENOSPC},
@@ -84,7 +85,9 @@ func TestPublicInspectErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := New(Config{FFprobePath: filepath.Join(t.TempDir(), "missing-probe")}).Inspect(context.Background(), path)
-	if CodeOf(err) != CodeToolUnavailable || !errors.Is(err, os.ErrNotExist) {
+	// Windows resolves even absolute command names through LookPath, whose
+	// missing executable cause is exec.ErrNotFound. Preserve the OS's cause.
+	if CodeOf(err) != CodeToolUnavailable || (!errors.Is(err, os.ErrNotExist) && !errors.Is(err, exec.ErrNotFound)) {
 		t.Fatalf("missing tool code/cause: %v", err)
 	}
 }

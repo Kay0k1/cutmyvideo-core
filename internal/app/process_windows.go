@@ -100,9 +100,9 @@ func attachAndResume(job uintptr, pid uint32) error {
 	if ok, _, err := assignJobProcess.Call(job, uintptr(process)); ok == 0 {
 		return fmt.Errorf("contain media process: %w", err)
 	}
-	// os/exec closes CreateProcess's primary thread handle. Until its first
-	// resume the tool has exactly one application thread; obtain its handle
-	// through the supported Tool Help API rather than an undocumented syscall.
+	// os/exec closes CreateProcess's primary thread handle. Locate its
+	// suspended thread through the supported Tool Help API; loader-support
+	// threads may also exist before the primary thread first runs.
 	snapshot, err := syscall.CreateToolhelp32Snapshot(syscall.TH32CS_SNAPTHREAD, 0)
 	if err != nil {
 		return fmt.Errorf("enumerate suspended media thread: %w", err)
@@ -121,7 +121,17 @@ func attachAndResume(job uintptr, pid uint32) error {
 			if uint32(count) == 0xffffffff {
 				return fmt.Errorf("resume media process: %w", resumeErr)
 			}
-			return closeErr
+			if closeErr != nil {
+				return closeErr
+			}
+			if count == 1 {
+				return nil
+			}
+			if count > 1 {
+				return errors.New("media process thread remained suspended")
+			}
+			// Windows can create loader-support threads. A zero count means
+			// this thread was already running; find the suspended primary.
 		}
 		entry.Size = uint32(unsafe.Sizeof(entry))
 		ok, _, err = threadNext.Call(uintptr(snapshot), uintptr(unsafe.Pointer(&entry)))

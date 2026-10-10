@@ -20,6 +20,10 @@ checks is not proof of every semantic behavior or platform combination.
    server export behavior with synthetic media. Install the pinned Python
    [contract tooling](api.md#executable-contract-checks-current-source) in an
    isolated environment; full checks include actual HTTP/OpenAPI fixtures.
+   Require all five [native runtime jobs](platforms.md) and run
+   `make recovery-check` with disposable PostgreSQL and complete repository
+   history. Database/media changes must pass real historical upgrade and
+   coordinated backup restoration, with redacted evidence retained.
 2. Move completed Unreleased notes under a dated heading such as
    `## 0.2.1 - 2026-10-10`, retaining Unreleased for future changes. Include known
    limitations and measured benchmark methods.
@@ -73,8 +77,9 @@ receive the prerelease flag. Inspect artifacts before publishing the draft.
 Manual dispatch rebuilds an existing tag and saves artifacts without publication.
 Failed checks prevent packaging/publication.
 
-CI uses Go 1.27.2 and checks runtime/media/cancellation on Linux. Other targets are
-cross-built and need native verification before equivalent support is claimed.
+Current-source CI uses Go 1.27.2 and requires runtime/media/cancellation plus
+the PostgreSQL API/worker path on every shipped Linux, macOS and Windows target.
+These native jobs gate packaging along with the upgrade/recovery acceptance.
 Release checks include the full Ubuntu/FFmpeg 6.1 suite and targeted copy/HLS
 timeline regressions in the pinned Bookworm runtime base with FFmpeg 5.1.
 Website production deployment is separate and must preserve persistent volumes;

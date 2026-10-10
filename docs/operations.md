@@ -92,7 +92,9 @@ docker compose --env-file .env -f deploy/compose.example.yml exec -T worker cutm
 ```
 
 Readiness checks PostgreSQL; worker health independently requires successful
-queue/lease access within 30 seconds. Keep its marker container-local. Monitor
+queue/lease access within 30 seconds. `cutmy healthcheck` uses `LISTEN_ADDR`,
+including custom ports; wildcard addresses are probed through local loopback.
+Keep the worker marker container-local. Monitor
 health failures, restarts, queue/storage wait, disk headroom and export errors.
 Logs include stage timings and sanitized errors; preserve privacy when sharing.
 
@@ -103,13 +105,15 @@ raising it.
 
 ## Output publication guarantees
 
-New local exports and server artifacts synchronize completed file data and the
-required directory entries before reporting success or committing artifact/job
+Current-source local exports, uploaded/direct sources, thumbnails, window
+previews and server artifacts synchronize completed file data and the required
+directory entries before reporting success or committing their database
 metadata. Publication never replaces an existing output. Local export checks
 hard-link and synchronization support in the destination filesystem before
 encoding; use a filesystem that provides these operations reliably. The
-containing directory hierarchy must already be persistent. The application
-synchronizes its known output directories, not arbitrary ancestors created by
+containing directory hierarchy of a local export must already be persistent.
+The service creates and synchronizes each missing directory in its owned media
+hierarchy. It synchronizes known parents, not unrelated ancestors created by
 the caller immediately before an export.
 
 If a final name was created but directory synchronization fails, local export
@@ -118,7 +122,7 @@ before retrying; an existing result is never overwritten or unlinked to guess
 away an uncertain outcome.
 
 A database connection failure during COMMIT can leave its outcome unknown.
-Workers retain possibly committed files and recover from authoritative database
+Sources, previews and workers retain possibly committed files and recover from authoritative database
 state instead of deleting those results. API HTTP 503 similarly does not prove
 that a mutation was not applied; reuse an export's `Idempotency-Key` when replaying
 its submission. Do not turn transient diagnostics into automatic retries of
@@ -126,17 +130,29 @@ arbitrary mutations.
 
 These guarantees depend on the filesystem and storage honoring synchronization;
 they do not replace backups or protect against failed hardware. The new
-synchronization contract covers local outputs and registered export artifacts,
-not source uploads, thumbnails or cached previews. Older artifacts are not
-retroactively verified or synchronized. Native macOS/Windows storage behavior
-still needs verification before equivalent platform support is claimed.
+synchronization contract applies to newly published files; existing files are
+not retroactively verified or synchronized. Unsupported filesystems fail rather
+than silently acknowledging weaker publication. Native CI exercises the same
+barriers on Linux, macOS and Windows; it cannot simulate a physical power loss.
 
 ## Upgrade and recover
 
 Pin a release/image revision. Read [CHANGELOG](../CHANGELOG.md), record the old
 revision/image and back up database/media before upgrading. Schema migrations run
-when API/worker/maintenance opens the store. Do not assume an older binary reads
-a newer schema; test upgrades against a restored copy first.
+when API/worker/maintenance opens the store. Current source uses immutable,
+ordered migrations and verifies known schema shape, version markers and SQL
+checksums before applying changes. Unknown/future versions or inconsistent
+schemas fail startup with the stable CLI code `schema_incompatible`; successful
+current-schema restarts perform no DDL. Historical releases lack this guard and
+must not be started against an upgraded database. See [migration rules](migrations.md)
+and the required [upgrade/recovery acceptance gate](backup-recovery.md).
+Test upgrades against a restored copy first.
+
+For a versioned Docker build, supply `VERSION`, `VCS_REF` and `BUILD_TIME` build
+arguments from the reviewed tag, exact commit and commit timestamp. `cutmy version`
+then identifies the deployed binary. Unspecified values remain `dev`/`unknown`
+rather than advertising an official release. The native CLI archive builder
+sets these values automatically from its clean tagged checkout.
 
 From the example, after checking out the intended release:
 

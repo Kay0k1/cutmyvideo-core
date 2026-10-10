@@ -12,19 +12,23 @@ import time
 
 def main():
     args = sys.argv[1:]
-    gate_path = Path(os.environ["CUTMY_RECOVERY_GATE"])
+    # Core intentionally strips unneeded child environment variables. A private
+    # adjacent config belongs to the copied, per-invocation wrapper, not to the
+    # application environment or persistent media directory.
+    config = json.loads((Path(__file__).resolve().parent / "ffmpeg-config.json").read_text())
+    gate_path = Path(config["gate_path"])
     try:
         gate = json.loads(gate_path.read_text())
     except FileNotFoundError:
         gate = {}
     target = Path(args[-1]).name if args else ""
     if "-progress" not in args or target != gate.get("target"):
-        os.execv(os.environ["CUTMY_RECOVERY_REAL_FFMPEG"], ["ffmpeg", *args])
+        os.execv(config["real_ffmpeg"], ["ffmpeg", *args])
 
     # Pace just the selected export to make interruption deterministic. Its
     # output remains real FFmpeg output; no database or media result is faked.
     args.insert(args.index("-i"), "-re")
-    child = subprocess.Popen([os.environ["CUTMY_RECOVERY_REAL_FFMPEG"], *args])
+    child = subprocess.Popen([config["real_ffmpeg"], *args])
     time.sleep(0.25)
     if child.poll() is not None:
         return child.returncode or 1

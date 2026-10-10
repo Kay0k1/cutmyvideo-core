@@ -32,6 +32,9 @@ func (s *Store) addSourceWithSync(ctx context.Context, v Source, synchronize fun
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if (v.Kind == "upload" || v.Kind == "direct") && v.Path == "" {
+		return errors.New("local source requires a completed file")
+	}
 	c := s.storageConfig()
 	sizes := make(map[string]int64)
 	for _, path := range []string{v.Path, v.ThumbnailPath} {

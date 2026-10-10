@@ -183,8 +183,12 @@ func syncPath(path string, directories []string, ops operations) (fs.FileInfo, e
 // SyncDirectories persists a bounded set of known directory entries. Callers
 // include the parent of a directory they have just created.
 func SyncDirectories(directories ...string) error {
+	return syncDirectories(directories, systemOperations())
+}
+
+func syncDirectories(directories []string, ops operations) error {
 	for _, dir := range directories {
-		if err := syncDirectory(dir); err != nil {
+		if err := ops.syncDir(dir); err != nil {
 			return capabilityError("synchronize publication parent", err)
 		}
 	}

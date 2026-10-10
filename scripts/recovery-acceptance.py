@@ -184,6 +184,10 @@ class Acceptance:
         require(self.ffmpeg and self.ffprobe, "Install ffmpeg and ffprobe")
         self.gate = self.work / "gate.json"
         self.marker = self.work / "gate-marker.json"
+        self.wrapper = self.work / "ffmpeg-wrapper.py"
+        shutil.copyfile(ROOT / "scripts/recovery-ffmpeg.py", self.wrapper)
+        self.wrapper.chmod(0o700)
+        (self.work / "ffmpeg-config.json").write_text(json.dumps({"real_ffmpeg": self.ffmpeg, "gate_path": str(self.gate)}))
         self.report = {"historical_revision": HISTORICAL_REVISION, "checks": [], "artifacts": [], "limitations": [
             "Linux process/container-loss simulation; no physical power-loss or live-provider test",
             "Anonymous capability sessions are preserved; the core has no named accounts",
@@ -224,6 +228,8 @@ class Acceptance:
                             *ROOT.glob("internal/app/migrations/*.json"), *ROOT.glob("pkg/**/*.go")]):
             source_hash.update(str(path.relative_to(ROOT)).encode() + b"\0" + path.read_bytes() + b"\0")
         self.report["current_source_sha256"] = source_hash.hexdigest()
+        self.report["acceptance_script_sha256"] = {name: digest(ROOT / "scripts" / name)
+                                                  for name in ("recovery-acceptance.py", "recovery-ffmpeg.py")}
         self.report["binary_sha256"] = {"old": digest(old), "current": digest(current)}
         self.report["go_version"] = run([self.args.go, "version"]).decode().strip()
         self.report["ffmpeg_version"] = run([self.ffmpeg, "-version"]).decode().splitlines()[0]
@@ -245,9 +251,8 @@ class Acceptance:
     def environment(self, database, port):
         return {**os.environ, "DATABASE_URL": self.pg.dsn(database), "DATA_DIR": str(self.media),
                 "LISTEN_ADDR": "127.0.0.1:" + str(port), "PUBLIC_ORIGIN": f"http://127.0.0.1:{port}",
-                "COOKIE_SECURE": "false", "TRUST_PROXY": "false", "FFMPEG_PATH": str(ROOT / "scripts/recovery-ffmpeg.py"),
+                "COOKIE_SECURE": "false", "TRUST_PROXY": "false", "FFMPEG_PATH": str(self.wrapper),
                 "FFPROBE_PATH": self.ffprobe, "WORKER_HEALTH_PATH": str(self.work / "worker-health.json"),
-                "CUTMY_RECOVERY_REAL_FFMPEG": self.ffmpeg, "CUTMY_RECOVERY_GATE": str(self.gate),
                 "MAX_SOURCE_BYTES": str(8 << 20), "MAX_FETCH_BYTES": str(8 << 20), "MAX_OUTPUT_BYTES": str(16 << 20),
                 "MAX_STORAGE_BYTES": str(1 << 30), "MAX_OWNER_BYTES": str(512 << 20), "STORAGE_SAFETY_BYTES": "0",
                 "SOURCE_TTL": "24h", "ARTIFACT_TTL": "24h", "STORAGE_WAIT_TIMEOUT": "2m", "JOB_TIMEOUT": "3m",
@@ -285,20 +290,21 @@ class Acceptance:
                 raise RuntimeError("A service did not stop within its shutdown budget")
             require(process.returncode == (-signal.SIGKILL if kill else 0), "Unexpected service shutdown status")
 
-    def arm(self, job):
-        require(len(job["items"]) == 2, "Fault gate requires two items")
+    def arm(self, job, index=1):
+        require(len(job["items"]) > index, "Fault gate item is absent")
         self.marker.unlink(missing_ok=True)
-        self.gate.write_text(json.dumps({"target": job["items"][1]["id"] + ".mp4", "marker": str(self.marker)}))
+        self.gate.write_text(json.dumps({"target": job["items"][index]["id"] + ".mp4", "marker": str(self.marker)}))
 
     def disarm(self):
         self.gate.unlink(missing_ok=True)
 
-    def partial(self, client, job, worker):
+    def partial(self, client, job, worker, index=1):
         until = time.monotonic() + 20
         while time.monotonic() < until:
             require(worker.poll() is None, "Worker exited before controlled interruption")
             state = client.get_job(job)
-            if self.marker.exists() and state["items"][0]["status"] == "succeeded" and state["items"][1]["status"] == "running":
+            if (self.marker.exists() and state["items"][index]["status"] == "running"
+                    and all(item["status"] == "succeeded" for item in state["items"][:index])):
                 marker = json.loads(self.marker.read_text())
                 require(marker["pid"] == marker["pgid"], "Fault tool does not have an isolated process group")
                 self.tool_groups.append(marker)
@@ -412,8 +418,8 @@ class Acceptance:
         worker = self.start(self.current, "worker", original, port, "upgraded-worker")
         queued_done = self.finished(b, queued, worker)
         observed_lease = self.pg.lease(original, batch["id"])
-        if observed_lease["active"] and observed_lease["until"] == lease["until"]:
-            require(observed_lease["token"] == lease["token"] and observed_lease["attempts"] == 1, "Upgrade stole an active old lease")
+        require(observed_lease["token"] == lease["token"] and observed_lease["attempts"] == 1
+                and observed_lease["until"] == lease["until"], "Upgrade stole the interrupted lease before the queued job completed")
         done = self.finished(a, batch, worker)
         require(done["items"][0]["artifact"]["id"] == retained["id"], "Upgrade replaced an already completed item")
         recovered = self.verify_artifact(a, b, done["items"][0], "after-upgrade-retained")
@@ -434,7 +440,20 @@ class Acceptance:
         self.disarm()
         lease = self.pg.lease(original, interrupted["id"])
         require(lease["active"] and lease["attempts"] == 1, "SIGKILL did not preserve the active unfinished lease")
+        before_first = b.job(source_b, "restore-before-first-result", ranges[:1])
+        self.arm(before_first, index=0)
+        worker = self.start(self.current, "worker", original, port, "before-first-result-worker")
+        no_result, marker = self.partial(b, before_first, worker, index=0)
+        require(all(item["artifact"] is None for item in no_result["items"]), "Zero-result interruption already published an item")
+        require(self.pg.sql(original, "SELECT count(*) FROM artifacts WHERE job_id=" + sql_string(before_first["id"])) == "0",
+                "Zero-result interruption already registered an artifact")
+        self.stop(worker, kill=True)
+        self.reap_tool(marker)
+        self.disarm()
+        first_lease = self.pg.lease(original, before_first["id"])
+        require(first_lease["active"] and first_lease["attempts"] == 1, "First-item interruption did not retain its unfinished lease")
         queued_restore = b.job(source_b, "restore-queued", ranges[:1])
+        self.check("real_first_item_SIGKILL_before_any_artifact_publication")
         self.stop(api)
         coordinated = self.pg.snapshot(original)
         dump, media_archive = self.work / "database.dump", self.work / "media.tar.gz"
@@ -485,6 +504,9 @@ class Acceptance:
         require(a.job(source_a, "restore-interrupted", ranges)["id"] == interrupted["id"], "Restore lost idempotency")
         require(a.get_job(interrupted)["items"][0]["artifact"]["id"] == retained_restore["id"], "Restore lost partial results")
         require(self.pg.lease(restored, interrupted["id"])["token"] == lease["token"], "Restore rewrote the old lease")
+        require(b.job(source_b, "restore-before-first-result", ranges[:1])["id"] == before_first["id"], "Restore lost zero-result idempotency")
+        require(all(item["artifact"] is None for item in b.get_job(before_first)["items"]), "Restore fabricated a result for interrupted first item")
+        require(self.pg.lease(restored, before_first["id"])["token"] == first_lease["token"], "Restore rewrote the first-item lease")
         self.check("SIGKILL_coordinated_pg_dump_media_backup_fresh_database_and_directory_restore")
         worker = self.start(self.current, "worker", restored, port, "restored-worker")
         queued_done = self.finished(b, queued_restore, worker)
@@ -495,7 +517,13 @@ class Acceptance:
         self.verify_artifact(a, b, recovered["items"][1], "after-restore-recovered")
         self.verify_artifact(b, a, queued_done["items"][0], "after-restore-queued")
         require(self.pg.lease(restored, interrupted["id"])["attempts"] == 2, "Restored unfinished job did not use exactly one recovery attempt")
-        self.check("restored_partial_and_queued_jobs_recover_without_duplicate_results")
+        first_done = self.finished(b, before_first, worker)
+        require(first_done["items"][0]["id"] == before_first["items"][0]["id"], "First-item recovery changed its item identity")
+        require(self.pg.lease(restored, before_first["id"])["attempts"] == 2, "Zero-result job did not use exactly one recovery attempt")
+        require(self.pg.sql(restored, "SELECT count(*) FROM artifacts WHERE job_id=" + sql_string(before_first["id"])) == "1",
+                "First-item recovery registered duplicate or absent artifacts")
+        self.verify_artifact(b, a, first_done["items"][0], "after-restore-first-result")
+        self.check("restored_zero_result_partial_and_queued_jobs_recover_without_duplicate_results")
         fresh_source = a.upload(self.fixture, "fresh-after-restore.mp4")
         fresh = a.job(fresh_source, "fresh-mp3", ranges[:1], format="mp3")
         fresh_done = self.finished(a, fresh, worker)

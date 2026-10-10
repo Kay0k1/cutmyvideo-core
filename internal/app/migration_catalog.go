@@ -75,5 +75,6 @@ func readSchemaShape(ctx context.Context, tx pgx.Tx) (schemaShape, error) {
 		}
 		shape.Tables[name] = table
 	}
+	normalizeSchemaShape(shape)
 	return shape, nil
 }
