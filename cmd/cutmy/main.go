@@ -18,10 +18,7 @@ import (
 )
 
 func main() {
-	if err := run(); err != nil {
-		slog.Error("cutmy stopped", "error", err)
-		os.Exit(1)
-	}
+	os.Exit(runCLI(os.Args[1:], os.Stdout, os.Stderr))
 }
 
 func run() error {
@@ -35,7 +32,7 @@ func runArgs(args []string, stdout, stderr io.Writer) error {
 	}
 	if args[0] == "version" || args[0] == "--version" {
 		if len(args) != 1 {
-			return errors.New("version does not accept arguments")
+			return invalidCLI(errors.New("version does not accept arguments"))
 		}
 		return printVersion(stdout)
 	}
@@ -46,7 +43,7 @@ func runArgs(args []string, stdout, stderr io.Writer) error {
 		return inspect(args[1:], stdout, stderr)
 	}
 	if args[0] != "server" && args[0] != "worker" && args[0] != "maintenance" && args[0] != "healthcheck" && args[0] != "worker-healthcheck" {
-		return fmt.Errorf("unknown command %q; use cutmy --help", args[0])
+		return invalidCLI(fmt.Errorf("unknown command %q; use cutmy --help", args[0]))
 	}
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -54,10 +51,10 @@ func runArgs(args []string, stdout, stderr io.Writer) error {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
-		return err
+		return invalidCLI(err)
 	}
 	if flags.NArg() != 0 {
-		return fmt.Errorf("%s does not accept positional arguments", args[0])
+		return invalidCLI(fmt.Errorf("%s does not accept positional arguments", args[0]))
 	}
 	if args[0] == "worker-healthcheck" {
 		return app.CheckWorkerHealth(os.Getenv("WORKER_HEALTH_PATH"))
@@ -76,7 +73,7 @@ func runArgs(args []string, stdout, stderr io.Writer) error {
 	}
 	c, err := app.ConfigFromEnv()
 	if err != nil {
-		return err
+		return invalidCLI(err)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -85,7 +82,7 @@ func runArgs(args []string, stdout, stderr io.Writer) error {
 	cancelOpen()
 	if err != nil {
 		// Parser/connection errors can include the full DSN and its password.
-		return errors.New("could not initialize the database; check private configuration and database availability")
+		return &redactedCLIError{message: "could not initialize the database; check private configuration and database availability", cause: err}
 	}
 	defer s.DB.Close()
 	switch args[0] {

@@ -256,9 +256,9 @@ func (s *Server) beginSourceWithBytes(ctx context.Context, owner string, bytes i
 			s.endSource(owner)
 		}
 	}()
-	admitCtx, admitCancel := context.WithTimeout(ctx, workerDatabaseTimeout)
-	defer admitCancel()
-	if err := s.Store.reserveSource(admitCtx, s.Config, owner, s.sourceToken(owner), len(thumbnails) > 0 && thumbnails[0], bytes); err != nil {
+	if err := apiDatabaseExec(ctx, func(dbCtx context.Context) error {
+		return s.Store.reserveSource(dbCtx, s.Config, owner, s.sourceToken(owner), len(thumbnails) > 0 && thumbnails[0], bytes)
+	}); err != nil {
 		return err
 	}
 	accepted = true
@@ -271,7 +271,9 @@ func sourceTimedOut(ctx context.Context, err error) bool {
 }
 
 func writeSourceAdmissionError(w http.ResponseWriter, ctx context.Context, err error) {
-	if sourceTimedOut(ctx, err) {
+	if errors.Is(err, errDatabaseUnavailable) {
+		internalError(w, err)
+	} else if sourceTimedOut(ctx, err) {
 		writeError(w, 504, "source_timeout", "Source preparation timed out; try again")
 	} else if problem := problemFromError(err); problem != nil {
 		writeError(w, 429, problem.code, problem.message)
@@ -417,12 +419,12 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 				}
 				return
 			}
-			if e = s.Store.AddSource(ctx, v); e != nil {
+			if e = s.databaseAddSource(ctx, v); e != nil {
 				keep = errors.Is(e, ErrSourceCommitUncertain)
 				if keep {
 					s.holdSourceReservation(owner)
 				}
-				internalError(w, e)
+				writeSourcePersistenceError(w, ctx, e)
 				return
 			}
 			keep = true
@@ -484,14 +486,14 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 		}
 		v.ThumbnailPath, _ = fetchThumbnail(ctx, s.Config, v.ID, info.Thumbnail)
 		completeSourcePresentation(&v)
-		if e = s.Store.AddSource(ctx, v); e != nil {
+		if e = s.databaseAddSource(ctx, v); e != nil {
 			if errors.Is(e, ErrSourceCommitUncertain) {
 				s.holdSourceReservation(owner)
 			}
 			if v.ThumbnailPath != "" && !errors.Is(e, ErrSourceCommitUncertain) {
 				_ = os.Remove(v.ThumbnailPath)
 			}
-			internalError(w, e)
+			writeSourcePersistenceError(w, ctx, e)
 			return
 		}
 		_ = s.Store.CachePlatformMetadata(ctx, v, info)
@@ -501,7 +503,7 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request, owner string)
 		v.PreviewURL = &preview
 	}
 	completeSourcePresentation(&v)
-	if persisted, err := s.Store.Source(ctx, v.ID, owner); err == nil {
+	if persisted, err := s.databaseSource(ctx, v.ID, owner); err == nil {
 		v = persisted
 	}
 	writeJSON(w, 201, v)
@@ -666,26 +668,26 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request, owner string) {
 		}
 		return
 	}
-	if err = s.Store.AddSource(ctx, v); err != nil {
+	if err = s.databaseAddSource(ctx, v); err != nil {
 		keep = errors.Is(err, ErrSourceCommitUncertain)
 		if keep {
 			s.holdSourceReservation(owner)
 		}
-		internalError(w, err)
+		writeSourcePersistenceError(w, ctx, err)
 		return
 	}
 	keep = true
 	preview := "/api/v1/sources/" + v.ID + "/media"
 	v.PreviewURL = &preview
 	completeSourcePresentation(&v)
-	if persisted, err := s.Store.Source(ctx, v.ID, owner); err == nil {
+	if persisted, err := s.databaseSource(ctx, v.ID, owner); err == nil {
 		v = persisted
 	}
 	writeJSON(w, 201, v)
 }
 
 func (s *Server) source(w http.ResponseWriter, r *http.Request, owner string) {
-	v, err := s.Store.Source(r.Context(), r.PathValue("id"), owner)
+	v, err := s.databaseSource(r.Context(), r.PathValue("id"), owner)
 	if err != nil {
 		lookupError(w, err)
 		return
@@ -693,7 +695,7 @@ func (s *Server) source(w http.ResponseWriter, r *http.Request, owner string) {
 	writeJSON(w, 200, v)
 }
 func (s *Server) sourceMedia(w http.ResponseWriter, r *http.Request, owner string) {
-	v, err := s.Store.Source(r.Context(), r.PathValue("id"), owner)
+	v, err := s.databaseSource(r.Context(), r.PathValue("id"), owner)
 	if err != nil {
 		lookupError(w, err)
 		return
@@ -710,7 +712,7 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request, owner string)
 	if err := decodeJSON(w, r, &request); err != nil {
 		return
 	}
-	v, err := s.Store.Source(r.Context(), request.SourceID, owner)
+	v, err := s.databaseSource(r.Context(), request.SourceID, owner)
 	if err != nil {
 		lookupError(w, err)
 		return
@@ -728,7 +730,9 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request, owner string)
 		writeError(w, 429, "rate_limit", "Too many exports; wait a minute")
 		return
 	}
-	j, err := s.Store.CreateJobLimited(r.Context(), owner, request, key, 3, s.Config.MaxActiveJobs)
+	j, err := apiDatabase(r.Context(), func(ctx context.Context) (Job, error) {
+		return s.Store.CreateJobLimited(ctx, owner, request, key, 3, s.Config.MaxActiveJobs)
+	})
 	if errors.Is(err, ErrJobTooLarge) {
 		writeError(w, 413, "storage_limit", "This export exceeds the server storage budget; select fewer fragments")
 		return
@@ -745,7 +749,9 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request, owner string)
 }
 
 func (s *Server) job(w http.ResponseWriter, r *http.Request, owner string) {
-	j, err := s.Store.Job(r.Context(), r.PathValue("id"), owner)
+	j, err := apiDatabase(r.Context(), func(ctx context.Context) (Job, error) {
+		return s.Store.Job(ctx, r.PathValue("id"), owner)
+	})
 	if err != nil {
 		lookupError(w, err)
 		return
@@ -753,14 +759,20 @@ func (s *Server) job(w http.ResponseWriter, r *http.Request, owner string) {
 	writeJSON(w, 200, j)
 }
 func (s *Server) cancelJob(w http.ResponseWriter, r *http.Request, owner string) {
-	if err := s.Store.Cancel(r.Context(), r.PathValue("id"), owner); err != nil {
+	if err := apiDatabaseExec(r.Context(), func(ctx context.Context) error {
+		return s.Store.Cancel(ctx, r.PathValue("id"), owner)
+	}); err != nil {
 		lookupError(w, err)
 		return
 	}
 	s.job(w, r, owner)
 }
 func (s *Server) download(w http.ResponseWriter, r *http.Request, owner string) {
-	path, name, err := s.Store.ArtifactPath(r.Context(), r.PathValue("id"), owner)
+	type location struct{ path, name string }
+	result, err := apiDatabase(r.Context(), func(ctx context.Context) (location, error) {
+		path, name, err := s.Store.ArtifactPath(ctx, r.PathValue("id"), owner)
+		return location{path, name}, err
+	})
 	if err != nil {
 		lookupError(w, err)
 		return
@@ -768,7 +780,7 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request, owner string) 
 	// Large results can outlive the server's ordinary ten-minute response limit.
 	// ServeContent retains HTTP range/If-Range support for interrupted downloads.
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(12 * time.Hour))
-	serveFile(w, r, path, name, true)
+	serveFile(w, r, result.path, result.name, true)
 }
 
 func serveFile(w http.ResponseWriter, r *http.Request, path, name string, attachment bool) {
@@ -862,14 +874,25 @@ func lookupError(w http.ResponseWriter, err error) {
 	internalError(w, err)
 }
 func internalError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errDatabaseUnavailable) {
+		writeError(w, http.StatusServiceUnavailable, "database_unavailable", "Database is temporarily unavailable; try again")
+		return
+	}
+	if errors.Is(err, context.Canceled) {
+		return
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		writeError(w, http.StatusRequestTimeout, "request_timeout", "The request timed out; try again")
+		return
+	}
 	slog.Error("request failed", "error", fmt.Sprintf("%T", err))
 	writeError(w, 500, "internal", "The operation could not be completed; try again")
 }
 
 func (s *Server) deleteSource(w http.ResponseWriter, r *http.Request, owner string) {
-	ctx, cancel := context.WithTimeout(r.Context(), workerDatabaseTimeout)
-	defer cancel()
-	paths, err := s.Store.DeleteSource(ctx, r.PathValue("id"), owner)
+	paths, err := apiDatabase(r.Context(), func(ctx context.Context) ([]string, error) {
+		return s.Store.DeleteSource(ctx, r.PathValue("id"), owner)
+	})
 	if errors.Is(err, ErrSourceInUse) {
 		writeError(w, 409, "source_in_use", "Cancel or finish active exports before deleting this source")
 		return
@@ -878,6 +901,8 @@ func (s *Server) deleteSource(w http.ResponseWriter, r *http.Request, owner stri
 		lookupError(w, err)
 		return
 	}
+	ctx, cancel := context.WithTimeout(r.Context(), workerDatabaseTimeout)
+	defer cancel()
 	if err = s.Store.DrainStorageDeletes(ctx, s.Config, paths); err != nil {
 		slog.Warn("source files awaiting deletion", "error", err)
 	}
@@ -891,9 +916,9 @@ func (s *Server) sourceToken(owner string) string {
 }
 
 func (s *Server) listSources(w http.ResponseWriter, r *http.Request, owner string) {
-	ctx, cancel := context.WithTimeout(r.Context(), workerDatabaseTimeout)
-	defer cancel()
-	sources, err := s.Store.Sources(ctx, owner)
+	sources, err := apiDatabase(r.Context(), func(ctx context.Context) ([]Source, error) {
+		return s.Store.Sources(ctx, owner)
+	})
 	if err != nil {
 		lookupError(w, err)
 		return

@@ -68,7 +68,12 @@ jobs:
         with:
           go-version: '1.27.2'
           cache: true
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg python3
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg python3 python3-venv
+      - name: Install pinned OpenAPI contract tooling in an isolated environment
+        run: |
+          python3 -m venv /tmp/cutmy-contract-venv
+          /tmp/cutmy-contract-venv/bin/python -m pip install --disable-pip-version-check --no-cache-dir -r scripts/requirements-contract.txt
+          echo '/tmp/cutmy-contract-venv/bin' >> "$GITHUB_PATH"
       - name: Install pinned extractor for offline metadata regressions
         run: |
           curl --fail --show-error --location --proto '=https' --tlsv1.2 https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp -o /tmp/cutmy-yt-dlp

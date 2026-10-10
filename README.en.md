@@ -41,6 +41,12 @@ go build -trimpath -o cutmy ./cmd/cutmy
 
 Output is JSON with path, byte size and actual bounds. Existing outputs are never overwritten. Options include `--quality best|1080p|720p`, `--profile fast|compact`, `--threads 1..32` and `--timeout 30m`. Accurate mode re-encodes; copy begins at a preceding keyframe and preserves resolution. MP3 requires accurate mode. Local intervals can span up to 24 hours; default limits are 10 GiB per output and 30 minutes per export. The library can change byte/deadline limits. See the [user and library guide](docs/usage.md).
 
+Builds from the current source include public library error codes and optional
+`cutmy --json-errors clip …` diagnostics. The output directory must support hard
+links and synchronization to storage; these capabilities are checked before
+encoding. Local export success follows synchronization of the file and directory
+entry. See the [guide](docs/usage.md) for the contract and limits.
+
 ## Self-hosting
 
 Docker Compose runs PostgreSQL, API and worker with shared media storage. The example listens only on `127.0.0.1:8080` and deliberately uses lower budgets than the server defaults.

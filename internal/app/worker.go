@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
 )
 
 func RunWorker(ctx context.Context, c Config, s *Store) error {
@@ -26,6 +28,12 @@ func RunWorker(ctx context.Context, c Config, s *Store) error {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Join(c.DataDir, "work"), 0700); err != nil {
+		return err
+	}
+	if err := fsdurable.Preflight(filepath.Join(c.DataDir, "work"), filepath.Join(c.DataDir, "artifacts")); err != nil {
+		return err
+	}
+	if err := fsdurable.SyncDirectories(c.DataDir, filepath.Dir(c.DataDir)); err != nil {
 		return err
 	}
 	if err := recoverWorkerJobs(ctx, s); err != nil {
@@ -65,6 +73,10 @@ func RunWorker(ctx context.Context, c Config, s *Store) error {
 }
 
 func processJob(parent context.Context, c Config, s *Store, j Job, token string) {
+	processJobWithPublisher(parent, c, s, j, token, s.PublishArtifact)
+}
+
+func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, token string, publish func(context.Context, Job, string, string, Artifact) error) {
 	started := time.Now()
 	work := filepath.Join(c.DataDir, "work", j.ID+"-"+token)
 	defer func() {
@@ -229,14 +241,30 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 	defer mediaPermit.Release()
 
 	work = filepath.Join(c.DataDir, "work", j.ID+"-"+token)
-	if err = os.MkdirAll(work, 0700); err != nil {
+	for _, directory := range []string{work, filepath.Join(c.DataDir, "artifacts")} {
+		if err = os.MkdirAll(directory, 0700); err != nil {
+			if storagePressureError(err) {
+				if !waitForJobStorage(parent, c, s, &j, token, work) {
+					finishFailure("server_error", "Could not wait for storage")
+				}
+				return
+			}
+			finishFailure("server_error", "Could not initialize result storage")
+			return
+		}
+	}
+	if err = fsdurable.Preflight(work, filepath.Join(c.DataDir, "artifacts")); err != nil {
 		if storagePressureError(err) {
 			if !waitForJobStorage(parent, c, s, &j, token, work) {
 				finishFailure("server_error", "Could not wait for storage")
 			}
 			return
 		}
-		finishFailure("server_error", "Could not create a temporary workspace")
+		if ctx.Err() != nil || leaseUncertain.Load() {
+			finishFailure("job_timeout", "Processing stopped or exceeded the time limit")
+			return
+		}
+		finishFailure("server_error", "Storage does not permit reliable result publication")
 		return
 	}
 	for i := range j.Items {
@@ -408,7 +436,13 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 		}
 		id := newID("art")
 		path := filepath.Join(c.DataDir, "artifacts", id+"."+j.Request.Format)
-		if e = os.Rename(out, path); e != nil {
+		info, e := fsdurable.Publish(ctx, out, path)
+		if e != nil {
+			if errors.Is(e, fsdurable.ErrPublicationUncertain) {
+				// No result is registered before the filesystem barrier. Retain
+				// any uncertain final name for bounded orphan reconciliation.
+				slog.Warn("artifact file publication outcome unknown", "job_id", j.ID, "artifact_id", id)
+			}
 			if storagePressureError(e) {
 				if !waitForJobStorage(parent, c, s, &j, token, work) {
 					finishFailure("server_error", "Could not wait for storage")
@@ -427,29 +461,12 @@ func processJob(parent context.Context, c Config, s *Store, j Job, token string)
 			}
 			continue
 		}
-		info, e := os.Stat(path)
-		if e != nil {
-			_ = os.Remove(path)
-			if ctx.Err() != nil || leaseUncertain.Load() {
-				finishFailure("job_timeout", "Processing stopped or exceeded the time limit")
-				return
-			}
-			item.Status = "failed"
-			item.Message = "Could not verify the result"
-			item.ErrorCode = "server_error"
-			if !persist() {
-				return
-			}
-			continue
-		}
 		a := Artifact{ID: id, Filename: fmt.Sprintf("cut-%02d-%s.%s", i+1, item.ID[5:13], j.Request.Format), SizeBytes: info.Size(), DownloadURL: "/api/v1/artifacts/" + id + "/download", ActualStartMS: start, ActualEndMS: end}
 		previous := *item
 		item.Status = "succeeded"
 		item.ProgressMS = item.EndMS - item.StartMS
 		item.Artifact = &a
-		publishCtx, publishCancel := context.WithTimeout(ctx, workerDatabaseTimeout)
-		e = s.PublishArtifact(publishCtx, j, path, token, a)
-		publishCancel()
+		e = publish(ctx, j, path, token, a)
 		if e != nil {
 			var publication *ArtifactPublicationError
 			if errors.As(e, &publication) && publication.CommitUncertain {

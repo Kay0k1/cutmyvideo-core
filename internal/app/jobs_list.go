@@ -51,9 +51,9 @@ func (s *Store) Jobs(ctx context.Context, owner string) ([]jobSummary, error) {
 }
 
 func (s *Server) listJobs(w http.ResponseWriter, r *http.Request, owner string) {
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
-	jobs, err := s.Store.Jobs(ctx, owner)
+	jobs, err := apiDatabase(r.Context(), func(ctx context.Context) ([]jobSummary, error) {
+		return s.Store.Jobs(ctx, owner)
+	})
 	if err != nil {
 		internalError(w, err)
 		return

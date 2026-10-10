@@ -34,7 +34,7 @@ var errPreviewPending = errors.New("this preview is being prepared")
 func (s *Server) sourcePreview(w http.ResponseWriter, r *http.Request, owner string) {
 	ctx, cancel := context.WithTimeout(r.Context(), previewTimeout)
 	defer cancel()
-	v, err := s.Store.Source(ctx, r.PathValue("id"), owner)
+	v, err := s.databaseSource(ctx, r.PathValue("id"), owner)
 	if err != nil {
 		lookupError(w, err)
 		return
@@ -54,7 +54,9 @@ func (s *Server) sourcePreview(w http.ResponseWriter, r *http.Request, owner str
 	id := newID("preview")
 	var cached *os.File
 	for {
-		cached, err = s.Store.acquirePreview(ctx, s.Config, v, id, key, r.URL.Query().Get("priority") == "background")
+		cached, err = apiDatabase(ctx, func(dbCtx context.Context) (*os.File, error) {
+			return s.Store.acquirePreview(dbCtx, s.Config, v, id, key, r.URL.Query().Get("priority") == "background")
+		})
 		if !errors.Is(err, errPreviewPending) {
 			break
 		}
@@ -163,7 +165,9 @@ func (s *Server) sourcePreview(w http.ResponseWriter, r *http.Request, owner str
 	// A failed COMMIT can have succeeded remotely. Preserve the bounded lease
 	// until maintenance decides its state instead of deleting a published file.
 	retain = true
-	if err = s.Store.publishPreview(ctx, s.Config, v, id, file); err != nil {
+	if err = apiDatabaseExec(ctx, func(dbCtx context.Context) error {
+		return s.Store.publishPreview(dbCtx, s.Config, v, id, file)
+	}); err != nil {
 		internalError(w, err)
 		return
 	}

@@ -101,6 +101,36 @@ backups, OS and logs. Large/unknown video inputs occupy a worker's whole pool;
 concurrency does not promise throughput. Measure representative load before
 raising it.
 
+## Output publication guarantees
+
+New local exports and server artifacts synchronize completed file data and the
+required directory entries before reporting success or committing artifact/job
+metadata. Publication never replaces an existing output. Local export checks
+hard-link and synchronization support in the destination filesystem before
+encoding; use a filesystem that provides these operations reliably. The
+containing directory hierarchy must already be persistent. The application
+synchronizes its known output directories, not arbitrary ancestors created by
+the caller immediately before an export.
+
+If a final name was created but directory synchronization fails, local export
+returns `publication_uncertain` and retains that name. Inspect the destination
+before retrying; an existing result is never overwritten or unlinked to guess
+away an uncertain outcome.
+
+A database connection failure during COMMIT can leave its outcome unknown.
+Workers retain possibly committed files and recover from authoritative database
+state instead of deleting those results. API HTTP 503 similarly does not prove
+that a mutation was not applied; reuse an export's `Idempotency-Key` when replaying
+its submission. Do not turn transient diagnostics into automatic retries of
+arbitrary mutations.
+
+These guarantees depend on the filesystem and storage honoring synchronization;
+they do not replace backups or protect against failed hardware. The new
+synchronization contract covers local outputs and registered export artifacts,
+not source uploads, thumbnails or cached previews. Older artifacts are not
+retroactively verified or synchronized. Native macOS/Windows storage behavior
+still needs verification before equivalent platform support is claimed.
+
 ## Upgrade and recover
 
 Pin a release/image revision. Read [CHANGELOG](../CHANGELOG.md), record the old

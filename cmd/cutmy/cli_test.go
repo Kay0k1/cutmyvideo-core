@@ -86,4 +86,13 @@ func TestCLIInspectAndClipActualMedia(t *testing.T) {
 	if err := runArgs(args, &stdout, &stderr); err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Fatalf("existing output was not protected: %v", err)
 	}
+	stdout.Reset()
+	stderr.Reset()
+	if status := runCLI([]string{"--json-errors", "clip", "--input", input, "--output", filepath.Join(t.TempDir(), "silent.mp3"), "--end", "1"}, &stdout, &stderr); status != 1 || stdout.Len() != 0 {
+		t.Fatalf("missing-audio failure: %d %s %s", status, &stdout, &stderr)
+	}
+	var failure struct{ Error struct{ Code string } }
+	if err := json.Unmarshal(stderr.Bytes(), &failure); err != nil || failure.Error.Code != "audio_missing" {
+		t.Fatalf("actual missing-audio code: %s %v", &stderr, err)
+	}
 }

@@ -4,6 +4,15 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 
 ## Unreleased
 
+### Added
+- Public library error codes with preserved underlying causes, optional JSON CLI diagnostics, and documented exit codes.
+- Executable HTTP/OpenAPI contract checks, including byte-length limits, preview priority, download range errors and database unavailability.
+
+### Fixed
+- Bound API database stages, including connection-pool acquisition and SQL lock waits, without shortening media uploads, exports or downloads. Report unavailable database operations with a stable HTTP 503 diagnostic.
+- Synchronize completed output data and required directory entries before acknowledging local exports or registering server artifacts. Preserve exclusive output publication and uncertain database commit recovery.
+- Check required filesystem publication capabilities before local encoding rather than discovering unsupported hard links after processing.
+
 ## 0.2.1 - 2026-10-10
 
 This is the first published CLI binary release. It includes the open-source

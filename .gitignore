@@ -5,6 +5,7 @@
 /bin/
 /dist/
 __pycache__/
+/.venv-contract/
 /backups/
 *.log
 coverage.out

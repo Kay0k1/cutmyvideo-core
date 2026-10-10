@@ -65,7 +65,7 @@ func fetchThumbnail(ctx context.Context, c Config, id, raw string) (string, erro
 	return path, nil
 }
 func (s *Server) sourceThumbnail(w http.ResponseWriter, r *http.Request, owner string) {
-	v, err := s.Store.Source(r.Context(), r.PathValue("id"), owner)
+	v, err := s.databaseSource(r.Context(), r.PathValue("id"), owner)
 	if err != nil {
 		lookupError(w, err)
 		return

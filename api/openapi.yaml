@@ -2,7 +2,10 @@ openapi: 3.1.0
 info:
   title: cutmyvideo-core HTTP API
   version: 0.1.0
-  description: Manual media selection and asynchronous separate-fragment export.
+  description: >-
+    Manual media selection and asynchronous separate-fragment export. Clients
+    must ignore unknown response fields and accept unknown additive error codes
+    with a generic fallback. Human messages are not stable identifiers.
 servers:
   - url: /
 security:
@@ -30,11 +33,13 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [ok, limits]
                 properties:
                   ok: {type: boolean, const: true}
                   limits:
                     type: object
                     description: Public admission policy; contains no private configuration.
+                    required: [max_source_bytes, max_output_bytes, max_fetch_bytes, max_ranges, max_range_ms, max_job_ms]
                     properties:
                       max_source_bytes: {type: integer, minimum: 1}
                       max_output_bytes: {type: integer, minimum: 1, description: Maximum bytes in one exported file}
@@ -47,6 +52,7 @@ paths:
     get:
       description: The session owner's newest sources, at most 20. Empty sessions return an empty array.
       responses:
+        '503': {$ref: '#/components/responses/DatabaseUnavailable'}
         '200':
           description: Owner source list
           content:
@@ -73,10 +79,11 @@ paths:
               properties:
                 url:
                   type: string
-                  maxLength: 8192
-                  description: Public HTTPS media URL or recognized platform recording/clip link. Known platform hosts accept HTTP/schemeless pastes and normalize to HTTPS before fetching. YouTube watch, short-link, Shorts, recorded-live and embed URLs become a canonical watch link; access-essential parameters for other platforms are preserved. Actual live and collection links are rejected.
+                  x-maxBytes: 8192
+                  description: Maximum 8192 UTF-8 bytes, both before and after URL normalization. Public HTTPS media URL or recognized platform recording/clip link. Known platform hosts accept HTTP/schemeless pastes and normalize to HTTPS before fetching. YouTube watch, short-link, Shorts, recorded-live and embed URLs become a canonical watch link; access-essential parameters for other platforms are preserved. Actual live and collection links are rejected.
                   examples: ['https://www.youtube.com/watch?v=aqz-KE-bpKQ', 'youtu.be/aqz-KE-bpKQ', 'https://cdn.example.com/interview.mp4']
       responses:
+        '503': {$ref: '#/components/responses/DatabaseUnavailable'}
         '201': {$ref: '#/components/responses/Source'}
         '408': {$ref: '#/components/responses/Error'}
         default: {$ref: '#/components/responses/Error'}
@@ -93,6 +100,7 @@ paths:
               properties:
                 file: {type: string, format: binary}
       responses:
+        '503': {$ref: '#/components/responses/DatabaseUnavailable'}
         '201': {$ref: '#/components/responses/Source'}
         default: {$ref: '#/components/responses/Error'}
   /api/v1/sources/{id}:
@@ -100,11 +108,13 @@ paths:
     delete:
       description: Deletes the owner source, its terminal jobs and all outputs. Active queued/running/waiting_storage exports return 409 source_in_use. Physical deletion is retryable and remains charged until successful; clients must confirm destructive intent.
       responses:
+        '503': {$ref: '#/components/responses/DatabaseUnavailable'}
         '204': {description: Source and associated terminal resources removed}
         '409': {$ref: '#/components/responses/Error'}
         default: {$ref: '#/components/responses/Error'}
     get:
       responses:
+        '503': {$ref: '#/components/responses/DatabaseUnavailable'}
         '200': {$ref: '#/components/responses/Source'}
         default: {$ref: '#/components/responses/Error'}
   /api/v1/sources/{id}/media:
@@ -112,9 +122,12 @@ paths:
     get:
       description: Original staged bytes; requires owner session. Range supported. Private conditional caching with ETag requires owner and file revalidation on every request.
       responses:
+        '503': {$ref: '#/components/responses/DatabaseUnavailable'}
         '200': {description: Media bytes}
         '206': {description: Requested byte range}
         '304': {description: Authorized preview is unchanged; use the privately cached bytes}
+        '412': {description: A request precondition failed; empty response body}
+        '416': {$ref: '#/components/responses/RangeError'}
         default: {$ref: '#/components/responses/Error'}
   /api/v1/sources/{id}/preview:
     parameters: [{$ref: '#/components/parameters/ID'}]
@@ -125,30 +138,52 @@ paths:
           name: start_ms
           required: true
           schema: {type: integer, minimum: 0}
+        - in: query
+          name: priority
+          schema: {type: string, default: foreground, examples: [foreground, background]}
+          description: background prefetch yields rendering capacity to foreground requests; omission or any other value uses foreground priority.
       responses:
+        '503': {$ref: '#/components/responses/DatabaseUnavailable'}
         '200':
           description: Preview interval
           headers:
-            X-Preview-Cache: {schema: {type: string, enum: [hit, miss]}}
-            X-Preview-Start-MS: {schema: {type: integer}}
-            X-Preview-End-MS: {schema: {type: integer}}
+            X-Preview-Cache: {$ref: '#/components/headers/PreviewCache'}
+            X-Preview-Start-MS: {$ref: '#/components/headers/PreviewStart'}
+            X-Preview-End-MS: {$ref: '#/components/headers/PreviewEnd'}
           content:
             video/mp4:
               schema: {type: string, format: binary}
+        '206': {description: Requested preview byte range, headers: {X-Preview-Cache: {$ref: '#/components/headers/PreviewCache'}, X-Preview-Start-MS: {$ref: '#/components/headers/PreviewStart'}, X-Preview-End-MS: {$ref: '#/components/headers/PreviewEnd'}}}
+        '304': {description: Authorized preview is unchanged; empty response body, headers: {X-Preview-Cache: {$ref: '#/components/headers/PreviewCache'}, X-Preview-Start-MS: {$ref: '#/components/headers/PreviewStart'}, X-Preview-End-MS: {$ref: '#/components/headers/PreviewEnd'}}}
+        '412': {description: A request precondition failed; empty response body, headers: {X-Preview-Cache: {$ref: '#/components/headers/PreviewCache'}, X-Preview-Start-MS: {$ref: '#/components/headers/PreviewStart'}, X-Preview-End-MS: {$ref: '#/components/headers/PreviewEnd'}}}
+        '416':
+          description: Malformed or unsatisfiable preview Range; plain text
+          headers:
+            X-Preview-Cache: {$ref: '#/components/headers/PreviewCache'}
+            X-Preview-Start-MS: {$ref: '#/components/headers/PreviewStart'}
+            X-Preview-End-MS: {$ref: '#/components/headers/PreviewEnd'}
+            Content-Range: {schema: {type: string, pattern: '^bytes \*/[0-9]+$'}}
+          content:
+            text/plain:
+              schema: {type: string}
         default: {$ref: '#/components/responses/Error'}
   /api/v1/sources/{id}/thumbnail:
     parameters: [{$ref: '#/components/parameters/ID'}]
     get:
       description: Owner-protected, bounded and inspected PNG/JPEG thumbnail. Raw CDN URLs are never returned to clients. Private conditional caching with ETag requires owner and file revalidation on every request.
       responses:
+        '503': {$ref: '#/components/responses/DatabaseUnavailable'}
         '200': {description: Thumbnail image}
         '206': {description: Requested byte range}
         '304': {description: Authorized thumbnail is unchanged; use the privately cached image}
+        '412': {description: A request precondition failed; empty response body}
+        '416': {$ref: '#/components/responses/RangeError'}
         default: {$ref: '#/components/responses/Error'}
   /api/v1/jobs:
     get:
       description: Up to 30 owner-only exports, active jobs first and newest first within each group. Contains only retained files with private download URLs.
       responses:
+        '503': {$ref: '#/components/responses/DatabaseUnavailable'}
         '200':
           description: Export history
           content:
@@ -167,14 +202,15 @@ paths:
       parameters:
         - in: header
           name: Idempotency-Key
-          schema: {type: string, maxLength: 128}
-          description: Reusing the key for this session returns the original job.
+          schema: {type: string, x-maxBytes: 128}
+          description: Maximum 128 UTF-8 bytes. Reusing the key for this session returns the original job. After database_unavailable the mutation outcome can be unknown; retry this submission with the same key rather than a new key.
       requestBody:
         required: true
         content:
           application/json:
             schema: {$ref: '#/components/schemas/ExportRequest'}
       responses:
+        '503': {$ref: '#/components/responses/DatabaseUnavailable'}
         '202': {$ref: '#/components/responses/Job'}
         '408': {$ref: '#/components/responses/Error'}
         default: {$ref: '#/components/responses/Error'}
@@ -182,6 +218,7 @@ paths:
     parameters: [{$ref: '#/components/parameters/ID'}]
     get:
       responses:
+        '503': {$ref: '#/components/responses/DatabaseUnavailable'}
         '200': {$ref: '#/components/responses/Job'}
         default: {$ref: '#/components/responses/Error'}
   /api/v1/jobs/{id}/cancel:
@@ -189,6 +226,7 @@ paths:
     post:
       description: Queued and waiting_storage cancellation is immediate; running cancellation settles asynchronously.
       responses:
+        '503': {$ref: '#/components/responses/DatabaseUnavailable'}
         '200': {$ref: '#/components/responses/Job'}
         default: {$ref: '#/components/responses/Error'}
   /api/v1/artifacts/{id}/download:
@@ -196,8 +234,12 @@ paths:
     get:
       description: Owner-authorized attachment. Range supported.
       responses:
+        '503': {$ref: '#/components/responses/DatabaseUnavailable'}
         '200': {description: Exported file}
         '206': {description: Requested byte range}
+        '304': {description: Authorized file is unchanged; empty response body}
+        '412': {description: A request precondition failed; empty response body}
+        '416': {$ref: '#/components/responses/RangeError'}
         default: {$ref: '#/components/responses/Error'}
 components:
   securitySchemes:
@@ -205,6 +247,16 @@ components:
       type: apiKey
       in: cookie
       name: cutmy_session
+  headers:
+    PreviewCache:
+      x-required: true
+      schema: {type: string, enum: [hit, miss]}
+    PreviewStart:
+      x-required: true
+      schema: {type: integer}
+    PreviewEnd:
+      x-required: true
+      schema: {type: integer}
   parameters:
     ID:
       in: path
@@ -212,6 +264,27 @@ components:
       required: true
       schema: {type: string}
   responses:
+    RangeError:
+      description: Malformed or unsatisfiable Range. Plain text comes from HTTP byte-range serving; clients must not parse it as the JSON error envelope.
+      headers:
+        Content-Range:
+          description: Included for unsatisfiable ranges as bytes */size; malformed ranges may omit it.
+          schema: {type: string, pattern: '^bytes \*/[0-9]+$'}
+      content:
+        text/plain:
+          schema: {type: string}
+    DatabaseUnavailable:
+      description: A bounded database operation failed or exceeded its budget. Mutations may already have committed; retry job submission with the same Idempotency-Key. No blanket retry guarantee is given for other mutations.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - {$ref: '#/components/schemas/Error'}
+              - type: object
+                properties:
+                  error:
+                    properties:
+                      code: {const: database_unavailable}
     Error:
       description: Structured error
       content:
@@ -243,7 +316,7 @@ components:
       required: [id, title, duration_ms, kind, provider, provider_video_id, source_url, preview_kind, preview_url, embed_url, thumbnail_url, expires_at, retention_blocked]
       properties:
         id: {type: string}
-        expires_at: {type: [string, 'null'], format: date-time, description: RFC3339 source retention target, or null while linked jobs pin the source.}
+        expires_at: {type: [string, 'null'], format: date-time, description: 'RFC3339 source retention target, or null while linked jobs pin the source.'}
         retention_blocked: {type: boolean, description: A retained job currently pins this source.}
         title: {type: string}
         duration_ms: {type: integer, minimum: 1}
@@ -271,7 +344,7 @@ components:
       properties:
         start_ms: {type: integer, minimum: 0}
         end_ms: {type: integer, minimum: 1}
-        label: {type: string, description: Optional label; maximum 200 UTF-8 bytes}
+        label: {type: string, x-maxBytes: 200, x-trimSpace: true, description: Optional label; maximum 200 UTF-8 bytes after trimming Unicode whitespace}
     ExportRequest:
       type: object
       additionalProperties: false
@@ -290,7 +363,7 @@ components:
       required: [id, filename, size_bytes, download_url, actual_start_ms, actual_end_ms, expires_at]
       properties:
         id: {type: string}
-        expires_at: {type: [string, 'null'], format: date-time, description: Immutable result retention deadline, or null while an active job pins the result.}
+        expires_at: {type: [string, 'null'], format: date-time, description: 'Immutable result retention deadline, or null while an active job pins the result.'}
         filename: {type: string}
         size_bytes: {type: integer}
         download_url: {type: string}
@@ -313,7 +386,7 @@ components:
         error_code:
           type: string
           description: Optional fixed public diagnostic on failed/cancelled items. Legacy items can omit it. Localize known codes and use a safe generic fallback for unknown ones; never display raw subprocess output.
-          enum: [audio_missing, output_limit, platform_access_required, platform_unavailable, unsupported_stream, live_not_supported, unsupported_collection, media_upstream_denied, media_upstream_unavailable, media_network_timeout, media_network_reset, copy_incompatible, copy_quality_unsupported, media_processing_failed, source_expired, source_changed, source_timeline_changed, source_timeout, job_timeout, storage_full, storage_timeout, storage_limit, server_error, cancelled]
+          examples: [audio_missing, output_limit, platform_access_required, platform_unavailable, unsupported_stream, live_not_supported, unsupported_collection, media_upstream_denied, media_upstream_unavailable, media_network_timeout, media_network_reset, copy_incompatible, copy_quality_unsupported, media_processing_failed, source_expired, source_changed, source_timeline_changed, source_timeout, job_timeout, storage_full, storage_timeout, storage_limit, server_error, cancelled]
         artifact:
           oneOf:
             - {$ref: '#/components/schemas/Artifact'}

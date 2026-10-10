@@ -60,7 +60,7 @@ func TestEngineInspectAndExportActualMedia(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err = e.Export(context.Background(), input, output, Range{StartMS: 0, EndMS: 1000}, Options{}); !errors.Is(err, ErrOutputExists) {
+			if _, err = e.Export(context.Background(), input, output, Range{StartMS: 0, EndMS: 1000}, Options{}); !errors.Is(err, ErrOutputExists) || !errors.Is(err, os.ErrExist) || CodeOf(err) != CodeOutputExists {
 				t.Fatal("existing output not reported correctly", err)
 			}
 			unchanged, _ := os.ReadFile(output)
@@ -98,8 +98,8 @@ func TestEngineInvalidLimitsAndCancellationLeaveNoOutput(t *testing.T) {
 	if err != nil || len(files) != 0 {
 		t.Fatal("failed operation leaked files", files, err)
 	}
-	if _, err := New(Config{MaxOutputBytes: 1024}).Export(context.Background(), input, output, Range{EndMS: 3000}, Options{}); err == nil {
-		t.Fatal("output bound ignored")
+	if _, err := New(Config{MaxOutputBytes: 1024}).Export(context.Background(), input, output, Range{EndMS: 3000}, Options{}); CodeOf(err) != CodeOutputLimit {
+		t.Fatal("output bound ignored or misclassified", err)
 	}
 	files, err = os.ReadDir(filepath.Dir(output))
 	if err != nil || len(files) != 0 {
