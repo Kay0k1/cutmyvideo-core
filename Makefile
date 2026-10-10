@@ -40,6 +40,7 @@ contract-check: api-check
 	CUTMY_REQUIRE_CONTRACT=1 CUTMY_CONTRACT_PYTHON=$(PYTHON) $(GO) test -count=1 ./internal/app -run '^TestHTTPPublicContract$$'
 
 recovery-check:
+	$(PYTHON) -m unittest discover -s scripts -p recovery_test.py
 	$(PYTHON) scripts/recovery-acceptance.py --go "$(GO)"
 
 storage-capacity-check:
