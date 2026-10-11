@@ -76,8 +76,10 @@ def successful_report():
     for label, baseline, container in (('baseline', True, 'a'), ('current', False, 'b'), ('restored', False, 'c')):
         report[label + '_tcp_readiness'] = {'container_id': container * 64,
             'source_commit': a.UPGRADE_FROM if baseline else current, 'tcp_sql_verified': True,
-            'healthcheck': a.SOCKET_HEALTHCHECK_A if baseline else a.TCP_HEALTHCHECK,
-            'baseline_socket_healthcheck_workaround': baseline, 'attempts': [{'exit': 0, 'tcp_sql_ready': True}]}
+            'healthcheck': a.TCP_HEALTHCHECK, 'attempts': [{'exit': 0, 'tcp_sql_ready': True}]}
+    report['groups']['identity']['checks']['application_sources_unchanged']['evidence'] = {
+        'reference_commit': a.APPLICATION_REFERENCE, 'sha256': a.APPLICATION_FILES_SHA256,
+        'schema_changing_upgrade': False}
     return report
 
 
@@ -141,13 +143,22 @@ class ReceiptControls(unittest.TestCase):
         a.validate_report(report)
 
     def test_socket_only_current_health_missing_tcp_witness_or_helper_stage_cannot_pass(self):
-        for mutation in (lambda r: r['current_tcp_readiness'].update(healthcheck=a.SOCKET_HEALTHCHECK_A),
+        for mutation in (lambda r: r['current_tcp_readiness'].update(healthcheck=['CMD-SHELL', 'pg_isready -U cutmy_admin -d cutmy']),
                          lambda r: r.pop('restored_tcp_readiness'),
-                         lambda r: r['baseline_tcp_readiness'].update(baseline_socket_healthcheck_workaround=False),
+                         lambda r: r['baseline_tcp_readiness'].update(healthcheck=['CMD-SHELL', 'pg_isready -U cutmy_admin -d cutmy']),
                          lambda r: r['current_tcp_readiness']['attempts'][-1].update(tcp_sql_ready=False),
                          lambda r: r['groups']['container_constraints']['checks'].pop('owned_helper_partial_create_cleanup')):
             report = successful_report(); mutation(report)
             with self.assertRaises(RuntimeError): a.validate_report(report)
+
+    def test_failed_policy_snapshot_or_wrong_application_reference_cannot_be_pass(self):
+        for mutation in (lambda r: r.update(failed_policy_snapshots=[{'status': 'retained'}]),
+                         lambda r: r['groups']['identity']['checks']['application_sources_unchanged']['evidence'].update(reference_commit='9' * 40),
+                         lambda r: r['groups']['identity']['checks']['application_sources_unchanged']['evidence'].update(sha256='9' * 64),
+                         lambda r: r['groups']['identity']['checks']['application_sources_unchanged']['evidence'].update(schema_changing_upgrade=True)):
+            with self.subTest(mutation=mutation):
+                report = successful_report(); mutation(report)
+                with self.assertRaises(RuntimeError): a.validate_report(report)
 
     def test_routed_receiver_counters_and_source_identities_are_mandatory(self):
         mutations = [lambda r: r.pop('forwarded_receiver'),
@@ -755,6 +766,91 @@ class RoutedReceiverControls(unittest.TestCase):
 
 
 class HostAndEvidenceControls(unittest.TestCase):
+    @staticmethod
+    def policy_fixture(directory):
+        obj = a.Acceptance.__new__(a.Acceptance)
+        obj.output = Path(directory)
+        obj.report, obj.commands, obj.http = {'groups': {}, 'errors': []}, [], []
+        obj.secrets = ['super_private_password']
+        project = {'state': Path('/owned/old-state'), 'config_file': Path('/owned/private.env'),
+                   'config': {'CUTMY_PROJECT': 'cutmy_owned'}}
+        return obj, project
+
+    def test_failed_apply_and_remove_save_bounded_redacted_filter_before_exit_assertion(self):
+        for action in ('apply', 'remove'):
+            with self.subTest(action=action), tempfile.TemporaryDirectory() as directory:
+                obj, project = self.policy_fixture(directory)
+                raw = b'*filter\n:INPUT ACCEPT [0:0]\n# super_private_password\nCOMMIT\n'
+                obj.run = Mock(side_effect=[(1, b'', b'fixed refusal'), (0, raw, b'')])
+                original_require = a.require
+                def require_after_snapshot(value, message):
+                    if message == 'bounded command returned unexpected exit':
+                        self.assertTrue((obj.output / 'acceptance-report.json').is_file())
+                        self.assertEqual(obj.report['failed_policy_snapshots'][0]['status'], 'retained')
+                    return original_require(value, message)
+                with patch.object(a, 'require', side_effect=require_after_snapshot), \
+                        self.assertRaisesRegex(RuntimeError, 'unexpected exit'):
+                    obj.policy(project, action)
+                snapshot = obj.report['failed_policy_snapshots'][0]
+                saved = json.loads((obj.output / 'acceptance-report.json').read_bytes())
+                self.assertEqual(saved['failed_policy_snapshots'], [snapshot])
+                self.assertEqual(snapshot['policy_command_exit'], 1)
+                self.assertEqual(snapshot['action'], action)
+                self.assertEqual(snapshot['status'], 'retained')
+                retained = (obj.output / snapshot['path']).read_bytes()
+                self.assertNotIn(b'super_private_password', retained)
+                self.assertIn(b'[REDACTED]', retained)
+                self.assertEqual(snapshot['sha256'], a.digest(retained))
+                self.assertEqual(snapshot['bytes'], len(retained))
+                self.assertEqual(obj.run.call_args_list[0].kwargs, {'expected': None})
+                self.assertEqual(obj.run.call_args_list[1].args[0], ['iptables-save', '-t', 'filter'])
+                self.assertEqual(obj.run.call_args_list[1].kwargs, {'timeout': 10, 'expected': None})
+
+    def test_timed_out_policy_retains_snapshot_without_replacing_original_exception(self):
+        with tempfile.TemporaryDirectory() as directory:
+            obj, project = self.policy_fixture(directory)
+            original = RuntimeError('bounded command timed out')
+            obj.run = Mock(side_effect=[original, (0, b'*filter\nCOMMIT\n', b'')])
+            with self.assertRaises(RuntimeError) as raised:
+                obj.policy(project, 'apply')
+            self.assertIs(raised.exception, original)
+            snapshot = obj.report['failed_policy_snapshots'][0]
+            self.assertIsNone(snapshot['policy_command_exit'])
+            self.assertEqual(snapshot['status'], 'retained')
+            self.assertTrue((obj.output / snapshot['path']).is_file())
+
+    def test_failed_filter_capture_keeps_original_failure_and_fixed_unavailable_reason(self):
+        failures = [(2, b'', b'private filter error'), RuntimeError('super_private_password /private/path'),
+                    (0, b'x' * (a.POLICY_FILTER_LIMIT + 1), b''), (0, 'invalid bytes output', b''),
+                    (0, b'\xff' * (a.POLICY_FILTER_LIMIT // 2), b'')]
+        reasons = ['filter_snapshot_command_failed', 'filter_snapshot_unavailable',
+                   'filter_snapshot_size_exceeded', 'filter_snapshot_invalid_output', 'filter_snapshot_size_exceeded']
+        for failure, reason in zip(failures, reasons):
+            with self.subTest(reason=reason), tempfile.TemporaryDirectory() as directory:
+                obj, project = self.policy_fixture(directory)
+                original = RuntimeError('bounded command timed out')
+                obj.run = Mock(side_effect=[original, failure])
+                with self.assertRaises(RuntimeError) as raised:
+                    obj.policy(project, 'remove')
+                self.assertIs(raised.exception, original)
+                snapshot = obj.report['failed_policy_snapshots'][0]
+                self.assertEqual(snapshot['status'], 'unavailable')
+                self.assertEqual(snapshot['reason'], reason)
+                self.assertNotIn('sha256', snapshot)
+                self.assertEqual(list(obj.output.glob('filter-failed-policy-*')), [])
+                saved = (obj.output / 'acceptance-report.json').read_bytes()
+                self.assertNotIn(b'super_private_password', saved)
+                self.assertNotIn(b'/private/path', saved)
+
+    def test_successful_policy_keeps_stdout_and_does_not_capture_failure_filter(self):
+        with tempfile.TemporaryDirectory() as directory:
+            obj, project = self.policy_fixture(directory)
+            obj.run = Mock(return_value=(0, b'Owned policy complete\n', b''))
+            self.assertEqual(obj.policy(project, 'apply'), b'Owned policy complete\n')
+            self.assertNotIn('failed_policy_snapshots', obj.report)
+            self.assertEqual(obj.run.call_count, 1)
+            self.assertEqual(list(obj.output.iterdir()), [])
+
     def test_pre_policy_filter_snapshot_follows_bridge_setup_and_precedes_failing_probe(self):
         with tempfile.TemporaryDirectory() as tmp:
             obj = a.Acceptance.__new__(a.Acceptance)
@@ -954,23 +1050,31 @@ class HostAndEvidenceControls(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'inventory is not a list'):
             a.network_subnets({})
 
-    def test_socket_ready_baseline_waits_for_actual_tcp_and_current_definition_is_required(self):
-        obj = a.Acceptance.__new__(a.Acceptance)
-        obj.report = successful_report()
-        pg = {'Id': 'a' * 64, 'Config': {'Healthcheck': {'Test': a.SOCKET_HEALTHCHECK_A}},
-              'State': {'Running': True, 'Health': {'Status': 'healthy'}}}
-        obj.container = Mock(return_value=pg)
-        obj.sql = Mock(side_effect=[(2, b'', b'connection refused'), (0, b'1\n', b'')])
-        def wait(callback, timeout):
-            self.assertFalse(callback(), 'socket-ready temporary init server must not satisfy TCP barrier')
-            self.assertTrue(callback()); self.assertEqual(timeout, 120)
-        obj.wait = wait
-        proof = obj.pg_tcp_ready({}, baseline=True)
-        self.assertEqual(len(proof['attempts']), 2)
-        self.assertTrue(proof['baseline_socket_healthcheck_workaround']); self.assertFalse(proof['baseline_defect_fixed'])
-        obj.sql.reset_mock()
-        with self.assertRaisesRegex(RuntimeError, 'lacks exact TCP'): obj.pg_tcp_ready({})
-        obj.sql.assert_not_called()
+    def test_all_images_require_exact_tcp_healthcheck_and_real_sql_barrier(self):
+        for baseline in (True, False):
+            with self.subTest(baseline=baseline):
+                obj = a.Acceptance.__new__(a.Acceptance)
+                obj.report = successful_report()
+                pg = {'Id': 'a' * 64, 'Config': {'Healthcheck': {'Test': a.TCP_HEALTHCHECK}},
+                      'State': {'Running': True, 'Health': {'Status': 'healthy'}}}
+                obj.container = Mock(return_value=pg)
+                obj.sql = Mock(side_effect=[(2, b'', b'connection refused'), (0, b'1\n', b'')])
+                def wait(callback, timeout):
+                    self.assertFalse(callback(), 'health must not replace the real TCP SQL barrier')
+                    self.assertTrue(callback()); self.assertEqual(timeout, 120)
+                obj.wait = wait
+                proof = obj.pg_tcp_ready({}, baseline=baseline)
+                self.assertEqual(len(proof['attempts']), 2)
+                self.assertTrue(proof['tcp_sql_verified'])
+                self.assertEqual(proof['healthcheck'], a.TCP_HEALTHCHECK)
+                self.assertEqual(proof['source_commit'], a.UPGRADE_FROM if baseline else '1' * 40)
+                self.assertNotIn('baseline_socket_healthcheck_workaround', proof)
+                self.assertNotIn('baseline_defect_fixed', proof)
+                pg['Config']['Healthcheck']['Test'] = ['CMD-SHELL', 'pg_isready -U cutmy_admin -d cutmy']
+                obj.sql.reset_mock()
+                with self.assertRaisesRegex(RuntimeError, 'lacks exact TCP'):
+                    obj.pg_tcp_ready({}, baseline=baseline)
+                obj.sql.assert_not_called()
 
     def test_partial_helper_witness_uses_actual_profile_cleanup_and_requires_absence(self):
         obj = a.Acceptance.__new__(a.Acceptance)

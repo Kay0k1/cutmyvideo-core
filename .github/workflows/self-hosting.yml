@@ -60,7 +60,7 @@ jobs:
             TMPDIR="$RUNNER_TEMP/cutmy-public-private" PATH="$PATH" \
             "$RUNNER_TEMP/cutmy-public-venv/bin/python" -B scripts/self-hosting-acceptance.py \
             --allow-disposable-host --revision "$GITHUB_SHA" --pr-head "$ACCEPTANCE_PR_HEAD" \
-            --upgrade-from e59413c017d501d8c2ba3829fe4dd76267d127b2 \
+            --upgrade-from 0f93cd654a998be7740ba1d6fee4a44a6f7b3464 \
             --temp-directory "$RUNNER_TEMP/cutmy-public-private" \
             --output "$RUNNER_TEMP/public-self-hosting-evidence"
       - name: Require all seven completed groups and independent cleanup

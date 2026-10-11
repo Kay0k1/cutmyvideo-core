@@ -39,8 +39,11 @@ from urllib.parse import urlsplit
 
 sys.dont_write_bytecode = True
 REPO = Path(__file__).resolve().parents[1]
-UPGRADE_FROM = 'e59413c017d501d8c2ba3829fe4dd76267d127b2'
-UPGRADE_TREE = 'f68f158099b0273e8c02046d4a8de15b7e30f426'
+UPGRADE_FROM = '0f93cd654a998be7740ba1d6fee4a44a6f7b3464'
+UPGRADE_TREE = '58a431cf209a36b8acb0052ca77653b480814d48'
+APPLICATION_REFERENCE = '06bb74bca90a79fbf399c01cf71f7f44af186431'
+APPLICATION_FILES_SHA256 = 'a1aa7b968c06eaeb075d2cd73f8afbf309a1bc12121d1a3e598ba2561e785f90'
+POLICY_FILTER_LIMIT = 4 * 1024 * 1024
 GROUPS = {
     'identity': ('immutable_old_image', 'dirty_and_wrong_revision_refused', 'immutable_new_image',
                  'application_sources_unchanged', 'changed_state_and_remote_engine_refused'),
@@ -61,7 +64,6 @@ GROUPS = {
 SHA = re.compile(r'[0-9a-f]{40}\Z')
 HASH = re.compile(r'[0-9a-f]{64}\Z')
 TCP_HEALTHCHECK = ['CMD', 'pg_isready', '-h', '127.0.0.1', '-p', '5432', '-U', 'cutmy_admin', '-d', 'cutmy']
-SOCKET_HEALTHCHECK_A = ['CMD-SHELL', 'pg_isready -U cutmy_admin -d cutmy']
 
 
 def require(value, message):
@@ -262,17 +264,22 @@ def validate_report(report, evidence_directory=None):
     validate_forwarded_evidence(report)
     if evidence_directory is not None:
         validate_packet_snapshots(report, evidence_directory)
-    require(report.get('runtime_application_sources_unchanged') is True,
-            'A/B application-source scope missing')
+    application = report['groups']['identity']['checks']['application_sources_unchanged'].get('evidence', {})
+    require(report.get('runtime_application_sources_unchanged') is True
+            and application.get('reference_commit') == APPLICATION_REFERENCE
+            and application.get('sha256') == APPLICATION_FILES_SHA256
+            and application.get('schema_changing_upgrade') is False,
+            'A1/B application-source reference scope missing')
+    require(report.get('failed_policy_snapshots', []) == [],
+            'failed policy operation cannot be a successful receipt')
     for label, baseline in (('baseline', True), ('current', False), ('restored', False)):
         ready = report.get(label + '_tcp_readiness', {})
         require(re.fullmatch(r'[0-9a-f]{64}', ready.get('container_id', ''))
                 and ready.get('source_commit') == images['old' if baseline else 'current']['source_commit']
                 and ready.get('tcp_sql_verified') is True
-                and ready.get('healthcheck') == (SOCKET_HEALTHCHECK_A if baseline else TCP_HEALTHCHECK)
-                and ready.get('baseline_socket_healthcheck_workaround') is baseline
+                and ready.get('healthcheck') == TCP_HEALTHCHECK
                 and ready.get('attempts') and ready['attempts'][-1].get('tcp_sql_ready') is True,
-                'actual PostgreSQL TCP readiness/workaround evidence missing')
+                'actual PostgreSQL TCP readiness evidence missing')
 
 
 def owned_resource(value, *, project=None, token=None, component=None):
@@ -712,9 +719,54 @@ class Acceptance:
                         timeout=1900 if action in ('build', 'backup', 'restore') else 240, expected=expected,
                         terminate_grace=75)
 
+    def failed_policy_snapshot(self, project, action, exit_code):
+        # Snapshot only filter rules, never environment/configuration. A failed
+        # diagnostic must not replace the original policy failure or timeout.
+        snapshots = self.report.setdefault('failed_policy_snapshots', [])
+        index = len(snapshots)
+        record = {'action': action, 'project': project['config']['CUTMY_PROJECT'],
+                  'policy_command_exit': exit_code, 'status': 'unavailable'}
+        snapshots.append(record)
+        try:
+            code, data, _ = self.run(['iptables-save', '-t', 'filter'], timeout=10, expected=None)
+            if code != 0:
+                record['reason'] = 'filter_snapshot_command_failed'
+            elif not isinstance(data, bytes):
+                record['reason'] = 'filter_snapshot_invalid_output'
+            elif len(data) > POLICY_FILTER_LIMIT:
+                record['reason'] = 'filter_snapshot_size_exceeded'
+            else:
+                sanitized = redact(data, self.secrets).encode()
+                if len(sanitized) > POLICY_FILTER_LIMIT:
+                    record['reason'] = 'filter_snapshot_size_exceeded'
+                else:
+                    name = 'filter-failed-policy-' + str(index) + '-' + action + '.txt'
+                    (self.output / name).write_bytes(sanitized)
+                    record.update(status='retained', path=name, bytes=len(sanitized),
+                                  sha256=digest(sanitized), redacted=True)
+            self.save()
+        except Exception:
+            for key in ('path', 'bytes', 'sha256', 'redacted'):
+                record.pop(key, None)
+            record.update(status='unavailable', reason='filter_snapshot_unavailable')
+            with contextlib.suppress(Exception):
+                self.save()
+
     def policy(self, project, action, expected=0):
-        return self.run([sys.executable, '-B', project['state'] / 'source/deploy/egress-policy.py',
-                         '--config', project['config_file'], action], expected=expected)
+        try:
+            result = self.run([sys.executable, '-B', project['state'] / 'source/deploy/egress-policy.py',
+                               '--config', project['config_file'], action], expected=None)
+        except Exception:
+            if action in ('apply', 'remove'):
+                self.failed_policy_snapshot(project, action, None)
+            raise
+        code, stdout, _ = result
+        if code != 0 and action in ('apply', 'remove'):
+            self.failed_policy_snapshot(project, action, code)
+        if expected is None:
+            return result
+        require(code == expected, 'bounded command returned unexpected exit')
+        return stdout
 
     def compose(self, project):
         return ['docker', 'compose', '--project-name', project['config']['CUTMY_PROJECT'],
@@ -866,10 +918,13 @@ class Acceptance:
         self.check('immutable_new_image', self.report['images']['current'])
         app = lambda s: {k: v for k, v in s['files'].items()
                          if k.startswith(('cmd/', 'internal/', 'pkg/')) or k in ('go.mod', 'go.sum')}
-        require(app(self.old_source) == app(self.current_source), 'A/B application sources unexpectedly changed')
+        require(app(self.old_source) == app(self.current_source)
+                and digest(canonical(app(self.old_source))) == APPLICATION_FILES_SHA256,
+                'A1/B application sources differ from the immutable reference')
         self.report['runtime_application_sources_unchanged'] = True
         self.check('application_sources_unchanged', {'files': len(app(self.old_source)),
-                    'sha256': digest(canonical(app(self.old_source))), 'schema_changing_upgrade': False})
+                    'sha256': digest(canonical(app(self.old_source))), 'reference_commit': APPLICATION_REFERENCE,
+                    'schema_changing_upgrade': False})
         saved = self.current['state'] / 'source/README.md'
         original = saved.read_bytes()
         try:
@@ -1081,12 +1136,8 @@ class Acceptance:
     def pg_tcp_ready(self, project, *, baseline=False):
         pg = self.container(project, 'postgres')
         test = pg['Config'].get('Healthcheck', {}).get('Test')
-        if baseline:
-            require(test == SOCKET_HEALTHCHECK_A,
-                    'immutable A socket-healthcheck definition changed')
-        else:
-            require(test == TCP_HEALTHCHECK,
-                    'current PostgreSQL lacks exact TCP healthcheck')
+        require(test == TCP_HEALTHCHECK,
+                'PostgreSQL lacks exact TCP healthcheck')
         attempts = []
         def ready():
             code, stdout, _ = self.sql(project, 'SELECT 1', expected=None, timeout=8)
@@ -1097,9 +1148,7 @@ class Acceptance:
         require(observed['Id'] == pg['Id'] and observed['State']['Running']
                 and observed['State'].get('Health', {}).get('Status') == 'healthy', 'PG readiness identity/health changed')
         return {'container_id': pg['Id'], 'healthcheck': test, 'tcp_sql_verified': True, 'attempts': attempts,
-                'source_commit': self.report['images']['old' if baseline else 'current']['source_commit'],
-                'baseline_socket_healthcheck_workaround': baseline,
-                'baseline_defect_fixed': False if baseline else None}
+                'source_commit': self.report['images']['old' if baseline else 'current']['source_commit']}
 
     def setup_witnesses(self):
         self.host_witness = Witness(('0.0.0.0', 0)); self.witnesses.append(self.host_witness)
@@ -1250,8 +1299,8 @@ class Acceptance:
         # Only database and bounded probe commands run before installation;
         # no API/worker media service starts ahead of the policy.
         self.run(self.compose(self.old) + ['up', '-d', '--wait', 'postgres'], timeout=150)
-        # Immutable A's socket-only pg_isready can observe the temporary init
-        # server. This disclosed harness barrier waits for final TCP explicitly.
+        # A1 and current images use the final-listener TCP healthcheck. Verify
+        # a real SQL round trip separately before any namespace witnesses.
         self.report['baseline_tcp_readiness'] = self.pg_tcp_ready(self.old, baseline=True)
         for role in ('api', 'worker'):
             value = self.container(self.old, role)

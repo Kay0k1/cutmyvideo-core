@@ -1,8 +1,9 @@
 # Public self-hosting profile
 
 This **prepared, unvalidated current-source profile** supplies one API and one
-worker on a Linux amd64 host. Its container acceptance run has not happened yet;
-the Python controls test configuration and refusal paths, not an installation.
+worker on a Linux amd64 host. Hosted container acceptance has not yet completed
+all seven required groups with verified cleanup. The Python controls test
+configuration and refusal paths, not an installation.
 Use the [local trial](operations.md) for development. Native CLI archives remain
 supported by their separate five-platform distribution checks.
 
@@ -41,7 +42,11 @@ review its inert `plan` before any explicit `apply`. It never flushes host chain
 Existing chains with changed rules are refused instead of overwritten. A second
 fresh-restore project may coexist: only exact generated hooks on distinct project
 bridges are allowed ahead of this project's hooks. Broad, negated, wildcard or
-shadowing dispatch rules remain refusal conditions.
+shadowing dispatch rules remain refusal conditions. The complete conntrack
+`RETURN` rule accepts both iptables serialization orders for the exact two-state
+set `ESTABLISHED,RELATED`; added/duplicate states, negation, flags, other targets
+and changed rule order still refuse. A refusal prints a fixed diagnostic code,
+never a raw exception, command or private configuration.
 
 The API and worker run as UID/GID 1000 with read-only roots, dropped capabilities,
 no new privileges and separate private 256 MiB temporary filesystems. The shared
@@ -235,6 +240,25 @@ path is a separate offline migration. No lifecycle command deletes volumes or
 preexisting installations; never use `down -v` on retained state.
 
 ## Required acceptance before supported status
+
+The prepared image-upgrade test pins the immutable baseline **A1** to
+`0f93cd654a998be7740ba1d6fee4a44a6f7b3464` (tree
+`58a431cf209a36b8acb0052ca77653b480814d48`) and builds **B** from the actual
+CI checkout. A1 includes the TCP healthcheck and exact conntrack-order fix;
+the earlier immutable baseline and its failed runs remain separate historical
+evidence. No sealed old snapshot is patched to make an upgrade pass.
+
+The application sources (`cmd`, `internal`, `pkg`, `go.mod`, `go.sum`, including
+tracked tests and fixtures) must match the immutable reference
+`06bb74bca90a79fbf399c01cf71f7f44af186431` in both images. This tests image/source
+identity, retained data and a same-schema upgrade; it does not demonstrate a
+schema-changing application upgrade. A1, B and the restored B each require the
+actual final-listener TCP healthcheck and an independent SQL round trip.
+
+A failed policy apply/remove retains a bounded, redacted filter-rule snapshot
+before the expected-exit assertion, including after a command timeout. Capture
+failure has a fixed unavailable reason and preserves the original policy error.
+Neither failure diagnostics nor a partially completed run count as acceptance.
 
 The disposable acceptance runner must own an explicit test project, subnets,
 containers and output directory; it must refuse collision with preexisting
