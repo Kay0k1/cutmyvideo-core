@@ -9,8 +9,87 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+func TestStorageScanSchedulingBatchFailuresPreserveClocks(t *testing.T) {
+	for _, scenario := range []string{"roots", "repeat", "claim", "no-work"} {
+		t.Run(scenario, func(t *testing.T) {
+			s := testStore(t)
+			c := ledgerConfig(t)
+			ctx := context.Background()
+			tx, err := s.storageTx(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = ensureScanRoots(ctx, tx, c, bootstrapScanKinds); err != nil {
+				rollbackStorage(tx)
+				t.Fatal(err)
+			}
+			if err = tx.Commit(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if scenario == "repeat" || scenario == "no-work" {
+				if _, err = s.DB.Exec(ctx, `UPDATE storage_scan_progress SET position=11,prefix_digest=repeat('a',64),completed_at=clock_timestamp() WHERE data_dir=$1 AND scan_kind=ANY($2)`, c.DataDir, bootstrapScanKinds); err != nil {
+					t.Fatal(err)
+				}
+			}
+			snapshot := func() string {
+				t.Helper()
+				var value string
+				if err := s.DB.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(p) ORDER BY scan_kind,path)::text FROM storage_scan_progress p WHERE data_dir=$1`, c.DataDir).Scan(&value); err != nil {
+					t.Fatal(err)
+				}
+				return value
+			}
+			before := snapshot()
+			if scenario != "no-work" {
+				if _, err = s.DB.Exec(ctx, `CREATE FUNCTION storage_scan_batch_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='injected scheduling statement failure'; END $$`); err != nil {
+					t.Fatal(err)
+				}
+				trigger := map[string]string{
+					"roots":  `CREATE TRIGGER storage_scan_batch_failure BEFORE INSERT ON storage_scan_progress FOR EACH ROW WHEN(NEW.scan_kind='bootstrap_sources') EXECUTE FUNCTION storage_scan_batch_failure()`,
+					"repeat": `CREATE TRIGGER storage_scan_batch_failure BEFORE UPDATE ON storage_scan_progress FOR EACH ROW WHEN(OLD.completed_at IS NOT NULL AND NEW.completed_at IS NULL) EXECUTE FUNCTION storage_scan_batch_failure()`,
+					"claim":  `CREATE TRIGGER storage_scan_batch_failure BEFORE UPDATE ON storage_scan_progress FOR EACH ROW WHEN(NEW.scan_kind='schedule_bootstrap_artifacts') EXECUTE FUNCTION storage_scan_batch_failure()`,
+				}[scenario]
+				if _, err = s.DB.Exec(ctx, trigger); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, err = s.nextStorageScan(ctx, c, bootstrapScanKinds, scenario == "repeat")
+			if scenario == "no-work" {
+				if !errors.Is(err, pgx.ErrNoRows) {
+					t.Fatal("completed scheduling did not return acknowledged no-work", err)
+				}
+			} else {
+				var databaseError *pgconn.PgError
+				if !errors.As(err, &databaseError) || databaseError.Code != "P0001" {
+					t.Fatal("scheduling batch hid its original statement error", err)
+				}
+			}
+			if after := snapshot(); after != before {
+				t.Fatal("failed/no-work scheduling changed clocks, cursor or coverage", before, after)
+			}
+			if stored, reserved := ledgerBytes(t, s); stored != 0 || reserved != 0 {
+				t.Fatal("scheduling failure charged or reserved media", stored, reserved)
+			}
+			if scenario != "no-work" {
+				if _, err = s.DB.Exec(ctx, `DROP TRIGGER storage_scan_batch_failure ON storage_scan_progress; DROP FUNCTION storage_scan_batch_failure()`); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// A new pool must acquire the released fence and resume the same fair
+			// first class. No failed statement or missing row was committed as work.
+			restarted := storageProgressRestart(t, s)
+			p, err := restarted.nextStorageScan(ctx, c, bootstrapScanKinds, scenario == "repeat" || scenario == "no-work")
+			if err != nil || p.kind != "bootstrap_artifacts" || p.position != 0 || p.digest != "" {
+				t.Fatal("failed/no-work scheduling lost fair durable retry", p, err)
+			}
+		})
+	}
+}
 
 func storageProgressRow(t *testing.T, s *Store, c Config, kind, path string) storageScanProgress {
 	t.Helper()

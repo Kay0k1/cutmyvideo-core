@@ -32,6 +32,11 @@ type storageScanProgress struct {
 var bootstrapScanKinds = []string{"bootstrap_sources", "bootstrap_artifacts", "bootstrap_work"}
 var reconcileScanKinds = []string{"reconcile_sources", "reconcile_artifacts"}
 
+const storageScanRootsSQL = `INSERT INTO storage_scan_progress(data_dir,scan_kind,path)
+	 SELECT $1,scan.kind,root.path FROM unnest($2::text[],$3::text[]) AS root(kind,path)
+	 CROSS JOIN LATERAL (VALUES(root.kind),('schedule_'||root.kind)) AS scan(kind)
+	 ON CONFLICT DO NOTHING`
+
 func scanRoot(c Config, kind string) string {
 	return filepath.Join(c.DataDir, strings.TrimPrefix(strings.TrimPrefix(kind, "bootstrap_"), "reconcile_"))
 }
@@ -47,10 +52,7 @@ func ensureScanRoots(ctx context.Context, tx pgx.Tx, c Config, kinds []string) e
 	}
 	// A separate scheduling row keeps class fairness independent from the
 	// directory's verification markers. Initialize all bounded roots together.
-	_, err := tx.Exec(ctx, `INSERT INTO storage_scan_progress(data_dir,scan_kind,path)
-	 SELECT $1,scan.kind,root.path FROM unnest($2::text[],$3::text[]) AS root(kind,path)
-	 CROSS JOIN LATERAL (VALUES(root.kind),('schedule_'||root.kind)) AS scan(kind)
-	 ON CONFLICT DO NOTHING`, c.DataDir, kinds, roots)
+	_, err := tx.Exec(ctx, storageScanRootsSQL, c.DataDir, kinds, roots)
 	return err
 }
 
@@ -62,17 +64,6 @@ func (s *Store) nextStorageScan(ctx context.Context, c Config, kinds []string, r
 		return storageScanProgress{}, err
 	}
 	defer rollbackStorage(tx)
-	if err = ensureScanRoots(ctx, tx, c, kinds); err != nil {
-		return storageScanProgress{}, err
-	}
-	if repeat {
-		// Start another pass only after every root of this group has completed.
-		// Completed coverage remains available for reservation release until then.
-		_, err = tx.Exec(ctx, `UPDATE storage_scan_progress SET position=0,prefix_digest='',generation_mtime_ns=NULL,generation_size=NULL,started_at=clock_timestamp(),completed_at=NULL WHERE data_dir=$1 AND scan_kind=ANY($2) AND NOT EXISTS(SELECT 1 FROM storage_scan_progress WHERE data_dir=$1 AND scan_kind=ANY($2) AND completed_at IS NULL)`, c.DataDir, kinds)
-		if err != nil {
-			return storageScanProgress{}, err
-		}
-	}
 	roots := make([]string, 0, len(kinds))
 	for _, kind := range kinds {
 		path := scanRoot(c, kind)
@@ -81,6 +72,18 @@ func (s *Store) nextStorageScan(ctx context.Context, c Config, kinds []string, r
 		}
 		roots = append(roots, path)
 	}
+	// Send dependent scheduling statements together, retaining the same
+	// explicit transaction and already acquired storage fence. Batch preparation
+	// may lock relations before execution, so keep it after the fence as well.
+	// PostgreSQL executes statements in order: roots and resets are visible to
+	// selection. No filesystem I/O is allowed until Close and COMMIT succeed.
+	var batch pgx.Batch
+	batch.Queue(storageScanRootsSQL, c.DataDir, kinds, roots)
+	if repeat {
+		// Start another pass only after every root of this group has completed.
+		// Completed coverage remains available for reservation release until then.
+		batch.Queue(`UPDATE storage_scan_progress SET position=0,prefix_digest='',generation_mtime_ns=NULL,generation_size=NULL,started_at=clock_timestamp(),completed_at=NULL WHERE data_dir=$1 AND scan_kind=ANY($2) AND NOT EXISTS(SELECT 1 FROM storage_scan_progress WHERE data_dir=$1 AND scan_kind=ANY($2) AND completed_at IS NULL)`, c.DataDir, kinds)
+	}
 	// Pick among at most three durable class clocks, using an indexed EXISTS
 	// for pending directories. New work descendants start at -infinity within
 	// their class; they must not displace an unfinished source/artifact class.
@@ -88,7 +91,7 @@ func (s *Store) nextStorageScan(ctx context.Context, c Config, kinds []string, r
 	// stages preserve that order in one round trip. Scheduling and directory
 	// rows are distinct; neither update changes a coverage marker or cursor.
 	var p storageScanProgress
-	err = tx.QueryRow(ctx, `WITH class_pick AS MATERIALIZED (
+	batch.Queue(`WITH class_pick AS MATERIALIZED (
 	 SELECT root.kind,root.path FROM unnest($2::text[],$3::text[]) AS root(kind,path)
 	 JOIN storage_scan_progress AS class ON class.data_dir=$1 AND class.scan_kind='schedule_'||root.kind AND class.path=root.path
 	 WHERE EXISTS(SELECT 1 FROM storage_scan_progress AS pending WHERE pending.data_dir=$1 AND pending.scan_kind=root.kind AND pending.completed_at IS NULL)
@@ -110,7 +113,22 @@ func (s *Store) nextStorageScan(ctx context.Context, c Config, kinds []string, r
 	 RETURNING pending.scan_kind,pending.path,pending.position,pending.prefix_digest,
 	 pending.generation_mtime_ns,pending.generation_size,pending.started_at
 	) SELECT scan_kind,path,position,prefix_digest,generation_mtime_ns,generation_size,started_at
-	 FROM directory_visit`, c.DataDir, kinds, roots).Scan(&p.kind, &p.path, &p.position, &p.digest, &p.mtime, &p.size, &p.started)
+	 FROM directory_visit`, c.DataDir, kinds, roots)
+	results := tx.SendBatch(ctx, &batch)
+	_, err = results.Exec() // Initialize the bounded roots under the fence.
+	if err == nil && repeat {
+		_, err = results.Exec()
+	}
+	if err == nil {
+		err = results.QueryRow().Scan(&p.kind, &p.path, &p.position, &p.digest, &p.mtime, &p.size, &p.started)
+	}
+	if closeErr := results.Close(); closeErr != nil {
+		// A missing selected row is not a database failure. Do not let it mask
+		// a later protocol/connection error that bootstrap could treat as EOF.
+		if err == nil || errors.Is(err, pgx.ErrNoRows) {
+			err = closeErr
+		}
+	}
 	if err != nil {
 		return p, err
 	}
@@ -221,7 +239,49 @@ func (s *Store) storageScanStepSession(ctx context.Context, c Config, p storageS
 	var previous string
 	var completed *time.Time
 	var started time.Time
-	if err = tx.QueryRow(ctx, `SELECT position,prefix_digest,completed_at,started_at FROM storage_scan_progress WHERE data_dir=$1 AND scan_kind=$2 AND path=$3 FOR UPDATE`, c.DataDir, p.kind, p.path).Scan(&position, &previous, &completed, &started); err != nil {
+	// Keep preparation after the acknowledged storage fence. Read both
+	// bounded snapshots together without changing the default timestamp codec.
+	// No entry.Info lookup or cursor mutation may precede a complete batch
+	// drain. The CAS check and reset clock remain after these reads.
+	var batch pgx.Batch
+	batch.Queue(`SELECT position,prefix_digest,completed_at,started_at FROM storage_scan_progress WHERE data_dir=$1 AND scan_kind=$2 AND path=$3 FOR UPDATE`, c.DataDir, p.kind, p.path)
+	var registered map[string]bool
+	if p.kind != "cleanup_work" {
+		lookup := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			if entry.Type().IsRegular() {
+				lookup = append(lookup, filepath.Join(p.path, entry.Name()))
+			}
+		}
+		batch.Queue(`SELECT path FROM storage_files WHERE path=ANY($1) AND kind NOT IN ('orphan','work_orphan')`, lookup)
+		registered = make(map[string]bool, len(lookup))
+	}
+	results := tx.SendBatch(ctx, &batch)
+	err = results.QueryRow().Scan(&position, &previous, &completed, &started)
+	if err == nil && p.kind != "cleanup_work" {
+		rows, readErr := results.Query()
+		if readErr != nil {
+			err = readErr
+		} else {
+			for rows.Next() {
+				var path string
+				if err = rows.Scan(&path); err != nil {
+					break
+				}
+				registered[path] = true
+			}
+			rows.Close()
+			if err == nil {
+				err = rows.Err()
+			}
+		}
+	}
+	if closeErr := results.Close(); closeErr != nil {
+		if err == nil || errors.Is(err, pgx.ErrNoRows) {
+			err = closeErr
+		}
+	}
+	if err != nil {
 		return err
 	}
 	if position != p.position || previous != p.digest || completed != nil || !started.Equal(p.started) {
@@ -239,7 +299,7 @@ func (s *Store) storageScanStepSession(ctx context.Context, c Config, p storageS
 				return err
 			}
 		}
-	} else if err = observeStorageBatch(ctx, tx, c, p, entries); err != nil {
+	} else if err = observeStorageBatch(ctx, tx, c, p, entries, registered); err != nil {
 		return err
 	}
 	// Detect membership changes during replay/stat/SQL. Observations remain
@@ -276,30 +336,7 @@ func (s *Store) storageScanStepSession(ctx context.Context, c Config, p storageS
 	return nil
 }
 
-func observeStorageBatch(ctx context.Context, tx pgx.Tx, c Config, p storageScanProgress, entries []os.DirEntry) error {
-	lookup := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.Type().IsRegular() {
-			lookup = append(lookup, filepath.Join(p.path, entry.Name()))
-		}
-	}
-	rows, err := tx.Query(ctx, `SELECT path FROM storage_files WHERE path=ANY($1) AND kind NOT IN ('orphan','work_orphan')`, lookup)
-	if err != nil {
-		return err
-	}
-	registered := make(map[string]bool, len(lookup))
-	for rows.Next() {
-		var path string
-		if err = rows.Scan(&path); err != nil {
-			rows.Close()
-			return err
-		}
-		registered[path] = true
-	}
-	rows.Close()
-	if err = rows.Err(); err != nil {
-		return err
-	}
+func observeStorageBatch(ctx context.Context, tx pgx.Tx, c Config, p storageScanProgress, entries []os.DirEntry, registered map[string]bool) error {
 	var paths []string
 	var sizes []int64
 	var modified []time.Time
@@ -345,7 +382,7 @@ func observeStorageBatch(ctx context.Context, tx pgx.Tx, c Config, p storageScan
 	}
 	// Ownership is adopted inside each batch, without a final full-table path
 	// rewrite. Published files win; orphan observations only increase charges.
-	_, err = tx.Exec(ctx, `INSERT INTO storage_files(path,owner,resource_id,kind,size_bytes,observed_at)
+	_, err := tx.Exec(ctx, `INSERT INTO storage_files(path,owner,resource_id,kind,size_bytes,observed_at)
 	 SELECT f.path,COALESCE(s.owner,a.owner,''),COALESCE(s.id,a.id,''),CASE WHEN s.id IS NOT NULL THEN 'source' WHEN a.id IS NOT NULL THEN 'artifact' ELSE $4 END,f.size,f.modified
 	 FROM unnest($1::text[],$2::bigint[],$3::timestamptz[]) AS f(path,size,modified)
 	 LEFT JOIN LATERAL (SELECT id,owner FROM sources WHERE (path<>'' AND path=f.path) OR (thumbnail_path<>'' AND thumbnail_path=f.path) LIMIT 1) s ON true

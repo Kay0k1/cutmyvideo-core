@@ -28,7 +28,7 @@ const sourceRetentionSQL = `WITH source_retention_candidates AS MATERIALIZED (
 ), checked AS MATERIALIZED (
  SELECT candidate.id,
  EXISTS(SELECT 1 FROM jobs WHERE source_id=candidate.id OFFSET 0)
- OR EXISTS(SELECT 1 FROM storage_reservations WHERE kind='preview' AND job_id=candidate.id OFFSET 0) AS pinned
+ OR EXISTS(SELECT 1 FROM storage_reservations WHERE kind='preview' AND job_id=candidate.id) AS pinned
  FROM source_retention_candidates candidate
 ), quarantined AS (
  UPDATE sources source SET retention_pins_valid=false

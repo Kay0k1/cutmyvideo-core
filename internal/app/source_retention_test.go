@@ -190,6 +190,49 @@ func TestSourceRetentionFalseZerosContinueToHealthyTail(t *testing.T) {
 	}
 }
 
+func TestSourceRetentionFalsePreviewZerosPreservePinsAndBatchLimit(t *testing.T) {
+	s := testStore(t)
+	sourcePinExec(t, s.DB, `INSERT INTO sources(id,owner,title,duration_ms,kind,created_at)
+ SELECT 'preview-pin-'||lpad(i::text,4,'0'),'owner','old preview pinned',1000,'platform','2000-01-01'::timestamptz+i*interval '1 microsecond'
+ FROM generate_series(1,200) i;
+ INSERT INTO storage_reservations(id,owner,kind,size_bytes,expires_at,job_id,abandoned_at)
+ SELECT CASE WHEN i=1 AND j=1 THEN '' ELSE 'preview-'||i||'-'||j END,
+ 'foreign','preview',7,now()-interval '1 day','preview-pin-'||lpad(i::text,4,'0'),now()
+ FROM generate_series(1,200) i CROSS JOIN generate_series(1,2) j;
+ UPDATE sources SET retention_preview_pins=0;
+ INSERT INTO sources(id,owner,title,duration_ms,kind,created_at)
+ VALUES('healthy-preview-tail','owner','non-preview reservations only',1000,'platform','2000-01-02');
+ INSERT INTO storage_reservations(id,owner,kind,size_bytes,expires_at,job_id)
+ VALUES('tail-cache','foreign','preview_cache',3,now()-interval '1 day','healthy-preview-tail'),
+ ('tail-source','foreign','source',5,now()-interval '1 day','healthy-preview-tail')`)
+	stored, reserved := ledgerBytes(t, s)
+	first, err := s.cleanupStorageBatch(context.Background(), time.Hour, time.Hour)
+	if err != nil || !first.full || len(first.paths) != 0 {
+		t.Fatal("false preview zeros did not request bounded continuation", first, err)
+	}
+	var pins, eligibleZeros, tail, previews int
+	if err = s.DB.QueryRow(context.Background(), `SELECT
+ (SELECT count(*) FROM sources WHERE id LIKE 'preview-pin-%'),
+ (SELECT count(*) FROM sources WHERE id LIKE 'preview-pin-%' AND retention_pins_valid AND retention_preview_pins=0),
+ (SELECT count(*) FROM sources WHERE id='healthy-preview-tail'),
+ (SELECT count(*) FROM storage_reservations WHERE kind='preview')`).Scan(&pins, &eligibleZeros, &tail, &previews); err != nil || pins != 200 || eligibleZeros != 0 || tail != 1 || previews != 400 {
+		t.Fatal("preview pins were deleted, left eligible or bypassed the 200-source batch", pins, eligibleZeros, tail, previews, err)
+	}
+	second, err := s.cleanupStorageBatch(context.Background(), time.Hour, time.Hour)
+	if err != nil || len(second.paths) != 0 {
+		t.Fatal("preview quarantine prevented continuation", second, err)
+	}
+	if err = s.DB.QueryRow(context.Background(), `SELECT
+ (SELECT count(*) FROM sources WHERE id LIKE 'preview-pin-%'),
+ (SELECT count(*) FROM sources WHERE id='healthy-preview-tail'),
+ (SELECT count(*) FROM storage_reservations WHERE kind='preview')`).Scan(&pins, &tail, &previews); err != nil || pins != 200 || tail != 0 || previews != 400 {
+		t.Fatal("preview-cache/source reservation blocked the healthy tail or a real preview pin was lost", pins, tail, previews, err)
+	}
+	if a, b := ledgerBytes(t, s); a != stored || b != reserved {
+		t.Fatal("preview probe changed byte accounting", a, b, stored, reserved)
+	}
+}
+
 func TestSourcePinAuditPartialRestartRevisionAndFairness(t *testing.T) {
 	s := testStore(t)
 	for _, id := range []string{"a-hot", "b-free", "c-small"} {

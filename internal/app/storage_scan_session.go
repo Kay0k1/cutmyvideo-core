@@ -165,8 +165,17 @@ func (s *storageScanSession) read(ctx context.Context, c Config, p storageScanPr
 	// even a caller holding the old SQL cursor must reopen and verify its prefix.
 	reader.committed = false
 	batchLimit := storageRegistrationBatch
-	if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) < 100*time.Millisecond {
-		batchLimit = storageScanBatchSize
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline)
+		switch {
+		case remaining < 10*time.Millisecond:
+			// Leave less registration/trigger work in the atomic observation
+			// when scheduling and prefix replay have spent most of the budget.
+			// This bounds the batch, not its wall time or COMMIT outcome.
+			batchLimit = 32
+		case remaining < 100*time.Millisecond:
+			batchLimit = storageScanBatchSize
+		}
 	}
 	entries := make([]os.DirEntry, 0, batchLimit)
 	for len(entries) < batchLimit {
@@ -174,7 +183,7 @@ func (s *storageScanSession) read(ctx context.Context, c Config, p storageScanPr
 			s.discard(p.kind)
 			return nil, "", nil, false, false, err
 		}
-		batch, e := s.readNames(reader, storageScanBatchSize, false)
+		batch, e := s.readNames(reader, min(storageScanBatchSize, batchLimit-len(entries)), false)
 		if e != nil && !errors.Is(e, io.EOF) {
 			s.discard(p.kind)
 			return nil, "", nil, false, false, e

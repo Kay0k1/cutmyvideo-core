@@ -19,6 +19,9 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 - Executable HTTP/OpenAPI contract checks, including byte-length limits, preview priority, download range errors and database unavailability.
 
 ### Fixed
+- Batch storage scheduling and cursor/known-path reads while retaining the storage fence, binary timestamp decoding, rollback and acknowledged directory progress; use smaller local reads when little deadline remains. Require the new cancellation, permission, non-ISO timestamp and false-preview-pin checks on every native target.
+- Allow PostgreSQL to simplify the exact-preview pin existence check without changing the 200-source candidate limit or authoritative pin protection. The matched warm 1,000-row query experiment improves; global preview membership cost and memory at larger sizes remain unmeasured.
+- Move the unchanged 32-by-five-millisecond progress test to the explicit `storagecapacity` benchmark tag. Its recorded failures and original gates remain visible; ordinary CI requires deterministic storage correctness, and a separate 1,000-row observation checks the five-second API and ten-second one-shot maintenance budgets.
 - Check physical storage headroom on macOS and Windows as well as Linux, including outstanding reservations and safety bytes; refuse failed measurements and invalid paths, and measure the nearest existing parent before data-directory creation.
 - Recover retained export submissions by their session/idempotency key before changed admission limits or the new-export allowance can reject a replay; new keys still use current admission checks.
 - Warn that an uncertain source registration may already be saved when reporting database failures or request/source deadlines, preserving existing status codes and private commit causes.
