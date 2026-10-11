@@ -91,6 +91,11 @@ func mediaFailureCategory(stderr string) string {
 	if strings.Contains(text, "not currently supported in container") || strings.Contains(text, "codec not supported in container") {
 		return "copy_incompatible"
 	}
+	// Older muxers can reject a codec as experimental instead of using the
+	// usual unsupported-container wording. Do not enable that flag silently.
+	if strings.Contains(text, "support is experimental") && (strings.Contains(text, "mp4") || strings.Contains(text, "matroska")) {
+		return "copy_incompatible"
+	}
 	for _, phrase := range []string{"login required", "login_required", "sign in to", "log in to", "only available for registered", "subscriber-only", "subscribers only", "private video", "password protected"} {
 		if strings.Contains(text, phrase) {
 			return "platform_access"

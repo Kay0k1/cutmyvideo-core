@@ -47,3 +47,19 @@ func TestJobItemErrorCodeIsAdditiveAndOmittedWhenAbsent(t *testing.T) {
 		t.Fatal("safe diagnostic was omitted", err)
 	}
 }
+
+func TestExperimentalContainerCopyDiagnosticPreservesCause(t *testing.T) {
+	cause := errors.New("private cause TOKEN")
+	stderr := "[mp4] flac in MP4 support is experimental, add -strict -2 if you want to enable it"
+	failure := &mediaProcessFailure{cause: cause, category: mediaFailureCategory(stderr)}
+	result := copyExportDiagnostic(failure, "mp4")
+	if LocalErrorCode(result) != "copy_incompatible" || !strings.Contains(result.Error(), "MKV") || strings.Contains(result.Error(), "TOKEN") {
+		t.Fatalf("unsafe or unhelpful copy diagnostic: %v", result)
+	}
+	if !errors.Is(result, cause) {
+		t.Fatal("copy diagnostic discarded its process cause")
+	}
+	if problem := exportProblem(result); problem.code != "copy_incompatible" || strings.Contains(problem.message, "TOKEN") {
+		t.Fatalf("unsafe public copy diagnostic: %+v", problem)
+	}
+}

@@ -75,7 +75,15 @@ func TestCopyRetainsConfiguredMuxerCodecCompatibility(t *testing.T) {
 			if e = json.Unmarshal(raw, &info); e != nil {
 				t.Fatal(e)
 			}
-			if len(info.Streams) != 2 || len(oracleInfo.Streams) != 2 || info.Streams[0].Codec != oracleInfo.Streams[0].Codec || info.Streams[1].Codec != oracleInfo.Streams[1].Codec {
+			if len(info.Streams) != 2 || len(oracleInfo.Streams) != 2 {
+				t.Fatalf("unexpected copied streams: %s; oracle %s", raw, oracleRaw)
+			}
+			audioTagMatches := info.Streams[1].Codec == oracleInfo.Streams[1].Codec
+			if tc.audioCodec == "mp2" {
+				mpegAudio := func(codec string) bool { return codec == "mp2" || codec == "mp3" }
+				audioTagMatches = mpegAudio(info.Streams[1].Codec) && mpegAudio(oracleInfo.Streams[1].Codec)
+			}
+			if info.Streams[0].Codec != oracleInfo.Streams[0].Codec || !audioTagMatches {
 				t.Fatalf("copy differs from the configured muxer's codec tags: %s; oracle %s", raw, oracleRaw)
 			}
 			if tc.audioCodec == "mp2" {

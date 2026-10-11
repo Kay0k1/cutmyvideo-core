@@ -26,6 +26,8 @@ func TestMediaFailureCategoriesAreDiagnosticOnly(t *testing.T) {
 		{"Stream map '0:a:0' matches no streams.", "missing_audio"},
 		{"/data/out.mp4: No space left on device", "storage_full"},
 		{"Could not find tag for codec pcm_s16le, codec not currently supported in container", "copy_incompatible"},
+		{"[mp4] flac in MP4 support is experimental, add -strict -2 if you want to enable it", "copy_incompatible"},
+		{"The encoder is experimental but experimental codecs are not enabled", "unknown"},
 		{"Invalid data found when processing input", "unsupported_media"},
 		{"Protocol 'file' not on whitelist 'http,tcp'", "unsupported_media"},
 		{"Error initializing output stream 0:0", "unknown"},
