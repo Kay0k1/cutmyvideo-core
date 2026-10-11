@@ -16,12 +16,12 @@ import time
 from urllib.parse import quote
 
 MODE = 'source-retention-004-to-005'
-CANDIDATE = '76e9cdb4072e8c6a2ba293ee69635601785ba62c'
-CANDIDATE_TREE = 'ee1c6647390b8f91354fe0c371d19d81d3bf0549'
+CANDIDATE = '6023dcbca14b7b6a6f09dd3f4b6da97821ff7e9a'
+CANDIDATE_TREE = 'f49f729511d12d3458ca8e7e4c73ec82888647a3'
 # SOURCE inventories include git_blob. Root670's 168-file map and its review
 # hashes remain historical preparation roots; this pin is the separately
-# reviewed recovery application commit, before the wrapper-only pin update.
-APPLICATION_SHA256 = '1ac2c591d2e20c628ddfe2cf01f9e8a6af7bcde92e154d521794e97094d86534'
+# reviewed recovery and native disk application commit, before the wrapper-only pin update.
+APPLICATION_SHA256 = '5383852cb86732ae99b60e1392f85b7f32fd2c44f6a1764e3e32d527bdbb55f4'
 OLD_APPLICATION_SHA256 = 'a1aa7b968c06eaeb075d2cd73f8afbf309a1bc12121d1a3e598ba2561e785f90'
 OLD_COMMIT = '0f93cd654a998be7740ba1d6fee4a44a6f7b3464'
 OLD_TREE = '58a431cf209a36b8acb0052ca77653b480814d48'
@@ -199,7 +199,7 @@ def validate_transition(report, directory, base=None):
             'explicit transition receipt mode required')
     value = report.get('transition', {})
     require(value.get('candidate') == {'commit': CANDIDATE, 'tree': CANDIDATE_TREE,
-                                      'application_files': 169, 'application_sha256': APPLICATION_SHA256}
+                                      'application_files': 171, 'application_sha256': APPLICATION_SHA256}
             and value.get('preparation') == PREPARATION and value.get('policy_sha256') == POLICY_SHA256
             and value.get('from_position') == 4 and value.get('to_position') == 5
             and value.get('startup_timeout_seconds') == 30
@@ -212,7 +212,7 @@ def validate_transition(report, directory, base=None):
     require(application == {'old_commit': OLD_COMMIT, 'old_tree': OLD_TREE, 'old_reference': OLD_REFERENCE,
                             'old_application_sha256': OLD_APPLICATION_SHA256, 'old_files': 164,
                             'candidate_commit': CANDIDATE, 'candidate_tree': CANDIDATE_TREE,
-                            'candidate_application_sha256': APPLICATION_SHA256, 'candidate_files': 169,
+                            'candidate_application_sha256': APPLICATION_SHA256, 'candidate_files': 171,
                             'schema_changing_upgrade': True}
             and report.get('runtime_application_sources_unchanged') is False, 'approved application transition differs')
     require(type(application['old_files']) is int and type(application['candidate_files']) is int
@@ -376,7 +376,7 @@ def acceptance_class(base):
             self.report.update(mode=MODE, schema_version=2, runtime_application_sources_unchanged=False)
             self.report['scope']['schema_changing_upgrade'] = True
             self.report['transition'] = {
-                'candidate': {'commit': CANDIDATE, 'tree': CANDIDATE_TREE, 'application_files': 169,
+                'candidate': {'commit': CANDIDATE, 'tree': CANDIDATE_TREE, 'application_files': 171,
                               'application_sha256': APPLICATION_SHA256},
                 'preparation': PREPARATION, 'policy_sha256': POLICY_SHA256,
                 'from_position': 4, 'to_position': 5, 'startup_timeout_seconds': 30,
@@ -413,7 +413,7 @@ def acceptance_class(base):
                     require(kind == 'blob' and mode in ('100644', '100755'), 'unsupported runtime source')
                     data = self.run(['git', '-C', base.REPO, 'cat-file', 'blob', blob])
                     inventory[path] = {'mode': mode, 'git_blob': blob, 'bytes': len(data), 'sha256': digest(data)}
-            require(len(inventory) == 169 and digest(canonical(inventory)) == APPLICATION_SHA256,
+            require(len(inventory) == 171 and digest(canonical(inventory)) == APPLICATION_SHA256,
                     'runtime differs from reviewed immutable candidate')
             super().initialize_host()
             self.fault_old = self.make_project(self.old_repo, 'fault004', 46)
@@ -445,14 +445,14 @@ def acceptance_class(base):
             app = lambda source: {k: v for k, v in source['files'].items()
                                   if k.startswith(('cmd/', 'internal/', 'pkg/')) or k in ('go.mod', 'go.sum')}
             require(len(app(self.old_source)) == 164 and digest(canonical(app(self.old_source))) == OLD_APPLICATION_SHA256
-                    and len(app(self.current_source)) == 169 and digest(canonical(app(self.current_source))) == APPLICATION_SHA256,
+                    and len(app(self.current_source)) == 171 and digest(canonical(app(self.current_source))) == APPLICATION_SHA256,
                     'old/current immutable application inventory differs')
             self.report['transition']['current_source'] = self.raw('transition-current-source.json', canonical(self.current_source))
             self.check('approved_application_transition', {
                 'old_commit': OLD_COMMIT, 'old_tree': OLD_TREE, 'old_reference': OLD_REFERENCE,
                 'old_application_sha256': OLD_APPLICATION_SHA256, 'old_files': 164,
                 'candidate_commit': CANDIDATE, 'candidate_tree': CANDIDATE_TREE,
-                'candidate_application_sha256': APPLICATION_SHA256, 'candidate_files': 169,
+                'candidate_application_sha256': APPLICATION_SHA256, 'candidate_files': 171,
                 'schema_changing_upgrade': True})
 
         def capture_catalog(self, name, project, position):
