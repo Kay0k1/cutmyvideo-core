@@ -49,6 +49,22 @@ media volume is mounted at `/data`; the database has a separate persistent
 volume and no published port. PostgreSQL runs as UID/GID 999. App, database,
 temporary storage, logs, memory, CPU, process counts and graceful-stop intervals
 are bounded in Compose. Only `/data` and the PostgreSQL volume retain user state.
+PostgreSQL readiness checks its final TCP listener at `127.0.0.1:5432`; the
+temporary Unix-socket server used during first initialization is not readiness.
+
+Version, tool-inspection and media-tar helpers have separate random names and
+project/profile/purpose/identity/source labels; they never use Compose ownership
+labels. They run without a network, as UID/GID 1000, with read-only roots and
+fixed CPU, memory, swap and process limits. Backup mounts only the owned media
+volume read-only; restore mounts that same fresh project's volume writable.
+After a helper exits, fails or times out, the wrapper discovers its exact name,
+verifies the actual image, labels, command and mount, then removes and confirms
+only that resource. Foreign or changed resources are left untouched and cause
+refusal. Local subprocess timeouts and handled SIGINT/SIGTERM interruption kill
+the wrapper's own child process group and enter the checked helper cleanup;
+Docker daemon cleanup is a separate checked step. Dump/archive descriptors are
+streamed through the same bounded runner. A refused backup/restore leaves apps
+stopped and preserves private partial files for diagnosis.
 
 The initial application limits are 1 GiB per source/fetch/output, 10 GiB shared
 admission, 2 GiB per owner, one worker slot and two FFmpeg threads. API and worker

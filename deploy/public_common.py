@@ -9,8 +9,11 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import stat
 import subprocess
+import tempfile
+import time
 
 PROFILE = 'public-v1'
 KEYS = {'CUTMY_PROJECT', 'CUTMY_DOMAIN', 'CUTMY_HTTP_PORT', 'CUTMY_DATABASE_PREFIX',
@@ -145,19 +148,82 @@ def project_lock(config, root=Path('/run')):
         os.close(fd)
 
 
-def run(command, *, input=None, timeout=120, output=None):
+@contextlib.contextmanager
+def operation_signals():
+    previous = {}
+    def interrupted(_signum, _frame):
+        raise Refused('operation_interrupted')
     try:
-        result = subprocess.run([str(a) for a in command], input=input, stdout=output or subprocess.PIPE,
-                                stderr=subprocess.PIPE, env=command_environment(), timeout=timeout, check=False)
-    except (OSError, subprocess.TimeoutExpired) as exc:
+        for number in (signal.SIGINT, signal.SIGTERM):
+            handler = signal.getsignal(number)
+            try:
+                signal.signal(number, interrupted)
+            except ValueError as exc:
+                raise Refused('operation_signal_forwarding_unavailable') from exc
+            previous[number] = handler
+        yield
+    finally:
+        for number, handler in previous.items():
+            signal.signal(number, handler)
+
+
+def run(command, *, input=None, stdin=None, timeout=120, output=None):
+    with operation_signals():
+        return _run_group(command, input=input, stdin=stdin, timeout=timeout, output=output)
+
+
+def _run_group(command, *, input=None, stdin=None, timeout=120, output=None):
+    """Run an owned process group with bounded diagnostics and streamed files.
+
+    A supplied descriptor is never loaded into memory or closed here. Killing
+    a Docker CLI group does not kill daemon containers; their caller must also
+    verify and clean its explicitly owned daemon resources.
+    """
+    require(input is None or stdin is None, 'operation_input_ambiguous')
+    require(timeout > 0, 'operation_timeout_invalid')
+    process = None
+    success = False
+    try:
+        with tempfile.TemporaryFile() as captured, tempfile.TemporaryFile() as errors, tempfile.TemporaryFile() as supplied:
+            if input is not None:
+                supplied.write(input)
+                supplied.seek(0)
+            process = subprocess.Popen([str(a) for a in command],
+                stdin=stdin if stdin is not None else supplied if input is not None else subprocess.DEVNULL,
+                stdout=output if output is not None else captured, stderr=errors,
+                env=command_environment(), start_new_session=True)
+            deadline = time.monotonic() + timeout
+            while process.poll() is None:
+                require(time.monotonic() < deadline, 'operation_unavailable_or_timed_out')
+                require(errors.tell() <= 8 * 1024**2 and (output is not None or captured.tell() <= 8 * 1024**2),
+                        'operation_diagnostics_too_large')
+                time.sleep(.02)
+            require(errors.tell() <= 8 * 1024**2 and (output is not None or captured.tell() <= 8 * 1024**2),
+                    'operation_diagnostics_too_large')
+            require(process.returncode == 0, 'operation_failed_see_private_service_logs')
+            success = True
+            if output is None:
+                captured.seek(0)
+                return captured.read(8 * 1024**2 + 1)
+            return None
+    except OSError as exc:
         raise Refused('operation_unavailable_or_timed_out') from exc
-    require(result.returncode == 0, 'operation_failed_see_private_service_logs')
-    return result.stdout
+    finally:
+        if process is not None and not success:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired as exc:
+                raise Refused('operation_group_cleanup_unconfirmed') from exc
 
 
-def json_command(command):
+def json_command(command, *, timeout=120):
+    data = run(command, timeout=timeout)
     try:
-        return json.loads(run(command))
+        return json.loads(data)
     except (ValueError, TypeError) as exc:
         raise Refused('operation_returned_invalid_json') from exc
 

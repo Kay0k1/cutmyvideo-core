@@ -62,6 +62,8 @@ Keep `.env` private. Public hosting needs HTTPS, an exact `PUBLIC_ORIGIN`, `COOK
 
 [Independent HTTPS hosting](docs/operations.md#https-with-caddy) · [Operations, upgrades and backups](docs/operations.md) · [All configuration](docs/configuration.md) · [Security model](docs/security-model.md)
 
+A separate [prepared public hosting profile](docs/self-hosting.md) supplies HTTPS, distinct database roles, container limits, verified scoped egress rules, upgrades and coordinated database/media backups on Linux amd64. Required installation acceptance runs on a disposable CI host; local refusal controls do not establish an installation result. Native Linux, macOS and Windows CLI archives have separate execution checks.
+
 ### Minimal API request
 
 ```sh

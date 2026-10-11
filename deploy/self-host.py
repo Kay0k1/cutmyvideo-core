@@ -17,6 +17,7 @@ from pathlib import Path, PurePosixPath
 import re
 import secrets
 import shutil
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -34,6 +35,101 @@ SPEC = importlib.util.spec_from_file_location('release_manifest', REPO / 'script
 manifest = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(manifest)
 PUBLIC_KEYS = ('CUTMY_PROJECT', 'CUTMY_DOMAIN', 'CUTMY_HTTP_PORT', 'CUTMY_DATABASE_PREFIX', 'CUTMY_PROCESSING_PREFIX')
+TOOL_PROBE_CODE = ('import json,subprocess; print(json.dumps({k:subprocess.check_output(v,stderr=subprocess.STDOUT)'
+                   '.decode().splitlines()[0] for k,v in {"ffmpeg":["ffmpeg","-version"],'
+                   '"ffprobe":["ffprobe","-version"],"yt_dlp":["yt-dlp","--version"],'
+                   '"node":["node","--version"]}.items()}))')
+
+
+def helper_spec(config, source, image, purpose, media=None):
+    """One randomly named daemon resource; never borrow Compose ownership."""
+    require(purpose in ('version', 'tools', 'backup-tar', 'restore-tar'), 'helper_purpose_invalid')
+    require(re.fullmatch(r'sha256:[0-9a-f]{64}', image), 'helper_image_invalid')
+    identity = secrets.token_hex(16)
+    labels = {'video.cutmy.profile': PROFILE, 'video.cutmy.project': config['CUTMY_PROJECT'],
+              'video.cutmy.helper': purpose, 'video.cutmy.helper.identity': identity,
+              'video.cutmy.helper.source': source['commit'],
+              'video.cutmy.helper.source-sha256': digest(manifest.canonical(source))}
+    entrypoint, argv = {
+        'version': ('/usr/local/bin/cutmy', ['version']),
+        'tools': ('python3', ['-c', TOOL_PROBE_CODE]),
+        'backup-tar': ('tar', ['-C', '/data', '--format=gnu', '-czf', '-', '.']),
+        'restore-tar': ('tar', ['-C', '/data', '-xzf', '-', '--no-same-owner', '--no-same-permissions']),
+    }[purpose]
+    require((media is not None) == purpose.endswith('-tar'), 'helper_media_invalid')
+    if media is not None:
+        require(media == config['CUTMY_PROJECT'] + '_media', 'helper_media_not_owned')
+    return {'name': 'cutmy-helper-' + config['CUTMY_PROJECT'] + '-' + purpose + '-' + identity,
+            'image': image, 'labels': labels, 'entrypoint': entrypoint, 'argv': argv,
+            'media': media, 'readonly_media': purpose == 'backup-tar'}
+
+
+def helper_command(spec):
+    command = ['docker', 'run', '--rm', '--name', spec['name'], '--network', 'none', '--read-only',
+               '--user', '1000:1000', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true',
+               '--memory', '256m', '--memory-swap', '256m', '--cpus', '1', '--pids-limit', '32']
+    for key, value in sorted(spec['labels'].items()):
+        command += ['--label', key + '=' + value]
+    if spec['media']:
+        command += ['--mount', 'type=volume,src=' + spec['media'] + ',dst=/data'
+                    + (',readonly' if spec['readonly_media'] else '')]
+    if spec['labels']['video.cutmy.helper'] == 'restore-tar':
+        command += ['-i']
+    return command + ['--entrypoint', spec['entrypoint'], spec['image'], *spec['argv']]
+
+
+def validate_helper(row, spec):
+    config, host = row.get('Config', {}), row.get('HostConfig', {})
+    require(row.get('Name') == '/' + spec['name'] and row.get('Image') == spec['image']
+            and re.fullmatch(r'[0-9a-f]{64}', row.get('Id', ''))
+            and all(config.get('Labels', {}).get(k) == v for k, v in spec['labels'].items())
+            and not config.get('Labels', {}).get('com.docker.compose.project')
+            and config.get('User') == '1000:1000' and config.get('Entrypoint') == [spec['entrypoint']]
+            and config.get('Cmd') == spec['argv'] and host.get('NetworkMode') == 'none'
+            and set(row.get('NetworkSettings', {}).get('Networks', {})) <= {'none'}
+            and host.get('ReadonlyRootfs') is True and host.get('CapDrop') == ['ALL']
+            and host.get('SecurityOpt') == ['no-new-privileges:true']
+            and host.get('Memory') == host.get('MemorySwap') == 256 * 1024**2
+            and host.get('NanoCpus') == 1000000000 and host.get('PidsLimit') == 32,
+            'foreign_or_changed_helper')
+    mounts = row.get('Mounts', [])
+    require(len(mounts) == (1 if spec['media'] else 0), 'helper_mounts_differ')
+    if spec['media']:
+        mount = mounts[0]
+        require(mount.get('Type') == 'volume' and mount.get('Name') == spec['media']
+                and mount.get('Destination') == '/data' and mount.get('RW') is (not spec['readonly_media']),
+                'helper_mounts_differ')
+
+
+def cleanup_helper(spec):
+    # A failed/timed-out Docker client may still have created a daemon resource.
+    # Discover by exact random name, then bind its actual image, labels and
+    # operation before removal. Inspection failure is never evidence of absence.
+    selector = 'name=^/' + spec['name'] + '$'
+    ids = run(['docker', 'ps', '-aq', '--no-trunc', '--filter', selector], timeout=15).decode().split()
+    require(len(ids) <= 1 and all(re.fullmatch(r'[0-9a-f]{64}', cid) for cid in ids), 'helper_discovery_invalid')
+    if ids:
+        try:
+            rows = json_command(['docker', 'inspect', ids[0]], timeout=15)
+        except Refused:
+            # --rm may finish between listing and inspection. Only a new
+            # successful exact-name listing can prove absence, never the error.
+            require(not run(['docker', 'ps', '-aq', '--no-trunc', '--filter', selector], timeout=15).strip(),
+                    'helper_inspection_or_cleanup_unconfirmed')
+            return
+        require(len(rows) == 1 and rows[0].get('Id') == ids[0], 'helper_inspection_incomplete')
+        validate_helper(rows[0], spec)
+        run(['docker', 'rm', '-f', rows[0]['Id']], timeout=20)
+    require(not run(['docker', 'ps', '-aq', '--no-trunc', '--filter', selector], timeout=15).strip(),
+            'helper_cleanup_unconfirmed')
+
+
+def helper_run(config, source, image, purpose, *, media=None, stdin=None, output=None, timeout=120):
+    spec = helper_spec(config, source, image, purpose, media)
+    try:
+        return run(helper_command(spec), stdin=stdin, output=output, timeout=timeout)
+    finally:
+        cleanup_helper(spec)
 
 
 def config_text(values):
@@ -60,7 +156,7 @@ def expected_version(source):
             'go_version': source['toolchain'], 'os': 'linux', 'arch': 'amd64'}
 
 
-def image_verify(image, source):
+def image_verify(image, source, config):
     require(re.fullmatch(r'sha256:[0-9a-f]{64}', image), 'image_id_invalid')
     result = json_command(['docker', 'image', 'inspect', image])
     require(len(result) == 1, 'image_identity_missing')
@@ -72,9 +168,7 @@ def image_verify(image, source):
         'org.opencontainers.image.version': source['version'], 'org.opencontainers.image.revision': source['commit'],
         'org.opencontainers.image.created': source['build_time'],
         'org.opencontainers.image.source': 'https://github.com/Kay0k1/cutmyvideo-core'}.items()), 'image_labels_differ')
-    version = json.loads(run(['docker', 'run', '--rm', '--network', 'none', '--read-only', '--user', '1000:1000',
-                             '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true', '--memory', '256m',
-                             '--cpus', '1', '--pids-limit', '32', image, 'version']))
+    version = json.loads(helper_run(config, source, image, 'version'))
     require(version == expected_version(source), 'actual_image_binary_identity_differ')
     return version
 
@@ -93,7 +187,7 @@ def load_state(state, config, verify_image=True):
     require(private_read(env_file, 8192) == config_text(runtime_environment(config, record['image_id'])),
             'private_configuration_differ')
     if verify_image:
-        image_verify(record['image_id'], source)
+        image_verify(record['image_id'], source, config)
     return source, record, snapshot, env_file
 
 
@@ -124,14 +218,8 @@ def build(state, config, revision, release):
              '--build-arg', 'VERSION=' + source['version'], '--build-arg', 'VCS_REF=' + source['commit'],
              '--build-arg', 'BUILD_TIME=' + source['build_time'], snapshot], timeout=1800)
         image = iid.read_text().strip()
-        image_verify(image, source)
-        tools_code = ('import json,subprocess; print(json.dumps({k:subprocess.check_output(v,stderr=subprocess.STDOUT)'
-                      '.decode().splitlines()[0] for k,v in {"ffmpeg":["ffmpeg","-version"],'
-                      '"ffprobe":["ffprobe","-version"],"yt_dlp":["yt-dlp","--version"],'
-                      '"node":["node","--version"]}.items()}))')
-        tools = json.loads(run(['docker', 'run', '--rm', '--network', 'none', '--read-only', '--user', '1000:1000',
-                               '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true', '--memory', '256m',
-                               '--pids-limit', '32', '--entrypoint', 'python3', image, '-c', tools_code]))
+        image_verify(image, source, config)
+        tools = json.loads(helper_run(config, source, image, 'tools'))
         manifest.validate_source(REPO, source)
         save_state(state, config, source, image, tools, snapshot_exists=True)
     except BaseException:
@@ -223,14 +311,6 @@ def maintenance(command, config, snapshot, config_path):
     run(command + ['run', '--rm', '-T', '--no-deps', 'maintenance'], timeout=60)
 
 
-def tar_command(image, media, *, restore=False):
-    return ['docker', 'run', '--rm', '-i', '--network', 'none', '--read-only', '--user', '1000:1000',
-            '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true', '--memory', '256m',
-            '--cpus', '1', '--pids-limit', '32', '--mount', 'type=volume,src=' + media + ',dst=/data' + ('' if restore else ',readonly'),
-            '--entrypoint', 'tar', image, '-C', '/data'] + (
-                ['-xzf', '-', '--no-same-owner', '--no-same-permissions'] if restore else ['--format=gnu', '-czf', '-', '.'])
-
-
 def file_digest(path):
     import hashlib
     result = hashlib.sha256()
@@ -247,12 +327,14 @@ def backup(state, config, source, record, command, destination):
     no_writers(config)
     media = volume(config, 'media')
     volume(config, 'postgres')
-    for name, argv in (
-        ('database.dump', command + ['exec', '-T', 'postgres', 'pg_dump', '-U', 'cutmy_migrate', '-d', 'cutmy', '-Fc', '--no-owner', '--no-acl']),
-        ('media.tar.gz', tar_command(record['image_id'], media))):
+    for name in ('database.dump', 'media.tar.gz'):
         with (destination / name).open('xb') as output:
             os.chmod(destination / name, 0o600)
-            run(argv, output=output, timeout=1800)
+            if name == 'database.dump':
+                run(command + ['exec', '-T', 'postgres', 'pg_dump', '-U', 'cutmy_migrate', '-d', 'cutmy', '-Fc', '--no-owner', '--no-acl'],
+                    output=output, timeout=1800)
+            else:
+                helper_run(config, source, record['image_id'], 'backup-tar', media=media, output=output, timeout=1800)
             output.flush()
             os.fsync(output.fileno())
         require((destination / name).stat().st_size > 0, 'backup_file_empty')
@@ -353,17 +435,11 @@ def restore(config, source, record, command, snapshot, destination):
     run(command + ['up', '-d', '--wait', 'postgres'])
     with (destination / 'database.dump').open('rb') as stream:
         # Pass the descriptor as stdin rather than loading an entire dump.
-        import subprocess
-        from public_common import command_environment
-        result = subprocess.run(command + ['exec', '-T', 'postgres', 'pg_restore', '--exit-on-error', '--no-owner',
-                                          '--no-privileges', '-U', 'cutmy_migrate', '-d', 'cutmy'], stdin=stream,
-                                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, env=command_environment(), timeout=1800)
-        require(result.returncode == 0, 'database_restore_failed')
+        run(command + ['exec', '-T', 'postgres', 'pg_restore', '--exit-on-error', '--no-owner',
+                       '--no-privileges', '-U', 'cutmy_migrate', '-d', 'cutmy'], stdin=stream, output=subprocess.DEVNULL, timeout=1800)
     media = volume(config, 'media')
     with (destination / 'media.tar.gz').open('rb') as stream:
-        result = subprocess.run(tar_command(record['image_id'], media, restore=True), stdin=stream,
-                                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, env=command_environment(), timeout=1800)
-        require(result.returncode == 0, 'media_restore_failed')
+        helper_run(config, source, record['image_id'], 'restore-tar', media=media, stdin=stream, output=subprocess.DEVNULL, timeout=1800)
     # No app/migration container starts before the fresh project's explicitly
     # applied policy. Operator runs initialize after apply, then checked up.
 
@@ -401,7 +477,7 @@ def main():
         manifest.validate_source_shape(source)
         require(old_record['source_sha256'] == digest(manifest.canonical(source)), 'adopted_source_differ')
         snapshot = state_snapshot(old, source)
-        image_verify(old_record['image_id'], source)
+        image_verify(old_record['image_id'], source, config)
         state = private_directory(args.state, create=True)
         shutil.copytree(snapshot, state / 'source')
         save_state(state, config, source, old_record['image_id'], old_record['tools'], snapshot_exists=True)
