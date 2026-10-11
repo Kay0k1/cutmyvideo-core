@@ -1,0 +1,144 @@
+name: Reviewed current core paired media N3
+
+on:
+  workflow_dispatch:
+    inputs:
+      reviewed_tooling_commit:
+        description: Exact ROOT-reviewed tooling head; dataset URL must already be frozen
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: cutmy-current-pair-media-once
+  cancel-in-progress: false
+
+jobs:
+  current_pair_n3:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CUTMY_REVIEWED_TOOLING_COMMIT: ${{ inputs.reviewed_tooling_commit }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Admit exact reviewed head and disposable host
+        timeout-minutes: 1
+        run: |
+          python3 -I -B - <<'PY'
+          import json, os, pathlib, re, shutil, subprocess
+          expected = os.environ['CUTMY_REVIEWED_TOOLING_COMMIT']
+          assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
+          assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          assert re.fullmatch('[0-9a-f]{40}', expected)
+          assert os.environ['GITHUB_SHA'] == expected
+          assert subprocess.check_output(['git', '--no-optional-locks', 'rev-parse', 'HEAD'], text=True).strip() == expected
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          for name in ('current-pair-inputs', 'current-pair-prepared', 'current-pair-scratch', 'current-pair-hosted'):
+              assert not os.path.lexists(root / name)
+          raw = root / 'current-pair-hosted'; raw.mkdir(mode=0o700)
+          value = subprocess.check_output(['/usr/bin/docker', '--host', 'unix:///var/run/docker.sock', 'info', '--format',
+              '{"cpus":{{.NCPU}},"memory":{{.MemTotal}},"os":{{json .OSType}},"arch":{{json .Architecture}},"root":{{json .DockerRootDir}}}'], timeout=20)
+          assert len(value) <= 65536
+          (raw / 'admission.original.stdout').write_bytes(value)
+          host = json.loads(value)
+          assert host['cpus'] == 4 and 12 << 30 <= host['memory'] <= 16 << 30
+          assert host['os'] == 'linux' and host['arch'] in ('amd64', 'x86_64')
+          assert all(shutil.disk_usage(p).free >= 16 << 30 for p in (root, host['root']))
+          mem = dict(line.split(':', 1) for line in pathlib.Path('/proc/meminfo').read_text().splitlines())
+          assert int(mem['MemAvailable'].split()[0]) * 1024 >= 8 << 30
+          assert not subprocess.check_output(['/usr/bin/docker', '--host', 'unix:///var/run/docker.sock', 'ps', '--format', '{{.ID}}'], timeout=15).strip()
+          PY
+      - name: Stage four exact inputs without regeneration
+        timeout-minutes: 5
+        env:
+          CUTMY_ARTIFACT_TOKEN: ${{ github.token }}
+        run: |
+          sudo --preserve-env=RUNNER_TEMP,GITHUB_ACTIONS,CUTMY_ARTIFACT_TOKEN timeout --signal=TERM --kill-after=5s 240s \
+            python3 -I -B benchmarks/current-pair-common-tools-n3/stage-hosted-inputs.py \
+            > "$RUNNER_TEMP/current-pair-hosted/staging.original.stdout" 2> "$RUNNER_TEMP/current-pair-hosted/staging.original.stderr"
+      - name: Stage pinned Ubuntu and PostgreSQL before measurement
+        timeout-minutes: 5
+        run: |
+          ulimit -f 8192
+          sudo env -u DOCKER_HOST -u DOCKER_CONTEXT -u DOCKER_TLS_VERIFY -u DOCKER_CERT_PATH -u DOCKER_API_VERSION \
+            timeout --signal=TERM --kill-after=5s 120s /usr/bin/docker --host unix:///var/run/docker.sock pull --platform linux/amd64 \
+            ubuntu@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55 \
+            > "$RUNNER_TEMP/current-pair-hosted/ubuntu-pull.original.stdout" 2> "$RUNNER_TEMP/current-pair-hosted/ubuntu-pull.original.stderr"
+          sudo env -u DOCKER_HOST -u DOCKER_CONTEXT -u DOCKER_TLS_VERIFY -u DOCKER_CERT_PATH -u DOCKER_API_VERSION \
+            timeout --signal=TERM --kill-after=5s 120s /usr/bin/docker --host unix:///var/run/docker.sock pull --platform linux/amd64 \
+            postgres@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826 \
+            > "$RUNNER_TEMP/current-pair-hosted/postgres-pull.original.stdout" 2> "$RUNNER_TEMP/current-pair-hosted/postgres-pull.original.stderr"
+      - name: Prepare copy-only common image and freeze config
+        timeout-minutes: 5
+        run: |
+          sudo --preserve-env=RUNNER_TEMP,GITHUB_ACTIONS timeout --signal=TERM --kill-after=5s 290s \
+            python3 -I -B benchmarks/current-pair-common-tools-n3/prepare-common-tools.py \
+            --tool-archive "$RUNNER_TEMP/current-pair-inputs/tools/ffmpeg-master-latest-linux64-gpl.tar.xz" \
+            --input-root "$RUNNER_TEMP/current-pair-inputs" --output-dir "$RUNNER_TEMP/current-pair-prepared" --docker /usr/bin/docker \
+            > "$RUNNER_TEMP/current-pair-hosted/preparation.original.stdout" 2> "$RUNNER_TEMP/current-pair-hosted/preparation.original.stderr"
+      - name: Only two new pure controls after frozen image boundary
+        timeout-minutes: 1
+        run: |
+          ulimit -f 1024
+          timeout --signal=TERM --kill-after=2s 10s python3 -I -B benchmarks/current-pair-common-tools-n3/focused-controls.py \
+            > "$RUNNER_TEMP/current-pair-hosted/controls.original.stdout" 2> "$RUNNER_TEMP/current-pair-hosted/controls.original.stderr"
+      - name: Existing N3 driver with frozen shared tools and original streams
+        timeout-minutes: 92
+        run: |
+          sudo --preserve-env=RUNNER_TEMP,GITHUB_ACTIONS timeout --signal=TERM --kill-after=5s 5450s \
+            python3 -I -B - > "$RUNNER_TEMP/current-pair-hosted/pair.original.stdout" 2> "$RUNNER_TEMP/current-pair-hosted/pair.original.stderr" <<'PY'
+          import argparse, importlib.util, json, os, pathlib, shutil, signal, threading, time
+          os.umask(0o022)
+          here = pathlib.Path('benchmarks/current-pair-common-tools-n3').resolve()
+          spec = importlib.util.spec_from_file_location('current_pair_driver', here / 'media-capacity.py')
+          m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+          root = pathlib.Path(os.environ['RUNNER_TEMP']); raw = root / 'current-pair-hosted'
+          prepared = root / 'current-pair-prepared'
+          receipt = m.read_json(prepared / 'runtime-image-receipt.json')
+          m.require(receipt['ok'] is True, 'Preparation did not freeze a runtime')
+          frozen = prepared / 'CONFIG.frozen.json'
+          m.require(receipt['binding']['config_path'] == str(frozen), 'Frozen config path differs')
+          config = m.read_json(frozen, receipt['binding']['config_sha256'])
+          m.require(config['runtime_image'] == receipt['runtime_image'] and config['extensions'] == [], 'Runtime/matrix differs')
+          scratch = root / 'current-pair-scratch'; scratch.mkdir(mode=0o700)
+          args = argparse.Namespace(config=frozen, expected_config_sha256=receipt['binding']['config_sha256'],
+              evidence_dir=raw / 'pair', scratch_dir=scratch, docker=pathlib.Path('/usr/bin/docker'), mode='pilot')
+          experiment = m.Experiment(args)
+          (raw / 'pair-owner.json').write_bytes(m.canonical({'token': experiment.token, 'work': str(experiment.work)}))
+          stopped = threading.Event()
+          def guard():
+              try:
+                  while not stopped.wait(1):
+                      total = sum(p.stat().st_size for p in raw.rglob('*') if p.is_file() and not p.is_symlink())
+                      if total > 2 << 30 or shutil.disk_usage(scratch).free < 8 << 30:
+                          try: (raw / 'resource-refusal.json').write_bytes(m.canonical({'raw_bytes': total, 'scope': 'owned raw2GiB/scratch8GiB reserve'}))
+                          finally: os.kill(os.getpid(), signal.SIGTERM)
+              except BaseException as error:
+                  try: (raw / 'resource-refusal.json').write_bytes(m.canonical({'error': type(error).__name__, 'scope': 'owned evidence guard failed'}))
+                  finally: os.kill(os.getpid(), signal.SIGTERM)
+          watch = threading.Thread(target=guard, name='owned-evidence-cap', daemon=True); watch.start()
+          try: experiment.run()
+          finally: stopped.set(); watch.join(timeout=2)
+          PY
+      - name: Always reconcile only journalled owned resources and select raw evidence
+        if: always()
+        timeout-minutes: 5
+        run: |
+          sudo --preserve-env=RUNNER_TEMP,GITHUB_ACTIONS timeout --signal=TERM --kill-after=5s 240s \
+            python3 -I -B benchmarks/current-pair-common-tools-n3/cleanup-hosted.py
+      - name: Preserve first outputs, refusals, frozen identities and cleanup
+        if: always()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: current-pair-n3-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/current-pair-hosted
+          if-no-files-found: warn
+          compression-level: 1
+          retention-days: 30

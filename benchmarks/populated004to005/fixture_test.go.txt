@@ -1,0 +1,617 @@
+package app
+
+// Injected only into a fresh exact-d594 checkout. This does not run workers,
+// media, HTTP, maintenance, or OpenStore while constructing schema004.
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"hash"
+	"net/url"
+	"os"
+	"path/filepath"
+	"reflect"
+	"sort"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+const populatedRows = 100000
+const populatedRowCap = 32 << 10
+const populatedMetadataCap = 31 << 20 // Runner reserves the remaining 1MiB.
+
+// Only generated, owned database credentials are retained in memory for redaction.
+var populatedSecrets sync.Map
+
+var populatedPK = map[string][]string{
+	"app_schema_migrations": {"position"}, "app_schema_versions": {"version"},
+	"artifacts": {"id"}, "jobs": {"id"}, "queue_owners": {"owner"},
+	"source_metadata_cache": {"source_id"}, "sources": {"id"},
+	"storage_counters": {"id"}, "storage_files": {"path"},
+	"storage_reservations": {"id"}, "storage_scan_progress": {"data_dir", "scan_kind", "path"},
+	"storage_state": {"id"}, "storage_work_cleanup": {"data_dir", "path"},
+	"source_retention_audit": {"id"}, "source_pin_audit_progress": {"source_id"},
+}
+
+type populatedDigest struct {
+	Rows int64 `json:"rows"`
+	UTF8Bytes int64 `json:"utf8_bytes"`
+	FramedBytes int64 `json:"framed_bytes"`
+	SHA256 string `json:"sha256"`
+	Columns []string `json:"columns"`
+	Order []string `json:"order"`
+	Xmin bool `json:"xmin"`
+}
+
+type populatedStream struct {
+	state hash.Hash
+	value populatedDigest
+}
+
+func newPopulatedStream(columns, order []string, xmin bool) *populatedStream {
+	return &populatedStream{state: sha256.New(), value: populatedDigest{Columns: columns, Order: order, Xmin: xmin}}
+}
+
+func (s *populatedStream) add(raw string) error {
+	if len(raw) > populatedRowCap {
+		return errors.New("snapshot row exceeds 32KiB; no complete evidence")
+	}
+	var frame [8]byte
+	binary.BigEndian.PutUint64(frame[:], uint64(len(raw)))
+	s.state.Write(frame[:])
+	s.state.Write([]byte(raw))
+	s.value.Rows++
+	s.value.UTF8Bytes += int64(len(raw))
+	s.value.FramedBytes += int64(len(raw) + 8)
+	return nil
+}
+
+func (s *populatedStream) finish() populatedDigest {
+	s.value.SHA256 = hex.EncodeToString(s.state.Sum(nil))
+	return s.value
+}
+
+type populatedSnapshot struct {
+	Version int `json:"version"`
+	Legacy map[string]populatedDigest `json:"legacy004"`
+	Full map[string]populatedDigest `json:"full"`
+	SourceXmin populatedDigest `json:"source_xmin"`
+	CatalogSHA256 string `json:"catalog_sha256"`
+	CatalogFileSHA256 string `json:"catalog_file_sha256"`
+	Ledger json.RawMessage `json:"ledger_original_rows"`
+	CatalogChecked bool `json:"catalog_checked"`
+	SnapshotSettings map[string]string `json:"settings"`
+}
+
+type populatedEvidence struct {
+	root string
+	mu sync.Mutex
+	bytes int
+}
+
+func (e *populatedEvidence) save(name string, value any, limit int) error {
+	raw, err := json.MarshalIndent(value, "", "  ")
+	if err != nil { return err }
+	raw = append(raw, '\n')
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if len(raw) > limit || e.bytes + len(raw) > populatedMetadataCap {
+		return errors.New("structured evidence cap exceeded; incomplete evidence")
+	}
+	f, err := os.OpenFile(filepath.Join(e.root, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil { return err }
+	_, err = f.Write(raw)
+	closeErr := f.Close()
+	e.bytes += len(raw)
+	if err != nil { return err }
+	return closeErr
+}
+
+// Production checkMigrationLedger deliberately takes SHARE, which is forbidden
+// in a read-only snapshot. This independent SELECT keeps the same exact prefix
+// order/version/checksum oracle without a write-mode relation lock.
+func populatedReadOnlyLedger(ctx context.Context, tx pgx.Tx, applied int) error {
+	rows, err := tx.Query(ctx, "SELECT position,version,checksum FROM app_schema_migrations ORDER BY position")
+	if err != nil { return err }
+	defer rows.Close()
+	position := 0
+	for rows.Next() {
+		var recorded int
+		var version, checksum string
+		if err = rows.Scan(&recorded, &version, &checksum); err != nil { return err }
+		if position >= applied || recorded != position+1 || version != schemaMigrations[position].version || checksum != migrationChecksum(schemaMigrations[position]) {
+			return errors.New("read-only ledger order/version/checksum differs from immutable prefix")
+		}
+		position++
+	}
+	if err = rows.Err(); err != nil { return err }
+	if position != applied { return errors.New("read-only ledger prefix is incomplete") }
+	return nil
+}
+
+func populatedSnapshotAt(db *pgxpool.Pool, version int, name string, evidence *populatedEvidence) (populatedSnapshot, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	tx, err := db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil { return populatedSnapshot{}, err }
+	defer rollbackStorage(tx)
+	for _, sql := range []string{"SET LOCAL TimeZone='UTC'", "SET LOCAL DateStyle='ISO'", "SET LOCAL bytea_output='hex'"} {
+		if _, err = tx.Exec(ctx, sql); err != nil { return populatedSnapshot{}, err }
+	}
+	shape, err := readSchemaShape(ctx, tx)
+	if err != nil { return populatedSnapshot{}, err }
+	expected := expectedSchemaShape(schemaMigrations[version-1].shape)
+	if err = checkSchemaShape(shape, expected, false); err != nil { return populatedSnapshot{}, err }
+	if err = populatedReadOnlyLedger(ctx, tx, version); err != nil { return populatedSnapshot{}, err }
+	var markers int
+	if err = tx.QueryRow(ctx, "SELECT count(*) FROM app_schema_versions").Scan(&markers); err != nil || markers != version {
+		return populatedSnapshot{}, errors.New("marker count differs from exact migration prefix")
+	}
+	catalog, err := json.Marshal(shape)
+	if err != nil { return populatedSnapshot{}, err }
+	if err = evidence.save(name+"-catalog.json", shape, 1<<20); err != nil { return populatedSnapshot{}, err }
+	catalogFile,err:=os.ReadFile(filepath.Join(evidence.root,name+"-catalog.json"))
+	if err!=nil { return populatedSnapshot{},err }
+	result := populatedSnapshot{Version: version, Legacy: map[string]populatedDigest{}, Full: map[string]populatedDigest{},
+		CatalogSHA256: fmt.Sprintf("%x", sha256.Sum256(catalog)), CatalogChecked: true,
+		CatalogFileSHA256:fmt.Sprintf("%x",sha256.Sum256(catalogFile)),
+		SnapshotSettings: map[string]string{}}
+	var zone, dates, bytea, isolation, readonly string
+	if err=tx.QueryRow(ctx,"SELECT current_setting('TimeZone'),current_setting('DateStyle'),current_setting('bytea_output'),current_setting('transaction_isolation'),current_setting('transaction_read_only')").Scan(&zone,&dates,&bytea,&isolation,&readonly); err!=nil { return result,err }
+	if zone!="UTC" || !strings.HasPrefix(dates,"ISO") || bytea!="hex" || isolation!="repeatable read" || readonly!="on" { return result,errors.New("snapshot settings differ") }
+	result.SnapshotSettings=map[string]string{"TimeZone":zone,"DateStyle":dates,"bytea_output":bytea,"isolation":isolation,"access":readonly}
+	old := expectedSchemaShape(schemaMigrations[3].shape)
+	tables := make([]string, 0, len(expected.Tables))
+	for table := range expected.Tables { tables = append(tables, table) }
+	sort.Strings(tables)
+	var ledger []json.RawMessage
+	sourceXmin := newPopulatedStream([]string{"id", "xmin"}, []string{"id COLLATE C"}, true)
+	for _, table := range tables {
+		definition := expected.Tables[table]
+		keys, ok := populatedPK[table]
+		if !ok { return result, errors.New("snapshot table has no frozen PK ordering") }
+		order := make([]string, len(keys))
+		for i, key := range keys {
+			order[i] = "t."+pgx.Identifier{key}.Sanitize()
+			if definition.Columns[key].Type == "text" { order[i] += " COLLATE \"C\"" }
+		}
+		fullColumns := make([]string, 0, len(definition.Columns))
+		for column := range definition.Columns { fullColumns = append(fullColumns, column) }
+		sort.Strings(fullColumns)
+		full := newPopulatedStream(fullColumns, order, true)
+		legacyColumns := []string{}
+		legacyJSON := "'{}'::jsonb"
+		membership := "false"
+		if predecessor, exists := old.Tables[table]; exists {
+			for column := range predecessor.Columns { legacyColumns = append(legacyColumns, column) }
+			sort.Strings(legacyColumns)
+			parts := make([]string, 0, len(legacyColumns)*2)
+			for _, column := range legacyColumns {
+				parts = append(parts, "'"+column+"'", "t."+pgx.Identifier{column}.Sanitize())
+			}
+			legacyJSON = "jsonb_build_object('row',jsonb_build_object("+strings.Join(parts,",")+")"
+			if table != "sources" { legacyJSON += ",'xmin',t.xmin::text" }
+			legacyJSON += ")"
+			membership = "true"
+			if table == "app_schema_migrations" { membership = "t.position<=4" }
+			if table == "app_schema_versions" { membership = "t.version<>'20261011-source-retention-v1'" }
+		}
+		legacy := newPopulatedStream(legacyColumns, order, table != "sources")
+		xminJSON := "''"
+		if table == "sources" { xminJSON = "jsonb_build_object('id',t.id,'xmin',t.xmin::text)::text" }
+		sql := "SELECT ("+legacyJSON+")::text,jsonb_build_object('row',to_jsonb(t),'xmin',t.xmin::text)::text,"+xminJSON+","+membership+
+			" FROM "+pgx.Identifier{table}.Sanitize()+" t ORDER BY "+strings.Join(order,",")
+		rows, queryErr := tx.Query(ctx, sql)
+		if queryErr != nil { return result, queryErr }
+		for rows.Next() {
+			var prior, current, sourceTuple string
+			var retained bool
+			if err = rows.Scan(&prior, &current, &sourceTuple, &retained); err != nil { rows.Close(); return result, err }
+			if err = full.add(current); err != nil { rows.Close(); return result, err }
+			if retained {
+				if err = legacy.add(prior); err != nil { rows.Close(); return result, err }
+			}
+			if table == "sources" {
+				if err = sourceXmin.add(sourceTuple); err != nil { rows.Close(); return result, err }
+			}
+			if table == "app_schema_migrations" {
+				ledger = append(ledger, json.RawMessage(current))
+				encoded, marshalErr := json.Marshal(ledger)
+				if marshalErr != nil || len(encoded) > 16<<10 { rows.Close(); return result, errors.New("ledger original exceeds 16KiB") }
+			}
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil { return result, err }
+		result.Full[table] = full.finish()
+		if _, exists := old.Tables[table]; exists { result.Legacy[table] = legacy.finish() }
+	}
+	result.SourceXmin = sourceXmin.finish()
+	result.Ledger, err = json.Marshal(ledger)
+	if err != nil { return result, err }
+	if err = tx.Commit(ctx); err != nil { return result, err }
+	if err = evidence.save(name+"-snapshot.json", result, 2<<20); err != nil { return result, err }
+	return result, nil
+}
+
+const populatedSeedSQL = `
+INSERT INTO sources(id,owner,title,duration_ms,kind,path,url,width,height,embed_url,thumbnail_url,provider_id,provider,thumbnail_path,created_at)
+ SELECT 's'||lpad(i::text,6,'0'),'owner-'||((i-1)/100),'Synthetic populated predecessor',1000,'upload',
+ '/fixture/data/sources/s'||lpad(i::text,6,'0'),'',0,0,NULL,NULL,'','','',
+ '2000-01-01 UTC'::timestamptz+i*interval '1 microsecond' FROM generate_series(1,100000) i;
+WITH graph AS (SELECT i,'s'||lpad(i::text,6,'0') sid,(i-1)%8 g,'owner-'||((i-1)/100) owner FROM generate_series(1,100000) i),
+ members AS (SELECT *,1 ordinal,CASE g WHEN 1 THEN 'succeeded' WHEN 2 THEN 'failed' WHEN 3 THEN 'cancelled' WHEN 4 THEN 'queued' WHEN 5 THEN 'running' WHEN 6 THEN 'waiting_storage' ELSE 'preview_cache' END status FROM graph WHERE g<>0
+ UNION ALL SELECT *,2,'succeeded' FROM graph WHERE g=7)
+INSERT INTO jobs(id,owner,source_id,request,items,status,stage,message,cancel_requested,lease_until,lease_token,attempts,idempotency_key,created_at,updated_at,storage_wait_until)
+ SELECT 'j'||sid||CASE ordinal WHEN 1 THEN '-a' ELSE '-b' END,owner,sid,
+ jsonb_build_object('source_id',sid,'ranges',jsonb_build_array(jsonb_build_object('start_ms',0,'end_ms',1000,'label','fixture')),'format','mp4'),
+ '[{"id":"fixture-item","label":"fixture","start_ms":0,"end_ms":1000,"status":"queued","artifact":null}]'::jsonb,status,status,'fixed synthetic state',g=3,
+ CASE WHEN g=5 THEN '2100-01-01 UTC'::timestamptz END,CASE WHEN g=5 THEN 'lease-'||sid END,
+ CASE WHEN g=5 THEN 1 ELSE 0 END,'idem-'||sid||'-'||ordinal,
+ '2000-01-01 UTC'::timestamptz+i*interval '1 microsecond','2000-01-02 UTC'::timestamptz+i*interval '1 microsecond',
+ CASE WHEN g=6 THEN '2100-01-01 UTC'::timestamptz END FROM members;
+INSERT INTO artifacts(id,owner,job_id,path,filename,size_bytes,actual_start_ms,actual_end_ms,created_at,expires_at)
+ SELECT 'a'||s.id,s.owner,'j'||s.id||CASE WHEN (substring(s.id from 2)::int-1)%8=7 THEN '-b' ELSE '-a' END,
+ '/fixture/data/artifacts/a'||s.id,'fixture.mp4',16,0,1000,s.created_at,
+ CASE substring(s.id from 2)::int%3 WHEN 0 THEN NULL WHEN 1 THEN '2000-01-01 UTC'::timestamptz ELSE '2100-01-01 UTC'::timestamptz END
+ FROM sources s WHERE (substring(s.id from 2)::int-1)%8 IN (1,7);
+INSERT INTO source_metadata_cache(source_id,owner,payload,expires_at)
+ SELECT id,owner,decode('000102fffc','hex'),CASE substring(id from 2)::int%2 WHEN 0 THEN '2000-01-01 UTC'::timestamptz ELSE '2100-01-01 UTC'::timestamptz END FROM sources;
+WITH graph AS (SELECT i,'s'||lpad(i::text,6,'0') sid,(i-1)%8 g,'owner-'||((i-1)/100) owner FROM generate_series(1,100000) i),
+ charges AS (SELECT graph.*,c.* FROM graph CROSS JOIN LATERAL
+ (SELECT 1 ordinal,CASE WHEN g IN (0,1,7) THEN 'preview_cache' WHEN g IN (2,3,5) THEN 'preview' WHEN g=4 THEN 'job' ELSE 'source' END kind,
+ CASE g WHEN 0 THEN 5 WHEN 1 THEN 7 WHEN 2 THEN 7 WHEN 3 THEN 11 WHEN 4 THEN 17 WHEN 5 THEN 19 WHEN 6 THEN 23 ELSE 29 END bytes
+ UNION ALL SELECT 2,CASE g WHEN 3 THEN 'preview' ELSE 'source' END,CASE g WHEN 3 THEN 13 ELSE 31 END WHERE g IN (3,7)) c)
+INSERT INTO storage_reservations(id,owner,kind,size_bytes,expires_at,token,job_id,abandoned_at)
+ SELECT 'r'||sid||'-'||ordinal,CASE WHEN g=3 THEN 'foreign-'||ordinal ELSE owner END,kind,bytes,
+ CASE WHEN g=2 OR g=3 AND ordinal=1 THEN '2000-01-01 UTC'::timestamptz ELSE '2100-01-01 UTC'::timestamptz END,
+ 'token-'||sid||'-'||ordinal,CASE WHEN g=4 THEN 'j'||sid||'-a' ELSE sid END,
+ CASE WHEN g=3 AND ordinal=2 THEN '2000-01-02 UTC'::timestamptz END FROM charges;
+INSERT INTO storage_reservations(id,owner,kind,size_bytes,expires_at,token,job_id,abandoned_at) VALUES
+ ('r-orphan-1','orphan','preview',7,'2000-01-01 UTC','orphan-token-1','not_yet_created_source',NULL),
+ ('r-orphan-2','orphan','preview',11,'2100-01-01 UTC','orphan-token-2','','2000-01-02 UTC');
+INSERT INTO storage_files(path,owner,resource_id,kind,size_bytes,delete_pending,observed_at,delete_retry_at,delete_failures)
+ SELECT path,owner,id,'source',16,false,'2000-01-01 UTC','-infinity',0 FROM sources;
+INSERT INTO storage_files(path,owner,resource_id,kind,size_bytes,delete_pending,observed_at,delete_retry_at,delete_failures)
+ SELECT path,owner,id,'artifact',16,false,'2000-01-01 UTC','-infinity',0 FROM artifacts;
+INSERT INTO storage_files(path,owner,resource_id,kind,size_bytes,delete_pending,observed_at,delete_retry_at,delete_failures) VALUES
+ ('/fixture/data/pending/one','pending','pending-1','source',8,true,'2000-01-01 UTC','2100-01-01 UTC',1),
+ ('/fixture/data/pending/two','pending','pending-2','artifact',9,true,'2000-01-01 UTC','2100-01-02 UTC',3);
+INSERT INTO storage_files(path,owner,resource_id,kind,size_bytes,delete_pending,observed_at,delete_retry_at,delete_failures)
+ SELECT '/fixture/data/orphan/'||i,'','','orphan',16,false,'2000-01-01 UTC','-infinity',0 FROM generate_series(1,3) i;
+INSERT INTO storage_state(id) VALUES('/fixture/data');
+INSERT INTO queue_owners(owner,last_claimed,last_considered)
+ SELECT 'owner-'||i,CASE WHEN i%2=0 THEN '2000-01-01 UTC'::timestamptz END,'2000-01-02 UTC' FROM generate_series(0,999) i;
+INSERT INTO storage_scan_progress(data_dir,scan_kind,path,position,prefix_digest,generation_mtime_ns,generation_size,started_at,completed_at,last_visited_at) VALUES
+ ('/fixture/data','sources','/fixture/data/sources/partial',128,repeat('a',64),123456,4096,'2000-01-01 UTC',NULL,'2000-01-02 UTC'),
+ ('/fixture/data','artifacts','/fixture/data/artifacts/unstarted',0,'',NULL,NULL,'2000-01-01 UTC',NULL,'-infinity'),
+ ('/fixture/data','work','/fixture/data/work/completed',9,repeat('b',64),654321,32,'2000-01-01 UTC','2000-01-03 UTC','2000-01-02 UTC');
+INSERT INTO storage_work_cleanup(data_dir,path,last_attempt_at) VALUES
+ ('/fixture/data','/fixture/data/work/retry-one','2000-01-01 UTC'),('/fixture/data','/fixture/data/work/retry-two','2000-01-02 UTC');
+`
+
+func populatedSeed(db *pgxpool.Pool) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	tx, err := db.Begin(ctx)
+	if err != nil { return err }
+	defer rollbackStorage(tx)
+	historical, err := os.ReadFile(filepath.Join("testdata","migrations","storage-maintenance-v1.sql"))
+	if err != nil { return err }
+	if _, err = tx.Exec(ctx, canonicalMigrationSQL(historical)); err != nil { return err }
+	migration := schemaMigrations[3]
+	if _, err = tx.Exec(ctx, migrationSQL(migration)); err != nil { return err }
+	if _, err = tx.Exec(ctx, "INSERT INTO app_schema_versions(version) VALUES($1)", migration.version); err != nil { return err }
+	if _, err = tx.Exec(ctx, "INSERT INTO app_schema_migrations(position,version,checksum) VALUES(4,$1,$2)", migration.version, migrationChecksum(migration)); err != nil { return err }
+	shape, err := readSchemaShape(ctx, tx)
+	if err != nil { return err }
+	if err = checkSchemaShape(shape, expectedSchemaShape(migration.shape), false); err != nil { return err }
+	if err = checkMigrationLedger(ctx, tx, 4); err != nil { return err }
+	if _, err = tx.Exec(ctx, populatedSeedSQL); err != nil { return err }
+	if err = tx.Commit(ctx); err != nil { return err }
+	_, err = db.Exec(ctx, "ANALYZE")
+	return err
+}
+
+func populatedCounts(db *pgxpool.Pool, version int, name string, evidence *populatedEvidence) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	expected := map[string]int64{"sources":100000,"jobs":100000,"artifacts":25000,"source_metadata_cache":100000,
+		"storage_files":125005,"storage_reservations":125002,"storage_counters":1,"storage_state":1,
+		"queue_owners":1000,"storage_scan_progress":3,"storage_work_cleanup":2,
+		"app_schema_migrations":int64(version),"app_schema_versions":int64(version)}
+	if version == 5 { expected["source_retention_audit"]=1; expected["source_pin_audit_progress"]=0 }
+	observed := map[string]int64{}
+	for table, count := range expected {
+		var actual int64
+		if err := db.QueryRow(ctx, "SELECT count(*) FROM "+pgx.Identifier{table}.Sanitize()).Scan(&actual); err != nil { return err }
+		observed[table]=actual
+		if actual != count { return fmt.Errorf("unexpected %s count: %d", table, actual) }
+	}
+	var stored, reserved, actualStored, actualReserved int64
+	if err := db.QueryRow(ctx, "SELECT stored_bytes::bigint,reserved_bytes::bigint,(SELECT sum(size_bytes)::bigint FROM storage_files),(SELECT sum(size_bytes)::bigint FROM storage_reservations) FROM storage_counters WHERE id=1").Scan(&stored,&reserved,&actualStored,&actualReserved); err != nil { return err }
+	if stored!=2000065 || reserved!=2025018 || stored!=actualStored || reserved!=actualReserved { return errors.New("actual ledger totals disagree with frozen graph") }
+	result := map[string]any{"counts":observed,"stored_bytes":stored,"reserved_bytes":reserved,"actual_accounting_equal":true}
+	if version == 5 {
+		var mismatch, eligible, jobPins, previewPins, badAudit int64
+		query := `WITH j AS (SELECT source_id,count(*) pins FROM jobs GROUP BY source_id),
+ p AS (SELECT job_id,count(*) pins FROM storage_reservations WHERE kind='preview' GROUP BY job_id)
+ SELECT count(*) FILTER(WHERE s.retention_job_pins<>COALESCE(j.pins,0) OR s.retention_preview_pins<>COALESCE(p.pins,0) OR NOT s.retention_pins_valid OR s.retention_pin_revision<>0),
+ count(*) FILTER(WHERE s.retention_pins_valid AND s.retention_job_pins=0 AND s.retention_preview_pins=0),
+ sum(s.retention_job_pins),sum(s.retention_preview_pins)
+ FROM sources s LEFT JOIN j ON j.source_id=s.id LEFT JOIN p ON p.job_id=s.id`
+		if err := db.QueryRow(ctx,query).Scan(&mismatch,&eligible,&jobPins,&previewPins); err != nil { return err }
+		if err := db.QueryRow(ctx,"SELECT count(*) FROM source_retention_audit WHERE id<>1 OR last_created_at IS NOT NULL OR last_source_id IS NOT NULL OR upper_created_at IS NOT NULL OR upper_source_id IS NOT NULL").Scan(&badAudit); err != nil { return err }
+		result["pin_mismatch_count"]=mismatch; result["eligible_sources"]=eligible; result["job_pins"]=jobPins; result["preview_pins"]=previewPins
+		rows, err := db.Query(ctx,`SELECT (substring(id from 2)::int-1)%8 g,count(*),sum(retention_job_pins),sum(retention_preview_pins) FROM sources GROUP BY g ORDER BY g`)
+		if err != nil { return err }
+		groups := [][]int64{}
+		jobs := []int64{0,1,1,1,1,1,1,2}; previews := []int64{0,0,1,2,0,1,0,0}
+		for rows.Next() {
+			var g,n,j,p int64
+			if err=rows.Scan(&g,&n,&j,&p); err!=nil { rows.Close(); return err }
+			groups=append(groups,[]int64{g,n,j,p})
+			if g<0 || g>7 || n!=12500 || j!=12500*jobs[g] || p!=12500*previews[g] { rows.Close(); return errors.New("per-group actual pin counts disagree") }
+		}
+		err=rows.Err(); rows.Close()
+		if err!=nil { return err }
+		result["groups"]=groups
+		if len(groups)!=8 || mismatch!=0 || eligible!=12500 || jobPins!=100000 || previewPins!=50000 || badAudit!=0 { return errors.New("actual backfill/audit oracles failed") }
+	}
+	return evidence.save(name+"-oracles.json",result,1<<20)
+}
+
+func populatedError(err error) map[string]any {
+	result := map[string]any{"deadline":errors.Is(err,context.DeadlineExceeded),"canceled":errors.Is(err,context.Canceled),"chain":[]string{}}
+	chain:=[]string{}
+	for current:=err; current!=nil && len(chain)<16; current=errors.Unwrap(current) { chain=append(chain,fmt.Sprintf("%T",current)) }
+	result["chain"]=chain
+	if err != nil {
+		message := err.Error()
+		if u,e:=url.Parse(os.Getenv("TEST_DATABASE_URL")); e==nil && u.User!=nil {
+			if password,ok:=u.User.Password(); ok { message=strings.ReplaceAll(message,password,"[redacted]") }
+		}
+		populatedSecrets.Range(func(secret, _ any) bool { message=strings.ReplaceAll(message,secret.(string),"[redacted]"); return true })
+		if len(message)>4096 { message=message[:4096]; result["message_truncated"]=true }
+		result["message"]=message
+	}
+	var pgError *pgconn.PgError
+	if errors.As(err,&pgError) { result["SQLSTATE"]=pgError.Code }
+	return result
+}
+
+func populatedOpen(raw, label string, evidence *populatedEvidence) (*Store, error, time.Duration) {
+	// Process exit is the independent 45s safeguard, never a replacement caller deadline.
+	watchdog:=time.AfterFunc(45*time.Second,func(){ fmt.Fprintln(os.Stderr,"populated OpenStore 45s watchdog: incomplete evidence"); os.Exit(3) })
+	start:=time.Now()
+	store,err:=OpenStore(context.Background(),raw)
+	elapsed:=time.Since(start)
+	watchdog.Stop()
+	record:=map[string]any{"call":label,"elapsed_ns":elapsed.Nanoseconds(),"caller":"context.Background","startup_budget_ns":int64(30*time.Second),"watchdog_ns":int64(45*time.Second),"nonnil_store":store!=nil,"error":populatedError(err)}
+	if saveErr:=evidence.save(label+"-open.json",record,16<<10); saveErr!=nil {
+		if store!=nil { store.DB.Close() }
+		return nil,saveErr,elapsed
+	}
+	return store,err,elapsed
+}
+
+func populatedURL(raw, schema, application string) (string,error) {
+	u,err:=url.Parse(raw)
+	if err!=nil || u.Scheme!="postgres" || u.Hostname()!="127.0.0.1" || u.Port()=="" || u.Path!="/cutmy_populated100k" || u.User==nil { return "",errors.New("owned loopback database URL required") }
+	if password,ok:=u.User.Password(); ok { populatedSecrets.Store(password,true) }
+	q:=u.Query(); q.Set("search_path",schema); q.Set("application_name",application); q.Set("pool_max_conns","2"); q.Set("sslmode","disable")
+	u.RawQuery=q.Encode()
+	return u.String(),nil
+}
+
+func populatedOwnerURL(raw, schema, application, role, password string) (string,error) {
+	owned,err:=populatedURL(raw,schema,application)
+	if err!=nil { return "",err }
+	u,err:=url.Parse(owned)
+	if err!=nil { return "",err }
+	u.User=url.UserPassword(role,password)
+	populatedSecrets.Store(password,true)
+	return u.String(),nil
+}
+
+// This checks a schema owner that must perform migrations, not the narrower DML
+// role used by the separate normal-budget maintenance experiment.
+func populatedMigrationOwner(db *pgxpool.Pool, schema, name string, evidence *populatedEvidence) error {
+	ctx,cancel:=context.WithTimeout(context.Background(),30*time.Second); defer cancel()
+	role:=schema+"_owner"
+	var current,session string
+	var login,super,createDB,createRole,inherit,replication,bypass,owns,createSchema,createDatabase,createPublic bool
+	var ownedSchemas,otherCreate,memberships,ownerMismatch int64
+	query:=`SELECT current_user,session_user,r.rolcanlogin,r.rolsuper,r.rolcreatedb,r.rolcreaterole,r.rolinherit,r.rolreplication,r.rolbypassrls,
+ (SELECT n.nspowner=r.oid FROM pg_namespace n WHERE n.nspname=$1),has_schema_privilege(current_user,$1,'CREATE'),
+ has_database_privilege(current_user,current_database(),'CREATE'),has_schema_privilege(current_user,'public','CREATE'),
+ (SELECT count(*) FROM pg_namespace n WHERE n.nspowner=r.oid),
+ (SELECT count(*) FROM pg_namespace n WHERE n.nspname<>$1 AND n.nspname NOT LIKE 'pg_%' AND n.nspname<>'information_schema' AND has_schema_privilege(current_user,n.oid,'CREATE')),
+ (SELECT count(*) FROM pg_auth_members m WHERE m.member=r.oid),
+ (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND c.relowner<>r.oid)
+ FROM pg_roles r WHERE r.rolname=current_user`
+	if err:=db.QueryRow(ctx,query,schema).Scan(&current,&session,&login,&super,&createDB,&createRole,&inherit,&replication,&bypass,&owns,&createSchema,&createDatabase,&createPublic,&ownedSchemas,&otherCreate,&memberships,&ownerMismatch); err!=nil { return err }
+	if current!=role || session!=role || !login || super || createDB || createRole || inherit || replication || bypass || !owns || !createSchema || createDatabase || createPublic || ownedSchemas!=1 || otherCreate!=0 || memberships!=0 || ownerMismatch!=0 {
+		return errors.New("actual migration login/schema-owner permissions differ")
+	}
+	return evidence.save(name+"-migration-owner.json",map[string]any{
+		"current_user":current,"session_user":session,"role":role,"schema":schema,"login":login,"superuser":super,
+		"create_database":createDB,"create_role":createRole,"inherit":inherit,"replication":replication,"bypass_rls":bypass,
+		"owns_schema":owns,"schema_create":createSchema,"database_create":createDatabase,"public_schema_create":createPublic,
+		"owned_schema_count":ownedSchemas,"other_schema_create_count":otherCreate,"membership_count":memberships,"object_owner_mismatch_count":ownerMismatch,
+		"runtime_dml_least_privilege_checked":false},16<<10)
+}
+
+func populatedObserveFailedCall(raw, label string, evidence *populatedEvidence) {
+	// Observe uncertain acknowledgement without editing or assuming rollback.
+	ctx,cancel:=context.WithTimeout(context.Background(),10*time.Second); defer cancel()
+	db,err:=pgxpool.New(ctx,raw)
+	if err!=nil { _=evidence.save(label+"-committed-observation.json",map[string]any{"classified":"unknown","error":populatedError(err)},16<<10); return }
+	defer db.Close()
+	tx,err:=db.BeginTx(ctx,pgx.TxOptions{AccessMode:pgx.ReadOnly})
+	if err!=nil { _=evidence.save(label+"-committed-observation.json",map[string]any{"classified":"unknown","error":populatedError(err)},16<<10); return }
+	defer rollbackStorage(tx)
+	shape,err:=readSchemaShape(ctx,tx)
+	classification:="unknown"
+	attempts:=map[string]any{}
+	if err==nil {
+		for _,version:=range []int{4,5} {
+			shapeErr:=checkSchemaShape(shape,expectedSchemaShape(schemaMigrations[version-1].shape),false)
+			var ledgerErr error
+			if shapeErr==nil { ledgerErr=populatedReadOnlyLedger(ctx,tx,version) }
+			attempts[fmt.Sprintf("00%d",version)]=map[string]any{"shape_error":populatedError(shapeErr),"ledger_checked":shapeErr==nil,"ledger_error":populatedError(ledgerErr)}
+			if shapeErr==nil && ledgerErr==nil {
+				classification=fmt.Sprintf("committed00%d",version)
+			}
+		}
+		_=evidence.save(label+"-observed-catalog.json",shape,1<<20)
+	}
+	_=evidence.save(label+"-committed-observation.json",map[string]any{"classified":classification,"original_call_remains_FAIL":true,"inspection_error":populatedError(err),"prefix_attempts":attempts},16<<10)
+}
+
+func TestPopulated004To005100k(t *testing.T) {
+	if os.Getenv("CUTMY_POPULATED100K")!="authorized-once" { t.Fatal("100k runtime requires independently reviewed once authorization") }
+	if storeStartupTimeout!=30*time.Second || len(schemaMigrations)!=5 { t.Fatal("frozen real startup budget/schema changed") }
+	root:=os.Getenv("CUTMY_POPULATED100K_EVIDENCE")
+	if root=="" { t.Fatal("fresh evidence path required") }
+	evidence:=&populatedEvidence{root:root}
+	raw:=os.Getenv("TEST_DATABASE_URL")
+	adminURL,err:=populatedURL(raw,"public","populated100k_admin")
+	if err!=nil { t.Fatal(err) }
+	ctx,cancel:=context.WithTimeout(context.Background(),30*time.Second)
+	admin,err:=pgxpool.New(ctx,adminURL); cancel()
+	if err!=nil { t.Fatal("owned admin pool setup failed") }
+	defer admin.Close()
+	callCount:=0
+	var schemas []string
+	var roles []string
+	defer func(){
+		cleanup,stop:=context.WithTimeout(context.Background(),30*time.Second); defer stop()
+		for _,schema:=range schemas {
+			if _,e:=admin.Exec(cleanup,"DROP SCHEMA IF EXISTS "+pgx.Identifier{schema}.Sanitize()+" CASCADE"); e!=nil { t.Error("owned schema cleanup failed") }
+		}
+		for _,role:=range roles {
+			if _,e:=admin.Exec(cleanup,"DROP ROLE IF EXISTS "+pgx.Identifier{role}.Sanitize()); e!=nil { t.Error("owned migration role cleanup failed") }
+		}
+		var remaining int
+		if e:=admin.QueryRow(cleanup,"SELECT count(*) FROM pg_namespace WHERE nspname=ANY($1::text[])",schemas).Scan(&remaining); e!=nil || remaining!=0 { t.Error("owned namespace absence unconfirmed") }
+		var remainingRoles int
+		if e:=admin.QueryRow(cleanup,"SELECT count(*) FROM pg_roles WHERE rolname=ANY($1::text[])",roles).Scan(&remainingRoles); e!=nil || remainingRoles!=0 { t.Error("owned migration role absence unconfirmed") }
+		if e:=evidence.save("fixture-final.json",map[string]any{"OpenStore_calls":callCount,"maximum_calls":4,"owned_schemas":schemas,"owned_roles":roles,"remaining_schemas":remaining,"remaining_roles":remainingRoles,"failed":t.Failed(),"complete":!t.Failed(),"full_raw_row_archive":false},16<<10); e!=nil { t.Error(e) }
+	}()
+	for _,which:=range []string{"success","deadline"} {
+		// The runner records fresh host/container/volume admission before each case.
+		fmt.Println("POPULATED_CASE_ADMISSION "+which)
+		if err=os.WriteFile(filepath.Join(root,"admission-request-"+which),[]byte(which+"\n"),0600); err!=nil { t.Fatal(err) }
+		wait:=time.NewTimer(30*time.Second)
+		for {
+			if data,e:=os.ReadFile(filepath.Join(root,"admission-accepted-"+which)); e==nil && string(data)==which+"\n" { break }
+			select { case <-wait.C: t.Fatal("fresh runner resource admission missing"); default: time.Sleep(20*time.Millisecond) }
+		}
+		wait.Stop()
+		schema:=newID("populated100k_"+which); schemas=append(schemas,schema)
+		role:=schema+"_owner"; roles=append(roles,role)
+		password:=newID("owned_password"); populatedSecrets.Store(password,true)
+		setupCtx,stop:=context.WithTimeout(context.Background(),120*time.Second)
+		if _,err=admin.Exec(setupCtx,"CREATE ROLE "+pgx.Identifier{role}.Sanitize()+" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD '"+password+"'"); err!=nil { stop(); t.Fatal("owned migration role setup failed") }
+		if _,err=admin.Exec(setupCtx,"CREATE SCHEMA "+pgx.Identifier{schema}.Sanitize()+" AUTHORIZATION "+pgx.Identifier{role}.Sanitize()); err!=nil { stop(); t.Fatal("owned schema setup failed") }
+		setupURL,e:=populatedOwnerURL(raw,schema,schema+"_setup",role,password); if e!=nil { stop(); t.Fatal(e) }
+		setup,e:=pgxpool.New(setupCtx,setupURL); stop(); if e!=nil { t.Fatal("owned setup pool failed") }
+		if e=populatedSeed(setup); e!=nil { setup.Close(); t.Fatal("004 install/seed failed",populatedError(e)) }
+		if e=populatedCounts(setup,4,which+"004",evidence); e!=nil { setup.Close(); t.Fatal(e) }
+		if e=populatedMigrationOwner(setup,schema,which+"004",evidence); e!=nil { setup.Close(); t.Fatal(e) }
+		before,e:=populatedSnapshotAt(setup,4,which+"004-before",evidence); setup.Close(); if e!=nil { t.Fatal(e) }
+		startURL,e:=populatedOwnerURL(raw,schema,schema+"_startup",role,password); if e!=nil { t.Fatal(e) }
+		var store *Store
+		if which=="success" {
+			callCount++
+			var elapsed time.Duration
+			store,e,elapsed=populatedOpen(startURL,"success-upgrade",evidence)
+			if e!=nil || store==nil || elapsed>30*time.Second { if store!=nil { store.DB.Close() }; populatedObserveFailedCall(startURL,"success-upgrade",evidence); t.Fatal("first populated upgrade FAIL",populatedError(e)) }
+		} else {
+			blockURL,e:=populatedURL(raw,schema,schema+"_blocker"); if e!=nil { t.Fatal(e) }
+			blocker,e:=pgxpool.New(context.Background(),blockURL); if e!=nil { t.Fatal("blocker pool failed") }
+			blockCtx,blockCancel:=context.WithTimeout(context.Background(),40*time.Second)
+			lock,e:=blocker.Begin(blockCtx); if e!=nil { blockCancel(); blocker.Close(); t.Fatal("blocker transaction failed") }
+			if _,e=lock.Exec(blockCtx,"LOCK TABLE "+pgx.Identifier{schema,"app_schema_migrations"}.Sanitize()+" IN SHARE MODE"); e!=nil { rollbackStorage(lock); blockCancel(); blocker.Close(); t.Fatal("blocker SHARE lock failed") }
+			var pid int
+			if e=lock.QueryRow(blockCtx,"SELECT pg_backend_pid()").Scan(&pid); e!=nil { rollbackStorage(lock); blockCancel(); blocker.Close(); t.Fatal("blocker PID missing") }
+			observeCtx,observeCancel:=context.WithTimeout(context.Background(),35*time.Second)
+			witness:=make(chan error,1)
+			go func(){
+				ticker:=time.NewTicker(50*time.Millisecond); defer ticker.Stop()
+				for {
+					var record []byte
+					query:=`SELECT jsonb_build_object('startup_pid',a.pid,'blocker_pid',$1::integer,'query',a.query,'startup_application',a.application_name,'startup_login',a.usename,'relation',$3::text,
+ 'waiting_mode',w.mode,'waiting_granted',w.granted,'blocker_mode',b.mode,'blocker_granted',b.granted,'blocking_pids',pg_blocking_pids(a.pid))
+ FROM pg_stat_activity a JOIN pg_locks w ON w.pid=a.pid JOIN pg_locks b ON b.pid=$1 AND b.relation=w.relation
+ WHERE a.datname=current_database() AND a.application_name=$2 AND a.usename=$4 AND a.query='INSERT INTO app_schema_migrations(position,version,checksum) VALUES($1,$2,$3)'
+ AND w.locktype='relation' AND w.relation=to_regclass($3) AND w.mode='RowExclusiveLock' AND NOT w.granted
+ AND b.locktype='relation' AND b.mode='ShareLock' AND b.granted AND $1=ANY(pg_blocking_pids(a.pid))`
+					e:=admin.QueryRow(observeCtx,query,pid,schema+"_startup",pgx.Identifier{schema,"app_schema_migrations"}.Sanitize(),role).Scan(&record)
+					if e==nil { witness<-evidence.save("deadline-ledger-insert-lock-witness.json",map[string]any{"observed":json.RawMessage(record),"pending_ordinal_source_derived":5,"pre_call_exact_ledger_position":4,"immutable005_checksum":migrationChecksum(schemaMigrations[4])},16<<10); return }
+					if !errors.Is(e,pgx.ErrNoRows) { witness<-e; return }
+					select { case <-observeCtx.Done(): witness<-observeCtx.Err(); return; case <-ticker.C: }
+				}
+			}()
+			callCount++
+			var elapsed time.Duration
+			store,e,elapsed=populatedOpen(startURL,"deadline-blocked-upgrade",evidence)
+			// Do not release the blocker until the actual 30s-startup call returns.
+			observeCancel(); witnessErr:=<-witness
+			releaseCtx,releaseCancel:=context.WithTimeout(context.Background(),30*time.Second)
+			releaseErr:=lock.Rollback(releaseCtx); releaseCancel(); blockCancel(); blocker.Close()
+			if store!=nil { store.DB.Close() }
+			if e==nil || store!=nil || !errors.Is(e,context.DeadlineExceeded) || elapsed>32*time.Second || elapsed<29*time.Second || witnessErr!=nil || releaseErr!=nil {
+				populatedObserveFailedCall(startURL,"deadline-blocked-upgrade",evidence)
+				t.Fatal("partial-DDL deadline control FAIL/incomplete",populatedError(e))
+			}
+			checkURL,e:=populatedOwnerURL(raw,schema,schema+"_rollback",role,password); if e!=nil { t.Fatal(e) }
+			check,e:=pgxpool.New(context.Background(),checkURL); if e!=nil { t.Fatal("rollback inspector failed") }
+			rolled,e:=populatedSnapshotAt(check,4,"deadline004-after-deadline",evidence)
+			if e==nil { e=populatedCounts(check,4,"deadline004-after-deadline",evidence) }; check.Close()
+			if e!=nil || !reflect.DeepEqual(before.Legacy,rolled.Legacy) || !reflect.DeepEqual(before.Full,rolled.Full) || before.CatalogSHA256!=rolled.CatalogSHA256 || !reflect.DeepEqual(before.SourceXmin,rolled.SourceXmin) {
+				t.Fatal("deadline failed to preserve exact committed004; no recovery replacement")
+			}
+			callCount++
+			store,e,elapsed=populatedOpen(startURL,"deadline-labelled-recovery",evidence)
+			if e!=nil || store==nil || elapsed>30*time.Second { if store!=nil { store.DB.Close() }; populatedObserveFailedCall(startURL,"deadline-labelled-recovery",evidence); t.Fatal("labelled recovery failed",populatedError(e)) }
+		}
+		afterName:=which+"005-after-upgrade"
+		if which=="deadline" { afterName="deadline005-after-labelled-recovery" }
+		after,e:=populatedSnapshotAt(store.DB,5,afterName,evidence)
+		if e==nil { e=populatedCounts(store.DB,5,afterName,evidence) }
+		if e==nil { e=populatedMigrationOwner(store.DB,schema,afterName,evidence) }
+		if e!=nil || !reflect.DeepEqual(before.Legacy,after.Legacy) { store.DB.Close(); t.Fatal("005 changed retained004 rows/ledger or backfill oracles failed") }
+		store.DB.Close()
+		if which=="success" {
+			callCount++
+			reopened,e,elapsed:=populatedOpen(startURL,"success-restart",evidence)
+			if e!=nil || reopened==nil || elapsed>30*time.Second { if reopened!=nil { reopened.DB.Close() }; populatedObserveFailedCall(startURL,"success-restart",evidence); t.Fatal("restart failed",populatedError(e)) }
+			restart,e:=populatedSnapshotAt(reopened.DB,5,"success005-after-restart",evidence)
+			if e==nil { e=populatedMigrationOwner(reopened.DB,schema,"success005-after-restart",evidence) }; reopened.DB.Close()
+			if e!=nil || !reflect.DeepEqual(after.Full,restart.Full) || after.CatalogSHA256!=restart.CatalogSHA256 { t.Fatal("restart rewrote005 values/xmin/catalog/ledger") }
+		}
+		dropCtx,dropCancel:=context.WithTimeout(context.Background(),30*time.Second)
+		_,e=admin.Exec(dropCtx,"DROP SCHEMA "+pgx.Identifier{schema}.Sanitize()+" CASCADE")
+		if e==nil { _,e=admin.Exec(dropCtx,"DROP ROLE "+pgx.Identifier{role}.Sanitize()) }
+		var remaining int
+		if e==nil { e=admin.QueryRow(dropCtx,"SELECT count(*) FROM pg_namespace WHERE nspname=$1",schema).Scan(&remaining) }
+		var remainingRoles int
+		if e==nil { e=admin.QueryRow(dropCtx,"SELECT count(*) FROM pg_roles WHERE rolname=$1",role).Scan(&remainingRoles) }
+		dropCancel()
+		if e!=nil || remaining!=0 || remainingRoles!=0 { t.Fatal("sequential namespace/role cleanup failed") }
+		if e=evidence.save(which+"-namespace-cleanup.json",map[string]any{"schema":schema,"remaining":remaining,"role":role,"remaining_roles":remainingRoles},16<<10); e!=nil { t.Fatal(e) }
+	}
+	if callCount!=4 { t.Fatal("unexpected OpenStore call count") }
+}

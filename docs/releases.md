@@ -1,6 +1,6 @@
 # CLI releases
 
-Releases use semantic versions during 0.x development. User-visible changes belong
+Releases use semantic versions; the documented 1.x library, CLI and HTTP contracts are stable. User-visible changes belong
 in [CHANGELOG](../CHANGELOG.md); `/api/v1` is the server contract. Additive fields
 should preserve clients. Incompatible changes need an explicit migration note and
 an appropriate version/API decision. A tag does not guarantee third-party source
@@ -25,7 +25,7 @@ checks is not proof of every semantic behavior or platform combination.
    history. Database/media changes must pass real historical upgrade and
    coordinated backup restoration, with redacted evidence retained.
 2. Move completed Unreleased notes under a dated heading such as
-   `## 0.3.0 - 2026-10-10`, retaining Unreleased for future changes. Include known
+   `## 1.0.0 - 2026-10-11`, retaining Unreleased for future changes. Include known
    limitations and measured benchmark methods.
 3. Commit the reviewed changes and tag that exact commit. Push the commit/tag when
    release publication is intended.
@@ -33,8 +33,8 @@ checks is not proof of every semantic behavior or platform combination.
 From a clean reviewed checkout:
 
 ```sh
-git tag -a v0.3.0 -m 'cutmyvideo-core v0.3.0'
-make release VERSION=v0.3.0
+git tag -a v1.0.0 -m 'cutmyvideo-core v1.0.0'
+make release VERSION=v1.0.0
 ```
 
 The script refuses dirty/untracked files, malformed versions and tags that do not
@@ -134,14 +134,15 @@ result too. This does not imply native historical restore acceptance on every OS
 Release checks include the full Ubuntu/FFmpeg 6.1 suite and targeted copy/HLS
 timeline regressions in the pinned Bookworm runtime base with FFmpeg 5.1.
 Published v0.2.1 archives predate this sealed-bundle and extracted-binary gate;
-new checks do not retroactively validate them. No approved tag has exercised the
-new signing/draft path yet; candidate tests cannot establish actual signing.
+new checks do not retroactively validate them. A release tag must pass the real
+signing/draft path and downloaded-asset verification before final publication;
+unsigned candidate tests do not establish signing.
 Website production deployment is separate and must preserve persistent volumes;
 see [operations](operations.md).
 
 ## SBOM and release trust
 
-The prepared protocol adds `SBOM.spdx.json`, `TRUST.json`, two retained Sigstore
+The 1.x protocol adds `SBOM.spdx.json`, `TRUST.json`, two retained Sigstore
 bundles and `ATTESTATIONS.json` beside the original eight files. The sealed
 archive directory remains exactly five archives plus SOURCE, MANIFEST and
 SHA256SUMS; the original files are never repackaged to add these sidecars.
@@ -201,10 +202,10 @@ See [GitHub's artifact attestation documentation](https://docs.github.com/en/act
 ## Consumer verification of a new signed release
 
 The [consumer verifier](../scripts/release-consumer.py) checks **all 13 already
-downloaded assets** in one command. It applies to a future approved tag containing
-this protocol. Historical v0.2.1 and unsigned candidates are refused. No approved
-tag has exercised the signing path yet; mocked signature controls do not establish
-actual Sigstore verification.
+downloaded assets** in one command. The 1.x publication process runs this real
+verification on all five native targets before finalizing the same draft release
+and asset set. Historical v0.2.1 and unsigned candidates are refused. Mocked
+signature controls remain separate from actual Sigstore verification.
 
 Install Git, GitHub CLI 2.89.0 (the reviewed JSON output/certificate contract), and CPython 3.10 or
 newer on Linux, macOS or Windows. Obtain the full expected source commit and version
@@ -231,7 +232,7 @@ Place exactly the five platform archives plus `SOURCE.json`, `MANIFEST.json`,
 command, replacing the paths, version and reviewed full 40-character commit:
 
 ```sh
-python3 /path/to/reviewed-verifier/release-consumer.py --directory /path/to/downloaded-release --version v0.3.0 --expected-commit REVIEWED_FULL_40_CHARACTER_COMMIT
+python3 /path/to/reviewed-verifier/release-consumer.py --directory /path/to/downloaded-release --version v1.0.0 --expected-commit REVIEWED_FULL_40_CHARACTER_COMMIT
 ```
 
 On Windows use `python` and the corresponding Windows paths. Exit status zero

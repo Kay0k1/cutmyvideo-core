@@ -1,14 +1,16 @@
 # Changelog
 
-Notable changes follow semantic versioning. The project is pre-1.0; the API is versioned under `/api/v1`.
+Notable changes follow semantic versioning. The documented 1.x Go library, CLI and `/api/v1` contracts are stable.
 
 ## Unreleased
 
+## 1.0.0 - 2026-10-11
+
 ### Added
-- Prepare migration 5 with transactional source job/exact-preview pin counts, indexed bounded source TTL selection and persisted bounded drift audits. This runtime/schema transition requires fresh PostgreSQL/native/upgrade acceptance and matched measurements; existing same-schema hosting evidence does not cover it.
-- Verify all 13 downloaded signed-release assets with one portable consumer command, fixed GitHub certificate policy, exact subjects and source/version hashes, and remote tag object/commit checks before and after verification. No Go SDK, checkout or unpublished gate receipt is required; real signing still requires an approved new tag.
-- Prepare a standalone public Linux amd64 hosting profile with HTTPS, separate administrative/migration/runtime roles, bounded containers, exact project-owned egress rules, immutable image/source identity and coordinated database/media upgrade/restore checks on a disposable CI host.
-- Derive deterministic SPDX 2.3 and trust sidecars from the five verified CLI binaries, with exact Go module checksums and shipped notice hashes. Prepare separate tag-only GitHub provenance/SPDX attestations and require certificate identity, every signed subject and the original archive/verdict identity before draft creation; signing still needs an approved new release tag.
+- Migration 5 adds transactional source job/exact-preview pin counts, indexed bounded source TTL selection and persisted bounded drift audits. Release checks require fresh PostgreSQL/native/004→005 upgrade and coordinated restore acceptance.
+- Verify all 13 downloaded signed-release assets with one portable consumer command, fixed GitHub certificate policy, exact subjects and source/version hashes, and remote tag object/commit checks before and after verification. No Go SDK, checkout or unpublished gate receipt is required. Publication requires real signature verification of the downloaded assets on all five native targets.
+- Add a standalone public Linux amd64 hosting profile with HTTPS, separate administrative/migration/runtime roles, bounded containers, exact project-owned egress rules, immutable image/source identity and coordinated database/media upgrade/restore checks on a disposable CI host.
+- Derive deterministic SPDX 2.3 and trust sidecars from the five verified CLI binaries, with exact Go module checksums and shipped notice hashes. Generate tag-only GitHub provenance/SPDX attestations and require certificate identity, every signed subject and the original archive/verdict identity before draft creation; only the original release tag push can sign.
 - Verify one immutable source and reproducible five-target archive bundle before release: safe manifests/checksums, nonpublishable PR candidates, native execution of the extracted CLI/API/worker and a separate draft publisher gated by all five results.
 - Add fresh SDK/CLI `display_width`/`display_height` inspection fields while preserving coded dimensions and persisted HTTP source responses; document shared stream, geometry, timing and color policies.
 - Persisted storage scan/workspace progress and fair deletion retries, with a retryable `storage_initializing` admission diagnostic and an upgrade from the ordered migration predecessor.

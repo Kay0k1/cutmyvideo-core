@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       acceptance_mode:
-        description: 'Explicit schema mode; transition requires the reviewed recovery application commit and 169-file inventory'
+        description: 'Explicit schema mode; transition verifies the current reviewed recovery application inventory'
         type: choice
         options: [same-schema, source-retention-004-to-005]
         default: source-retention-004-to-005

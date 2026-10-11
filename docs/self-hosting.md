@@ -248,11 +248,12 @@ preexisting installations; never use `down -v` on retained state.
 
 ## Required acceptance before supported status
 
-Migration 5 changes runtime sources and the schema. The unchanged acceptance
-below deliberately refuses this candidate at the runtime-source identity gate.
-It must receive a separate reviewed 004→005 upgrade, reduced-role execution and
-005 backup/restore gate before supported status. Earlier successful runs remain
-historical evidence for their exact commits; they do not transfer to this change.
+Migration 5 changes runtime sources and the schema. The required
+`source-retention-004-to-005` acceptance mode checks the actual current checkout
+through the reviewed 004→005 upgrade, reduced-role execution and coordinated
+005 backup/restore gate. Its 53 checks across ten groups run automatically for
+release candidates; missing or skipped prerequisites refuse acceptance.
+Historical runs remain evidence for their exact commits.
 See [migration recovery](migrations.md#migration-5-upgrade-and-rollback).
 
 The prepared image-upgrade test pins the immutable baseline **A1** to
@@ -262,11 +263,12 @@ CI checkout. A1 includes the TCP healthcheck and exact conntrack-order fix;
 the earlier immutable baseline and its failed runs remain separate historical
 evidence. No sealed old snapshot is patched to make an upgrade pass.
 
-The application sources (`cmd`, `internal`, `pkg`, `go.mod`, `go.sum`, including
-tracked tests and fixtures) must match the immutable reference
-`06bb74bca90a79fbf399c01cf71f7f44af186431` in both images. This tests image/source
-identity, retained data and a same-schema upgrade; it does not demonstrate a
-schema-changing application upgrade. A1, B and the restored B each require the
+In the historical `same-schema` mode, application sources (`cmd`, `internal`,
+`pkg`, `go.mod`, `go.sum`, including tracked tests and fixtures) must match the
+immutable reference `06bb74bca90a79fbf399c01cf71f7f44af186431` in both images.
+That mode verifies a same-schema image upgrade. The required
+`source-retention-004-to-005` mode instead binds B to the reviewed current
+application inventory and verifies the schema-changing upgrade. A1, B and the restored B each require the
 actual final-listener TCP healthcheck and an independent SQL round trip.
 
 A failed policy apply/remove retains a bounded, redacted filter-rule snapshot

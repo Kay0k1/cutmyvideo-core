@@ -1,4 +1,11 @@
-# Prepared source-retention 004→005 public transition
+# Historical preparation of the source-retention 004→005 public transition
+
+This page retains the original preparation plan and its historical candidate
+identities. Its references to pending gates and future observations describe
+that preparation stage. The current mandatory, automated transition and
+coordinated restoration checks are documented in [self-hosting.md](self-hosting.md).
+The current release must pass those checks for its own exact source and archives;
+the historical identities below do not replace that acceptance.
 
 This is a source-only acceptance extension. It defines the evidence required for
 the explicit `source-retention-004-to-005` mode; it does not record a successful
