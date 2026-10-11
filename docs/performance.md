@@ -5,6 +5,10 @@ and concurrent storage admission, use the separate
 [storage capacity workload](storage-capacity.md). It measures synthetic metadata
 and filesystem entries; media encoding results below have a different scope.
 
+The [current storage 1,000-row pilot](../benchmarks/current-storage-1000-2026-10-11/README.md)
+records a complete failed capacity gate, its measured SQL/publication
+latencies and unchanged short-cycle criteria. 10,000/100,000 were not run.
+
 Current optimization evidence: [metadata cache encoding, 2026-10-10](../benchmarks/2026-10-10-metadata-compression/README.md)
 includes raw before/after measurements, environment, medians/ranges and limits.
 Repeated compressible metadata fills allocated 65.1% fewer bytes and took 24.7%

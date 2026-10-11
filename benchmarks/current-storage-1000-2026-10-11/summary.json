@@ -1,0 +1,626 @@
+{
+  "cleanup": {
+    "both_namespaces_and_roles_absent": true,
+    "owned_container_removed_and_absence_checked": true
+  },
+  "environment": {
+    "fresh_namespace_each": true,
+    "go_version": "go version go1.27.2 linux/amd64",
+    "gomaxprocs": 2,
+    "gomemlimit": "128MiB (soft)",
+    "hosted_job": "Ubuntu24.04",
+    "minimum_stage_resource_admission": {
+      "available_host_memory_bytes": 3221225472,
+      "free_host_disk_bytes": 2147483648,
+      "host_cpus": 2
+    },
+    "platform": "linux/amd64",
+    "postgres_image": {
+      "amd64_manifest_digest": "sha256:66aafa11cf15800a3c94763f7e11d1e7b2e37e5e84bc4ce027cb6e1e4bfaf4df",
+      "config_digest": "sha256:589f742565e4f6d22149176b032974f55f8201a8a37b71ed587ec5c6902e689f",
+      "container_image_identity": "sha256:589f742565e4f6d22149176b032974f55f8201a8a37b71ed587ec5c6902e689f",
+      "image_store_identity": "sha256:589f742565e4f6d22149176b032974f55f8201a8a37b71ed587ec5c6902e689f",
+      "index_digest": "sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826",
+      "memory_bytes": 1073741824,
+      "memory_swap_bytes": 1073741824,
+      "nano_cpus": 2000000000,
+      "oom_killed": false,
+      "platform": "linux/amd64",
+      "reference": "docker.io/library/postgres@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826"
+    },
+    "postgresql_settings": {
+      "fsync": "on",
+      "jit": "off",
+      "max_connections": "32",
+      "server_version": "17.11 (Debian 17.11-1.pgdg12+2)",
+      "server_version_num": "170011",
+      "shared_buffers": "128MB",
+      "synchronous_commit": "on",
+      "work_mem": "4MB"
+    },
+    "same_container_without_cache_reset": true
+  },
+  "format": 1,
+  "kind": "current-storage-1000-public-result",
+  "limits": [
+    "Synthetic database rows, zero-byte filesystem entries and tiny files only.",
+    "No video/FFmpeg, production latency or maximum-capacity claim.",
+    "One before/after pair; no significance or individual-change attribution claim.",
+    "Full reconciliation, unchanged scan and final bootstrap are one observation each.",
+    "The fixture migrates fresh schemas before seeding; populated004-to005 startup was not measured.",
+    "Failed short-cycle gates remain FAIL after later full recovery."
+  ],
+  "metrics_ms": {
+    "after": {
+      "durable_source_publication": {
+        "max_ms": 40.717,
+        "n": 80,
+        "p50_ms": 7.042,
+        "p95_ms": 22.283
+      },
+      "job_membership_insert": {
+        "client_round_trip": {
+          "max_ms": 0.762,
+          "n": 20,
+          "p50_ms": 0.276,
+          "p95_ms": 0.382
+        },
+        "postgres_execution": {
+          "max_ms": 0.465,
+          "n": 20,
+          "p50_ms": 0.107,
+          "p95_ms": 0.208
+        }
+      },
+      "job_status_only": {
+        "client_round_trip": {
+          "max_ms": 0.968,
+          "n": 20,
+          "p50_ms": 0.259,
+          "p95_ms": 0.325
+        },
+        "postgres_execution": {
+          "max_ms": 0.54,
+          "n": 20,
+          "p50_ms": 0.072,
+          "p95_ms": 0.145
+        }
+      },
+      "persisted_metadata_hit": {
+        "max_ms": 30.118,
+        "n": 80,
+        "p50_ms": 0.56,
+        "p95_ms": 3.439
+      },
+      "preview_membership_insert": {
+        "client_round_trip": {
+          "max_ms": 1.009,
+          "n": 20,
+          "p50_ms": 0.282,
+          "p95_ms": 0.369
+        },
+        "postgres_execution": {
+          "max_ms": 0.693,
+          "n": 20,
+          "p50_ms": 0.127,
+          "p95_ms": 0.202
+        }
+      },
+      "progressive_bootstrap": {
+        "max_ms": 6.074,
+        "n": 32,
+        "p50_ms": 5.714,
+        "p95_ms": 6.001
+      },
+      "reserve_source": {
+        "max_ms": 50.779,
+        "n": 80,
+        "p50_ms": 7.13,
+        "p95_ms": 36.149
+      },
+      "retention_batch": {
+        "max_ms": 120.188,
+        "n": 20,
+        "p50_ms": 30.111,
+        "p95_ms": 88.666
+      },
+      "short_reconciliation": {
+        "max_ms": 5.435,
+        "n": 32,
+        "p50_ms": 5.131,
+        "p95_ms": 5.393
+      },
+      "source_retention": {
+        "client_round_trip": {
+          "max_ms": 9.878,
+          "n": 20,
+          "p50_ms": 7.824,
+          "p95_ms": 7.926
+        },
+        "postgres_execution": {
+          "max_ms": 8.734,
+          "n": 20,
+          "p50_ms": 7.322,
+          "p95_ms": 7.421
+        }
+      },
+      "source_retention_begin_and_fence": {
+        "max_ms": 0.465,
+        "n": 20,
+        "p50_ms": 0.198,
+        "p95_ms": 0.225
+      }
+    },
+    "before": {
+      "durable_source_publication": {
+        "max_ms": 135.379,
+        "n": 80,
+        "p50_ms": 6.108,
+        "p95_ms": 38.613
+      },
+      "job_membership_insert": {
+        "client_round_trip": {
+          "max_ms": 0.429,
+          "n": 20,
+          "p50_ms": 0.19,
+          "p95_ms": 0.221
+        },
+        "postgres_execution": {
+          "max_ms": 0.156,
+          "n": 20,
+          "p50_ms": 0.055,
+          "p95_ms": 0.09
+        }
+      },
+      "job_status_only": {
+        "client_round_trip": {
+          "max_ms": 0.522,
+          "n": 20,
+          "p50_ms": 0.215,
+          "p95_ms": 0.296
+        },
+        "postgres_execution": {
+          "max_ms": 0.119,
+          "n": 20,
+          "p50_ms": 0.039,
+          "p95_ms": 0.108
+        }
+      },
+      "persisted_metadata_hit": {
+        "max_ms": 22.624,
+        "n": 80,
+        "p50_ms": 0.576,
+        "p95_ms": 5.529
+      },
+      "preview_membership_insert": {
+        "client_round_trip": {
+          "max_ms": 1.328,
+          "n": 20,
+          "p50_ms": 0.203,
+          "p95_ms": 0.279
+        },
+        "postgres_execution": {
+          "max_ms": 1.025,
+          "n": 20,
+          "p50_ms": 0.064,
+          "p95_ms": 0.137
+        }
+      },
+      "progressive_bootstrap": {
+        "max_ms": 5.829,
+        "n": 32,
+        "p50_ms": 5.437,
+        "p95_ms": 5.808
+      },
+      "reserve_source": {
+        "max_ms": 46.391,
+        "n": 80,
+        "p50_ms": 5.982,
+        "p95_ms": 38.659
+      },
+      "retention_batch": {
+        "max_ms": 54.033,
+        "n": 20,
+        "p50_ms": 6.195,
+        "p95_ms": 38.868
+      },
+      "short_reconciliation": {
+        "max_ms": 5.749,
+        "n": 32,
+        "p50_ms": 5.235,
+        "p95_ms": 5.582
+      },
+      "source_retention": {
+        "client_round_trip": {
+          "max_ms": 5.176,
+          "n": 20,
+          "p50_ms": 3.912,
+          "p95_ms": 4.185
+        },
+        "postgres_execution": {
+          "max_ms": 3.998,
+          "n": 20,
+          "p50_ms": 3.406,
+          "p95_ms": 3.512
+        }
+      },
+      "source_retention_begin_and_fence": {
+        "max_ms": 0.433,
+        "n": 20,
+        "p50_ms": 0.192,
+        "p95_ms": 0.266
+      }
+    }
+  },
+  "provenance": {
+    "artifact_id": 11701729285,
+    "artifact_zip_sha256": "10f9779d4f0ed35b99686b202dbdb0ecd3080dba18f8620d952aedd56126094c",
+    "fixture_sha256": "ddaa0f59251344dbc164c60d81ed4c451a58cf908a02b76235eae0641dbe42e6",
+    "identity_sha256": "bfad2c0c3f1c636f10a62d33aca077eff1a728f61281d86c65256dd57cbf8b5f",
+    "original_producer_summary_sha256": "2e9789f9fe97648400730f3fc587a55324cf25cb8ee29cd7472e9c34b3eb94fd",
+    "original_scan_helpers": {
+      "capacityBootstrap": {
+        "identical_in_both_runtime_revisions": true,
+        "sha256": "18b6fa06da0cd6094e8bb6f35776e8ceaf930acefc5b170f3f2ae70eaa5f6fd3"
+      },
+      "capacityShortReconciliation": {
+        "identical_in_both_runtime_revisions": true,
+        "sha256": "59d75a261ff19ba1f5275a5a42a54cd27a29a19de9545e60f9a9be1edf32bc9c"
+      }
+    },
+    "provider_log_zip_sha256": "3aa7f9fe1639c0e20ab0fd9a83c5e2910d44f350d67ed17b7d36f99e35a1d694",
+    "raw_copies": {
+      "raw/after-1000.json": {
+        "bytes": 813178,
+        "original_artifact_member": "after-1000/pilot.json",
+        "sha256": "e67c817f6b62b2f7968b9bd39aa779891297213f5d45be44872bc7358ed3a991"
+      },
+      "raw/before-1000.json": {
+        "bytes": 611638,
+        "original_artifact_member": "before-1000/pilot.json",
+        "sha256": "26e893d0f4d516bf324725231bcb859dd7735438ed3a3eba2ff7d2127cb397bc"
+      }
+    },
+    "root_evidence_review_sha256": "05b9673824a4ea52bcd338cdbac0cce6ddc186e2a4b758387726a1225ff7da98"
+  },
+  "publication_scope": {
+    "original_raw_reports_byte_identical": true,
+    "private_environment_and_provider_log_contents_included": false,
+    "raw_report_schema_and_all_string_values_reviewed": true
+  },
+  "result": {
+    "100000_executed": false,
+    "10000_executed": false,
+    "complete": true,
+    "executed_sizes": [
+      1000
+    ],
+    "failed_stages_each": [
+      "short_reconciliation",
+      "progressive_bootstrap"
+    ],
+    "performance_acceptance": false,
+    "promotion_ready": false,
+    "workload_pass": false
+  },
+  "run": {
+    "attempt": 1,
+    "harness_commit": "cde55b3198fd74b58ef3652b175cf919a9f3a315",
+    "id": 38138782219,
+    "provider_conclusion": "failure",
+    "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38138782219/attempts/1",
+    "workflow_id": 381076044
+  },
+  "sampling": {
+    "cold_cache_claim": false,
+    "confidence_interval": null,
+    "dml_rolled_back_each_sample": true,
+    "independent_before_after_pairs": 1,
+    "percentiles": "nearest rank: sorted samples[ceil(n*p)-1]",
+    "sql_includes_first_sample_and_real_triggers": true
+  },
+  "source": {
+    "after": {
+      "application_files": 172,
+      "application_inventory_sha256": "57f97d213b17785c76079e5a0adaaffcc8a7f2350a911af947a2ddd536a04cea",
+      "commit": "f80cb9bba29f2ba97b37152bbf3388735d4a3173",
+      "raw_report": "raw/after-1000.json",
+      "schema": 5,
+      "selector_sql_sha256": "8f40530566bd0bd9bf3ae12ca9604ff20baa5a58a932ea244ee9b5c01ebe8fb7",
+      "test_binary_sha256": "5a129043d5d4eddfe0313d7162dbdbe9c14fe2feb1a871fbb2391a425f6deadb",
+      "tree": "79055414abf21788dc696b73e2e8b1d3bf0afb37"
+    },
+    "before": {
+      "application_files": 164,
+      "application_inventory_sha256": "a1aa7b968c06eaeb075d2cd73f8afbf309a1bc12121d1a3e598ba2561e785f90",
+      "commit": "63873e935626d51087d0a26b84f1de9a7ed86a28",
+      "raw_report": "raw/before-1000.json",
+      "schema": 4,
+      "selector_sql_sha256": "f24b6db8d33ec3b30ac7f26c21fb5874add71f26ea128b1d0468fd20d841b474",
+      "test_binary_sha256": "d4c02937e5786f1c12c3fc213c9e1dd1b33d48daf08a5a76e895aa3321f36440",
+      "tree": "4827f2aa59fd0855963ece7439357dde58fe0826"
+    }
+  },
+  "workloads": {
+    "after": {
+      "complete": true,
+      "foreground": {
+        "admission_workers": 4,
+        "counters_match_actual_ledger": true,
+        "errors": null,
+        "operations_per_worker": 20,
+        "published_sources": 80,
+        "source_reservations_remaining": 0
+      },
+      "go_exit": 1,
+      "held_fence": {
+        "acquired_after_release": true,
+        "attempts": [
+          {
+            "budget_ms": 5,
+            "deadline": true,
+            "error_type": "*pgconn.errTimeout",
+            "unexpected_acquisition": false,
+            "wall_ms": 5.352
+          },
+          {
+            "budget_ms": 50,
+            "deadline": true,
+            "error_type": "*pgconn.errTimeout",
+            "unexpected_acquisition": false,
+            "wall_ms": 50.477
+          }
+        ],
+        "pass": true,
+        "wall_limit_claimed": false
+      },
+      "namespace_role_cleanup": true,
+      "pass": false,
+      "persisted_audit_applicable": true,
+      "postgres_cgroup_cumulative_peak_bytes": 145481728,
+      "progressive_bootstrap": {
+        "cycle_budget_ms": 5,
+        "cycles": 32,
+        "deferrals": 32,
+        "final_pass_ms": 119.086,
+        "final_registered_files": 2024,
+        "final_retry_calls": 1,
+        "initialization_markers": 1,
+        "pass": false,
+        "registered_after_each_cycle": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "registered_before_final_pass": 0
+      },
+      "short_reconciliation": {
+        "cycle_budget_ms": 5,
+        "cycles": 32,
+        "final_full_scan_calls": 1,
+        "final_full_scan_ms": 122.598,
+        "pass": false,
+        "physical_files": 2024,
+        "physical_small_files": 1024,
+        "physical_zero_byte_entries": 1000,
+        "registered_after_each_cycle": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "registered_before_full_scan": 0,
+        "timeouts": 32,
+        "unchanged_full_scan_calls": 1,
+        "unchanged_full_scan_ms": 81.847,
+        "unchanged_scan_preserves_tuple_xmin": true
+      },
+      "stage_pass": {
+        "foreground_dml": true,
+        "foreground_maintenance": true,
+        "held_fence": true,
+        "persisted_audit": true,
+        "progressive_bootstrap": false,
+        "short_reconciliation": false,
+        "source_ttl": true
+      }
+    },
+    "before": {
+      "complete": true,
+      "foreground": {
+        "admission_workers": 4,
+        "counters_match_actual_ledger": true,
+        "errors": null,
+        "operations_per_worker": 20,
+        "published_sources": 80,
+        "source_reservations_remaining": 0
+      },
+      "go_exit": 1,
+      "held_fence": {
+        "acquired_after_release": true,
+        "attempts": [
+          {
+            "budget_ms": 5,
+            "deadline": true,
+            "error_type": "*pgconn.errTimeout",
+            "unexpected_acquisition": false,
+            "wall_ms": 5.281
+          },
+          {
+            "budget_ms": 50,
+            "deadline": true,
+            "error_type": "*pgconn.errTimeout",
+            "unexpected_acquisition": false,
+            "wall_ms": 50.462
+          }
+        ],
+        "pass": true,
+        "wall_limit_claimed": false
+      },
+      "namespace_role_cleanup": true,
+      "pass": false,
+      "persisted_audit_applicable": false,
+      "postgres_cgroup_cumulative_peak_bytes": 126701568,
+      "progressive_bootstrap": {
+        "cycle_budget_ms": 5,
+        "cycles": 32,
+        "deferrals": 32,
+        "final_pass_ms": 179.487,
+        "final_registered_files": 2024,
+        "final_retry_calls": 1,
+        "initialization_markers": 1,
+        "pass": false,
+        "registered_after_each_cycle": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "registered_before_final_pass": 0
+      },
+      "short_reconciliation": {
+        "cycle_budget_ms": 5,
+        "cycles": 32,
+        "final_full_scan_calls": 1,
+        "final_full_scan_ms": 135.053,
+        "pass": false,
+        "physical_files": 2024,
+        "physical_small_files": 1024,
+        "physical_zero_byte_entries": 1000,
+        "registered_after_each_cycle": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "registered_before_full_scan": 0,
+        "timeouts": 32,
+        "unchanged_full_scan_calls": 1,
+        "unchanged_full_scan_ms": 84.471,
+        "unchanged_scan_preserves_tuple_xmin": true
+      },
+      "stage_pass": {
+        "foreground_dml": true,
+        "foreground_maintenance": true,
+        "held_fence": true,
+        "persisted_audit": true,
+        "progressive_bootstrap": false,
+        "short_reconciliation": false,
+        "source_ttl": true
+      }
+    }
+  }
+}

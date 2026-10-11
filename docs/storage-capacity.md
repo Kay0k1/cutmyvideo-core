@@ -10,6 +10,10 @@ The [2026-10-10 before/after report](../benchmarks/2026-10-10-storage-maintenanc
 preserves complete results at both sizes, including regressions and the overall
 failed workload gate. Use its recorded runtime/harness hashes and configuration
 when reproducing that comparison.
+The [current 1,000-row 004/005 pilot, 2026-10-11](../benchmarks/current-storage-1000-2026-10-11/README.md)
+preserves its complete FAIL: both unchanged 32 × 5 ms scan gates make zero
+progress, while publication/accounting and the other stages pass. Its
+current candidate is not ready for 10,000; 100,000 was not measured.
 The [subsequent scalable-storage report](../benchmarks/2026-10-10-scalable-storage/README.md)
 uses the revised frozen harness with the additional bounded-cache backlog stage;
 compare its own matched before/after pair rather than mixing harness versions.

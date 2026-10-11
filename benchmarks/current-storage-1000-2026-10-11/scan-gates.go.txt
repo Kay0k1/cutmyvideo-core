@@ -1,0 +1,106 @@
+// Byte-identical acceptance helpers from both runtime revisions.
+// Documentation copy only; use the fixed pilot for execution.
+
+func capacityShortReconciliation(t *testing.T, f capacityFixture) map[string]any {
+	t.Helper()
+	const smallFiles = 1024
+	count := f.retained + smallFiles
+	for i := 0; i < count; i++ {
+		path := filepath.Join(f.c.DataDir, "artifacts", fmt.Sprintf("scan-%06d", i))
+		var content []byte
+		if i < smallFiles {
+			content = []byte("synthetic")
+		}
+		if err := os.WriteFile(path, content, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pattern := filepath.Join(f.c.DataDir, "artifacts", "scan-%")
+	latencies := []float64{}
+	progress := []int64{}
+	timeouts := 0
+	for range 32 {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+		start := time.Now()
+		err := f.maintenance.ReconcileStorage(ctx, f.c)
+		cancel()
+		latencies = append(latencies, float64(time.Since(start).Microseconds())/1000)
+		if errors.Is(err, context.DeadlineExceeded) {
+			timeouts++
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		progress = append(progress, capacityCount(t, f.api.DB, "SELECT count(*) FROM storage_files WHERE path LIKE $1", pattern))
+	}
+	// Final unbounded scan verifies data/accounting independently of whether
+	// short cycles progress. The budgeted result is not silently repaired.
+	before := progress[len(progress)-1]
+	fullStart := time.Now()
+	fullCalls := capacityFullReconcile(t, f, pattern, count)
+	fullMS := float64(time.Since(fullStart).Microseconds()) / 1000
+	if n := capacityCount(t, f.api.DB, "SELECT count(*) FROM storage_files WHERE path LIKE $1", pattern); n != int64(count) {
+		t.Fatal("full reconciliation lost files", n)
+	}
+	var xminBefore, xminAfter string
+	if err := f.api.DB.QueryRow(context.Background(), "SELECT md5(string_agg(path||xmin::text,',' ORDER BY path)) FROM storage_files WHERE path LIKE $1", pattern).Scan(&xminBefore); err != nil {
+		t.Fatal(err)
+	}
+	unchangedStart := time.Now()
+	unchangedCalls := capacityFullReconcile(t, f, pattern, count)
+	unchangedMS := float64(time.Since(unchangedStart).Microseconds()) / 1000
+	if err := f.api.DB.QueryRow(context.Background(), "SELECT md5(string_agg(path||xmin::text,',' ORDER BY path)) FROM storage_files WHERE path LIKE $1", pattern).Scan(&xminAfter); err != nil {
+		t.Fatal(err)
+	}
+	progressed := before == int64(count) || before >= progress[7]+min(int64(count)-progress[7], int64(storageScanBatchSize*4))
+	return map[string]any{"physical_zero_byte_entries": f.retained, "physical_small_files": smallFiles, "physical_files": count, "cycle_budget_ms": 5, "cycles": 32, "timeouts": timeouts, "latency": summarizeCapacityLatency(latencies), "registered_after_each_cycle": progress, "registered_before_full_scan": before, "final_full_scan_calls": fullCalls, "unchanged_full_scan_calls": unchangedCalls, "unchanged_full_scan_ms": unchangedMS, "final_full_scan_ms": fullMS, "unchanged_scan_preserves_tuple_xmin": xminBefore == xminAfter, "pass": progressed && xminBefore == xminAfter}
+}
+
+func capacityBootstrap(t *testing.T, f capacityFixture) map[string]any {
+	t.Helper()
+	pattern := filepath.Join(f.c.DataDir, "artifacts", "scan-%")
+	capacityExec(t, f.api.DB, "DELETE FROM storage_state WHERE id=$1", f.c.DataDir)
+	capacityExec(t, f.api.DB, "DELETE FROM storage_files WHERE path LIKE $1", pattern)
+	progress := []int64{}
+	latencies := []float64{}
+	deferrals := 0
+	for range 32 {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+		begin := time.Now()
+		err := f.api.ReserveSource(ctx, f.c, "bootstrap-owner", "bootstrap-token")
+		cancel()
+		latencies = append(latencies, float64(time.Since(begin).Microseconds())/1000)
+		if err != nil {
+			deferrals++
+		} else {
+			if err := f.api.ReleaseSource(context.Background(), "bootstrap-owner", "bootstrap-token"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		progress = append(progress, capacityCount(t, f.api.DB, "SELECT count(*) FROM storage_files WHERE path LIKE $1", pattern))
+	}
+	before := progress[len(progress)-1]
+	// A progressive implementation may intentionally return initializing.
+	// Retry real admissions within a fixed aggregate budget; no ledger patching.
+	begin := time.Now()
+	finalCalls := 0
+	complete := false
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	for finalCalls < 3000 && ctx.Err() == nil {
+		finalCalls++
+		err := f.api.ReserveSource(ctx, f.c, "bootstrap-owner", "bootstrap-token")
+		if err == nil {
+			complete = true
+			if err = f.api.ReleaseSource(ctx, "bootstrap-owner", "bootstrap-token"); err != nil {
+				t.Fatal(err)
+			}
+			break
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			break
+		}
+	}
+	final := capacityCount(t, f.api.DB, "SELECT count(*) FROM storage_files WHERE path LIKE $1", pattern)
+	marker := capacityCount(t, f.api.DB, "SELECT count(*) FROM storage_state WHERE id=$1", f.c.DataDir)
+	return map[string]any{"cycle_budget_ms": 5, "cycles": 32, "latency": summarizeCapacityLatency(latencies), "deferrals": deferrals, "registered_after_each_cycle": progress, "registered_before_final_pass": before, "final_retry_calls": finalCalls, "final_pass_ms": float64(time.Since(begin).Microseconds()) / 1000, "final_registered_files": final, "initialization_markers": marker, "pass": complete && marker == 1 && final == int64(f.retained+1024) && (before > progress[0] || before == int64(f.retained+1024))}
+}

@@ -1,0 +1,17 @@
+{
+  "attempt": 1,
+  "files": {
+    "raw/after-1000.json": {
+      "bytes": 813178,
+      "original_artifact_member": "after-1000/pilot.json",
+      "sha256": "e67c817f6b62b2f7968b9bd39aa779891297213f5d45be44872bc7358ed3a991"
+    },
+    "raw/before-1000.json": {
+      "bytes": 611638,
+      "original_artifact_member": "before-1000/pilot.json",
+      "sha256": "26e893d0f4d516bf324725231bcb859dd7735438ed3a3eba2ff7d2127cb397bc"
+    }
+  },
+  "format": 1,
+  "run_id": 38138782219
+}
