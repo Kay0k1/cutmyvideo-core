@@ -34,6 +34,11 @@ from verify_saved import verify_catalog
 
 IDENTITY = loads(Path(__file__).with_name("identity.json").read_bytes())
 
+# Actual before-1000 foreground from run38123312708/attempt1, preserved report
+# SHA027449077f935bb266536400852e7ac8cee26813bed581116745666deeb50b85.
+# Only this subobject is copied; all measured values and explicit null remain.
+ACTUAL_FOREGROUND_NULL = loads(b'{"admission_workers":4,"advisory_lock_samples":75,"counters_match_actual_ledger":true,"durable_source_publication":{"samples_ms":[32.87,30.405,28.358,26.47,9.677,9.225,8.78,8.229,10.319,9.806,9.302,8.879,12.414,11.878,10.564,9.815,10.006,9.159,8.329,7.655,11.036,9.96,9.457,8.404,8.959,8.17,7.356,6.995,9.414,8.544,8.101,7.262,9.417,9.082,8.23,7.263,9.318,8.464,8.165,7.572,8.624,8.348,7.617,7.001,7.27,6.3,5.907,5.568,7.682,6.875,5.936,5.036,6.347,5.905,5.457,5.133,6.977,6.783,5.908,5.591,7.806,7.033,6.258,5.309,7.308,6.541,5.823,5.383,8.106,7.187,6.317,5.428,7.435,6.502,7.097,6.16,7.084,6.507,5.43,4.901],"p50_ms":7.617,"p95_ms":12.414,"max_ms":32.87},"duration_ms":383.008,"errors":null,"max_observed_waiters":4,"operations_per_worker":20,"pass":true,"persisted_metadata_hit":{"samples_ms":[3.481,1.266,5.77,3,26.733,6.029,4.151,4.707,17.849,0.833,2.07,0.843,1.954,0.742,1.938,0.694,4.008,2.171,2.051,1.887,0.777,2.414,0.55,1.401,0.681,1.044,0.51,0.6,0.547,4.438,0.294,0.361,1.419,0.331,1.734,0.28,1.75,0.356,3.835,0.598,0.916,0.562,0.95,0.708,0.957,0.528,4.175,0.294,1.829,0.326,2.64,0.273,0.303,0.315,0.275,0.317,0.865,0.285,0.275,0.272,0.255,0.296,0.292,0.31,2.956,0.533,1.117,0.562,1.124,0.662,0.788,0.537,3.686,0.311,1.895,0.36,1.873,0.31,1.705,0.403],"p50_ms":0.788,"p95_ms":4.707,"max_ms":26.733},"published_sources":80,"reserve_source":{"samples_ms":[39.238,44.745,49.666,54.062,12.918,12.198,11.519,10.754,9.7,10.105,10.436,11.091,9.382,9.978,11.418,12.048,8.901,9.522,9.998,10.593,8.12,9.297,9.853,10.896,7.926,8.567,9.275,9.458,7.266,8.089,8.544,9.484,7.499,7.963,8.903,9.725,7.547,8.274,8.568,9.613,8.003,8.349,9.074,9.274,5.705,6.567,6.982,7.454,5.57,6.337,7.177,7.958,5.379,5.864,6.274,6.728,5.706,6.03,6.908,7.206,5.617,6.419,7.39,8.287,5.762,6.385,6.923,7.326,5.421,6.349,7.181,8.077,5.471,6.438,6.984,7.863,6.451,6.805,6.613,7.037],"p50_ms":8.003,"p95_ms":12.918,"max_ms":54.062},"retention_batch":{"samples_ms":[69.608,23.678,9.059,10.969,8.891,13.011,8.276,10.62,7.636,11.453,7.852,9.439,6.88,9.76,7.125,9.948,7.177,9.616,7.558,9.384],"p50_ms":9.384,"p95_ms":23.678,"max_ms":69.608},"samples_with_waiters":75,"sampling_interval_ms":5,"source_reservations_remaining":0}')
+
 
 def latency(count):
     return {"samples_ms": [1.0] * count, "p50_ms": 1.0, "p95_ms": 1.0, "max_ms": 1.0}
@@ -158,6 +163,36 @@ class PilotProtocolControls(unittest.TestCase):
             if change == "successor": a["healthy_successor_repaired"] = False
             if change == "full": a["complete_child_audit_claimed"] = True
             self.rejected(v)
+
+    def test_actual_go_nil_errors_preserve_report_and_original_5ms_failures(self):
+        value = fixture("before", short_pass=False)
+        value["stages"]["foreground_maintenance"] = copy.deepcopy(ACTUAL_FOREGROUND_NULL)
+        original = canonical(value)
+        proof = validate_report(value, "before", 1000, IDENTITY)
+        self.assertTrue(proof["verified_measurements"])
+        self.assertTrue(proof["correctness_stages_pass"])
+        self.assertFalse(proof["workload_pass"])
+        self.assertEqual(proof["failed_stages"], ["progressive_bootstrap", "short_reconciliation"])
+        self.assertEqual(canonical(value), original)
+        self.assertIsNone(value["stages"]["foreground_maintenance"]["errors"])
+        value["pass"] = True
+        self.rejected(value, label="before")
+
+    def test_nil_errors_require_present_field_and_preserve_foreground_oracles(self):
+        for invalid in (False, 0, "", {}, ["operation failed"]):
+            value = fixture()
+            value["stages"]["foreground_maintenance"]["errors"] = invalid
+            self.rejected(value)
+        value = fixture()
+        del value["stages"]["foreground_maintenance"]["errors"]
+        self.rejected(value)
+        for key, changed in (("admission_workers", 3), ("operations_per_worker", 19),
+                             ("published_sources", 79), ("source_reservations_remaining", 1),
+                             ("counters_match_actual_ledger", False), ("pass", False)):
+            value = fixture()
+            value["stages"]["foreground_maintenance"].update(errors=None)
+            value["stages"]["foreground_maintenance"][key] = changed
+            self.rejected(value)
 
     def test_foreground_errors_cannot_be_hidden_by_publication_count(self):
         v = fixture(); v["stages"]["foreground_maintenance"]["errors"] = ["synthetic operation failed"]; self.rejected(v)

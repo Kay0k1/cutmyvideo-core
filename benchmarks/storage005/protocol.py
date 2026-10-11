@@ -146,8 +146,12 @@ def validate_report(value, label, size, identity):
         require(isinstance(partial, list) and all(isinstance(p, dict) for p in partial), "audit_partial_shape")
         require(len(partial) == 1 and partial[0].get("source_id") == "comparison-a-hot" and partial[0].get("job_count") == partial[0].get("preview_count") == 128 and partial[0].get("job_done") is False and partial[0].get("preview_done") is False, "durable_partial_audit")
     foreground = stages["foreground_maintenance"]
-    require(foreground.get("admission_workers") == 4 and foreground.get("operations_per_worker") == 20 and isinstance(foreground.get("errors"), list), "foreground_workload")
-    expected_foreground = not foreground["errors"] and foreground.get("published_sources") == 80 and foreground.get("source_reservations_remaining") == 0 and foreground.get("counters_match_actual_ledger") is True
+    errors = foreground.get("errors")
+    require(foreground.get("admission_workers") == 4 and foreground.get("operations_per_worker") == 20 and "errors" in foreground and (errors is None or isinstance(errors, list)), "foreground_workload")
+    # Unchanged capacityConcurrent marshals a nil []string as explicit JSON null.
+    # Normalize locally; retain the original report and reject a missing field.
+    errors = [] if errors is None else errors
+    expected_foreground = not errors and foreground.get("published_sources") == 80 and foreground.get("source_reservations_remaining") == 0 and foreground.get("counters_match_actual_ledger") is True
     require(foreground["pass"] == expected_foreground, "foreground_verdict")
     if expected_foreground:
         for key, count in (("reserve_source", 80), ("durable_source_publication", 80), ("retention_batch", 20), ("persisted_metadata_hit", 80)):
