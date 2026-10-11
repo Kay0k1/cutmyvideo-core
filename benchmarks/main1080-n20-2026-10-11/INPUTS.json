@@ -1,0 +1,294 @@
+{
+  "accepted_checks": {
+    "actual_command_count": 3884,
+    "actual_original_downloads_with_exact_frozen_input_SHA_and_bytes": 168,
+    "fully_verified_exports": 504,
+    "fully_verified_previews": 168,
+    "independently_recomputed_per_frame_SSIM_stats": 504,
+    "measured_workflows": 160,
+    "observed_idle_root_only_samples": 100,
+    "observed_oom_or_oomkill": 0,
+    "resource_observer_errors": 0,
+    "resource_samples_oom_and_swap_checked": 107163,
+    "retained_excluded_warmups": 8,
+    "sampled_host_global_oom_counter_change": 0,
+    "total_fully_verified_workflows": 168,
+    "zero_accounting_queries": 108
+  },
+  "after_distribution": "Local candidate 06bb; not a hosted merge, current EA/005 integration, published release or 1.0 performance claim.",
+  "after_source_epoch": 1791678826,
+  "binaries": {
+    "after": {
+      "archive_name": "cutmyvideo-core_v0.0.0-candidate.g06bb74bca90a79fbf399c01cf71f7f44af186431_linux_amd64.tar.gz",
+      "archive_sha256": "f009fb6c5f28ea7481ada95fbc69557f17a581065913f410b7178e09a60d3395",
+      "binary_sha256": "b22e024425ab8ac43eba19d07e693c8e8eec2dc57061ff5020c597d364851a9c",
+      "runtime_source_sha256": "f04722a03d790d8a5bd6346e2959ce683c73ff1ef0da151910f5d567f89fc811",
+      "tree": "ff341331bc18aa9773ca3fc61f48f9a021c5409c",
+      "version": {
+        "arch": "amd64",
+        "build_time": "2026-10-11T00:33:46Z",
+        "commit": "06bb74bca90a79fbf399c01cf71f7f44af186431",
+        "go_version": "go1.27.2",
+        "os": "linux",
+        "version": "v0.0.0-candidate.g06bb74bca90a79fbf399c01cf71f7f44af186431"
+      }
+    },
+    "before": {
+      "archive_name": "cutmyvideo-core_v0.2.1_linux_amd64.tar.gz",
+      "archive_sha256": "89e7832aaa29e25e6794a9d6e9e14eb9027549bdfc92270eecfd983aac1a8a21",
+      "binary_sha256": "a80cf0504fc4c9c9719c7be8fcd291375dd66637316b7a06b3242187fed8dbf8",
+      "runtime_source_sha256": "71e23398a6a309efb75b68e350100fa0d2ca7aa00a4bb57c27696aa604fbc67a",
+      "tree": "5a3d0ee82d128539468d65ef72e923fdbc40941f",
+      "version": {
+        "arch": "amd64",
+        "build_time": "2026-10-10T19:33:28Z",
+        "commit": "f2be62c42a6a0d3d7a017b40bd683596bc578b95",
+        "go_version": "go1.27.2",
+        "os": "linux",
+        "version": "v0.2.1"
+      }
+    }
+  },
+  "dedicated_cpu_or_memory_reservation": false,
+  "execution_budget": {
+    "cell_seconds": 1800,
+    "minimum_initial_free_bytes": 14949123912,
+    "mode": "descriptive",
+    "pair_seconds": 14400
+  },
+  "experiment": "main1080 N20 accepted attempt2; exact local archived executables",
+  "ffmpeg_ffprobe_version": "N-127083-g65a3870462-20261001",
+  "fixture": {
+    "bytes": 18495443,
+    "duration_ms": 20000,
+    "end_ms": 8000,
+    "fps": 30,
+    "height": 1080,
+    "kind": "natural-camera-derived",
+    "preview_start_ms": 0,
+    "sha256": "dbcce2e3a87a05e104be167e3075c7c98cd23da867f8b858ac3edb724580364d",
+    "start_ms": 2000,
+    "width": 1920
+  },
+  "fixture_complete_audio_proof_sha256": "ea569097946623aa50a2f8cdd3fc00cf98ab4de75e1bfdb4c2bfbfd6ad15f9f5",
+  "fixture_provenance": {
+    "author": "Joaquim Baeta (Spontaneous Symmetry)",
+    "changes": "First20 seconds; SMPTE170m\u2192BT709; CFR30 H264; original sound replaced by stereo440/880Hz pulsed tones; RGB witness strip256\u00d764; no upscale.",
+    "description_revision_url": "https://commons.wikimedia.org/w/index.php?title=File:Pycnonotus_goiavier.webm&oldid=1030336221",
+    "description_url": "https://commons.wikimedia.org/wiki/File:Pycnonotus_goiavier.webm",
+    "generator_argv_receipt_sha256": "c516c78afb08b6a55ad852b90357952d0fa8d1b8ccbb7c757460e46c9e6a6731",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "original_sha256": "c2ba89f5bfa1a7c69c78b04eff8de0c6fce3736e335499f76ee7dbe2006ea7b8",
+    "source_url": "https://upload.wikimedia.org/wikipedia/commons/2/20/Pycnonotus_goiavier.webm",
+    "verification_script_sha256": "54e6f6bebe274ee75adc37334c656ceefd820e2e5848017f0b3f18f8df9fe21d"
+  },
+  "full_raw_corpus_publicly_downloadable": false,
+  "harness_exact_frozen_files": {
+    "harness-frozen/scripts/media-capacity-fixtures.py": {
+      "bytes": 13349,
+      "name": "media-capacity-fixtures.py",
+      "sha256": "de81e4ea682103e9c3ea9b2f57680048537f727389456e78e5e2c9aa3c72483e"
+    },
+    "harness-frozen/scripts/media-capacity.README.md": {
+      "bytes": 11823,
+      "name": "media-capacity.README.md",
+      "sha256": "c8e15acee26253eee4378d73b0c9f4f7e281234a9debc7362538d89d9ee925ee"
+    },
+    "harness-frozen/scripts/media-capacity.py": {
+      "bytes": 111243,
+      "name": "media-capacity.py",
+      "sha256": "071beaf2132b2bcb0943ca9d7ea5519720321a783bbf977cfe44726c0565114f"
+    },
+    "harness-frozen/scripts/media_capacity_test.py": {
+      "bytes": 63400,
+      "name": "media_capacity_test.py",
+      "sha256": "e84ae83c5dd51deadaec7cf1ad60b34cc675253cfbf690fb6944ab42e2896c38"
+    }
+  },
+  "host": {
+    "architecture": "x86_64",
+    "cpus": 4,
+    "driver": "overlayfs",
+    "kernel": "5.15.0-190-generic",
+    "os": "linux",
+    "python": "3.10.12",
+    "server_version": "29.2.1"
+  },
+  "host_memory_total_bytes": 8322879488,
+  "idle_validator_requested_limits": {
+    "actual_peak_measured": false,
+    "cpus": 0.5,
+    "memory_bytes": 536870912,
+    "network": "none",
+    "readonly": true,
+    "swap_bytes": 0
+  },
+  "images": {
+    "postgres": "sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826",
+    "runtime": "sha256:d5b7732e601a8972964e0e1f056190879b798505de32242b3eec9a75766b9742",
+    "tool_base": "sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55"
+  },
+  "local_evidence_integrity": [
+    {
+      "bytes": 1021352,
+      "name": "MANIFEST.json",
+      "sha256": "77fd39f47869df3da623f0e268490b411d2c73b861241ad78a411a5f38a89e40"
+    },
+    {
+      "bytes": 11263867,
+      "name": "summary.json",
+      "sha256": "3cfab0c83389a192194abb4970cc8e548029e6a7a2b757909cbc642e2a8e246e"
+    },
+    {
+      "bytes": 42672,
+      "name": "main-N20-attempt2-final-verification.json",
+      "sha256": "b827100b48f7c619c0e931ba90e270c6091a11a110672e542cae00ff3ed5e8cc"
+    },
+    {
+      "bytes": 351,
+      "name": "main-N20-attempt2-cleanup-verification.json",
+      "sha256": "40c1932b8956cd98b2a6fdc93dd761e3dbd5ee29f45dbf7df9509c92eb76a62d"
+    },
+    {
+      "bytes": 4373,
+      "name": "root-acceptance.json",
+      "sha256": "bc3e3ba01a2e9aed4880903fd3e7fb5767f8c8b37863530d08b7dccb20fffcf0"
+    },
+    {
+      "bytes": 2367,
+      "name": "completed-N20-attempt2-harness-snapshot.json",
+      "sha256": "fdb6c12a42f22eccf31546937311e02c9560e1e647e3a3854b4e72389b52bcc7"
+    },
+    {
+      "bytes": 5042,
+      "name": "main-N20-attempt2-final-input-identities.json",
+      "sha256": "83b38c1bc4bc6ccf33f878ecb5028b2de6683eec13da77c272392ce6a6b1dae3"
+    },
+    {
+      "bytes": 2585,
+      "name": "CONFIG-main-N20-proposed.json",
+      "sha256": "d1171b00c3e22240953798bd2a630eeab6c3b21ff0515b6ec9ba3daa40b13a66"
+    },
+    {
+      "bytes": 3640,
+      "name": "FIXTURES-complete-audio.json",
+      "sha256": "3b1e14da1a6abe9409d85eb7ec0d6ada33652b838a139dc14af53500fcf60c05"
+    }
+  ],
+  "memory_scope": "Observed 100 ms sequential-role samples; lower bounds on possible maxima, includes page cache. Summed process RSS overlaps shared pages. Kernel memory.peak unavailable; idle-validator actual peak not measured. No reservation or exact lifetime peak claim.",
+  "operator_activity": "Unrelated pre-existing services, bounded source/Git/Python/ZIP/provider collection and pure controls; existing hash-pinned Go BuildInfo/env metadata reads disclosed. No concurrent local application/Go build/test/media generation/database workload. Child sampler/monitor overhead included. No independent OS trace guarantee for metadata-child counts.",
+  "operator_notes_integrity": [
+    {
+      "bytes": 1096,
+      "name": "N20-ATTEMPT2-SHARED-HOST-OPERATOR-NOTES-ADDENDUM-1.json",
+      "sha256": "398caaccc8468744a74653afc69519ab9b8e1ed263887b5c28d7cb28c8d1d78f"
+    },
+    {
+      "bytes": 1898,
+      "name": "N20-ATTEMPT2-SHARED-HOST-OPERATOR-NOTES-ADDENDUM-10.json",
+      "sha256": "dae671868e0414fe87e0ae73393caa8f9921d856f3702109695425d6e868e0a6"
+    },
+    {
+      "bytes": 1034,
+      "name": "N20-ATTEMPT2-SHARED-HOST-OPERATOR-NOTES-ADDENDUM-11.json",
+      "sha256": "30eecf27942c9f3de9636ec856d97fa55077b15a65f135f0c72109d6e70da49d"
+    },
+    {
+      "bytes": 1743,
+      "name": "N20-ATTEMPT2-SHARED-HOST-OPERATOR-NOTES-ADDENDUM-12.json",
+      "sha256": "19767dfd3f15fb752fb98b3e544f2a5ca4a07f4a3ddb107378ea9cfa30270622"
+    },
+    {
+      "bytes": 1755,
+      "name": "N20-ATTEMPT2-SHARED-HOST-OPERATOR-NOTES-ADDENDUM-13.json",
+      "sha256": "06d5291ac76c74fb8a54b1b198464b0a4682967ca926a84114e04640322e5363"
+    },
+    {
+      "bytes": 1666,
+      "name": "N20-ATTEMPT2-SHARED-HOST-OPERATOR-NOTES-ADDENDUM-14.json",
+      "sha256": "6bf938ac5df742498b8b28115461766f03726d54d72912ef7867b1cefb66202f"
+    },
+    {
+      "bytes": 3384,
+      "name": "N20-ATTEMPT2-SHARED-HOST-OPERATOR-NOTES-ADDENDUM-15.json",
+      "sha256": "831ef3d3f712118f61d140ffe7b65a72357accafbd55e78c05061d035307c642"
+    },
+    {
+      "bytes": 1645,
+      "name": "N20-ATTEMPT2-SHARED-HOST-OPERATOR-NOTES-ADDENDUM-2.json",
+      "sha256": "7f1f92d85af954e820b13b1852c1cb0591cee72b737a852e7128fa14c1346145"
+    },
+    {
+      "bytes": 1784,
+      "name": "N20-ATTEMPT2-SHARED-HOST-OPERATOR-NOTES-ADDENDUM-3.json",
+      "sha256": "a40d04607de0ca7dade3b6263fc3bdd0b084561b5d2acdfe55aed546a3b62bd8"
+    },
+    {
+      "bytes": 1564,
+      "name": "N20-ATTEMPT2-SHARED-HOST-OPERATOR-NOTES-ADDENDUM-4.json",
+      "sha256": "310f902a4c203c8e3d925b6265f5ecce3e253f580efa5ec01dcc0bf3673bccd1"
+    },
+    {
+      "bytes": 1552,
+      "name": "N20-ATTEMPT2-SHARED-HOST-OPERATOR-NOTES-ADDENDUM-5.json",
+      "sha256": "f681558652a4a881f06bae402c9d544a861d3b9eca97894f749d29bf27b40bfc"
+    },
+    {
+      "bytes": 1847,
+      "name": "N20-ATTEMPT2-SHARED-HOST-OPERATOR-NOTES-ADDENDUM-6.json",
+      "sha256": "f6c73e10cc29e0729db065b53e333e994e0103ca67ae2f891610bf9dab4101fc"
+    },
+    {
+      "bytes": 1100,
+      "name": "N20-ATTEMPT2-SHARED-HOST-OPERATOR-NOTES-ADDENDUM-7.json",
+      "sha256": "29dd29bfca3d7cba30b5b94f224e90707207e3339fb30960d7db37c45cb9e364"
+    },
+    {
+      "bytes": 1753,
+      "name": "N20-ATTEMPT2-SHARED-HOST-OPERATOR-NOTES-ADDENDUM-8.json",
+      "sha256": "1a510e7b085a9d4c9a23e8a2adb118e9c4b763984708c0a893482d9f911155b1"
+    },
+    {
+      "bytes": 1833,
+      "name": "N20-ATTEMPT2-SHARED-HOST-OPERATOR-NOTES-ADDENDUM-9.json",
+      "sha256": "3c00125dda6c3cde9fd2851b74c0642b5525b04494364558ae0e52279c49cc02"
+    },
+    {
+      "bytes": 1420,
+      "name": "N20-ATTEMPT2-SHARED-HOST-OPERATOR-NOTES.json",
+      "sha256": "59b5f8b2ef561a6c8cc18ab6e1223b8787150fbaeb1ad1abaeae93284cd6840d"
+    }
+  ],
+  "resources": {
+    "api_cpus": 0.5,
+    "api_memory_bytes": 536870912,
+    "ffmpeg_threads": 2,
+    "gomaxprocs": 2,
+    "gomemlimit": "128MiB",
+    "postgres_cpus": 0.5,
+    "postgres_memory_bytes": 805306368,
+    "worker_cpus": 2,
+    "worker_memory_bytes": 1610612736
+  },
+  "sampled_aggregate_service_current_memory_max_bytes": {
+    "measured": 921030656,
+    "validation_idle": 327299072,
+    "warmup": 432513024
+  },
+  "schema_version": 1,
+  "seed": 1729,
+  "shared_host": true,
+  "swap_bytes_allowed": 0,
+  "templates_scope": "Path-normalized config/fixture examples have new hashes. Editing their absolute paths requires rehashing/review. A rerun is a separate experiment; these templates do not fabricate equality with the original frozen config or provide missing archived inputs/tools.",
+  "tools": {
+    "ffmpeg": {
+      "bytes": 175103784,
+      "sha256": "8ebf553fe2f604c2fef17c8681eb477de22bb523eca415f83cb64878061b1189"
+    },
+    "ffprobe": {
+      "bytes": 174866152,
+      "sha256": "1b42c53f70d3316cda1e253f1ad5553f845df6fc99cd695e5e9be51590f272e2"
+    }
+  },
+  "unchanged_operation_budget_seconds": 120
+}

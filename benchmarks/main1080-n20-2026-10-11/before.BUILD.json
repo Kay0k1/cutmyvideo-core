@@ -1,0 +1,10 @@
+{
+  "arch": "amd64",
+  "binary_sha256": "a80cf0504fc4c9c9719c7be8fcd291375dd66637316b7a06b3242187fed8dbf8",
+  "build_time": "2026-10-10T19:33:28Z",
+  "commit": "f2be62c42a6a0d3d7a017b40bd683596bc578b95",
+  "dependencies": "FFmpeg and ffprobe are external; server platform sources also require yt-dlp and Node.js.",
+  "os": "linux",
+  "toolchain": "go1.27.2",
+  "version": "v0.2.1"
+}
