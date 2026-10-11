@@ -1,59 +1,86 @@
-name: Storage normal operational capacity
+name: Storage normal memory diagnostic
 
 on:
   workflow_dispatch:
     inputs:
-      maximum_size:
-        description: Largest reviewed size (1000 runs only the first pair)
-        type: choice
-        default: '1000'
-        options: ['1000', '10000']
+      reviewed_tooling_commit:
+        description: Exact tooling commit accepted by ROOT and peer for this one diagnostic
+        required: true
+        type: string
   pull_request:
     paths:
-      - benchmarks/storage-normal-capacity/**
+      - benchmarks/storage-normal-memory/**
       - .github/workflows/storage005-capacity.yml
 
 permissions:
   contents: read
 
 concurrency:
-  group: storage-normal-capacity-pilot
+  group: storage-normal-memory-current10000
   cancel-in-progress: false
 
 jobs:
-  pure-protocol:
+  pure-observer:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    env:
+      CUTMY_REVIEWED_TOOLING_COMMIT: ${{ inputs.reviewed_tooling_commit }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Pure fixtures (all actual children and network calls denied)
+      - name: Admit exact reviewed head and first attempt for manual diagnostic
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          python3 -I -B - <<'PY'
+          import os, re, subprocess
+          expected = os.environ['CUTMY_REVIEWED_TOOLING_COMMIT']
+          assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
+          assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          assert re.fullmatch('[0-9a-f]{40}', expected)
+          assert os.environ['GITHUB_SHA'] == expected
+          assert subprocess.check_output(['git', '--no-optional-locks', 'rev-parse', 'HEAD'], text=True).strip() == expected
+          PY
+      - name: Synthetic observer and interruption controls (actual child and network denied)
         env:
           PYTHONDONTWRITEBYTECODE: '1'
-        run: python3 -m unittest discover -s benchmarks/storage-normal-capacity -p protocol_test.py -v
-  fixed-postgres-pilot:
+        run: python3 -B -m unittest discover -s benchmarks/storage-normal-memory -p observer_test.py -v -f
+  current10000:
     if: github.event_name == 'workflow_dispatch'
-    needs: pure-protocol
+    needs: pure-observer
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     env:
+      CUTMY_REVIEWED_TOOLING_COMMIT: ${{ inputs.reviewed_tooling_commit }}
+      CUTMY_REVIEWED_WRAPPER_SHA: b4e2a70059bc6018a8d0d56de8ba1e9dee7917d8a642748b4255a7d0c5f71b9d
       GOMAXPROCS: '2'
       GOMEMLIMIT: 128MiB
       GOTOOLCHAIN: local
+      GOTELEMETRY: 'off'
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Exact schema004 source
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          ref: 63873e935626d51087d0a26b84f1de9a7ed86a28
-          path: .comparison/before
-          fetch-depth: 2
-          persist-credentials: false
-      - name: Exact current schema005 source
+      - name: Admit exact reviewed tooling before runtime preparation
+        run: |
+          python3 -I -B - <<'PY'
+          import hashlib, os, pathlib, re, subprocess
+          expected = os.environ['CUTMY_REVIEWED_TOOLING_COMMIT']
+          assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
+          assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          assert re.fullmatch('[0-9a-f]{40}', expected)
+          assert os.environ['GITHUB_SHA'] == expected
+          assert subprocess.check_output(['git', '--no-optional-locks', 'rev-parse', 'HEAD'], text=True).strip() == expected
+          assert hashlib.sha256(pathlib.Path('benchmarks/storage-normal-memory/run_supervised.py').read_bytes()).hexdigest() == os.environ['CUTMY_REVIEWED_WRAPPER_SHA']
+          assert not os.path.lexists('.comparison/after')
+          assert not os.path.lexists(pathlib.Path(os.environ['RUNNER_TEMP']) / 'storage-normal-memory')
+          assert not os.path.lexists(pathlib.Path(os.environ['RUNNER_TEMP']) / 'storage-normal-memory-go-cache')
+          assert not os.path.lexists(pathlib.Path(os.environ['RUNNER_TEMP']) / 'storage-normal-memory-private')
+          PY
+      - name: Exact current application (fresh checkout, no other runtime)
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: d594cc4681dc1cab61664cec8c92bdf9a3e9444c
@@ -64,16 +91,19 @@ jobs:
         with:
           go-version: '1.27.2'
           cache: false
-      - name: New normal profile (legacy5ms results remain separate)
+      - name: One supervised current10k memory diagnostic (observer overhead recorded)
         env:
-          GOCACHE: ${{ runner.temp }}/storage-normal-go-cache
-          CUTMY_STORAGE_NORMAL_MAXIMUM_SIZE: ${{ inputs.maximum_size }}
-        run: python3 benchmarks/storage-normal-capacity/run_hosted.py
-      - name: Preserve original measurements and refusals
+          GOCACHE: ${{ runner.temp }}/storage-normal-memory-go-cache
+        run: python3 -B benchmarks/storage-normal-memory/run_supervised.py
+      - name: Reconcile only journalled owned processes and resources
+        if: always()
+        timeout-minutes: 2
+        run: python3 -B benchmarks/storage-normal-memory/run_supervised.py --cleanup
+      - name: Preserve original diagnostics, failures and cleanup
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: storage-normal-pilot-${{ github.sha }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/storage-normal-pilot/
+          name: storage-normal-memory-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/storage-normal-memory/
           if-no-files-found: warn
           retention-days: 30

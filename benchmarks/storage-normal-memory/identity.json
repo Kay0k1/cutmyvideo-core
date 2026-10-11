@@ -1,0 +1,52 @@
+{
+  "diagnostic_boundary_ack_seconds": 30,
+  "format": 1,
+  "kind": "storage-normal-memory-current10000",
+  "large_preview_workload": false,
+  "legacy_imports": {
+    "benchmarks/storage-normal-capacity/identity.json": {
+      "bytes": 276650,
+      "sha256": "9f8a9492358a36796d7b5bd8bcb9aa1bf51378fb41f2e335fc8df7fed83185a4"
+    },
+    "benchmarks/storage-normal-capacity/pilot_test.go.txt": {
+      "bytes": 38147,
+      "sha256": "b384edab31464a30e094bfead2906dc9598b05fc2b2a5b58854bc30cc5ae43e9"
+    },
+    "benchmarks/storage-normal-capacity/protocol.py": {
+      "bytes": 25072,
+      "sha256": "4ea46af5df5e36294270cbd890a78eab5f97dd2e09c15c3bf48d1cd5547a72fa"
+    },
+    "benchmarks/storage-normal-capacity/run_hosted.py": {
+      "bytes": 19261,
+      "sha256": "ac8b3578b79de383f4e0c967079ff8ec91b08468b66bfd392551591f3ea955d1"
+    }
+  },
+  "maximum_markers": 160,
+  "maximum_sample_gap_ms": 200,
+  "maximum_samples": 5000,
+  "postgres": {
+    "amd64_manifest_digest": "sha256:66aafa11cf15800a3c94763f7e11d1e7b2e37e5e84bc4ce027cb6e1e4bfaf4df",
+    "config_digest": "sha256:589f742565e4f6d22149176b032974f55f8201a8a37b71ed587ec5c6902e689f",
+    "image": "docker.io/library/postgres@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826",
+    "index_digest": "sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826"
+  },
+  "runtime": {
+    "application_count": 173,
+    "application_inventory_sha256": "d1ae273e0d56212ef549f029970cd4ea1f33276faa7e4e11c88127e3aeeacef6",
+    "commit": "d594cc4681dc1cab61664cec8c92bdf9a3e9444c",
+    "parents": [
+      "732340c43a71b332da31b3580c3c5048e936a000"
+    ],
+    "schema": 5,
+    "selector_sql_sha256": "e85e5fab8f20375a9fad988f69553f94f17570de964d8f55c46030f36d4bc019",
+    "source_count": 391,
+    "tree": "513b45dd28c309891713e01a6bd11c0e4dcd4858"
+  },
+  "sample_cap_bytes": 33554432,
+  "samples_ms": 100,
+  "sizes": [
+    10000
+  ],
+  "sql_boundary_timeout_seconds": 10,
+  "tooling_base": "bc2651be29dc020707782658c0e1a363309bcf14"
+}
