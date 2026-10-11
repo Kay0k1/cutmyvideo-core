@@ -24,8 +24,14 @@ func (s *Store) Jobs(ctx context.Context, owner string) ([]jobSummary, error) {
 	rows, err := s.DB.Query(ctx, `SELECT j.id,j.source_id,COALESCE(s.title,'Video'),j.status,j.stage,j.created_at,jsonb_array_length(j.items),
  COALESCE((SELECT jsonb_agg(jsonb_build_object('id',a.id,'filename',a.filename,'size_bytes',a.size_bytes,
  'actual_start_ms',a.actual_start_ms,'actual_end_ms',a.actual_end_ms,
- 'expires_at',CASE WHEN j.status IN ('queued','running','waiting_storage') THEN NULL ELSE a.expires_at END) ORDER BY a.created_at,a.id)
- FROM artifacts a WHERE a.job_id=j.id AND a.owner=$1),'[]'::jsonb)
+ 'expires_at',CASE WHEN j.status IN ('queued','running','waiting_storage') THEN NULL ELSE a.expires_at END)
+ || COALESCE(snapshot.manifests,'{}'::jsonb) ORDER BY a.created_at,a.id)
+ FROM artifacts a LEFT JOIN LATERAL (
+ SELECT jsonb_strip_nulls(jsonb_build_object(
+ 'segments',CASE WHEN jsonb_typeof(item->'artifact'->'segments')='array' THEN item->'artifact'->'segments' ELSE NULL END,
+ 'track_manifest',CASE WHEN jsonb_typeof(item->'artifact'->'track_manifest')='array' THEN item->'artifact'->'track_manifest' ELSE NULL END)) AS manifests
+ FROM jsonb_array_elements(j.items) item WHERE item->'artifact'->>'id'=a.id LIMIT 1
+ ) snapshot ON true WHERE a.job_id=j.id AND a.owner=$1),'[]'::jsonb)
  FROM jobs j LEFT JOIN sources s ON s.id=j.source_id AND s.owner=$1
  WHERE j.owner=$1 ORDER BY (j.status IN ('queued','running','waiting_storage')) DESC,j.created_at DESC,j.id DESC LIMIT 30`, owner)
 	if err != nil {

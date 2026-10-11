@@ -124,7 +124,7 @@ class NativeResultsChecks(unittest.TestCase):
                  "TestStorageScanSessionReadBatchPreservesNonISODateStyle",
                  "TestStorageScanSessionReadBatchLookupFailureRollsBackAndRecovers")
         self.assertEqual(len(native_results.REQUIRED[3]), 45)
-        self.assertEqual(sum(map(len, native_results.REQUIRED)), 70)
+        self.assertEqual(sum(map(len, native_results.REQUIRED)), 79)
         workflow = SCRIPT.parent.parent / ".github" / "workflows" / "ci.yml"
         commands = [line for line in workflow.read_text(encoding="utf-8").splitlines()
                     if "tee native-storage-tests.jsonl" in line]

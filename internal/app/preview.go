@@ -52,13 +52,42 @@ func (s *Server) sourcePreviewWithPublisher(w http.ResponseWriter, r *http.Reque
 		writeError(w, 400, "invalid_preview", "Choose a position inside the video")
 		return
 	}
+	request := ExportRequest{}
+	query := r.URL.Query()
+	if value, ok := query["audio_track"]; ok {
+		if len(value) != 1 {
+			writeError(w, 400, "invalid_preview", "Choose one audio stream index")
+			return
+		}
+		index, e := strconv.Atoi(value[0])
+		if e != nil || index < 0 {
+			writeError(w, 400, "invalid_preview", "Choose a nonnegative audio stream index")
+			return
+		}
+		request.AudioTrack = &index
+	}
+	if value, ok := query["no_audio"]; ok {
+		if len(value) != 1 || (value[0] != "true" && value[0] != "false") {
+			writeError(w, 400, "invalid_preview", "no_audio must be true or false")
+			return
+		}
+		request.NoAudio = value[0] == "true"
+	}
+	if request.NoAudio && request.AudioTrack != nil {
+		writeError(w, 400, "invalid_preview", "Choose an audio stream or no audio")
+		return
+	}
+	if request.AudioTrack != nil && v.Path == "" {
+		writeError(w, 422, "audio_track_unavailable", "Selecting an audio track requires an uploaded source")
+		return
+	}
 	if !s.allow("preview:"+owner, 60) {
 		writeError(w, 429, "rate_limit", "Wait before requesting another preview")
 		return
 	}
 	// Canonical intervals make nearby seeks reuse the same result.
 	start = start / previewWindowMS * previewWindowMS
-	key := previewCacheKey(v, start)
+	key := previewCacheKeyOptions(v, start, request)
 	id := newID("preview")
 	var cached *os.File
 	inspected := v.Path == ""
@@ -147,7 +176,7 @@ func (s *Server) sourcePreviewWithPublisher(w http.ResponseWriter, r *http.Reque
 		}
 		defer guard.Close()
 		render := func(fresh bool) error {
-			request := ExportRequest{Quality: "480p", Format: "mp4", CutMode: "accurate"}
+			request.Quality, request.Format, request.CutMode = "480p", "mp4", "accurate"
 			resolved, streams, playlists, _, e := platformInputs(ctx, c, s.Store, v, guard, request, fresh)
 			if e != nil {
 				return e
@@ -167,14 +196,14 @@ func (s *Server) sourcePreviewWithPublisher(w http.ResponseWriter, r *http.Reque
 				}
 				resolved[i] = mediaInput{Path: path, OffsetMS: offset}
 			}
-			return renderPreview(ctx, c, resolved, rangeMS, out)
+			return renderPreviewOptions(ctx, c, resolved, rangeMS, out, request)
 		}
 		err = render(false)
 		if cachedAddressDenied(err) && ctx.Err() == nil {
 			err = render(true)
 		}
 	} else {
-		err = renderPreview(ctx, c, inputs, rangeMS, out)
+		err = renderPreviewOptions(ctx, c, inputs, rangeMS, out, request)
 	}
 	if err != nil {
 		if r.Context().Err() != nil {
@@ -214,9 +243,20 @@ func (s *Server) sourcePreviewWithPublisher(w http.ResponseWriter, r *http.Reque
 }
 
 func previewCacheKey(source Source, start int64) string {
+	return previewCacheKeyOptions(source, start, ExportRequest{})
+}
+
+func previewCacheKeyOptions(source Source, start int64, request ExportRequest) string {
+	audio := "default"
+	if request.AudioTrack != nil {
+		audio = strconv.Itoa(*request.AudioTrack)
+	}
+	if request.NoAudio {
+		audio = "none"
+	}
 	// A prior rendition may have selected different tracks or display/color
 	// handling. Leave its charged cache entry to expire, without reusing it.
-	sum := sha256.Sum256([]byte("media-contract-v1:" + source.ID + ":" + strconv.FormatInt(start, 10)))
+	sum := sha256.Sum256([]byte("media-contract-v2:" + source.ID + ":" + strconv.FormatInt(start, 10) + ":" + audio))
 	return hex.EncodeToString(sum[:])
 }
 
@@ -253,7 +293,11 @@ func trimPreviewWorkspace(ctx context.Context, dir string) error {
 }
 
 func renderPreview(ctx context.Context, c Config, inputs []mediaInput, r Range, out string) error {
-	selection, err := probeInputSelection(ctx, c, inputs)
+	return renderPreviewOptions(ctx, c, inputs, r, out, ExportRequest{})
+}
+
+func renderPreviewOptions(ctx context.Context, c Config, inputs []mediaInput, r Range, out string, request ExportRequest) error {
+	selection, err := probeInputSelectionOptions(ctx, c, inputs, request)
 	if err != nil {
 		return err
 	}
@@ -554,7 +598,7 @@ func removePreviewEntry(ctx context.Context, tx pgx.Tx, c Config, id string) err
 	if err = removeStorageTree(ctx, dir); err != nil {
 		return err
 	}
-	if err = fsdurable.SyncDirectories(filepath.Dir(dir)); err != nil && !os.IsNotExist(err) {
+	if err = fsdurable.SyncDirectories(filepath.Dir(dir)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	_, err = tx.Exec(ctx, "DELETE FROM storage_reservations WHERE id=$1 AND kind IN ('preview','preview_cache')", id)

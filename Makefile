@@ -5,7 +5,7 @@ STORAGE_REPORT_DIR ?=
 STORAGE_SIZES ?= 10000,100000
 STORAGE_SAMPLES ?= 20
 
-.PHONY: help build fmt fmt-check vet test test-full docs-check api-check native-results-check release-check contract-check recovery-check storage-capacity-check notices-check workflows-check vuln check check-full release
+.PHONY: help build fmt fmt-check vet test test-full docs-check api-check native-results-check release-check hosting-controls-check contract-check recovery-check storage-capacity-check notices-check workflows-check vuln check check-full release
 
 help:
 	@printf '%s\n' 'make build       Build bin/cutmy' 'make check       Format, vet, docs, tests and build (integration tests may skip)' 'make check-full  Require media/extractor/PostgreSQL tools, race tests, workflows and vulnerability scan' 'make release VERSION=vX.Y.Z  Package CLI binaries from a clean tagged checkout'
@@ -43,6 +43,12 @@ release-check:
 	$(PYTHON) -m unittest discover -s scripts -p 'release*_test.py'
 	$(PYTHON) -m unittest discover -s scripts -p consumer_process_native_test.py
 
+hosting-controls-check:
+	$(PYTHON) -m unittest discover -s deploy -p self_host_test.py
+	$(PYTHON) -m unittest discover -s scripts -p self_hosting_acceptance_test.py
+	$(PYTHON) -m unittest discover -s scripts -p source_retention_transition_test.py
+	$(PYTHON) -m unittest discover -s scripts -p current_installation_acceptance_test.py
+
 contract-check: api-check
 	CUTMY_REQUIRE_CONTRACT=1 CUTMY_CONTRACT_PYTHON=$(PYTHON) $(GO) test -count=1 ./internal/app -run '^TestHTTPPublicContract$$'
 
@@ -65,7 +71,7 @@ vuln:
 
 check: fmt-check vet docs-check api-check native-results-check release-check test build
 
-check-full: fmt-check vet docs-check api-check native-results-check release-check notices-check workflows-check test-full vuln build
+check-full: fmt-check vet docs-check api-check native-results-check release-check hosting-controls-check notices-check workflows-check test-full vuln build
 
 release:
 	./scripts/release.sh "$(VERSION)"

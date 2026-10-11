@@ -1,5 +1,7 @@
 # User and library guide
 
+[Saved plans, joined outputs, selected audio and MKV/subtitles](batch-cutting.md).
+
 ## Choosing an export
 
 `accurate` decodes/re-encodes for precise requested boundaries. MP4 uses H.264/AAC;

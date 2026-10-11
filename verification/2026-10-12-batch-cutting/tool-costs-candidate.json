@@ -1,0 +1,198 @@
+{
+  "source_revision": "e8fe7b796056655d5cf741bd9a2a36144a0d7e2b",
+  "binary": {
+    "sha256": "9bbe2a810514130c4704aaf635c6cf2217a2011015cbdc7aba03aacd3231eede",
+    "version": {
+      "version": "verification",
+      "commit": "e8fe7b796056655d5cf741bd9a2a36144a0d7e2b",
+      "build_time": "unknown",
+      "go_version": "go1.27.2",
+      "os": "linux",
+      "arch": "amd64"
+    }
+  },
+  "environment": {
+    "platform": "Linux-5.15.0-190-generic-x86_64-with-glibc2.35",
+    "logical_cpus": 4,
+    "cpu": {
+      "model name": "AMD Ryzen 9 5950X 16-Core Processor",
+      "siblings": "4",
+      "cpu cores": "4"
+    },
+    "cpu_affinity_count": 4,
+    "cgroup_cpu_max": null,
+    "cgroup_memory_max": null,
+    "load_average_at_start": [
+      0.625,
+      0.46728515625,
+      0.81591796875
+    ],
+    "tools": {
+      "ffmpeg": "ffmpeg version N-127083-g65a3870462-20261001 Copyright (c) 2000-2026 the FFmpeg developers",
+      "ffprobe": "ffprobe version N-127083-g65a3870462-20261001 Copyright (c) 2007-2026 the FFmpeg developers"
+    },
+    "captured_utc": "2026-10-11T23:00:03.519166+00:00"
+  },
+  "workflow": {
+    "sample": 1,
+    "upload_inspect_ms": 166.703148977831,
+    "first_preview_request_to_received_ms": 1319.3095568567514,
+    "upload_to_preview_received_ms": 1486.0127058345824,
+    "job_accept_ms": 4.789883969351649,
+    "job_request_to_ready_ms": 1930.3177720867097,
+    "job_request_to_received_ms": 1963.5866081807762,
+    "upload_to_export_received_ms": 3449.5993140153587,
+    "download_ms": 33.2688360940665,
+    "preview_bytes": 3517615,
+    "artifact_bytes": 14761820,
+    "polls": 36,
+    "preview_cache": "miss",
+    "load_average_after": [
+      0.625,
+      0.46728515625,
+      0.81591796875
+    ],
+    "artifact_sha256": "98a2376e5f3c00c41cc164752396f9882eb3e954565a9ceb2a0aba0dd4a58243"
+  },
+  "events": [
+    {
+      "event": "upload_started",
+      "elapsed_s": 0.0650920900516212
+    },
+    {
+      "event": "upload_received",
+      "elapsed_s": 0.23174792900681496
+    },
+    {
+      "event": "preview_started",
+      "elapsed_s": 0.23174951202236116
+    },
+    {
+      "event": "preview_received",
+      "elapsed_s": 1.5510583480354398
+    },
+    {
+      "event": "job_requested",
+      "elapsed_s": 1.5510634169913828
+    },
+    {
+      "event": "job_accepted",
+      "elapsed_s": 1.555847560055554
+    },
+    {
+      "event": "job_ready",
+      "elapsed_s": 3.4813752281479537
+    },
+    {
+      "event": "artifact_received",
+      "elapsed_s": 3.5146453760098666
+    }
+  ],
+  "tools": [
+    {
+      "pid": 1099590,
+      "parent_role": "api",
+      "tool": "ffprobe",
+      "first_seen_s": 0.17562909796833992,
+      "last_seen_s": 0.17562909796833992,
+      "cpu_s_last_observed": 0.0,
+      "exit_observed_s": 0.2030682871118188,
+      "approx_wall_ms": 27.43918914347887
+    },
+    {
+      "pid": 1099593,
+      "parent_role": "api",
+      "tool": "ffprobe",
+      "first_seen_s": 0.2557536670938134,
+      "last_seen_s": 0.2557536670938134,
+      "cpu_s_last_observed": 0.01,
+      "exit_observed_s": 0.2824525120668113,
+      "approx_wall_ms": 26.698844972997904
+    },
+    {
+      "pid": 1099596,
+      "parent_role": "api",
+      "tool": "ffprobe",
+      "first_seen_s": 0.2817273570690304,
+      "last_seen_s": 0.2817273570690304,
+      "cpu_s_last_observed": 0.01,
+      "exit_observed_s": 0.3078695861622691,
+      "approx_wall_ms": 26.14222909323871
+    },
+    {
+      "pid": 1099599,
+      "parent_role": "api",
+      "tool": "ffmpeg",
+      "first_seen_s": 0.30715603311546147,
+      "last_seen_s": 1.5018127111252397,
+      "cpu_s_last_observed": 3.44,
+      "exit_observed_s": 1.5303615150041878,
+      "approx_wall_ms": 1223.2054818887264
+    },
+    {
+      "pid": 1099632,
+      "parent_role": "api",
+      "tool": "ffprobe",
+      "first_seen_s": 1.5294612580910325,
+      "last_seen_s": 1.5294612580910325,
+      "cpu_s_last_observed": 0.01,
+      "exit_observed_s": 1.5584267319645733,
+      "approx_wall_ms": 28.96547387354076
+    },
+    {
+      "pid": 1099635,
+      "parent_role": "worker",
+      "tool": "ffprobe",
+      "first_seen_s": 1.5848428411409259,
+      "last_seen_s": 1.5848428411409259,
+      "cpu_s_last_observed": 0.01,
+      "exit_observed_s": 1.6122141410596669,
+      "approx_wall_ms": 27.371299918740988
+    },
+    {
+      "pid": 1099638,
+      "parent_role": "worker",
+      "tool": "ffprobe",
+      "first_seen_s": 1.611460522050038,
+      "last_seen_s": 1.611460522050038,
+      "cpu_s_last_observed": 0.0,
+      "exit_observed_s": 1.6440416330005974,
+      "approx_wall_ms": 32.58111095055938
+    },
+    {
+      "pid": 1099641,
+      "parent_role": "worker",
+      "tool": "ffmpeg",
+      "first_seen_s": 1.6424046391621232,
+      "last_seen_s": 3.380669989157468,
+      "cpu_s_last_observed": 4.3,
+      "exit_observed_s": 3.4101335271261632,
+      "approx_wall_ms": 1767.72888796404
+    },
+    {
+      "pid": 1099658,
+      "parent_role": "worker",
+      "tool": "ffprobe",
+      "first_seen_s": 3.437040627002716,
+      "last_seen_s": 3.437040627002716,
+      "cpu_s_last_observed": 0.02,
+      "exit_observed_s": 3.470035362057388,
+      "approx_wall_ms": 32.994735054671764
+    }
+  ],
+  "approx_phase_tool_wall_ms": {
+    "upload": {
+      "ffmpeg_wall_ms": 0.0,
+      "ffprobe_wall_ms": 27.43918914347887
+    },
+    "first_preview": {
+      "ffmpeg_wall_ms": 1223.2054818887264,
+      "ffprobe_wall_ms": 74.43816401064396
+    },
+    "job_through_download": {
+      "ffmpeg_wall_ms": 1767.72888796404,
+      "ffprobe_wall_ms": 100.31046089716256
+    }
+  },
+  "method": "Separate instrumented workflow; 20 ms requested /proc sampling period; reads tool names, parent PID and process CPU stats only. No argv, environment or URL/cookie data captured. Lifetimes are approximate; tools shorter than one polling period can be missed, and last observed CPU excludes final unsampled work. Observer overhead can affect these workflow timings; use paired uninstrumented report for speed comparison."
+}

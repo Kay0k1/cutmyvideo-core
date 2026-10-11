@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
     inputs:
       acceptance_mode:
-        description: 'Explicit schema mode; transition verifies the current reviewed recovery application inventory'
+        description: 'Current 005 installation/upgrade, or an explicit immutable historical transition'
         type: choice
-        options: [same-schema, source-retention-004-to-005]
-        default: source-retention-004-to-005
+        options: [current-installation, same-schema, source-retention-004-to-005]
+        default: current-installation
         required: true
 
 permissions:
@@ -31,7 +31,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        if: github.event_name != 'workflow_dispatch' || inputs.acceptance_mode == 'source-retention-004-to-005'
+        if: github.event_name == 'workflow_dispatch' && inputs.acceptance_mode == 'source-retention-004-to-005'
         with:
           go-version: '1.27.2'
           cache: false
@@ -51,6 +51,7 @@ jobs:
           "$RUNNER_TEMP/cutmy-public-venv/bin/python" -B -m unittest discover -s deploy -p self_host_test.py -v 2>&1 | tee "$RUNNER_TEMP/public-profile-controls.log"
           "$RUNNER_TEMP/cutmy-public-venv/bin/python" -B -m unittest discover -s scripts -p self_hosting_acceptance_test.py -v 2>&1 | tee "$RUNNER_TEMP/public-acceptance-controls.log"
           "$RUNNER_TEMP/cutmy-public-venv/bin/python" -B -m unittest discover -s scripts -p source_retention_transition_test.py -v 2>&1 | tee "$RUNNER_TEMP/public-transition-controls.log"
+          "$RUNNER_TEMP/cutmy-public-venv/bin/python" -B -m unittest discover -s scripts -p current_installation_acceptance_test.py -v 2>&1 | tee "$RUNNER_TEMP/public-current-controls.log"
       - name: Explicit bridge-filter prerequisites on the disposable runner
         run: |
           test "$GITHUB_ACTIONS" = true
@@ -63,7 +64,7 @@ jobs:
       - name: Actual public profile HTTPS, roles, egress, image upgrade and restore
         env:
           ACCEPTANCE_PR_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-          ACCEPTANCE_MODE: ${{ github.event_name != 'workflow_dispatch' && 'source-retention-004-to-005' || inputs.acceptance_mode }}
+          ACCEPTANCE_MODE: ${{ github.event_name != 'workflow_dispatch' && 'current-installation' || inputs.acceptance_mode }}
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           sudo env \
@@ -74,13 +75,12 @@ jobs:
             TMPDIR="$RUNNER_TEMP/cutmy-public-private" PATH="$PATH" \
             "$RUNNER_TEMP/cutmy-public-venv/bin/python" -B scripts/self-hosting-acceptance.py \
             --allow-disposable-host --revision "$GITHUB_SHA" --pr-head "$ACCEPTANCE_PR_HEAD" \
-            --upgrade-from 0f93cd654a998be7740ba1d6fee4a44a6f7b3464 \
             --mode "$ACCEPTANCE_MODE" \
             --temp-directory "$RUNNER_TEMP/cutmy-public-private" \
             --output "$RUNNER_TEMP/public-self-hosting-evidence"
       - name: Require the exact mode groups, raw transition evidence and independent cleanup
         env:
-          ACCEPTANCE_MODE: ${{ github.event_name != 'workflow_dispatch' && 'source-retention-004-to-005' || inputs.acceptance_mode }}
+          ACCEPTANCE_MODE: ${{ github.event_name != 'workflow_dispatch' && 'current-installation' || inputs.acceptance_mode }}
         run: |
           python3 -B scripts/self-hosting-acceptance.py --mode "$ACCEPTANCE_MODE" --verify-report "$RUNNER_TEMP/public-self-hosting-evidence/acceptance-report.json"
       - name: Retain sanitized public profile evidence only
@@ -93,5 +93,6 @@ jobs:
             ${{ runner.temp }}/public-profile-controls.log
             ${{ runner.temp }}/public-acceptance-controls.log
             ${{ runner.temp }}/public-transition-controls.log
+            ${{ runner.temp }}/public-current-controls.log
           if-no-files-found: warn
           retention-days: 14

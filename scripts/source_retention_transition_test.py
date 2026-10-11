@@ -1,6 +1,6 @@
 """Pure source-only controls with synthetic receipts; no acceptance is executed.
 
-Only local source bytes and temporary JSON/text files are read. These fixtures
+Only local driver bytes, immutable source metadata and temporary JSON/text files are read. These fixtures
 are verifier controls, never hosted, PostgreSQL, media or performance evidence.
 """
 from copy import deepcopy
@@ -28,6 +28,7 @@ def module(name, path):
     return value
 
 
+current = module('current_control_helper', ROOT / 'current-installation-acceptance.py')
 base = module('transition_control_base', ROOT / 'self-hosting-acceptance.py')
 transition = module('transition_control_helper', ROOT / 'source-retention-transition.py')
 REFUSALS = (RuntimeError, OSError, ValueError, KeyError, TypeError)
@@ -47,7 +48,7 @@ def workflow_expression(expression, event, mode):
         if isinstance(node, ast.Name) and node.id in values:
             return values[node.id]
         if isinstance(node, ast.Constant) and node.value in (
-                'workflow_dispatch', 'same-schema', transition.MODE):
+                'workflow_dispatch', 'same-schema', transition.MODE, current.MODE):
             return node.value
         if isinstance(node, ast.Compare) and len(node.ops) == len(node.comparators) == 1:
             left, right = read(node.left), read(node.comparators[0])
@@ -82,19 +83,12 @@ def event_bytes(events):
 
 
 def source_inventory():
-    """Purely reconstruct the pinned map from current immutable application files."""
-    paths = [path for prefix in ('cmd', 'internal', 'pkg')
-             for path in (REPO / prefix).rglob('*') if path.is_file()]
-    paths.extend(REPO / name for name in ('go.mod', 'go.sum'))
-    result = {}
-    for path in sorted(paths):
-        data = path.read_bytes()
-        result[path.relative_to(REPO).as_posix()] = {
-            'mode': '100755' if path.stat().st_mode & 0o111 else '100644',
-            'git_blob': hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest(),
-            'bytes': len(data), 'sha256': transition.digest(data),
-        }
-    return result
+    """Pinned metadata fixture; current application edits are not old evidence."""
+    data = (ROOT / 'testdata/selfhosting-candidate-application.json').read_bytes()
+    value = transition.strict_json(data)
+    if len(value) != 173 or transition.digest(transition.canonical(value)) != transition.APPLICATION_SHA256:
+        raise AssertionError('candidate fixture differs from reviewed immutable application')
+    return value
 
 
 def old_source_inventory():
@@ -334,25 +328,25 @@ class WorkflowModeControls(unittest.TestCase):
         self.go = [step for step in self.steps
                    if step.get('uses', '').startswith('actions/setup-go@')]
 
-    def test_automatic_pull_request_and_push_select_transition_with_go(self):
+    def test_automatic_events_select_current_installation_without_historical_go(self):
         self.assertEqual(set(self.workflow['on']), {'pull_request', 'push', 'workflow_dispatch'})
         self.assertEqual(self.workflow['on']['push']['branches'], ['main'])
         self.assertEqual(len(self.selectors), 2)
         self.assertEqual(len(self.go), 1)
         for event in ('pull_request', 'push'):
-            for supplied in ('', 'same-schema', transition.MODE, 'unknown'):
+            for supplied in ('', 'same-schema', transition.MODE, current.MODE, 'unknown'):
                 with self.subTest(event=event, supplied=supplied):
                     for selector in self.selectors:
-                        self.assertEqual(workflow_expression(selector, event, supplied), transition.MODE)
-                    self.assertIs(workflow_expression(self.go[0]['if'], event, supplied), True)
+                        self.assertEqual(workflow_expression(selector, event, supplied), current.MODE)
+                    self.assertIs(workflow_expression(self.go[0]['if'], event, supplied), False)
 
-    def test_dispatch_defaults_transition_and_preserves_explicit_legacy_choice(self):
+    def test_dispatch_defaults_current_and_preserves_explicit_historical_choices(self):
         option = self.workflow['on']['workflow_dispatch']['inputs']['acceptance_mode']
         self.assertEqual(option['type'], 'choice')
-        self.assertEqual(option['options'], ['same-schema', transition.MODE])
+        self.assertEqual(option['options'], [current.MODE, 'same-schema', transition.MODE])
         self.assertEqual(option['required'], 'true')
-        self.assertEqual(option['default'], transition.MODE)
-        for supplied, needs_go in ((option['default'], True), ('same-schema', False)):
+        self.assertEqual(option['default'], current.MODE)
+        for supplied, needs_go in ((option['default'], False), ('same-schema', False), (transition.MODE, True)):
             with self.subTest(mode=supplied):
                 for selector in self.selectors:
                     selected = workflow_expression(selector, 'workflow_dispatch', supplied)
@@ -394,14 +388,7 @@ class WorkflowModeControls(unittest.TestCase):
 class CandidateSourceControls(unittest.TestCase):
     """Mock every process and stop at the first base host-setup boundary."""
     def acceptance(self, files=None, *, ancestry_exit=0, old_inventory=None):
-        files = files if files is not None else {
-            name: (REPO / name).read_bytes() for name in source_inventory()}
-        inventory = {name: {
-            'mode': '100755' if (REPO / name).exists() and (REPO / name).stat().st_mode & 0o111 else '100644',
-            'git_blob': hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest(),
-            'bytes': len(data), 'sha256': transition.digest(data),
-        } for name, data in files.items()}
-        blobs = {inventory[name]['git_blob']: data for name, data in files.items()}
+        inventory = deepcopy(source_inventory() if files is None else files)
         host_setup = Mock(side_effect=RuntimeError('synthetic base initialization boundary'))
         pure_base = SimpleNamespace(Acceptance=type('PureCandidateBase', (), {'initialize_host': host_setup}),
                                     GROUPS=base.GROUPS, REPO=REPO)
@@ -427,18 +414,13 @@ class CandidateSourceControls(unittest.TestCase):
                 return ancestry_exit, b'', b''
             if kwargs:
                 raise AssertionError('unexpected synthetic command options')
-            if 'ls-tree' in argv:
-                return b''.join((item['mode'] + ' blob ' + item['git_blob'] + '\t' + name + '\0').encode()
-                                for name, item in inventory.items())
-            if 'cat-file' in argv:
-                return blobs[argv[-1]]
             raise AssertionError('unexpected synthetic process command')
 
         value.git, value.run = Mock(side_effect=git), Mock(side_effect=run)
         old = old_source_inventory() if old_inventory is None else old_inventory
         value.application_inventory = Mock(side_effect=lambda revision:
             deepcopy(old) if revision in (transition.OLD_COMMIT, transition.OLD_REFERENCE)
-            else transition.application_inventory(value.run, REPO, revision))
+            else deepcopy(inventory))
         return value, host_setup
 
     def test_exact_application_descendant_reaches_only_mocked_host_setup(self):
@@ -492,13 +474,13 @@ class CandidateSourceControls(unittest.TestCase):
             self.assertFalse(any('ls-tree' in call.args[0] for call in value.run.call_args_list))
 
     def test_missing_extra_or_changed_application_bytes_refuse_before_host_setup(self):
-        original = {name: (REPO / name).read_bytes() for name in source_inventory()}
+        original = source_inventory()
         changes = [lambda files: files.pop('internal/app/http_recovery_test.go'),
-                   lambda files: files.update({'internal/app/unreviewed.go': b'package app\n'}),
-                   lambda files: files.update({'internal/app/http.go': files['internal/app/http.go'] + b'\n'})]
+                   lambda files: files.update({'internal/app/unreviewed.go': {'mode': '100644', 'git_blob': '0' * 40, 'bytes': 12, 'sha256': '0' * 64}}),
+                   lambda files: files['internal/app/http.go'].update(sha256='0' * 64)]
         for ancestry_exit in (0, 1):
             for change in changes:
-                files = dict(original)
+                files = deepcopy(original)
                 change(files)
                 value, host_setup = self.acceptance(files, ancestry_exit=ancestry_exit)
                 with self.subTest(change=change, ancestry_exit=ancestry_exit), self.assertRaisesRegex(RuntimeError, 'reviewed immutable candidate'):

@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "input": "interview.mp4",
+  "ranges": [
+    {"label": "Opening", "start_ms": 1000, "end_ms": 6000},
+    {"label": "Quote", "start_ms": 12000, "end_ms": 20000}
+  ],
+  "output_mode": "separate",
+  "options": {
+    "format": "mp4",
+    "quality": "best",
+    "cut_mode": "accurate"
+  }
+}

@@ -1,8 +1,10 @@
 # cutmyvideo-core
 
+[Saved batch plans, joined output, audio tracks and MKV/subtitles](docs/batch-cutting.md).
+
 **English** · [Русский](README.md)
 
-An open tool for manually trimming video and audio: choose a source and intervals, get separate MP4 or MP3 files. Use the local CLI, Go library, or HTTP API with a durable job queue. [cutmy.video](https://cutmy.video) uses this engine; the product UI is maintained in a private repository. The core runs and can be hosted independently.
+An open tool for manually trimming video and audio: choose a source and intervals, get separate files or one joined result in MP4, MP3 or MKV. Use the local CLI, Go library, or HTTP API with a durable job queue. [cutmy.video](https://cutmy.video) uses this engine; the open product UI lives in [cutmyvideo-web](https://github.com/Kay0k1/cutmyvideo-web). The core runs and can be hosted independently.
 
 [![Core checks](https://github.com/Kay0k1/cutmyvideo-core/actions/workflows/ci.yml/badge.svg)](https://github.com/Kay0k1/cutmyvideo-core/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -12,8 +14,8 @@ An open tool for manually trimming video and audio: choose a source and interval
 ## Features
 
 - Local files, API uploads, direct HTTPS files and accessible public recordings through yt-dlp.
-- Multiple intervals in one job, with a separate result for each.
-- Accurate H.264/AAC MP4, MP3 and fast stream-copy MP4.
+- Named intervals in one job, with separate files or one result in selected order; saved JSON plans for the CLI and Go.
+- Accurate H.264/AAC MP4, MP3 and original-stream MP4/MKV copy; selected audio, silent video and compatible text subtitles.
 - Original-file playback, YouTube embeds and short server-rendered MP4 windows for platforms or browser codec fallback.
 - PostgreSQL queue, history, cancellation, idempotency, restart recovery and stale-worker fencing.
 - Configurable byte/time/storage/concurrency budgets, retention cleanup and explicit source deletion.

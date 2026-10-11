@@ -117,6 +117,23 @@ paths:
         '503': {$ref: '#/components/responses/DatabaseUnavailable'}
         '200': {$ref: '#/components/responses/Source'}
         default: {$ref: '#/components/responses/Error'}
+  /api/v1/sources/{id}/tracks:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    get:
+      description: Fresh owner-protected track inspection for a staged local upload/direct source. Audio indices are absolute source stream indices. Platform sources without a staged file return tracks_unavailable; their deterministic default audio or no-audio export remains available.
+      responses:
+        '200':
+          description: Available source tracks
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tracks]
+                properties:
+                  tracks:
+                    type: array
+                    items: {$ref: '#/components/schemas/Track'}
+        default: {$ref: '#/components/responses/Error'}
   /api/v1/sources/{id}/media:
     parameters: [{$ref: '#/components/parameters/ID'}]
     get:
@@ -142,6 +159,14 @@ paths:
           name: priority
           schema: {type: string, default: foreground, examples: [foreground, background]}
           description: background prefetch yields rendering capacity to foreground requests; omission or any other value uses foreground priority.
+        - in: query
+          name: audio_track
+          schema: {type: integer, minimum: 0}
+          description: Absolute inspected audio stream index for a staged local source. Its selection is included in the private preview cache identity.
+        - in: query
+          name: no_audio
+          schema: {type: boolean}
+          description: true renders silent video; cannot be combined with audio_track. Omission selects default audio, otherwise the first audio stream.
       responses:
         '503': {$ref: '#/components/responses/StorageUnavailable'}
         '200':
@@ -357,6 +382,48 @@ components:
         height:
           type: integer
           description: Coded height of the selected playable video for local files, before sample-aspect-ratio/display-rotation normalization; omitted for audio-only files.
+        tracks:
+          type: array
+          items: {$ref: '#/components/schemas/Track'}
+          description: Optional fresh stream inspection; use the tracks endpoint for retained sources.
+    Track:
+      type: object
+      required: [index, type, codec, default]
+      properties:
+        index: {type: integer, minimum: 0}
+        type: {type: string}
+        codec: {type: string}
+        language: {type: string}
+        title: {type: string}
+        channels: {type: integer}
+        sample_rate: {type: string}
+        attached_picture: {type: boolean}
+        default: {type: boolean}
+    TrackSelection:
+      type: object
+      required: [index, type, codec, default, included, reason]
+      properties:
+        index: {type: integer, minimum: 0}
+        type: {type: string}
+        codec: {type: string}
+        language: {type: string}
+        title: {type: string}
+        channels: {type: integer}
+        sample_rate: {type: string}
+        attached_picture: {type: boolean}
+        default: {type: boolean}
+        included: {type: boolean}
+        reason: {type: string, description: Explanation of the stream selection; unknown future values are permitted.}
+    ArtifactSegment:
+      type: object
+      required: [index, label, source_start_ms, source_end_ms, output_start_ms, output_end_ms]
+      properties:
+        index: {type: integer}
+        label: {type: string}
+        source_start_ms: {type: integer}
+        source_end_ms: {type: integer}
+        output_start_ms: {type: integer}
+        output_end_ms: {type: integer}
     Range:
       type: object
       additionalProperties: false
@@ -375,9 +442,13 @@ components:
           type: array
           minItems: 1
           items: {$ref: '#/components/schemas/Range'}
-        format: {type: string, enum: [mp4, mp3]}
+        format: {type: string, enum: [mp4, mp3, mkv], description: MKV requires copy; MP3 requires accurate.}
         quality: {type: string, enum: [1080p, 720p, best]}
         cut_mode: {type: string, enum: [accurate, copy], description: MP3 requires accurate. Copy preserves source resolution; select best for original quality. A lower explicit cap fails with copy_quality_unsupported instead of silently resizing or exceeding the cap.}
+        output_mode: {type: string, enum: [separate, joined], default: separate, description: Separate publishes each range independently. Joined publishes one artifact in submitted range order; its actual bounds describe the output timeline and segments describe each source interval.}
+        audio_track: {type: integer, minimum: 0, description: Absolute inspected audio stream index for staged local media. Omission uses first default audio, otherwise first audio.}
+        no_audio: {type: boolean, default: false, description: Export video without audio; cannot be combined with audio_track or MP3.}
+        subtitle_mode: {type: string, enum: [omit, preserve], default: omit, description: Preserve compatible plain text subtitles from local copy sources, clipped and rebased to actual boundaries. Unsupported subtitle codecs fail explicitly. MP4 writes mov_text; MKV writes subrip.}
     Artifact:
       type: object
       required: [id, filename, size_bytes, download_url, actual_start_ms, actual_end_ms, expires_at]
@@ -389,6 +460,12 @@ components:
         download_url: {type: string}
         actual_start_ms: {type: integer}
         actual_end_ms: {type: integer}
+        segments:
+          type: array
+          items: {$ref: '#/components/schemas/ArtifactSegment'}
+        track_manifest:
+          type: array
+          items: {$ref: '#/components/schemas/TrackSelection'}
     JobItem:
       type: object
       required: [id, label, start_ms, end_ms, status, artifact]

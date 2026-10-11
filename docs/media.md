@@ -9,8 +9,11 @@ Local CLI, Go SDK and server exports share the media implementation.
 One output contains at most one playable video and one audio stream. Select the
 lowest-index video that is not an attached picture. Select the lowest-index
 audio marked default; when no audio is default, select the lowest-index audio.
-Titles and language tags do not change that policy. Additional video/audio
-tracks, cover art, subtitles and data streams are not exported. MP3 uses the
+Titles and language tags do not change the default policy. An explicit
+`audio_track` chooses an inspected absolute audio index; `no_audio` omits audio.
+Additional video/audio tracks, cover art and data streams are excluded.
+Subtitles are omitted by default; local copy can preserve compatible plain text
+subtitles with clipped/rebased timing. See [batch cutting](batch-cutting.md). MP3 uses the
 selected audio only; a file containing audio and an attached cover remains an
 audio-only source for inspection.
 

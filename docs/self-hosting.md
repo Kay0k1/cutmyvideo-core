@@ -7,12 +7,12 @@ all 35 required checks, all seven groups and verified cleanup on a disposable
 Linux amd64 runner.
 
 Every new candidate, including a combined release candidate, requires its own
-complete hosted acceptance and cleanup. Squash-merged release revisions are
-admitted only when the complete reviewed application inventory matches exactly;
-actual commit ancestry is recorded separately. Changed application sources
-require a new review. Pure Python controls cover configuration
-and refusal paths. The dated run does not cover production, host reboots or
-public ACME certificate issuance.
+complete hosted acceptance and cleanup. The default `current-installation`
+mode binds both built images to their complete immutable source inventories and
+the current hosted checkout. Historical transition modes retain their original
+reviewed application pins and receipts. Pure Python controls cover configuration
+and refusal paths; they do not execute hosted acceptance. The dated run does not
+cover later source changes, production, host reboots or public ACME certificate issuance.
 Use the [local trial](operations.md) for development. Native CLI archives remain
 supported by their separate five-platform distribution checks.
 
@@ -251,15 +251,28 @@ preexisting installations; never use `down -v` on retained state.
 
 ## Required acceptance before supported status
 
-Migration 5 changes runtime sources and the schema. The required
-`source-retention-004-to-005` acceptance mode checks the actual current checkout
-through the reviewed 004→005 upgrade, reduced-role execution and coordinated
-005 backup/restore gate. Its 53 checks across ten groups run automatically for
-release candidates; missing or skipped prerequisites refuse acceptance.
-Historical runs remain evidence for their exact commits.
-See [migration recovery](migrations.md#migration-5-upgrade-and-rollback).
+The default `current-installation` mode checks a schema-005 installation and
+an actual image upgrade from immutable commit
+`1d684b4b0918138190439fc4ce223ff1bc22de40` (tree
+`c568f55433cd2be92e9e5dffc956e1f1dca6cadb`) to the exact hosted checkout.
+Its schema-3 receipt requires 35 checks across seven groups, fresh and retained
+media checks, reduced-role execution, coordinated backup/restore and verified
+private-state cleanup. Before building either image, it captures both application
+inventories directly from Git and requires identical migration sources. Raw
+`SOURCE.json` receipts must reconstruct each complete Git tree and match the
+built image, runtime version, provider, checkout and admitted application map.
+Changed application sources therefore receive their own hosted observations;
+they cannot borrow a historical candidate's successful receipt. A schema change
+requires a separately reviewed transition mode.
 
-The prepared image-upgrade test pins the immutable baseline **A1** to
+Migration 5's historical `source-retention-004-to-005` mode retains the reviewed
+004→005 upgrade, catalog, retention and coordinated 005 restoration oracles. Its
+53 checks across ten groups and its immutable 173-file application pin remain
+unchanged. Historical runs remain evidence for their exact commits. See
+[migration recovery](migrations.md#migration-5-upgrade-and-rollback) and the
+[historical transition contract](self-hosting-source-retention-transition.md).
+
+That historical image-upgrade test pins the immutable baseline **A1** to
 `0f93cd654a998be7740ba1d6fee4a44a6f7b3464` (tree
 `58a431cf209a36b8acb0052ca77653b480814d48`) and builds **B** from the actual
 CI checkout. A1 includes the TCP healthcheck and exact conntrack-order fix;
@@ -269,9 +282,9 @@ evidence. No sealed old snapshot is patched to make an upgrade pass.
 In the historical `same-schema` mode, application sources (`cmd`, `internal`,
 `pkg`, `go.mod`, `go.sum`, including tracked tests and fixtures) must match the
 immutable reference `06bb74bca90a79fbf399c01cf71f7f44af186431` in both images.
-That mode verifies a same-schema image upgrade. The required
-`source-retention-004-to-005` mode instead binds B to the reviewed current
-application inventory and verifies the schema-changing upgrade. A1, B and the restored B each require the
+That mode verifies a same-schema image upgrade. The historical
+`source-retention-004-to-005` mode instead binds B to its reviewed
+application inventory and verifies the schema-changing upgrade. All modes require the
 actual final-listener TCP healthcheck and an independent SQL round trip.
 
 A failed policy apply/remove retains a bounded, redacted filter-rule snapshot
@@ -311,21 +324,26 @@ Compose file, and perform these checks:
    policy verification and retains HTTPS/origin/cookie settings. Record that
    the real host/Docker boot ordering is outside this test's evidence.
 
-Static controls are executable without Docker or firewall access:
-
-Schema-changing acceptance uses the separate, explicitly selected
+Automatic pull-request and push workflow runs select `current-installation`,
+which is also the default for the required manual workflow input. Historical
+schema-changing acceptance uses the separate, explicitly selected
 [`source-retention-004-to-005` mode](self-hosting-source-retention-transition.md).
 Its schema-2 receipt requires 53 checks across ten groups and actual pinned
-PostgreSQL/test observations from the same disposable hosted run. Automatic
-pull-request and push workflow runs explicitly select this transition, which is
-also the default for the required manual workflow input. Explicit historical
-`same-schema` workflow selection, or omitting the CLI mode, still requires the
+PostgreSQL/test observations from the same disposable hosted run. Explicit
+historical `same-schema` workflow selection, or omitting the CLI mode, still requires the
 original 35 checks across seven groups and exact A1/current application byte
-equality. Both workflow mode choices authorize only disposable acceptance, not
+equality. Every mode authorizes only disposable acceptance, not
 release or deployment.
+
+Static controls are executable without Docker or firewall access. Historical
+positive controls use immutable metadata fixtures rather than current application
+bytes; changing a later release cannot silently rewrite a historical test's identity.
 
 ```sh
 python3 -m unittest discover -s deploy -p self_host_test.py -v
+python3 -m unittest discover -s scripts -p self_hosting_acceptance_test.py -v
+python3 -m unittest discover -s scripts -p source_retention_transition_test.py -v
+python3 -m unittest discover -s scripts -p current_installation_acceptance_test.py -v
 ```
 
 They require PyYAML (the repository's pinned contract-tooling environment

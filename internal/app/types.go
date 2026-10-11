@@ -147,6 +147,7 @@ type Source struct {
 	ThumbnailURL     *string    `json:"thumbnail_url"`
 	Width            int        `json:"width,omitempty"`
 	Height           int        `json:"height,omitempty"`
+	Tracks           []Track    `json:"tracks,omitempty"`
 	// Display dimensions are computed only by fresh local inspection. They are
 	// not persisted in the source table or exposed by HTTP source responses.
 	DisplayWidth  int    `json:"-"`
@@ -165,19 +166,23 @@ type Range struct {
 }
 
 type ExportRequest struct {
-	SourceID string  `json:"source_id"`
-	Ranges   []Range `json:"ranges"`
-	Format   string  `json:"format"`
-	Quality  string  `json:"quality"`
-	CutMode  string  `json:"cut_mode"`
+	SourceID     string  `json:"source_id"`
+	Ranges       []Range `json:"ranges"`
+	Format       string  `json:"format"`
+	Quality      string  `json:"quality"`
+	CutMode      string  `json:"cut_mode"`
+	OutputMode   string  `json:"output_mode,omitempty"`
+	AudioTrack   *int    `json:"audio_track,omitempty"`
+	NoAudio      bool    `json:"no_audio,omitempty"`
+	SubtitleMode string  `json:"subtitle_mode,omitempty"`
 }
 
 func (r *ExportRequest) Validate(c Config, s Source) error {
 	if len(r.Ranges) == 0 || len(r.Ranges) > c.MaxRanges {
 		return errors.New("choose between 1 and the allowed number of ranges")
 	}
-	if r.Format != "mp4" && r.Format != "mp3" {
-		return errors.New("format must be mp4 or mp3")
+	if r.Format != "mp4" && r.Format != "mp3" && r.Format != "mkv" {
+		return errors.New("format must be mp4, mp3, or mkv")
 	}
 	if r.Quality != "1080p" && r.Quality != "720p" && r.Quality != "best" {
 		return errors.New("quality must be 1080p, 720p, or best")
@@ -188,26 +193,82 @@ func (r *ExportRequest) Validate(c Config, s Source) error {
 	if r.Format == "mp3" && r.CutMode == "copy" {
 		return errors.New("MP3 export requires accurate mode; preserving arbitrary input audio as MP3 is not possible")
 	}
+	if r.Format == "mkv" && r.CutMode != "copy" {
+		return errors.New("MKV export requires copy mode; choose MP4 for accurate cutting")
+	}
+	if r.OutputMode != "" && r.OutputMode != "separate" && r.OutputMode != "joined" {
+		return errors.New("output_mode must be separate or joined")
+	}
+	if r.SubtitleMode != "" && r.SubtitleMode != "omit" && r.SubtitleMode != "preserve" {
+		return errors.New("subtitle_mode must be omit or preserve")
+	}
+	if r.AudioTrack != nil && *r.AudioTrack < 0 {
+		return errors.New("audio_track must be a nonnegative source stream index; inspect the source tracks first")
+	}
+	if r.NoAudio && r.AudioTrack != nil {
+		return errors.New("choose audio_track or no_audio, not both")
+	}
+	if r.NoAudio && r.Format == "mp3" {
+		return errors.New("MP3 export requires audio; enable audio or choose a video format")
+	}
+	if r.AudioTrack != nil && s.Path == "" {
+		return errors.New("audio track selection requires an uploaded file; upload the source to select its audio track")
+	}
+	if r.SubtitleMode == "preserve" && (r.CutMode != "copy" || r.Format == "mp3") {
+		return errors.New("subtitle preservation requires MP4 or MKV copy mode; choose copy mode or omit subtitles")
+	}
+	if r.SubtitleMode == "preserve" && s.Path == "" {
+		return errors.New("subtitle preservation requires an uploaded file; upload the source or omit subtitles")
+	}
+	// Persist defaults exactly as older requests did. Idempotency continues to
+	// return the original owner/key pair regardless of later request changes.
+	if r.OutputMode == "separate" {
+		r.OutputMode = ""
+	}
+	if r.SubtitleMode == "omit" {
+		r.SubtitleMode = ""
+	}
 	var total int64
 	for i := range r.Ranges {
 		v := &r.Ranges[i]
 		v.Label = strings.TrimSpace(v.Label)
-		if len(v.Label) > 200 {
-			return errors.New("labels must be at most 200 bytes")
+		context := fmt.Sprintf("range %d", i+1)
+		if v.Label != "" {
+			context += fmt.Sprintf(" (%q)", v.Label)
 		}
-		if v.StartMS < 0 || v.EndMS <= v.StartMS || v.EndMS > s.DurationMS {
-			return errors.New("range must be within the source and end after its start")
+		if len(v.Label) > 200 {
+			return fmt.Errorf("%s: shorten the label to at most 200 UTF-8 bytes", context)
+		}
+		if v.StartMS < 0 {
+			return fmt.Errorf("%s: start_ms must be at least 0", context)
+		}
+		if v.EndMS <= v.StartMS {
+			return fmt.Errorf("%s: set end_ms after start_ms (%d)", context, v.StartMS)
+		}
+		if v.EndMS > s.DurationMS {
+			return fmt.Errorf("%s: set end_ms at or before the source duration (%d ms)", context, s.DurationMS)
 		}
 		if v.EndMS-v.StartMS > c.MaxRangeMS {
-			return errors.New("range exceeds the duration limit")
+			return fmt.Errorf("%s: shorten the range to at most %d ms", context, c.MaxRangeMS)
 		}
 		duration := v.EndMS - v.StartMS
 		if duration > c.MaxJobMS-total {
-			return errors.New("total selected duration exceeds the limit")
+			return fmt.Errorf("%s: total selected duration exceeds %d ms; shorten or remove ranges", context, c.MaxJobMS)
 		}
 		total += duration
 	}
 	return nil
+}
+
+// ArtifactSegment records actual source boundaries and the resulting joined
+// timeline in user-specified order. Copy boundaries may include keyframe preroll.
+type ArtifactSegment struct {
+	Index         int    `json:"index"`
+	Label         string `json:"label"`
+	SourceStartMS int64  `json:"source_start_ms"`
+	SourceEndMS   int64  `json:"source_end_ms"`
+	OutputStartMS int64  `json:"output_start_ms"`
+	OutputEndMS   int64  `json:"output_end_ms"`
 }
 
 type Artifact struct {
@@ -218,6 +279,10 @@ type Artifact struct {
 	DownloadURL   string     `json:"download_url"`
 	ActualStartMS int64      `json:"actual_start_ms"`
 	ActualEndMS   int64      `json:"actual_end_ms"`
+	// Pointers retain Artifact's comparable 1.x shape while adding optional
+	// manifests. Both serialize as JSON arrays and persist in the job snapshot.
+	Segments      *[]ArtifactSegment `json:"segments,omitempty"`
+	TrackManifest *[]TrackSelection  `json:"track_manifest,omitempty"`
 }
 
 type JobItem struct {

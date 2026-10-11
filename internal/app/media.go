@@ -91,6 +91,11 @@ func mediaFailureCategory(stderr string) string {
 	if strings.Contains(text, "not currently supported in container") || strings.Contains(text, "codec not supported in container") {
 		return "copy_incompatible"
 	}
+	// Older muxers can reject a codec as experimental instead of using the
+	// usual unsupported-container wording. Do not enable that flag silently.
+	if strings.Contains(text, "support is experimental") && (strings.Contains(text, "mp4") || strings.Contains(text, "matroska")) {
+		return "copy_incompatible"
+	}
 	for _, phrase := range []string{"login required", "login_required", "sign in to", "log in to", "only available for registered", "subscriber-only", "subscribers only", "private video", "password protected"} {
 		if strings.Contains(text, phrase) {
 			return "platform_access"
@@ -436,12 +441,12 @@ func exportInputs(ctx context.Context, c Config, inputs []mediaInput, r Range, r
 	return exportInputsProgress(ctx, c, inputs, r, request, out, nil)
 }
 
-func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r Range, request ExportRequest, out string, report func(int64)) (int64, int64, error) {
-	selection, err := probeInputSelection(ctx, c, inputs)
+func exportInputsCoreProgress(ctx context.Context, c Config, inputs []mediaInput, r Range, request ExportRequest, out string, report func(int64)) (int64, int64, error) {
+	selection, err := probeInputSelectionOptions(ctx, c, inputs, request)
 	if err != nil {
 		return 0, 0, err
 	}
-	if request.Format == "mp3" && selection.Audio == nil || len(inputs) == 2 && selection.Audio == nil {
+	if request.Format == "mp3" && selection.Audio == nil || len(inputs) == 2 && selection.Audio == nil && !request.NoAudio {
 		return 0, 0, errNoAudio
 	}
 	if request.Format != "mp3" && selection.Video == nil {
@@ -564,8 +569,11 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 			args = append(args, "-vf", filter, "-fps_mode:v", "passthrough", "-enc_time_base:v", encoderTimeBase)
 			args = append(args, hdrOutputColorArgs(hdr)...)
 		}
-		args = append(args, "-movflags", "+faststart")
+		if request.Format == "mp4" {
+			args = append(args, "-movflags", "+faststart")
+		}
 	}
+	args = append(args, audioMetadataArgs(selection.Audio)...)
 	args = append(args, "-threads", threads, "-map_metadata", "-1", "-map_chapters", "-1", "-fs", strconv.FormatInt(limit, 10), out)
 	var commandErr error
 	if report == nil {
@@ -576,6 +584,9 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 	if err := commandErr; err != nil {
 		if info, statErr := os.Stat(out); statErr == nil && info.Size() >= limit {
 			return 0, 0, errOutputLimit
+		}
+		if request.CutMode == "copy" {
+			err = copyExportDiagnostic(err, request.Format)
 		}
 		return 0, 0, renderedMediaFailure(err, hdr)
 	}
@@ -590,7 +601,7 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 	if err != nil {
 		return 0, 0, err
 	}
-	if request.Format == "mp4" {
+	if request.Format != "mp3" {
 		if p.selectedVideo() == nil {
 			return 0, 0, errors.New("result has no video stream")
 		}

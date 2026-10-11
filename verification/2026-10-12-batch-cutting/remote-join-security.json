@@ -1,0 +1,18 @@
+{
+  "test": "TestJoinedRemoteEntryKeepsMediaFormatAndProtocolRestrictions",
+  "scope": "Real FFmpeg/ffprobe, remote accurate join; content changes from probed MP4 to nested concat before decode",
+  "negative_control": {
+    "application_commit": "6efc2ffdcdbf645f51cfcf4e79ac35865a460c8d",
+    "result": "failed as expected: unguarded private HTTP endpoint fetched",
+    "cases": [
+      "relative HTTP child",
+      "absolute private HTTP child",
+      "local nested concat with private HTTP child"
+    ]
+  },
+  "fixed_revision": "50e0819fc4ab341ac677de5345d485ebb50a090b",
+  "positive_control": "normal remote MP4 join independently decodes",
+  "negative_cases": "all rejected; zero observable private HTTP requests",
+  "race_check": "passed",
+  "mitigation": "Trusted concat list retains concat/file decoding. Each remote entry restricts protocols to http,tcp and formats to allowed media demuxers, excluding nested concat."
+}

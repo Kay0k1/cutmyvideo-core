@@ -9,7 +9,7 @@ func InspectLocal(ctx context.Context, c Config, path string) (Source, error) {
 	if err != nil {
 		return Source{}, &localInspectionFailure{cause: err}
 	}
-	s := Source{DurationMS: duration, Path: path, Kind: "upload"}
+	s := Source{DurationMS: duration, Path: path, Kind: "upload", Tracks: p.tracks()}
 	if v := p.selectedVideo(); v != nil {
 		s.Width = v.Width
 		s.Height = v.Height

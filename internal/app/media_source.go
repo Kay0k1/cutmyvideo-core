@@ -48,6 +48,7 @@ func (s *Store) refreshLocalMediaDimensions(ctx context.Context, c Config, sourc
 	if err := ctx.Err(); err != nil {
 		return source, err
 	}
+	source.Tracks = inspected.Tracks
 	if source.Width == inspected.Width && source.Height == inspected.Height {
 		return source, nil
 	}

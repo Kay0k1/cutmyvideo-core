@@ -209,6 +209,14 @@ func (s *Store) ReleaseSource(ctx context.Context, owner string, tokens ...strin
 }
 
 func remainingJobReserve(c Config, j Job, platform bool) (int64, error) {
+	if j.Request.OutputMode == "joined" {
+		for _, item := range j.Items {
+			if item.Status != "succeeded" || item.Artifact == nil {
+				return joinedWorkBudget(c, j.Request, platform)
+			}
+		}
+		return 0, nil
+	}
 	var size, staging int64
 	for _, item := range j.Items {
 		if item.Status == "succeeded" && item.Artifact != nil {
@@ -216,6 +224,11 @@ func remainingJobReserve(c Config, j Job, platform bool) (int64, error) {
 		}
 		r := Range{StartMS: item.StartMS, EndMS: item.EndMS}
 		budget := outputBudget(c, r, j.Request)
+		if subtitles, err := subtitleWorkBudget(c, j.Request, budget); err != nil || subtitles > math.MaxInt64-budget {
+			return 0, errStorageUnavailable
+		} else {
+			budget += subtitles
+		}
 		if budget <= 0 || budget > math.MaxInt64-size {
 			return 0, errStorageUnavailable
 		}

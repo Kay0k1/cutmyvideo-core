@@ -59,10 +59,7 @@ func (s *Store) CreateJobLimited(ctx context.Context, owner string, r ExportRequ
 	}
 	c := s.storageConfig()
 	if c.MaxStorageBytes > 0 {
-		items := make([]JobItem, len(r.Ranges))
-		for i, selected := range r.Ranges {
-			items[i] = JobItem{StartMS: selected.StartMS, EndMS: selected.EndMS}
-		}
+		items := jobItems(r)
 		reserve, e := remainingJobReserve(c, Job{Items: items, Request: r}, sourceKind == "platform" || sourceKind == "youtube")
 		if e != nil || reserve > c.MaxStorageBytes {
 			return Job{}, ErrJobTooLarge
@@ -166,10 +163,7 @@ func (s *Store) CreateJob(ctx context.Context, owner string, r ExportRequest, ke
 }
 
 func insertJob(ctx context.Context, db dbExecutor, owner string, r ExportRequest, key string) (Job, error) {
-	j := Job{ID: newID("job"), Owner: owner, Status: "queued", Stage: "queued", Message: "Waiting for a worker", Request: r, Items: make([]JobItem, len(r.Ranges))}
-	for i, v := range r.Ranges {
-		j.Items[i] = JobItem{ID: newID("item"), Label: v.Label, StartMS: v.StartMS, EndMS: v.EndMS, Status: "queued"}
-	}
+	j := Job{ID: newID("job"), Owner: owner, Status: "queued", Stage: "queued", Message: "Waiting for a worker", Request: r, Items: jobItems(r)}
 	request, _ := json.Marshal(r)
 	items, _ := json.Marshal(j.Items)
 	var idem *string
@@ -180,6 +174,11 @@ func insertJob(ctx context.Context, db dbExecutor, owner string, r ExportRequest
 	if err != nil {
 		return j, err
 	}
+	// NOTIFY is delivered on commit; workers retain polling as the correctness
+	// path when no listener is connected. The payload contains no owner data.
+	if _, err = db.Exec(ctx, `SELECT pg_notify('cutmy_jobs','')`); err != nil {
+		return j, err
+	}
 	if key != "" {
 		var existing string
 		if err = db.QueryRow(ctx, `SELECT id FROM jobs WHERE owner=$1 AND idempotency_key=$2`, owner, key).Scan(&existing); err != nil {
@@ -188,6 +187,21 @@ func insertJob(ctx context.Context, db dbExecutor, owner string, r ExportRequest
 		return readJob(ctx, db, existing, owner)
 	}
 	return j, nil
+}
+
+func jobItems(r ExportRequest) []JobItem {
+	if r.OutputMode == "joined" {
+		var duration int64
+		for _, selected := range r.Ranges {
+			duration += selected.EndMS - selected.StartMS
+		}
+		return []JobItem{{ID: newID("item"), Label: "Joined result", EndMS: duration, Status: "queued"}}
+	}
+	items := make([]JobItem, len(r.Ranges))
+	for i, selected := range r.Ranges {
+		items[i] = JobItem{ID: newID("item"), Label: selected.Label, StartMS: selected.StartMS, EndMS: selected.EndMS, Status: "queued"}
+	}
+	return items
 }
 
 func (s *Store) Job(ctx context.Context, id, owner string) (Job, error) {

@@ -1,0 +1,45 @@
+{
+  "builds": [
+    {
+      "endpoint": "baseline",
+      "source_revision": "1d684b4b0918138190439fc4ce223ff1bc22de40",
+      "binary_sha256": "7d255e0f87c43ae7b5f94e2ccaad2aeed4ff736afaab4ed667be7989e3a80b4d",
+      "go_toolchain": "go1.27.2 linux/amd64",
+      "working_directory": "/root/video_cut/core-baseline",
+      "build_command": "go build -trimpath -buildvcs=false -ldflags='-X main.version=verification -X main.commit=1d684b4b0918138190439fc4ce223ff1bc22de40 -X main.buildTime=unknown' -o /root/.cache/cutmy-stage/binaries/1d684b4/cutmy ./cmd/cutmy",
+      "nonsecret_configuration": {
+        "MAX_OUTPUT_BYTES": 16777216,
+        "MAX_SOURCE_BYTES": 67108864,
+        "MAX_FETCH_BYTES": 67108864,
+        "MAX_STORAGE_BYTES": 2147483648,
+        "MAX_OWNER_BYTES": 536870912,
+        "STORAGE_SAFETY_BYTES": 67108864,
+        "MUTATIONS_PER_MINUTE": 10000,
+        "FFMPEG_THREADS": 2,
+        "FFMPEG_PROFILE": "fast",
+        "WORKER_CONCURRENCY": 1
+      }
+    },
+    {
+      "endpoint": "candidate",
+      "source_revision": "6efc2ffdcdbf645f51cfcf4e79ac35865a460c8d",
+      "binary_sha256": "85975f0320333fb2dcf5009aacd500f99a1663dc4d6a41b27e54b399d8a962eb",
+      "go_toolchain": "go1.27.2 linux/amd64",
+      "working_directory": "/root/video_cut/core",
+      "build_command": "go build -trimpath -buildvcs=false -ldflags='-X main.version=verification -X main.commit=6efc2ffdcdbf645f51cfcf4e79ac35865a460c8d -X main.buildTime=unknown' -o /root/.cache/cutmy-stage/binaries/6efc2ff/cutmy ./cmd/cutmy",
+      "nonsecret_configuration": {
+        "MAX_OUTPUT_BYTES": 16777216,
+        "MAX_SOURCE_BYTES": 67108864,
+        "MAX_FETCH_BYTES": 67108864,
+        "MAX_STORAGE_BYTES": 2147483648,
+        "MAX_OWNER_BYTES": 536870912,
+        "STORAGE_SAFETY_BYTES": 67108864,
+        "MUTATIONS_PER_MINUTE": 10000,
+        "FFMPEG_THREADS": 2,
+        "FFMPEG_PROFILE": "fast",
+        "WORKER_CONCURRENCY": 1
+      }
+    }
+  ],
+  "note": "Both disposable API/worker pairs were restarted from these exact immutable binaries before paired timing. Database credentials, owner/session cookies and environment contents are deliberately absent."
+}

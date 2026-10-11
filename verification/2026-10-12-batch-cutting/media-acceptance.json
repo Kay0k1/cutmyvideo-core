@@ -1,0 +1,2314 @@
+{
+  "binary": {
+    "version": "verification",
+    "commit": "0fe726e338b567c09fcea7509b8dcfe5be90bcac",
+    "build_time": "unknown",
+    "go_version": "go1.27.2",
+    "os": "linux",
+    "arch": "amd64"
+  },
+  "binary_sha256": "e46053cf4113aad38b6e513fa273cc7cc14b1ed9443ae9b9c3afb3a4c6ac8fba",
+  "tools": {
+    "ffmpeg": "ffmpeg version N-127083-g65a3870462-20261001 Copyright (c) 2000-2026 the FFmpeg developers",
+    "ffprobe": "ffprobe version N-127083-g65a3870462-20261001 Copyright (c) 2007-2026 the FFmpeg developers"
+  },
+  "fixtures": {
+    "ordinary": "b3fe0874335e5ac4297770f69dcef46ddbab69952b4c97d55ab35c88ccaf86a7",
+    "vfr": "30d34bdd81f80769c9af1ac5f4fd64e159faabf1c2ea93d8f480375c759dba0e",
+    "rotated": "e3e0315782a74ec117f096d5148fe901107f1cc012b520943e116371f79cd7ca",
+    "multi": "6d7be13f9edc279999e5520c5fabf295164e87200c5d779547529d4479ba579c",
+    "chirp": "059035c819745fc7f41690174fbffffeef4ebae647e41eab383d166169a1d599"
+  },
+  "cases": [
+    {
+      "case": "ordinary-accurate-mp4-separate-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/ordinary-accurate-mp4-separate-audio/01-Blue_first.mp4",
+            "size_bytes": 33588,
+            "actual_start_ms": 8500,
+            "actual_end_ms": 10520,
+            "label": "Blue first",
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8500,
+                "source_end_ms": 10520,
+                "output_start_ms": 0,
+                "output_end_ms": 2020
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": true,
+                "reason": "selected_audio"
+              }
+            ]
+          },
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/ordinary-accurate-mp4-separate-audio/02-Red_second.mp4",
+            "size_bytes": 33921,
+            "actual_start_ms": 1500,
+            "actual_end_ms": 3520,
+            "label": "Red second",
+            "segments": [
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1500,
+                "source_end_ms": 3520,
+                "output_start_ms": 0,
+                "output_end_ms": 2020
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": true,
+                "reason": "selected_audio"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 2.02,
+          "colours": [
+            "blue"
+          ],
+          "audio_hz": 437.5,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": -0.04322,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": null,
+          "width": 320,
+          "height": 240,
+          "sha256": "281ea51819f5ee306aa1168bde6fd6ebfbb9a297dbb4ee824432190d1a157eeb",
+          "bytes": 33588
+        },
+        {
+          "duration_s": 2.02,
+          "colours": [
+            "red"
+          ],
+          "audio_hz": 437.5,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": -0.04322,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": null,
+          "width": 320,
+          "height": 240,
+          "sha256": "c90471a7196e10c9d30a7f2b8972cf807dd6088e96389aac10ba35bf2781262e",
+          "bytes": 33921
+        }
+      ]
+    },
+    {
+      "case": "ordinary-accurate-mp4-joined-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/ordinary-accurate-mp4-joined-audio/joined.mp4",
+            "size_bytes": 70659,
+            "actual_start_ms": 0,
+            "actual_end_ms": 4000,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8500,
+                "source_end_ms": 10500,
+                "output_start_ms": 0,
+                "output_end_ms": 2000
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1500,
+                "source_end_ms": 3500,
+                "output_start_ms": 2000,
+                "output_end_ms": 4000
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": true,
+                "reason": "selected_audio"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 4.02,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": 437.5,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": -0.04322,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": null,
+          "width": 320,
+          "height": 240,
+          "sha256": "e28dec40de318748ac11cee0bec26664a12bc2f7e162d68ceae88867440935a7",
+          "bytes": 70659
+        }
+      ]
+    },
+    {
+      "case": "ordinary-copy-mp4-joined-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/ordinary-copy-mp4-joined-audio/joined.mp4",
+            "size_bytes": 51896,
+            "actual_start_ms": 0,
+            "actual_end_ms": 5200,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8000,
+                "source_end_ms": 10600,
+                "output_start_ms": 0,
+                "output_end_ms": 2600
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1000,
+                "source_end_ms": 3600,
+                "output_start_ms": 2600,
+                "output_end_ms": 5200
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": true,
+                "reason": "selected_audio"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 5.211088,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": 440.0,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": 0.010975,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": true,
+          "width": 320,
+          "height": 240,
+          "sha256": "aa8c7177a8d580a942476dc8b348e8d8f3bea9a939037b0ca5e7407fae02b116",
+          "bytes": 51896
+        }
+      ]
+    },
+    {
+      "case": "ordinary-copy-mkv-joined-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/ordinary-copy-mkv-joined-audio/joined.mkv",
+            "size_bytes": 50518,
+            "actual_start_ms": 0,
+            "actual_end_ms": 5360,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8000,
+                "source_end_ms": 10680,
+                "output_start_ms": 0,
+                "output_end_ms": 2680
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1000,
+                "source_end_ms": 3680,
+                "output_start_ms": 2680,
+                "output_end_ms": 5360
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": true,
+                "reason": "selected_audio"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 5.395,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": 437.5,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": 0.011,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": true,
+          "width": 320,
+          "height": 240,
+          "sha256": "f30b33585bb93261197a142d0e7f16e7c74210e8ab8c3d77b168e87c5f07c3f6",
+          "bytes": 50518
+        }
+      ]
+    },
+    {
+      "case": "ordinary-accurate-mp4-joined-silent",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/ordinary-accurate-mp4-joined-silent/joined.mp4",
+            "size_bytes": 3670,
+            "actual_start_ms": 0,
+            "actual_end_ms": 4000,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8500,
+                "source_end_ms": 10500,
+                "output_start_ms": 0,
+                "output_end_ms": 2000
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1500,
+                "source_end_ms": 3500,
+                "output_start_ms": 2000,
+                "output_end_ms": 4000
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": false,
+                "reason": "audio_disabled"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 4.0,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": null,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": null,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": null,
+          "width": 320,
+          "height": 240,
+          "sha256": "32dc450cd58924fbf8b98fcd9d3f919774f17ba028d9f800010f61675dcf3a38",
+          "bytes": 3670
+        }
+      ]
+    },
+    {
+      "case": "vfr-accurate-mp4-separate-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/vfr-accurate-mp4-separate-audio/01-Blue_first.mp4",
+            "size_bytes": 32424,
+            "actual_start_ms": 8500,
+            "actual_end_ms": 10560,
+            "label": "Blue first",
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8500,
+                "source_end_ms": 10560,
+                "output_start_ms": 0,
+                "output_end_ms": 2060
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": true,
+                "reason": "selected_audio"
+              }
+            ]
+          },
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/vfr-accurate-mp4-separate-audio/02-Red_second.mp4",
+            "size_bytes": 33161,
+            "actual_start_ms": 1500,
+            "actual_end_ms": 3520,
+            "label": "Red second",
+            "segments": [
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1500,
+                "source_end_ms": 3520,
+                "output_start_ms": 0,
+                "output_end_ms": 2020
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": true,
+                "reason": "selected_audio"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 2.06,
+          "colours": [
+            "blue"
+          ],
+          "audio_hz": 437.5,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": -0.04322,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": null,
+          "width": 320,
+          "height": 240,
+          "sha256": "64725b26f2e15faceb83f3be8c6804aeefd23da593b726f5366f481624896e17",
+          "bytes": 32424
+        },
+        {
+          "duration_s": 2.02,
+          "colours": [
+            "red"
+          ],
+          "audio_hz": 437.5,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": -0.04322,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": null,
+          "width": 320,
+          "height": 240,
+          "sha256": "9300c15d9b1e4c059cdc21e40de258486f1fa46b9d1eb6b14eaaf4d22ffbb8eb",
+          "bytes": 33161
+        }
+      ]
+    },
+    {
+      "case": "vfr-accurate-mp4-joined-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/vfr-accurate-mp4-joined-audio/joined.mp4",
+            "size_bytes": 68732,
+            "actual_start_ms": 0,
+            "actual_end_ms": 4000,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8500,
+                "source_end_ms": 10500,
+                "output_start_ms": 0,
+                "output_end_ms": 2000
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1500,
+                "source_end_ms": 3500,
+                "output_start_ms": 2000,
+                "output_end_ms": 4000
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": true,
+                "reason": "selected_audio"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 4.02,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": 437.5,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": -0.04322,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": null,
+          "width": 320,
+          "height": 240,
+          "sha256": "f1fe723b9d6cf0a27906fa70c6aae04b3e84689932f5e4481c18b638bc7850de",
+          "bytes": 68732
+        }
+      ]
+    },
+    {
+      "case": "vfr-copy-mp4-joined-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/vfr-copy-mp4-joined-audio/joined.mp4",
+            "size_bytes": 51139,
+            "actual_start_ms": 0,
+            "actual_end_ms": 5480,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8040,
+                "source_end_ms": 10800,
+                "output_start_ms": 0,
+                "output_end_ms": 2760
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 960,
+                "source_end_ms": 3680,
+                "output_start_ms": 2760,
+                "output_end_ms": 5480
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": true,
+                "reason": "selected_audio"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 5.56,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": 440.0,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": 0.017007,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": true,
+          "width": 320,
+          "height": 240,
+          "sha256": "abd2359ac5d4d453267b780c05b7112c1b613e9bf075d39cbf6774896c099191",
+          "bytes": 51139
+        }
+      ]
+    },
+    {
+      "case": "vfr-copy-mkv-joined-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/vfr-copy-mkv-joined-audio/joined.mkv",
+            "size_bytes": 52875,
+            "actual_start_ms": 0,
+            "actual_end_ms": 5760,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8040,
+                "source_end_ms": 10920,
+                "output_start_ms": 0,
+                "output_end_ms": 2880
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 960,
+                "source_end_ms": 3840,
+                "output_start_ms": 2880,
+                "output_end_ms": 5760
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": true,
+                "reason": "selected_audio"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 5.797,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": 439.86254295532643,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": 0.017,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": true,
+          "width": 320,
+          "height": 240,
+          "sha256": "f12898b7499571a483c540219270c138bdbdd04da16674d1bff3b92941f32032",
+          "bytes": 52875
+        }
+      ]
+    },
+    {
+      "case": "vfr-accurate-mp4-joined-silent",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/vfr-accurate-mp4-joined-silent/joined.mp4",
+            "size_bytes": 2519,
+            "actual_start_ms": 0,
+            "actual_end_ms": 4000,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8500,
+                "source_end_ms": 10500,
+                "output_start_ms": 0,
+                "output_end_ms": 2000
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1500,
+                "source_end_ms": 3500,
+                "output_start_ms": 2000,
+                "output_end_ms": 4000
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": false,
+                "reason": "audio_disabled"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 4.0,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": null,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": null,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": null,
+          "width": 320,
+          "height": 240,
+          "sha256": "d97c3efe8fa0254fbda9b304588a234be45e79ca1d74ec4a8f7ec52afa22b8f4",
+          "bytes": 2519
+        }
+      ]
+    },
+    {
+      "case": "rotated-accurate-mp4-separate-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/rotated-accurate-mp4-separate-audio/01-Blue_first.mp4",
+            "size_bytes": 33587,
+            "actual_start_ms": 8500,
+            "actual_end_ms": 10520,
+            "label": "Blue first",
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8500,
+                "source_end_ms": 10520,
+                "output_start_ms": 0,
+                "output_end_ms": 2020
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": true,
+                "reason": "selected_audio"
+              }
+            ]
+          },
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/rotated-accurate-mp4-separate-audio/02-Red_second.mp4",
+            "size_bytes": 33920,
+            "actual_start_ms": 1500,
+            "actual_end_ms": 3520,
+            "label": "Red second",
+            "segments": [
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1500,
+                "source_end_ms": 3520,
+                "output_start_ms": 0,
+                "output_end_ms": 2020
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": true,
+                "reason": "selected_audio"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 2.02,
+          "colours": [
+            "blue"
+          ],
+          "audio_hz": 437.5,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": -0.04322,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": null,
+          "width": 240,
+          "height": 320,
+          "sha256": "db554730227a7489b4ee1d466870e568f87982708dfede29213fc69d39dd4812",
+          "bytes": 33587
+        },
+        {
+          "duration_s": 2.02,
+          "colours": [
+            "red"
+          ],
+          "audio_hz": 437.5,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": -0.04322,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": null,
+          "width": 240,
+          "height": 320,
+          "sha256": "2e4a063ddfcadd38111586d0adde1ade70e3f641b452e96011359d1e9117f468",
+          "bytes": 33920
+        }
+      ]
+    },
+    {
+      "case": "rotated-accurate-mp4-joined-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/rotated-accurate-mp4-joined-audio/joined.mp4",
+            "size_bytes": 70658,
+            "actual_start_ms": 0,
+            "actual_end_ms": 4000,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8500,
+                "source_end_ms": 10500,
+                "output_start_ms": 0,
+                "output_end_ms": 2000
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1500,
+                "source_end_ms": 3500,
+                "output_start_ms": 2000,
+                "output_end_ms": 4000
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": true,
+                "reason": "selected_audio"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 4.02,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": 437.5,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": -0.04322,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": null,
+          "width": 240,
+          "height": 320,
+          "sha256": "dc0216b154b75e778d6c0e1e41bc94fbd8aedd38326742622a853b15c87e644b",
+          "bytes": 70658
+        }
+      ]
+    },
+    {
+      "case": "rotated-copy-mp4-joined-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/rotated-copy-mp4-joined-audio/joined.mp4",
+            "size_bytes": 51896,
+            "actual_start_ms": 0,
+            "actual_end_ms": 5200,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8000,
+                "source_end_ms": 10600,
+                "output_start_ms": 0,
+                "output_end_ms": 2600
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1000,
+                "source_end_ms": 3600,
+                "output_start_ms": 2600,
+                "output_end_ms": 5200
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": true,
+                "reason": "selected_audio"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 5.211088,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": 440.0,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": 0.010975,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": true,
+          "width": 320,
+          "height": 240,
+          "sha256": "4cb3fe53374eb826e1dfe0fb1fcf0bc2f501bc5961244cdfee648f9a6834ff13",
+          "bytes": 51896
+        }
+      ]
+    },
+    {
+      "case": "rotated-copy-mkv-joined-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/rotated-copy-mkv-joined-audio/joined.mkv",
+            "size_bytes": 50532,
+            "actual_start_ms": 0,
+            "actual_end_ms": 5360,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8000,
+                "source_end_ms": 10680,
+                "output_start_ms": 0,
+                "output_end_ms": 2680
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1000,
+                "source_end_ms": 3680,
+                "output_start_ms": 2680,
+                "output_end_ms": 5360
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": true,
+                "reason": "selected_audio"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 5.395,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": 437.5,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": 0.011,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": true,
+          "width": 320,
+          "height": 240,
+          "sha256": "2ed32056c3e1f9347cc0bb6f677b6142aa3cc6207a60a3d9440dc28c60fc67cc",
+          "bytes": 50532
+        }
+      ]
+    },
+    {
+      "case": "rotated-accurate-mp4-joined-silent",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/rotated-accurate-mp4-joined-silent/joined.mp4",
+            "size_bytes": 3669,
+            "actual_start_ms": 0,
+            "actual_end_ms": 4000,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8500,
+                "source_end_ms": 10500,
+                "output_start_ms": 0,
+                "output_end_ms": 2000
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1500,
+                "source_end_ms": 3500,
+                "output_start_ms": 2000,
+                "output_end_ms": 4000
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": false,
+                "reason": "audio_disabled"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 4.0,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": null,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": null,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": null,
+          "width": 240,
+          "height": 320,
+          "sha256": "c65b81979f68bcb91e55aae88d194ae2c266f23619278750a984c21ee4c3def5",
+          "bytes": 3669
+        }
+      ]
+    },
+    {
+      "case": "multi-accurate-mp4-separate-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/multi-accurate-mp4-separate-audio/01-Blue_first.mp4",
+            "size_bytes": 31967,
+            "actual_start_ms": 8500,
+            "actual_end_ms": 10520,
+            "label": "Blue first",
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8500,
+                "source_end_ms": 10520,
+                "output_start_ms": 0,
+                "output_end_ms": 2020
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": false,
+                "reason": "audio_not_selected"
+              },
+              {
+                "index": 2,
+                "type": "audio",
+                "codec": "aac",
+                "language": "rus",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": false,
+                "included": true,
+                "reason": "selected_audio"
+              },
+              {
+                "index": 3,
+                "type": "subtitle",
+                "codec": "mov_text",
+                "language": "und",
+                "default": true,
+                "included": false,
+                "reason": "subtitles_omitted"
+              }
+            ]
+          },
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/multi-accurate-mp4-separate-audio/02-Red_second.mp4",
+            "size_bytes": 31819,
+            "actual_start_ms": 1500,
+            "actual_end_ms": 3520,
+            "label": "Red second",
+            "segments": [
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1500,
+                "source_end_ms": 3520,
+                "output_start_ms": 0,
+                "output_end_ms": 2020
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": false,
+                "reason": "audio_not_selected"
+              },
+              {
+                "index": 2,
+                "type": "audio",
+                "codec": "aac",
+                "language": "rus",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": false,
+                "included": true,
+                "reason": "selected_audio"
+              },
+              {
+                "index": 3,
+                "type": "subtitle",
+                "codec": "mov_text",
+                "language": "und",
+                "default": true,
+                "included": false,
+                "reason": "subtitles_omitted"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 2.02,
+          "colours": [
+            "blue"
+          ],
+          "audio_hz": 877.5,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": -0.04322,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": null,
+          "width": 320,
+          "height": 240,
+          "sha256": "87dd8bcfa7b601087a626462791693c3f65177c4e0d7a6b45a18a2bc3efc90dd",
+          "bytes": 31967
+        },
+        {
+          "duration_s": 2.02,
+          "colours": [
+            "red"
+          ],
+          "audio_hz": 877.5,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": -0.04322,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": null,
+          "width": 320,
+          "height": 240,
+          "sha256": "7da1b7e0819175df01c58348946d46018be57714dbf4e08efec540075961f2ab",
+          "bytes": 31819
+        }
+      ]
+    },
+    {
+      "case": "multi-accurate-mp4-joined-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/multi-accurate-mp4-joined-audio/joined.mp4",
+            "size_bytes": 70417,
+            "actual_start_ms": 0,
+            "actual_end_ms": 4000,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8500,
+                "source_end_ms": 10500,
+                "output_start_ms": 0,
+                "output_end_ms": 2000
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1500,
+                "source_end_ms": 3500,
+                "output_start_ms": 2000,
+                "output_end_ms": 4000
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": false,
+                "reason": "audio_not_selected"
+              },
+              {
+                "index": 2,
+                "type": "audio",
+                "codec": "aac",
+                "language": "rus",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": false,
+                "included": true,
+                "reason": "selected_audio"
+              },
+              {
+                "index": 3,
+                "type": "subtitle",
+                "codec": "mov_text",
+                "language": "und",
+                "default": true,
+                "included": false,
+                "reason": "subtitles_omitted"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 4.02,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": 877.5,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": -0.04322,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": null,
+          "width": 320,
+          "height": 240,
+          "sha256": "71091edf310df0c2e8da4d39e2dc1ee4a1abd8f87d08d08f4064f9604375921f",
+          "bytes": 70417
+        }
+      ]
+    },
+    {
+      "case": "multi-copy-mp4-joined-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/multi-copy-mp4-joined-audio/joined.mp4",
+            "size_bytes": 52488,
+            "actual_start_ms": 0,
+            "actual_end_ms": 5200,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8000,
+                "source_end_ms": 10600,
+                "output_start_ms": 0,
+                "output_end_ms": 2600
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1000,
+                "source_end_ms": 3600,
+                "output_start_ms": 2600,
+                "output_end_ms": 5200
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": false,
+                "reason": "audio_not_selected"
+              },
+              {
+                "index": 2,
+                "type": "audio",
+                "codec": "aac",
+                "language": "rus",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": false,
+                "included": true,
+                "reason": "selected_audio"
+              },
+              {
+                "index": 3,
+                "type": "subtitle",
+                "codec": "mov_text",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "subtitles_preserved"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 5.21,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": 880.0,
+          "subtitle_srt": "1\n00:00:01,000 --> 00:00:02,600\nBlue caption\n\n2\n00:00:02,600 --> 00:00:05,200\nRed caption\n\n",
+          "audio_video_start_delta_s": 0.01,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": true,
+          "width": 320,
+          "height": 240,
+          "sha256": "5af68b5094c9899b5a7b39a6aa86f7a75e4f9be2b18e6e1c9178c2bb1d871e58",
+          "bytes": 52488
+        }
+      ]
+    },
+    {
+      "case": "multi-copy-mkv-joined-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/multi-copy-mkv-joined-audio/joined.mkv",
+            "size_bytes": 50741,
+            "actual_start_ms": 0,
+            "actual_end_ms": 5360,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8000,
+                "source_end_ms": 10680,
+                "output_start_ms": 0,
+                "output_end_ms": 2680
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1000,
+                "source_end_ms": 3680,
+                "output_start_ms": 2680,
+                "output_end_ms": 5360
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": false,
+                "reason": "audio_not_selected"
+              },
+              {
+                "index": 2,
+                "type": "audio",
+                "codec": "aac",
+                "language": "rus",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": false,
+                "included": true,
+                "reason": "selected_audio"
+              },
+              {
+                "index": 3,
+                "type": "subtitle",
+                "codec": "mov_text",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "subtitles_preserved"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 5.395,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": 877.5,
+          "subtitle_srt": "1\n00:00:01,000 --> 00:00:02,680\nBlue caption\n\n2\n00:00:02,680 --> 00:00:05,360\nRed caption\n\n",
+          "audio_video_start_delta_s": 0.011,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": true,
+          "width": 320,
+          "height": 240,
+          "sha256": "54b4603882ff36d9e16682d3c1aa9871134b2bba31c1c0781185944ef8e7168b",
+          "bytes": 50741
+        }
+      ]
+    },
+    {
+      "case": "multi-accurate-mp4-joined-silent",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/multi-accurate-mp4-joined-silent/joined.mp4",
+            "size_bytes": 3670,
+            "actual_start_ms": 0,
+            "actual_end_ms": 4000,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8500,
+                "source_end_ms": 10500,
+                "output_start_ms": 0,
+                "output_end_ms": 2000
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1500,
+                "source_end_ms": 3500,
+                "output_start_ms": 2000,
+                "output_end_ms": 4000
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": false,
+                "reason": "audio_disabled"
+              },
+              {
+                "index": 2,
+                "type": "audio",
+                "codec": "aac",
+                "language": "rus",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": false,
+                "included": false,
+                "reason": "audio_disabled"
+              },
+              {
+                "index": 3,
+                "type": "subtitle",
+                "codec": "mov_text",
+                "language": "und",
+                "default": true,
+                "included": false,
+                "reason": "subtitles_omitted"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 4.0,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": null,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": null,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": null,
+          "width": 320,
+          "height": 240,
+          "sha256": "32dc450cd58924fbf8b98fcd9d3f919774f17ba028d9f800010f61675dcf3a38",
+          "bytes": 3670
+        }
+      ]
+    },
+    {
+      "case": "chirp-accurate-mp4-separate-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/chirp-accurate-mp4-separate-audio/01-Blue_first.mp4",
+            "size_bytes": 27697,
+            "actual_start_ms": 8500,
+            "actual_end_ms": 10520,
+            "label": "Blue first",
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8500,
+                "source_end_ms": 10520,
+                "output_start_ms": 0,
+                "output_end_ms": 2020
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": false,
+                "reason": "audio_not_selected"
+              },
+              {
+                "index": 2,
+                "type": "audio",
+                "codec": "aac",
+                "language": "rus",
+                "channels": 1,
+                "sample_rate": "48000",
+                "default": false,
+                "included": true,
+                "reason": "selected_audio"
+              },
+              {
+                "index": 3,
+                "type": "subtitle",
+                "codec": "mov_text",
+                "language": "und",
+                "default": true,
+                "included": false,
+                "reason": "subtitles_omitted"
+              }
+            ]
+          },
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/chirp-accurate-mp4-separate-audio/02-Red_second.mp4",
+            "size_bytes": 27930,
+            "actual_start_ms": 1500,
+            "actual_end_ms": 3520,
+            "label": "Red second",
+            "segments": [
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1500,
+                "source_end_ms": 3520,
+                "output_start_ms": 0,
+                "output_end_ms": 2020
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": false,
+                "reason": "audio_not_selected"
+              },
+              {
+                "index": 2,
+                "type": "audio",
+                "codec": "aac",
+                "language": "rus",
+                "channels": 1,
+                "sample_rate": "48000",
+                "default": false,
+                "included": true,
+                "reason": "selected_audio"
+              },
+              {
+                "index": 3,
+                "type": "subtitle",
+                "codec": "mov_text",
+                "language": "und",
+                "default": true,
+                "included": false,
+                "reason": "subtitles_omitted"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 2.02,
+          "colours": [
+            "blue"
+          ],
+          "audio_hz": null,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": -0.041333,
+          "chirp_audio_alignment": [
+            {
+              "correlation": 0.9999958906706292,
+              "lag_samples_48000hz": 0,
+              "lag_ms": 0.0
+            }
+          ],
+          "copied_packet_payloads_unchanged": null,
+          "width": 320,
+          "height": 240,
+          "sha256": "f877d8bff11d122080a29580be1a3f34157800261302d029e50d720593f3af52",
+          "bytes": 27697
+        },
+        {
+          "duration_s": 2.02,
+          "colours": [
+            "red"
+          ],
+          "audio_hz": null,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": -0.041333,
+          "chirp_audio_alignment": [
+            {
+              "correlation": 0.9999980756561151,
+              "lag_samples_48000hz": 0,
+              "lag_ms": 0.0
+            }
+          ],
+          "copied_packet_payloads_unchanged": null,
+          "width": 320,
+          "height": 240,
+          "sha256": "40d25bd9e1a2fa1e564611fbdf52ada369d21981690e85e55ec6ff9092d86ad1",
+          "bytes": 27930
+        }
+      ]
+    },
+    {
+      "case": "chirp-accurate-mp4-joined-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/chirp-accurate-mp4-joined-audio/joined.mp4",
+            "size_bytes": 70375,
+            "actual_start_ms": 0,
+            "actual_end_ms": 4000,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8500,
+                "source_end_ms": 10500,
+                "output_start_ms": 0,
+                "output_end_ms": 2000
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1500,
+                "source_end_ms": 3500,
+                "output_start_ms": 2000,
+                "output_end_ms": 4000
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": false,
+                "reason": "audio_not_selected"
+              },
+              {
+                "index": 2,
+                "type": "audio",
+                "codec": "aac",
+                "language": "rus",
+                "channels": 1,
+                "sample_rate": "48000",
+                "default": false,
+                "included": true,
+                "reason": "selected_audio"
+              },
+              {
+                "index": 3,
+                "type": "subtitle",
+                "codec": "mov_text",
+                "language": "und",
+                "default": true,
+                "included": false,
+                "reason": "subtitles_omitted"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 4.02,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": null,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": -0.041333,
+          "chirp_audio_alignment": [
+            {
+              "correlation": 0.999998544141971,
+              "lag_samples_48000hz": 0,
+              "lag_ms": 0.0
+            },
+            {
+              "correlation": 0.9999995683143873,
+              "lag_samples_48000hz": 128,
+              "lag_ms": 2.6666666666666665
+            }
+          ],
+          "copied_packet_payloads_unchanged": null,
+          "width": 320,
+          "height": 240,
+          "sha256": "2a28bfb23c7c8683ede51a474a8d8c5f1e19d96be96778ea4851cecbf0f6dd54",
+          "bytes": 70375
+        }
+      ]
+    },
+    {
+      "case": "chirp-copy-mp4-joined-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/chirp-copy-mp4-joined-audio/joined.mp4",
+            "size_bytes": 51705,
+            "actual_start_ms": 0,
+            "actual_end_ms": 5200,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8000,
+                "source_end_ms": 10600,
+                "output_start_ms": 0,
+                "output_end_ms": 2600
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1000,
+                "source_end_ms": 3600,
+                "output_start_ms": 2600,
+                "output_end_ms": 5200
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": false,
+                "reason": "audio_not_selected"
+              },
+              {
+                "index": 2,
+                "type": "audio",
+                "codec": "aac",
+                "language": "rus",
+                "channels": 1,
+                "sample_rate": "48000",
+                "default": false,
+                "included": true,
+                "reason": "selected_audio"
+              },
+              {
+                "index": 3,
+                "type": "subtitle",
+                "codec": "mov_text",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "subtitles_preserved"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 5.202167,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": null,
+          "subtitle_srt": "1\n00:00:01,000 --> 00:00:02,600\nBlue caption\n\n2\n00:00:02,600 --> 00:00:05,200\nRed caption\n\n",
+          "audio_video_start_delta_s": 0.0,
+          "chirp_audio_alignment": [
+            {
+              "correlation": 1.0,
+              "lag_samples_48000hz": 0,
+              "lag_ms": 0.0
+            },
+            {
+              "correlation": 1.0,
+              "lag_samples_48000hz": 0,
+              "lag_ms": 0.0
+            }
+          ],
+          "copied_packet_payloads_unchanged": true,
+          "width": 320,
+          "height": 240,
+          "sha256": "f6b92466f62e4ea9e7fa78b24b2441eaae437ecc05d4639e407cdd75d9980ec9",
+          "bytes": 51705
+        }
+      ]
+    },
+    {
+      "case": "chirp-copy-mkv-joined-audio",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/chirp-copy-mkv-joined-audio/joined.mkv",
+            "size_bytes": 50386,
+            "actual_start_ms": 0,
+            "actual_end_ms": 5360,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8000,
+                "source_end_ms": 10680,
+                "output_start_ms": 0,
+                "output_end_ms": 2680
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1000,
+                "source_end_ms": 3680,
+                "output_start_ms": 2680,
+                "output_end_ms": 5360
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": false,
+                "reason": "audio_not_selected"
+              },
+              {
+                "index": 2,
+                "type": "audio",
+                "codec": "aac",
+                "language": "rus",
+                "channels": 1,
+                "sample_rate": "48000",
+                "default": false,
+                "included": true,
+                "reason": "selected_audio"
+              },
+              {
+                "index": 3,
+                "type": "subtitle",
+                "codec": "mov_text",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "subtitles_preserved"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 5.391,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": null,
+          "subtitle_srt": "1\n00:00:01,000 --> 00:00:02,680\nBlue caption\n\n2\n00:00:02,680 --> 00:00:05,360\nRed caption\n\n",
+          "audio_video_start_delta_s": 0.0,
+          "chirp_audio_alignment": [
+            {
+              "correlation": 1.0,
+              "lag_samples_48000hz": -16,
+              "lag_ms": -0.3333333333333333
+            },
+            {
+              "correlation": 1.0,
+              "lag_samples_48000hz": 16,
+              "lag_ms": 0.3333333333333333
+            }
+          ],
+          "copied_packet_payloads_unchanged": true,
+          "width": 320,
+          "height": 240,
+          "sha256": "8895bb85071b9a93db03dd69c0e8f81f2908bd22e4f9df58a9c32d7e73ab298c",
+          "bytes": 50386
+        }
+      ]
+    },
+    {
+      "case": "chirp-accurate-mp4-joined-silent",
+      "result": {
+        "outputs": [
+          {
+            "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/chirp-accurate-mp4-joined-silent/joined.mp4",
+            "size_bytes": 3670,
+            "actual_start_ms": 0,
+            "actual_end_ms": 4000,
+            "segments": [
+              {
+                "index": 0,
+                "label": "Blue first",
+                "source_start_ms": 8500,
+                "source_end_ms": 10500,
+                "output_start_ms": 0,
+                "output_end_ms": 2000
+              },
+              {
+                "index": 1,
+                "label": "Red second",
+                "source_start_ms": 1500,
+                "source_end_ms": 3500,
+                "output_start_ms": 2000,
+                "output_end_ms": 4000
+              }
+            ],
+            "track_manifest": [
+              {
+                "index": 0,
+                "type": "video",
+                "codec": "h264",
+                "language": "und",
+                "default": true,
+                "included": true,
+                "reason": "selected_video"
+              },
+              {
+                "index": 1,
+                "type": "audio",
+                "codec": "aac",
+                "language": "eng",
+                "channels": 1,
+                "sample_rate": "44100",
+                "default": true,
+                "included": false,
+                "reason": "audio_disabled"
+              },
+              {
+                "index": 2,
+                "type": "audio",
+                "codec": "aac",
+                "language": "rus",
+                "channels": 1,
+                "sample_rate": "48000",
+                "default": false,
+                "included": false,
+                "reason": "audio_disabled"
+              },
+              {
+                "index": 3,
+                "type": "subtitle",
+                "codec": "mov_text",
+                "language": "und",
+                "default": true,
+                "included": false,
+                "reason": "subtitles_omitted"
+              }
+            ]
+          }
+        ]
+      },
+      "decoded_files": [
+        {
+          "duration_s": 4.0,
+          "colours": [
+            "blue",
+            "red"
+          ],
+          "audio_hz": null,
+          "subtitle_srt": null,
+          "audio_video_start_delta_s": null,
+          "chirp_audio_alignment": [],
+          "copied_packet_payloads_unchanged": null,
+          "width": 320,
+          "height": 240,
+          "sha256": "32dc450cd58924fbf8b98fcd9d3f919774f17ba028d9f800010f61675dcf3a38",
+          "bytes": 3670
+        }
+      ]
+    }
+  ]
+}

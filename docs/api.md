@@ -1,5 +1,7 @@
 # HTTP contract
 
+[Saved plans, joined outputs, selected audio and MKV/subtitles](batch-cutting.md).
+
 Base path: `/api/v1`. Media timestamps are integer milliseconds on the original source timeline. Retention and waiting deadlines are nullable RFC3339 strings. A range is `[start_ms, end_ms)`. Delivery URLs (`preview_url`, `thumbnail_url`, `download_url`) are relative to the same origin. Platform page and embed URLs are absolute HTTPS URLs. Enum names and known error codes are stable machine-readable identifiers; user-facing messages can be localized by a client. Ignore unknown response fields and use a safe generic fallback for unknown additive error codes.
 
 Initialize a session with `GET /session`. The HttpOnly cookie is a bearer capability: keep it private and send it with every subsequent request, including media and downloads. Each request checks ownership; foreign resources return the same 404 as absent ones. Source preparation currently blocks until metadata/staging completes, bounded by the source timeout. Export is asynchronous.
@@ -24,6 +26,7 @@ for ordinary database failures. Readiness retains `503 not_ready`.
 | POST | `/sources` | Source; request `{url}` |
 | POST | `/uploads` | Source; multipart field `file` |
 | GET | `/sources/{id}` | Source |
+| GET | `/sources/{id}/tracks` | Fresh local `{tracks:[Track...]}` with absolute indices and language/title metadata; requires owner, returns `tracks_unavailable` for unstaged platform media |
 | DELETE | `/sources/{id}` | HTTP 204; source, terminal jobs and outputs removed; active exports return 409 `source_in_use` |
 | GET | `/sources/{id}/media` | Authorized source bytes; Range supported |
 | GET | `/sources/{id}/preview?start_ms=…` | Aligned 30-second H.264/AAC MP4 window, no-store; source time in X-Preview-Start-MS / X-Preview-End-MS; X-Preview-Cache is hit/miss; optional priority=background yields rendering capacity to foreground seeks |
