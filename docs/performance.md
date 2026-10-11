@@ -1,6 +1,17 @@
 # Performance and recovery
 
-Current media-workflow evidence: [N3 pilot with common tools, 2026-10-11](../verification/2026-10-11-current-pair-common-tools-n3/README.md).
+Current batch-cutting evidence: [complete HTTP workflow and independent media checks, 2026-10-12](../verification/2026-10-12-batch-cutting/README.md).
+Five alternating baseline/candidate pairs measured fresh uploads, uncached first
+server previews and receipt of every exported byte. Median upload-through-download
+time fell from 3.292 s to 2.876 s (12.6%); first preview did not improve.
+Committed queue notifications remove idle claim waiting without changing encoding
+quality. All ten downloads were byte-identical. Separate tool observations identify
+preview rendering and export encoding as the principal costs. This local fixture
+excludes browser painting and internet latency and establishes no general SLA.
+The same evidence includes 25 CLI cases and 30 independently decoded outputs for
+ordinary, VFR, rotated and multiple-audio/text-subtitle sources.
+
+Historical media-workflow evidence: [N3 pilot with common tools, 2026-10-11](../verification/2026-10-11-current-pair-common-tools-n3/README.md).
 It compares v0.2.1 with the actual PR30 `3f0102d` binary, whose 173 application
 files match main `4e34a17`. All 24 measured transactions passed; the candidate's
 median time until all three exports were downloaded was slightly higher in each
