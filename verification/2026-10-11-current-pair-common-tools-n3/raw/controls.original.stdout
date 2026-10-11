@@ -1,0 +1,1 @@
+{"scope": "exactly two new pure controls", "tests": ["test_old_generator_with_distinct_common_runtime_is_retained_and_reported", "test_generation_sha_substitution_or_missing_identity_is_rejected"], "tests_run": 2, "ok": true, "process_and_network_audit": "denied"}

@@ -1,5 +1,13 @@
 # Performance and recovery
 
+Current media-workflow evidence: [N3 pilot with common tools, 2026-10-11](../verification/2026-10-11-current-pair-common-tools-n3/README.md).
+It compares v0.2.1 with the actual PR30 `3f0102d` binary, whose 173 application
+files match main `4e34a17`. All 24 measured transactions passed; the candidate's
+median time until all three exports were downloaded was slightly higher in each
+profile, so this pilot shows no overall latency improvement. Three observations
+per version and profile do not establish a p95, SLA or capacity limit. Historical
+measurements below retain their separate scopes.
+
 For retained database rows, interrupted directory scans, failed-deletion fairness
 and concurrent storage admission, use the separate
 [storage capacity workload](storage-capacity.md). It measures synthetic metadata

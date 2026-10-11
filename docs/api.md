@@ -14,7 +14,7 @@ return `503 database_unavailable`; an earlier incoming request deadline returns
 `408 request_timeout` on ordinary endpoints. Source/upload/preview processing
 retain their distinct outer budgets and `504 source_timeout`. Sequential stages
 can take more than five seconds overall; failed source admission has its own
-bounded cleanup stage. These changes are unreleased; v0.2.1 used `500 internal`
+bounded cleanup stage. These changes were introduced in 1.0.2; v0.2.1 used `500 internal`
 for ordinary database failures. Readiness retains `503 not_ready`.
 
 | Method | Route | Response |

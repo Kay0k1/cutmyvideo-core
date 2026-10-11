@@ -1,6 +1,6 @@
 # Media selection and rendering
 
-This policy is **unreleased, available in current source**. The published
+This policy was **introduced in 1.0.2**. The published
 v0.2.1 archives predate these selection, display-geometry and HDR diagnostics.
 Local CLI, Go SDK and server exports share the media implementation.
 
