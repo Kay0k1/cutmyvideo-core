@@ -97,9 +97,18 @@ def source_inventory():
     return result
 
 
+def old_source_inventory():
+    """Pinned metadata only; no historical Git process or source execution."""
+    data = (ROOT / 'testdata/selfhosting-old-application.json').read_bytes()
+    value = transition.strict_json(data)
+    if len(value) != 164 or transition.digest(transition.canonical(value)) != transition.OLD_APPLICATION_SHA256:
+        raise AssertionError('old source fixture differs from reviewed immutable application')
+    return value
+
+
 class SyntheticReceipt:
     """A complete helper fixture made from local source, never real observations."""
-    def __init__(self, directory):
+    def __init__(self, directory, *, ancestry_exit=0):
         self.directory = Path(directory)
         candidate = {'commit': transition.CANDIDATE, 'tree': transition.CANDIDATE_TREE,
                      'application_files': 173, 'application_sha256': transition.APPLICATION_SHA256}
@@ -107,7 +116,10 @@ class SyntheticReceipt:
             'mode': transition.MODE, 'schema_version': 2,
             'provider': {'GITHUB_REPOSITORY': 'Kay0k1/cutmyvideo-core', 'GITHUB_EVENT_NAME': 'workflow_dispatch',
                          'GITHUB_RUN_ID': '987654', 'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_SHA': '1' * 40},
-            'checkout': {'commit': '1' * 40, 'tree': '2' * 40}, 'expected_checkout': '1' * 40,
+            'checkout': {'commit': '1' * 40, 'tree': '2' * 40,
+                         'approved_A_is_ancestor': ancestry_exit == 0,
+                         'approved_A_ancestry_exit': {'checkout': ancestry_exit, 'head': ancestry_exit}},
+            'expected_checkout': '1' * 40,
             'runtime_application_sources_unchanged': False,
             'groups': {group: {'status': 'pass', 'checks': {name: {'ok': True} for name in names}}
                        for group, names in transition.groups(base.GROUPS).items()},
@@ -134,9 +146,18 @@ class SyntheticReceipt:
             drivers[name] = {'bytes': len(data), 'sha256': transition.digest(data)}
             source['files'][name] = deepcopy(drivers[name])
         value = self.report['transition']
+        value['source_admission'] = {
+            'candidate_commit': transition.CANDIDATE, 'candidate_tree': transition.CANDIDATE_TREE,
+            'checkout_commit': self.report['expected_checkout'], 'candidate_ancestry_exit': ancestry_exit,
+            'candidate_is_ancestor': ancestry_exit == 0, 'application_files': 173,
+            'application_sha256': transition.APPLICATION_SHA256,
+            'old_commit': transition.OLD_COMMIT, 'old_tree': transition.OLD_TREE,
+            'old_reference': transition.OLD_REFERENCE, 'old_application_files': 164,
+            'old_application_sha256': transition.OLD_APPLICATION_SHA256}
         value['context'] = self.write('transition-context.json', {
             'mode': transition.MODE, 'provider': self.report['provider'], 'checkout': self.report['checkout'],
             'candidate': candidate, 'old_commit': transition.OLD_COMMIT, 'old_tree': transition.OLD_TREE,
+            'source_admission': deepcopy(value['source_admission']),
             'frozen_before_image_builds_and_database_media_changes': True, 'drivers': drivers,
         })
         self.context = {'provider': deepcopy(self.report['provider']), 'checkout': deepcopy(self.report['checkout']),
@@ -165,6 +186,9 @@ class SyntheticReceipt:
         })
         value['current_source'] = self.write('transition-source.json', source)
         self.report['images']['current']['source_sha256'] = value['current_source']['sha256']
+        value['old_source'] = self.write('transition-old-source.json', {
+            'commit': transition.OLD_COMMIT, 'tree': transition.OLD_TREE, 'files': old_source_inventory()})
+        self.report['images']['old'] = {'source_sha256': value['old_source']['sha256']}
         shapes = {}
         for position in (4, 5):
             raw = (REPO / f'internal/app/migrations/{position:03d}_schema.json').read_bytes()
@@ -369,7 +393,7 @@ class WorkflowModeControls(unittest.TestCase):
 
 class CandidateSourceControls(unittest.TestCase):
     """Mock every process and stop at the first base host-setup boundary."""
-    def acceptance(self, files=None):
+    def acceptance(self, files=None, *, ancestry_exit=0, old_inventory=None):
         files = files if files is not None else {
             name: (REPO / name).read_bytes() for name in source_inventory()}
         inventory = {name: {
@@ -383,17 +407,26 @@ class CandidateSourceControls(unittest.TestCase):
                                     GROUPS=base.GROUPS, REPO=REPO)
         value = object.__new__(transition.acceptance_class(pure_base))
         value.args = SimpleNamespace(revision='1' * 40)
+        value.report = {'transition': {}}
 
         def git(repo, *args):
             if args == ('rev-parse', transition.CANDIDATE + '^{tree}'):
                 return transition.CANDIDATE_TREE
             if args == ('status', '--porcelain', '--untracked-files=all'):
                 return ''
+            if args == ('rev-parse', transition.OLD_COMMIT + '^{tree}'):
+                return transition.OLD_TREE
+            if args == ('rev-parse', transition.OLD_REFERENCE + '^{commit}'):
+                return transition.OLD_REFERENCE
             raise AssertionError('unexpected synthetic Git query')
 
-        def run(argv):
+        def run(argv, **kwargs):
             if 'merge-base' in argv:
-                return b''
+                if kwargs != {'expected': None}:
+                    raise AssertionError('ancestry must record the actual exit')
+                return ancestry_exit, b'', b''
+            if kwargs:
+                raise AssertionError('unexpected synthetic command options')
             if 'ls-tree' in argv:
                 return b''.join((item['mode'] + ' blob ' + item['git_blob'] + '\t' + name + '\0').encode()
                                 for name, item in inventory.items())
@@ -402,6 +435,10 @@ class CandidateSourceControls(unittest.TestCase):
             raise AssertionError('unexpected synthetic process command')
 
         value.git, value.run = Mock(side_effect=git), Mock(side_effect=run)
+        old = old_source_inventory() if old_inventory is None else old_inventory
+        value.application_inventory = Mock(side_effect=lambda revision:
+            deepcopy(old) if revision in (transition.OLD_COMMIT, transition.OLD_REFERENCE)
+            else transition.application_inventory(value.run, REPO, revision))
         return value, host_setup
 
     def test_exact_application_descendant_reaches_only_mocked_host_setup(self):
@@ -412,17 +449,43 @@ class CandidateSourceControls(unittest.TestCase):
         self.assertIn((['git', '-c', 'safe.directory=' + str(REPO), '-C', REPO,
                         'merge-base', '--is-ancestor', transition.CANDIDATE, value.args.revision],),
                       [call.args for call in value.run.call_args_list])
+        self.assertIs(value.report['transition']['source_admission']['candidate_is_ancestor'], True)
+        self.assertEqual(value.report['transition']['source_admission']['candidate_ancestry_exit'], 0)
 
-    def test_wrong_tree_dirty_or_unrelated_checkout_refuses_before_host_setup(self):
-        for fault in ('tree', 'dirty', 'unrelated'):
+    def test_squashed_exact_application_records_false_ancestry_before_mocked_host_setup(self):
+        value, host_setup = self.acceptance(ancestry_exit=1)
+        with self.assertRaisesRegex(RuntimeError, 'synthetic base initialization boundary'):
+            value.initialize_host()
+        host_setup.assert_called_once()
+        self.assertEqual(value.report['transition']['source_admission'], {
+            'candidate_commit': transition.CANDIDATE, 'candidate_tree': transition.CANDIDATE_TREE,
+            'checkout_commit': value.args.revision, 'candidate_ancestry_exit': 1,
+            'candidate_is_ancestor': False, 'application_files': 173,
+            'application_sha256': transition.APPLICATION_SHA256,
+            'old_commit': transition.OLD_COMMIT, 'old_tree': transition.OLD_TREE,
+            'old_reference': transition.OLD_REFERENCE, 'old_application_files': 164,
+            'old_application_sha256': transition.OLD_APPLICATION_SHA256})
+        observed = value.checkout_ancestry('1' * 40)
+        self.assertEqual(observed, {'approved_A_is_ancestor': False,
+                                   'approved_A_ancestry_exit': {'checkout': 1, 'head': 1}})
+        transition.validate_checkout_ancestry(observed)
+
+    def test_wrong_tree_dirty_or_failed_ancestry_query_refuses_before_host_setup(self):
+        for fault in ('tree', 'old_tree', 'old_reference', 'dirty', 'command_error', 128, -15, True, None):
             value, host_setup = self.acceptance()
             if fault == 'tree':
                 value.git.side_effect = lambda repo, *args: '0' * 40
+            elif fault in ('old_tree', 'old_reference'):
+                query = transition.OLD_COMMIT + '^{tree}' if fault == 'old_tree' else transition.OLD_REFERENCE + '^{commit}'
+                original = value.git.side_effect
+                value.git.side_effect = lambda repo, *args: '0' * 40 if query in args else original(repo, *args)
             elif fault == 'dirty':
                 value.git.side_effect = lambda repo, *args: (transition.CANDIDATE_TREE if args[0] == 'rev-parse'
                                                            else ' M internal/app/http.go')
-            else:
+            elif fault == 'command_error':
                 value.run.side_effect = RuntimeError('synthetic ancestry refusal')
+            else:
+                value, host_setup = self.acceptance(ancestry_exit=fault)
             with self.subTest(fault=fault), self.assertRaises(RuntimeError):
                 value.initialize_host()
             host_setup.assert_not_called()
@@ -433,13 +496,53 @@ class CandidateSourceControls(unittest.TestCase):
         changes = [lambda files: files.pop('internal/app/http_recovery_test.go'),
                    lambda files: files.update({'internal/app/unreviewed.go': b'package app\n'}),
                    lambda files: files.update({'internal/app/http.go': files['internal/app/http.go'] + b'\n'})]
-        for change in changes:
-            files = dict(original)
-            change(files)
-            value, host_setup = self.acceptance(files)
-            with self.subTest(change=change), self.assertRaisesRegex(RuntimeError, 'reviewed immutable candidate'):
-                value.initialize_host()
+        for ancestry_exit in (0, 1):
+            for change in changes:
+                files = dict(original)
+                change(files)
+                value, host_setup = self.acceptance(files, ancestry_exit=ancestry_exit)
+                with self.subTest(change=change, ancestry_exit=ancestry_exit), self.assertRaisesRegex(RuntimeError, 'reviewed immutable candidate'):
+                    value.initialize_host()
+                host_setup.assert_not_called()
+                self.assertNotIn('source_admission', value.report['transition'])
+
+    def test_old_inventory_missing_or_changed_refuses_before_host_setup(self):
+        for ancestry_exit in (0, 1):
+            for change in (lambda inventory: inventory.pop('go.mod'),
+                           lambda inventory: inventory['go.mod'].update(sha256='0' * 64)):
+                inventory = old_source_inventory(); change(inventory)
+                value, host_setup = self.acceptance(ancestry_exit=ancestry_exit, old_inventory=inventory)
+                with self.subTest(ancestry_exit=ancestry_exit, change=change), self.assertRaisesRegex(RuntimeError, 'reviewed old application'):
+                    value.initialize_host()
+                host_setup.assert_not_called()
+                self.assertNotIn('source_admission', value.report['transition'])
+
+    def test_transition_old_ancestry_fatal_or_mistyped_exit_refuses(self):
+        for exit_code in (128, -15, True, None):
+            value, host_setup = self.acceptance(ancestry_exit=exit_code)
+            with self.subTest(exit_code=exit_code), self.assertRaisesRegex(RuntimeError, 'baseline ancestry observation failed'):
+                value.checkout_ancestry('1' * 40)
             host_setup.assert_not_called()
+        for mutation in ({'approved_A_is_ancestor': True},
+                         {'approved_A_is_ancestor': 0},
+                         {'approved_A_ancestry_exit': {'checkout': 1, 'head': False}},
+                         {'approved_A_ancestry_exit': {'checkout': 128, 'head': 1}},
+                         {'approved_A_ancestry_exit': {'checkout': 1}}):
+            original = {'approved_A_is_ancestor': False, 'approved_A_ancestry_exit': {'checkout': 1, 'head': 1}}
+            with self.subTest(mutation=mutation), self.assertRaises(RuntimeError):
+                transition.validate_checkout_ancestry({**original, **mutation})
+
+    def test_same_schema_checkout_ancestry_still_requires_two_successes(self):
+        value = object.__new__(base.Acceptance)
+        value.args = SimpleNamespace(revision='1' * 40)
+        value.run = Mock(return_value=b'')
+        self.assertEqual(value.checkout_ancestry('2' * 40), {'approved_A_is_ancestor': True})
+        self.assertEqual(value.run.call_count, 2)
+        self.assertTrue(all(call.kwargs == {} for call in value.run.call_args_list))
+        value.run.reset_mock(side_effect=True)
+        value.run.side_effect = [b'', RuntimeError('synthetic strict baseline ancestry refusal')]
+        with self.assertRaisesRegex(RuntimeError, 'strict baseline ancestry refusal'):
+            value.checkout_ancestry('2' * 40)
 
 
 class JSONAndArtifactControls(unittest.TestCase):
@@ -771,6 +874,52 @@ class TransitionReceiptControls(unittest.TestCase):
 
     def test_complete_synthetic_helper_receipt_passes_without_actual_operations(self):
         self.fixture.validate()
+
+    def test_squashed_exact_source_receipt_preserves_false_ancestry(self):
+        self.fixture = SyntheticReceipt(self.temp.name, ancestry_exit=1)
+        self.fixture.validate()
+        self.assertIs(self.fixture.report['transition']['source_admission']['candidate_is_ancestor'], False)
+        self.assertIs(self.fixture.report['checkout']['approved_A_is_ancestor'], False)
+
+    def test_source_admission_missing_mistyped_changed_or_unbound_refuses(self):
+        original = deepcopy(self.fixture.report)
+        changes = [lambda value: value.pop('source_admission'),
+                   lambda value: value['source_admission'].update(candidate_commit='0' * 40),
+                   lambda value: value['source_admission'].update(candidate_tree='0' * 40),
+                   lambda value: value['source_admission'].update(checkout_commit='9' * 40),
+                   lambda value: value['source_admission'].update(candidate_ancestry_exit=128),
+                   lambda value: value['source_admission'].update(candidate_ancestry_exit=False),
+                   lambda value: value['source_admission'].update(candidate_is_ancestor=1),
+                   lambda value: value['source_admission'].update(candidate_is_ancestor=False),
+                   lambda value: value['source_admission'].update(application_files=173.0),
+                   lambda value: value['source_admission'].update(application_sha256='0' * 64),
+                   lambda value: value['source_admission'].update(old_commit='0' * 40),
+                   lambda value: value['source_admission'].update(old_tree='0' * 40),
+                   lambda value: value['source_admission'].update(old_reference='0' * 40),
+                   lambda value: value['source_admission'].update(old_application_files=164.0),
+                   lambda value: value['source_admission'].update(old_application_sha256='0' * 64),
+                   lambda value: value['source_admission'].update(unknown=True),
+                   # Internally consistent ancestry still must match this run's frozen raw context.
+                   lambda value: value['source_admission'].update(candidate_ancestry_exit=1, candidate_is_ancestor=False)]
+        for change in changes:
+            with self.subTest(change=change):
+                self.refused(lambda report: change(report['transition']))
+                self.fixture.report = deepcopy(original)
+
+    def test_raw_old_source_missing_changed_or_unbound_refuses(self):
+        receipt = self.fixture.report['transition']['old_source']
+        raw = (self.fixture.directory / receipt['path']).read_bytes(); original = deepcopy(receipt)
+        changes = [lambda value: value.update(commit='0' * 40),
+                   lambda value: value.update(tree='0' * 40),
+                   lambda value: value['files'].pop('go.mod'),
+                   lambda value: value['files']['go.mod'].update(sha256='0' * 64)]
+        for change in changes:
+            with self.subTest(change=change):
+                self.fixture.change_raw(receipt, change)
+                with self.assertRaises(REFUSALS): self.fixture.validate()
+                (self.fixture.directory / receipt['path']).write_bytes(raw)
+                receipt.update(original)
+        self.refused(lambda report: report['transition'].pop('old_source'))
 
     def test_missing_unknown_mode_and_legacy_receipt_version_refuse(self):
         for field, value in (('mode', None), ('mode', 'same-schema'), ('mode', 'unknown'),

@@ -25,16 +25,18 @@ checks is not proof of every semantic behavior or platform combination.
    history. Database/media changes must pass real historical upgrade and
    coordinated backup restoration, with redacted evidence retained.
 2. Move completed Unreleased notes under a dated heading such as
-   `## 1.0.0 - 2026-10-11`, retaining Unreleased for future changes. Include known
+   `## 1.0.1 - 2026-10-11`, retaining Unreleased for future changes. Include known
    limitations and measured benchmark methods.
-3. Commit the reviewed changes and tag that exact commit. Push the commit/tag when
-   release publication is intended.
+3. Merge the reviewed changes using the repository's allowed method. Require
+   Core checks and Public self-hosting acceptance on that actual main commit,
+   including its source admission after the merge. Verify that its tree matches
+   the reviewed source, then tag that exact commit. Never move an existing tag.
 
-From a clean reviewed checkout:
+From a clean reviewed checkout of that verified main commit:
 
 ```sh
-git tag -a v1.0.0 -m 'cutmyvideo-core v1.0.0'
-make release VERSION=v1.0.0
+git tag -a v1.0.1 -m 'cutmyvideo-core v1.0.1'
+make release VERSION=v1.0.1
 ```
 
 The script refuses dirty/untracked files, malformed versions and tags that do not
@@ -232,7 +234,7 @@ Place exactly the five platform archives plus `SOURCE.json`, `MANIFEST.json`,
 command, replacing the paths, version and reviewed full 40-character commit:
 
 ```sh
-python3 /path/to/reviewed-verifier/release-consumer.py --directory /path/to/downloaded-release --version v1.0.0 --expected-commit REVIEWED_FULL_40_CHARACTER_COMMIT
+python3 /path/to/reviewed-verifier/release-consumer.py --directory /path/to/downloaded-release --version v1.0.1 --expected-commit REVIEWED_FULL_40_CHARACTER_COMMIT
 ```
 
 On Windows use `python` and the corresponding Windows paths. Exit status zero

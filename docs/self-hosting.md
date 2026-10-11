@@ -7,7 +7,10 @@ all 35 required checks, all seven groups and verified cleanup on a disposable
 Linux amd64 runner.
 
 Every new candidate, including a combined release candidate, requires its own
-complete hosted acceptance and cleanup. Pure Python controls cover configuration
+complete hosted acceptance and cleanup. Squash-merged release revisions are
+admitted only when the complete reviewed application inventory matches exactly;
+actual commit ancestry is recorded separately. Changed application sources
+require a new review. Pure Python controls cover configuration
 and refusal paths. The dated run does not cover production, host reboots or
 public ACME certificate issuance.
 Use the [local trial](operations.md) for development. Native CLI archives remain

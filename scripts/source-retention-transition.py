@@ -104,6 +104,29 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def application_inventory(run, repo, revision):
+    inventory = {}
+    for entry in run(['git', '-C', repo, 'ls-tree', '-rz', '--full-tree', revision]).split(b'\0'):
+        if not entry:
+            continue
+        header, raw_path = entry.split(b'\t', 1)
+        mode, kind, blob = header.decode().split(); path = raw_path.decode()
+        if path.startswith(('cmd/', 'internal/', 'pkg/')) or path in ('go.mod', 'go.sum'):
+            require(kind == 'blob' and mode in ('100644', '100755'), 'unsupported runtime source')
+            data = run(['git', '-C', repo, 'cat-file', 'blob', blob])
+            inventory[path] = {'mode': mode, 'git_blob': blob, 'bytes': len(data), 'sha256': digest(data)}
+    return inventory
+
+
+def validate_checkout_ancestry(binding):
+    observed = binding.get('approved_A_ancestry_exit', {})
+    require(isinstance(observed, dict) and set(observed) == {'checkout', 'head'}
+            and all(type(exit_code) is int and exit_code in (0, 1) for exit_code in observed.values())
+            and type(binding.get('approved_A_is_ancestor')) is bool
+            and binding['approved_A_is_ancestor'] == all(exit_code == 0 for exit_code in observed.values()),
+            'baseline ancestry observation differs')
+
+
 def strict_json(data):
     def pairs(items):
         result = {}
@@ -208,6 +231,23 @@ def validate_transition(report, directory, base=None):
             and all(type(v) is int for v in value['receipt_counts'].values())
             and type(value['candidate']['application_files']) is int
             and all(type(v) is str for v in report['provider'].values()), 'transition identity scalar types differ')
+    admission = value.get('source_admission', {})
+    require(isinstance(admission, dict) and set(admission) == {
+                'candidate_commit', 'candidate_tree', 'checkout_commit', 'candidate_ancestry_exit',
+                'candidate_is_ancestor', 'application_files', 'application_sha256',
+                'old_commit', 'old_tree', 'old_reference', 'old_application_files', 'old_application_sha256'}
+            and admission['candidate_commit'] == CANDIDATE and admission['candidate_tree'] == CANDIDATE_TREE
+            and admission['checkout_commit'] == report['expected_checkout']
+            and type(admission['candidate_ancestry_exit']) is int and admission['candidate_ancestry_exit'] in (0, 1)
+            and type(admission['candidate_is_ancestor']) is bool
+            and admission['candidate_is_ancestor'] == (admission['candidate_ancestry_exit'] == 0)
+            and type(admission['application_files']) is int and admission['application_files'] == 173
+            and admission['application_sha256'] == APPLICATION_SHA256
+            and admission['old_commit'] == OLD_COMMIT and admission['old_tree'] == OLD_TREE
+            and admission['old_reference'] == OLD_REFERENCE
+            and type(admission['old_application_files']) is int and admission['old_application_files'] == 164
+            and admission['old_application_sha256'] == OLD_APPLICATION_SHA256, 'reviewed source admission differs')
+    validate_checkout_ancestry(report['checkout'])
     application = report['groups']['identity']['checks']['approved_application_transition'].get('evidence')
     require(application == {'old_commit': OLD_COMMIT, 'old_tree': OLD_TREE, 'old_reference': OLD_REFERENCE,
                             'old_application_sha256': OLD_APPLICATION_SHA256, 'old_files': 164,
@@ -220,6 +260,7 @@ def validate_transition(report, directory, base=None):
     freeze = strict_json(artifact(directory, value.get('context', {})))
     require(freeze.get('provider') == report['provider'] and freeze.get('checkout') == report['checkout']
             and freeze.get('candidate') == value['candidate'] and freeze.get('mode') == MODE
+            and freeze.get('source_admission') == admission
             and freeze.get('old_commit') == OLD_COMMIT and freeze.get('old_tree') == OLD_TREE
             and freeze.get('frozen_before_image_builds_and_database_media_changes') is True,
             'raw transition provider/source context differs')
@@ -242,6 +283,13 @@ def validate_transition(report, directory, base=None):
             and all(source['files'][path]['sha256'] == item['sha256'] and source['files'][path]['bytes'] == item['bytes']
                     for path, item in freeze['drivers'].items()), 'driver/runtime SOURCE bytes differ')
     require(digest(canonical(source)) == report['images']['current']['source_sha256'], 'actual current SOURCE hash differs')
+    old_source = strict_json(artifact(directory, value.get('old_source', {})))
+    old_inventory = {k: v for k, v in old_source['files'].items()
+                     if k.startswith(('cmd/', 'internal/', 'pkg/')) or k in ('go.mod', 'go.sum')}
+    require(old_source['commit'] == OLD_COMMIT and old_source['tree'] == OLD_TREE
+            and len(old_inventory) == 164 and digest(canonical(old_inventory)) == OLD_APPLICATION_SHA256
+            and digest(canonical(old_source)) == report['images']['old']['source_sha256'],
+            'old reviewed SOURCE bytes differ')
     manifests = value.get('manifests', {})
     require(set(manifests) == {'004', '005'}, 'both pinned schema manifests required')
     expected = {}
@@ -397,24 +445,48 @@ def acceptance_class(base):
             return {'provider': self.report['provider'], 'checkout': self.report['checkout'],
                     'candidate': value['candidate'], 'context_sha256': value['context']['sha256']}
 
+        def application_inventory(self, revision):
+            return application_inventory(self.run, base.REPO, revision)
+
+        def checkout_ancestry(self, head):
+            observed = {}
+            for label, revision in (('checkout', self.args.revision), ('head', head)):
+                exit_code, _, _ = self.run([
+                    'git', '-c', 'safe.directory=' + str(base.REPO), '-C', base.REPO,
+                    'merge-base', '--is-ancestor', OLD_COMMIT, revision], expected=None)
+                require(type(exit_code) is int and exit_code in (0, 1), 'baseline ancestry observation failed')
+                observed[label] = exit_code
+            return {'approved_A_is_ancestor': all(exit_code == 0 for exit_code in observed.values()),
+                    'approved_A_ancestry_exit': observed}
+
         def initialize_host(self):
             # Refuse unknown runtime source before base starts any host mutation.
             require(self.git(base.REPO, 'rev-parse', CANDIDATE + '^{tree}') == CANDIDATE_TREE, 'reviewed candidate tree differs')
-            self.run(['git', '-c', 'safe.directory=' + str(base.REPO), '-C', base.REPO,
-                      'merge-base', '--is-ancestor', CANDIDATE, self.args.revision])
+            ancestry_exit, _, _ = self.run([
+                'git', '-c', 'safe.directory=' + str(base.REPO), '-C', base.REPO,
+                'merge-base', '--is-ancestor', CANDIDATE, self.args.revision], expected=None)
+            require(type(ancestry_exit) is int and ancestry_exit in (0, 1), 'candidate ancestry observation failed')
             require(self.git(base.REPO, 'status', '--porcelain', '--untracked-files=all') == '', 'transition checkout is dirty')
-            inventory = {}
-            for entry in self.run(['git', '-C', base.REPO, 'ls-tree', '-rz', '--full-tree', self.args.revision]).split(b'\0'):
-                if not entry:
-                    continue
-                header, raw_path = entry.split(b'\t', 1)
-                mode, kind, blob = header.decode().split(); path = raw_path.decode()
-                if path.startswith(('cmd/', 'internal/', 'pkg/')) or path in ('go.mod', 'go.sum'):
-                    require(kind == 'blob' and mode in ('100644', '100755'), 'unsupported runtime source')
-                    data = self.run(['git', '-C', base.REPO, 'cat-file', 'blob', blob])
-                    inventory[path] = {'mode': mode, 'git_blob': blob, 'bytes': len(data), 'sha256': digest(data)}
+            require(self.git(base.REPO, 'rev-parse', OLD_COMMIT + '^{tree}') == OLD_TREE
+                    and self.git(base.REPO, 'rev-parse', OLD_REFERENCE + '^{commit}') == OLD_REFERENCE,
+                    'reviewed old source reference/tree differs')
+            old_inventory = self.application_inventory(OLD_COMMIT)
+            require(len(old_inventory) == 164 and digest(canonical(old_inventory)) == OLD_APPLICATION_SHA256
+                    and self.application_inventory(OLD_REFERENCE) == old_inventory,
+                    'runtime differs from reviewed old application')
+            inventory = self.application_inventory(self.args.revision)
             require(len(inventory) == 173 and digest(canonical(inventory)) == APPLICATION_SHA256,
                     'runtime differs from reviewed immutable candidate')
+            # Squash merges can retain every reviewed application byte without
+            # retaining the candidate as an ancestor. Admission uses the exact
+            # inventory; keep the actual ancestry result as a separate fact.
+            self.report['transition']['source_admission'] = {
+                'candidate_commit': CANDIDATE, 'candidate_tree': CANDIDATE_TREE,
+                'checkout_commit': self.args.revision, 'candidate_ancestry_exit': ancestry_exit,
+                'candidate_is_ancestor': ancestry_exit == 0,
+                'application_files': len(inventory), 'application_sha256': digest(canonical(inventory)),
+                'old_commit': OLD_COMMIT, 'old_tree': OLD_TREE, 'old_reference': OLD_REFERENCE,
+                'old_application_files': len(old_inventory), 'old_application_sha256': digest(canonical(old_inventory))}
             super().initialize_host()
             self.fault_old = self.make_project(self.old_repo, 'fault004', 46)
             self.fault_new = self.make_project(self.current_repo, 'fault005', 46, same=self.fault_old)
@@ -426,6 +498,7 @@ def acceptance_class(base):
             value['context'] = self.raw('transition-context.json', canonical({
                 'mode': MODE, 'provider': self.report['provider'], 'checkout': self.report['checkout'],
                 'candidate': value['candidate'], 'old_commit': OLD_COMMIT, 'old_tree': OLD_TREE,
+                'source_admission': value['source_admission'],
                 # Read-only host/daemon probes and owned private source/project
                 # setup already ran; image, database and media changes have not.
                 'frozen_before_image_builds_and_database_media_changes': True,
@@ -447,6 +520,7 @@ def acceptance_class(base):
             require(len(app(self.old_source)) == 164 and digest(canonical(app(self.old_source))) == OLD_APPLICATION_SHA256
                     and len(app(self.current_source)) == 173 and digest(canonical(app(self.current_source))) == APPLICATION_SHA256,
                     'old/current immutable application inventory differs')
+            self.report['transition']['old_source'] = self.raw('transition-old-source.json', canonical(self.old_source))
             self.report['transition']['current_source'] = self.raw('transition-current-source.json', canonical(self.current_source))
             self.check('approved_application_transition', {
                 'old_commit': OLD_COMMIT, 'old_tree': OLD_TREE, 'old_reference': OLD_REFERENCE,

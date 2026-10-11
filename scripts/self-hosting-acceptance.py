@@ -234,10 +234,13 @@ def validate_report(report, evidence_directory=None):
             and all(re.fullmatch(r'[1-9][0-9]*', str(provider.get(k, ''))) for k in ('GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT')),
             'hosted provider identity missing')
     binding = report.get('checkout', {})
+    if transition:
+        transition.validate_checkout_ancestry(binding)
+    else:
+        require(binding.get('approved_A_is_ancestor') is True, 'approved baseline ancestry missing')
     require(binding.get('commit') == report.get('expected_checkout') == provider.get('GITHUB_SHA')
             and SHA.fullmatch(binding.get('commit', '')) and SHA.fullmatch(binding.get('tree', ''))
             and SHA.fullmatch(binding.get('head_commit', '')) and SHA.fullmatch(binding.get('head_tree', ''))
-            and binding.get('approved_A_is_ancestor') is True
             and binding.get('clean') is True
             and isinstance(binding.get('parents'), list) and binding['parents']
             and all(SHA.fullmatch(p) for p in binding['parents'])
@@ -848,18 +851,22 @@ class Acceptance:
         self.report['images'][label] = value
         return source
 
+    def checkout_ancestry(self, head):
+        self.run(['git', '-c', 'safe.directory=' + str(REPO), '-C', REPO, 'merge-base', '--is-ancestor', UPGRADE_FROM, self.args.revision])
+        self.run(['git', '-c', 'safe.directory=' + str(REPO), '-C', REPO, 'merge-base', '--is-ancestor', UPGRADE_FROM, head])
+        return {'approved_A_is_ancestor': True}
+
     def initialize_host(self):
         require(self.git(REPO, 'rev-parse', 'HEAD') == self.args.revision
                 and self.git(REPO, 'status', '--porcelain', '--untracked-files=all') == '', 'authoritative source is not exact and clean')
-        self.run(['git', '-c', 'safe.directory=' + str(REPO), '-C', REPO, 'merge-base', '--is-ancestor', UPGRADE_FROM, self.args.revision])
         head = self.args.pr_head
         require(SHA.fullmatch(head or ''), 'explicit actual provider head SHA required')
-        self.run(['git', '-c', 'safe.directory=' + str(REPO), '-C', REPO, 'merge-base', '--is-ancestor', UPGRADE_FROM, head])
+        ancestry = self.checkout_ancestry(head)
         self.report['checkout'] = {'commit': self.args.revision, 'tree': self.git(REPO, 'rev-parse', self.args.revision + '^{tree}'),
                                    'parents': self.git(REPO, 'show', '-s', '--format=%P', self.args.revision).split(),
                                    'head_commit': head, 'head_tree': self.git(REPO, 'rev-parse', head + '^{tree}'),
                                    'head_parents': self.git(REPO, 'show', '-s', '--format=%P', head).split(),
-                                   'approved_A_is_ancestor': True, 'clean': True}
+                                   **ancestry, 'clean': True}
         require(Path('/proc/sys/net/bridge/bridge-nf-call-iptables').read_text().strip() == '1', 'bridge filtering prerequisite missing')
         for program in ('docker', 'iptables', 'iptables-save', 'iptables-restore', 'ip', 'nsenter', 'caddy', 'openssl', 'ffmpeg', 'ffprobe'):
             require(shutil.which(program), 'required host tool missing')
