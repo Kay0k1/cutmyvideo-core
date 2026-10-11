@@ -1,6 +1,7 @@
 """Negative controls for the mandatory, unskipped native runtime gate."""
 import importlib.util
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -84,6 +85,38 @@ class NativeResultsChecks(unittest.TestCase):
                     result = self.run_gate()
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn(name, result.stderr)
+
+    def test_source_pin_audit_budget_tests_are_mandatory_in_storage_report(self):
+        names = ("TestSourcePinAuditOwnedBudgetKeepsContinuationAndAcknowledgedRepairs",
+                 "TestSourcePinAuditOwnedBudgetPreservesGenuineFailures",
+                 "TestSourcePinAuditParentCancellationHasPrecedence",
+                 "TestSourcePinAuditUnknownCommitResumesDurableState",
+                 "TestSourcePinAuditBlockedAfterMediaCommitKeepsDrainablePaths",
+                 "TestSourcePinAuditParentCanceledAfterMediaCommitKeepsDrainablePaths")
+        self.assertEqual({name for name in native_results.REQUIRED[3] if name.startswith("TestSourcePinAudit")}, set(names))
+        workflow = SCRIPT.parent.parent / ".github" / "workflows" / "ci.yml"
+        commands = [line for line in workflow.read_text(encoding="utf-8").splitlines()
+                    if "tee native-storage-tests.jsonl" in line]
+        self.assertEqual(len(commands), 1)
+        selector = re.search(r"-run '([^']+)'", commands[0])
+        self.assertIsNotNone(selector)
+        for name in names:
+            self.assertIsNotNone(re.fullmatch(selector.group(1), name))
+        path = self.reports[3]
+        original = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        for name in names:
+            for action in ("missing", "skip", "failed-subtest"):
+                with self.subTest(name=name, action=action):
+                    events = [event for event in original if action == "failed-subtest" or event.get("Test") != name]
+                    if action == "skip":
+                        events.append({"Action": "skip", "Test": name, "Package": native_results.APP_PACKAGE})
+                    elif action == "failed-subtest":
+                        events.append({"Action": "fail", "Test": name + "/fault", "Package": native_results.APP_PACKAGE})
+                    path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+                    result = self.run_gate()
+                    self.assertNotEqual(result.returncode, 0)
+                    if action != "failed-subtest":
+                        self.assertIn(name, result.stderr)
 
     def test_passed_parent_cannot_hide_failed_or_skipped_subtest(self):
         path = self.reports[-1]

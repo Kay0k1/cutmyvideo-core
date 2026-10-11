@@ -65,14 +65,31 @@ func (s *Store) auditSourcePins(ctx context.Context) (more, eligible bool, err e
 	}
 	auditCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
+	return auditSourcePinUnits(ctx, auditCtx, s.auditSourcePinUnit)
+}
+
+// Exhausting this audit's slice leaves durable work pending after media COMMIT.
+// It does not prove EOF, a repaired counter, or the outcome of a failed COMMIT.
+func auditSourcePinUnits(ctx, auditCtx context.Context, unit func(context.Context) (bool, bool, error)) (more, eligible bool, err error) {
 	for range sourcePinAuditSources {
-		var done, repaired bool
-		done, repaired, err = s.auditSourcePinUnit(auditCtx)
-		eligible = eligible || repaired
-		if err != nil {
-			return more, eligible, fmt.Errorf("source pin audit: %w", errors.Join(auditCtx.Err(), err))
+		more = true
+		if err = ctx.Err(); err != nil {
+			return more, eligible, fmt.Errorf("source pin audit: %w", err)
 		}
+		done, repaired, unitErr := unit(auditCtx)
+		if unitErr != nil {
+			// Inspect the original error before joining context diagnostics: a
+			// database/connection error coinciding with expiry must stay visible.
+			if ctx.Err() == nil && auditCtx.Err() == context.DeadlineExceeded && sourcePinAuditDeadlineOnly(unitErr) {
+				return more, eligible, nil
+			}
+			return more, eligible, fmt.Errorf("source pin audit: %w", errors.Join(ctx.Err(), unitErr))
+		}
+		eligible = eligible || repaired
 		more = !done
+		if err = ctx.Err(); err != nil {
+			return more, eligible, fmt.Errorf("source pin audit: %w", err)
+		}
 		if done {
 			break
 		}
@@ -80,7 +97,38 @@ func (s *Store) auditSourcePins(ctx context.Context) (more, eligible bool, err e
 	return more, eligible, nil
 }
 
+// A mixed error tree is not an owned-budget outcome merely because one branch
+// matches DeadlineExceeded. Only wrappers around that exact cause are deferred.
+func sourcePinAuditDeadlineOnly(err error) bool {
+	if err == context.DeadlineExceeded {
+		return true
+	}
+	switch e := err.(type) {
+	case interface{ Unwrap() []error }:
+		causes := e.Unwrap()
+		if len(causes) == 0 {
+			return false
+		}
+		for _, cause := range causes {
+			if !sourcePinAuditDeadlineOnly(cause) {
+				return false
+			}
+		}
+		return true
+	case interface{ Unwrap() error }:
+		return sourcePinAuditDeadlineOnly(e.Unwrap())
+	default:
+		return false
+	}
+}
+
 func (s *Store) auditSourcePinUnit(ctx context.Context) (done, eligible bool, err error) {
+	return s.auditSourcePinUnitCommit(ctx, func(ctx context.Context, tx pgx.Tx) error { return tx.Commit(ctx) })
+}
+
+// Tests can lose an acknowledgement after a real COMMIT or a real rollback.
+// Production always uses pgx Commit; subsequent units read durable progress.
+func (s *Store) auditSourcePinUnitCommit(ctx context.Context, commit func(context.Context, pgx.Tx) error) (done, eligible bool, err error) {
 	tx, err := s.storageTx(ctx)
 	if err != nil {
 		return false, false, err
@@ -100,7 +148,7 @@ func (s *Store) auditSourcePinUnit(ctx context.Context) (done, eligible bool, er
 	if !cursor.upper.Valid {
 		err = tx.QueryRow(ctx, `SELECT created_at,id FROM sources ORDER BY created_at DESC,id DESC LIMIT 1`).Scan(&cursor.upper, &cursor.upperID)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return true, false, tx.Commit(ctx)
+			return true, false, commit(ctx, tx)
 		}
 		if err != nil {
 			return false, false, err
@@ -122,7 +170,7 @@ func (s *Store) auditSourcePinUnit(ctx context.Context) (done, eligible bool, er
 		if _, err = tx.Exec(ctx, `UPDATE source_retention_audit SET last_created_at=NULL,last_source_id=NULL,upper_created_at=NULL,upper_source_id=NULL WHERE id=1`); err != nil {
 			return false, false, err
 		}
-		return true, false, tx.Commit(ctx)
+		return true, false, commit(ctx, tx)
 	}
 	if err != nil {
 		return false, false, err
@@ -166,7 +214,7 @@ func (s *Store) auditSourcePinUnit(ctx context.Context) (done, eligible bool, er
 	if _, err = tx.Exec(ctx, `UPDATE source_retention_audit SET last_created_at=$1,last_source_id=$2,upper_created_at=$3,upper_source_id=$4 WHERE id=1`, created, id, cursor.upper, cursor.upperID); err != nil {
 		return false, false, err
 	}
-	return false, eligible, tx.Commit(ctx)
+	return false, eligible, commit(ctx, tx)
 }
 
 func auditSourcePinChildren(ctx context.Context, tx pgx.Tx, id string, preview bool, cursor *string, count int64) (next *string, total int64, done bool, err error) {
