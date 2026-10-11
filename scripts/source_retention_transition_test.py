@@ -4,6 +4,7 @@ Only local source bytes and temporary JSON/text files are read. These fixtures
 are verifier controls, never hosted, PostgreSQL, media or performance evidence.
 """
 from copy import deepcopy
+import ast
 import hashlib
 import importlib.util
 import io
@@ -12,6 +13,8 @@ from pathlib import Path
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
+
+import yaml
 
 
 ROOT = Path(__file__).resolve().parent
@@ -28,6 +31,41 @@ def module(name, path):
 base = module('transition_control_base', ROOT / 'self-hosting-acceptance.py')
 transition = module('transition_control_helper', ROOT / 'source-retention-transition.py')
 REFUSALS = (RuntimeError, OSError, ValueError, KeyError, TypeError)
+
+
+def workflow_expression(expression, event, mode):
+    """Evaluate only the workflow's string comparisons and short-circuit routing."""
+    if expression.startswith('${{ ') and expression.endswith(' }}'):
+        expression = expression[4:-3]
+    expression = (expression.replace('github.event_name', 'event')
+                  .replace('inputs.acceptance_mode', 'mode')
+                  .replace('&&', ' and ').replace('||', ' or '))
+    tree = ast.parse(expression.strip(), mode='eval')
+    values = {'event': event, 'mode': mode}
+
+    def read(node):
+        if isinstance(node, ast.Name) and node.id in values:
+            return values[node.id]
+        if isinstance(node, ast.Constant) and node.value in (
+                'workflow_dispatch', 'same-schema', transition.MODE):
+            return node.value
+        if isinstance(node, ast.Compare) and len(node.ops) == len(node.comparators) == 1:
+            left, right = read(node.left), read(node.comparators[0])
+            if isinstance(node.ops[0], ast.Eq):
+                return left == right
+            if isinstance(node.ops[0], ast.NotEq):
+                return left != right
+        if isinstance(node, ast.BoolOp) and isinstance(node.op, (ast.And, ast.Or)):
+            result = read(node.values[0])
+            for value in node.values[1:]:
+                if (isinstance(node.op, ast.And) and not result
+                        or isinstance(node.op, ast.Or) and result):
+                    return result
+                result = read(value)
+            return result
+        raise ValueError('workflow selector uses an unreviewed input or operator')
+
+    return read(tree.body)
 
 
 def go_events():
@@ -260,6 +298,73 @@ class ModeAndDefaultControls(unittest.TestCase):
             report = deepcopy(original); mutation(report)
             with self.subTest(mutation=mutation), self.assertRaisesRegex(RuntimeError, 'required group|check incomplete'):
                 base.validate_report(report)
+
+
+class WorkflowModeControls(unittest.TestCase):
+    def setUp(self):
+        self.workflow = yaml.load((REPO / '.github/workflows/self-hosting.yml').read_bytes(),
+                                  Loader=yaml.BaseLoader)
+        self.steps = self.workflow['jobs']['public-profile']['steps']
+        self.selectors = [step['env']['ACCEPTANCE_MODE'] for step in self.steps
+                          if 'ACCEPTANCE_MODE' in step.get('env', {})]
+        self.go = [step for step in self.steps
+                   if step.get('uses', '').startswith('actions/setup-go@')]
+
+    def test_automatic_pull_request_and_push_select_transition_with_go(self):
+        self.assertEqual(set(self.workflow['on']), {'pull_request', 'push', 'workflow_dispatch'})
+        self.assertEqual(self.workflow['on']['push']['branches'], ['main'])
+        self.assertEqual(len(self.selectors), 2)
+        self.assertEqual(len(self.go), 1)
+        for event in ('pull_request', 'push'):
+            for supplied in ('', 'same-schema', transition.MODE, 'unknown'):
+                with self.subTest(event=event, supplied=supplied):
+                    for selector in self.selectors:
+                        self.assertEqual(workflow_expression(selector, event, supplied), transition.MODE)
+                    self.assertIs(workflow_expression(self.go[0]['if'], event, supplied), True)
+
+    def test_dispatch_defaults_transition_and_preserves_explicit_legacy_choice(self):
+        option = self.workflow['on']['workflow_dispatch']['inputs']['acceptance_mode']
+        self.assertEqual(option['type'], 'choice')
+        self.assertEqual(option['options'], ['same-schema', transition.MODE])
+        self.assertEqual(option['required'], 'true')
+        self.assertEqual(option['default'], transition.MODE)
+        for supplied, needs_go in ((option['default'], True), ('same-schema', False)):
+            with self.subTest(mode=supplied):
+                for selector in self.selectors:
+                    selected = workflow_expression(selector, 'workflow_dispatch', supplied)
+                    self.assertEqual(selected, supplied)
+                    self.assertEqual(base.parse_args(['--mode', selected, '--revision', '1' * 40,
+                                                     '--output', '/synthetic-control-output']).mode, supplied)
+                self.assertIs(workflow_expression(self.go[0]['if'], 'workflow_dispatch', supplied), needs_go)
+
+    def test_missing_unknown_dispatch_mode_does_not_fall_back_or_start_go(self):
+        for supplied in ('', 'unknown'):
+            with self.subTest(mode=supplied):
+                for selector in self.selectors:
+                    selected = workflow_expression(selector, 'workflow_dispatch', supplied)
+                    self.assertEqual(selected, supplied)
+                    with patch('sys.stderr', new_callable=io.StringIO), self.assertRaises(SystemExit):
+                        base.parse_args(['--mode', selected, '--revision', '1' * 40,
+                                         '--output', '/synthetic-control-output'])
+                self.assertIs(workflow_expression(self.go[0]['if'], 'workflow_dispatch', supplied), False)
+
+    def test_flow_and_verification_share_bounded_selector_and_pinned_go_setup(self):
+        self.assertEqual(len(self.selectors), 2)
+        self.assertEqual(self.selectors[0], self.selectors[1])
+        self.assertEqual(self.go[0]['uses'],
+                         'actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16')
+        self.assertEqual(self.go[0]['with'], {'go-version': '1.27.2', 'cache': 'false'})
+        mode_steps = [step for step in self.steps if 'ACCEPTANCE_MODE' in step.get('env', {})]
+        self.assertTrue(all('--mode "$ACCEPTANCE_MODE"' in step['run'] for step in mode_steps))
+        for expression in ('${{ github.sha }}', '${{ github.event.pull_request.head.sha }}',
+                           '${{ inputs.unreviewed }}', '${{ contains(mode, "same-schema") }}'):
+            with self.subTest(expression=expression), self.assertRaises(ValueError):
+                workflow_expression(expression, 'pull_request', '')
+        # The formerly implicit routing is a real counterexample for automatic events.
+        self.assertEqual(workflow_expression("${{ inputs.acceptance_mode || 'same-schema' }}",
+                                             'pull_request', ''), 'same-schema')
+        self.assertIs(workflow_expression("inputs.acceptance_mode == 'source-retention-004-to-005'",
+                                         'pull_request', ''), False)
 
 
 class CandidateSourceControls(unittest.TestCase):

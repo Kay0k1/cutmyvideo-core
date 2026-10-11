@@ -54,8 +54,8 @@ reviewed preparation identities, not results from an actual run.
 
 The existing [public profile](self-hosting.md) keeps its same-schema acceptance
 contract: exact A1/current application-source equality, all 35 original checks,
-all seven original groups, and its original strict receipt. The default path
-continues to use that contract. A schema-changing candidate fails its equality
+all seven original groups, and its original strict receipt. Omitting the CLI
+mode continues to use that contract. A schema-changing candidate fails its equality
 assertion; the new transition must not weaken, bypass, replace or relabel it.
 
 Transition evidence has receipt schema version 2 and exactly 53 named checks
@@ -81,13 +81,17 @@ the reviewed fifth entry. Non-004 old state, non-005 current state, an unreviewe
 commit/tree, changed source identity or missing transition evidence is refused.
 No mode infers permission to execute an upgrade from a candidate's version.
 
-The workflow's `workflow_dispatch` input is `acceptance_mode`, with default
-`same-schema`; a separately authorized transition run must select
-`source-retention-004-to-005` explicitly. The driver likewise requires
-`--mode source-retention-004-to-005`. Verification must repeat the same explicit
-mode; omitting it keeps the original same-schema verifier and refuses a
-transition receipt. Read-only verification of a future evidence directory has
-this form:
+The public workflow explicitly selects `source-retention-004-to-005` for
+automatic pull-request and push runs. Its required `workflow_dispatch` input
+`acceptance_mode` defaults to the same transition; `same-schema` remains an
+explicit historical opt-in and retains the original equality requirement. Every
+transition run installs the pinned Go toolchain for its PostgreSQL test oracles.
+The flow and report-verification steps use the same event/input selector; neither
+derives a mode from the candidate's source identity. Missing or unknown dispatch
+values are refused by the CLI. The driver requires
+`--mode source-retention-004-to-005` for a transition. Verification must repeat
+the same explicit mode; omitting it keeps the original same-schema verifier and
+refuses a transition receipt. Read-only verification has this form:
 
 ```sh
 python3 -B scripts/self-hosting-acceptance.py \

@@ -10,7 +10,7 @@ on:
         description: 'Explicit schema mode; transition requires the reviewed recovery application commit and 169-file inventory'
         type: choice
         options: [same-schema, source-retention-004-to-005]
-        default: same-schema
+        default: source-retention-004-to-005
         required: true
 
 permissions:
@@ -31,7 +31,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        if: inputs.acceptance_mode == 'source-retention-004-to-005'
+        if: github.event_name != 'workflow_dispatch' || inputs.acceptance_mode == 'source-retention-004-to-005'
         with:
           go-version: '1.27.2'
           cache: false
@@ -63,7 +63,7 @@ jobs:
       - name: Actual public profile HTTPS, roles, egress, image upgrade and restore
         env:
           ACCEPTANCE_PR_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-          ACCEPTANCE_MODE: ${{ inputs.acceptance_mode || 'same-schema' }}
+          ACCEPTANCE_MODE: ${{ github.event_name != 'workflow_dispatch' && 'source-retention-004-to-005' || inputs.acceptance_mode }}
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           sudo env \
@@ -80,7 +80,7 @@ jobs:
             --output "$RUNNER_TEMP/public-self-hosting-evidence"
       - name: Require the exact mode groups, raw transition evidence and independent cleanup
         env:
-          ACCEPTANCE_MODE: ${{ inputs.acceptance_mode || 'same-schema' }}
+          ACCEPTANCE_MODE: ${{ github.event_name != 'workflow_dispatch' && 'source-retention-004-to-005' || inputs.acceptance_mode }}
         run: |
           python3 -B scripts/self-hosting-acceptance.py --mode "$ACCEPTANCE_MODE" --verify-report "$RUNNER_TEMP/public-self-hosting-evidence/acceptance-report.json"
       - name: Retain sanitized public profile evidence only
