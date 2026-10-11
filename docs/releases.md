@@ -25,7 +25,7 @@ checks is not proof of every semantic behavior or platform combination.
    history. Database/media changes must pass real historical upgrade and
    coordinated backup restoration, with redacted evidence retained.
 2. Move completed Unreleased notes under a dated heading such as
-   `## 0.2.1 - 2026-10-10`, retaining Unreleased for future changes. Include known
+   `## 0.3.0 - 2026-10-10`, retaining Unreleased for future changes. Include known
    limitations and measured benchmark methods.
 3. Commit the reviewed changes and tag that exact commit. Push the commit/tag when
    release publication is intended.
@@ -33,54 +33,106 @@ checks is not proof of every semantic behavior or platform combination.
 From a clean reviewed checkout:
 
 ```sh
-git tag -a v0.2.1 -m 'cutmyvideo-core v0.2.1'
-make release VERSION=v0.2.1
+git tag -a v0.3.0 -m 'cutmyvideo-core v0.3.0'
+make release VERSION=v0.3.0
 ```
 
 The script refuses dirty/untracked files, malformed versions and tags that do not
-identify HEAD. It requires the exact `toolchain` version from go.mod (Go 1.27.2), readonly modules, disabled CGO,
-trimmed paths, fixed target baseline and commit-time metadata. Caller GOFLAGS and
+identify HEAD. It resolves an immutable commit, tree and all tracked input blobs
+into `SOURCE.json`, then builds from a private materialized copy of those blobs.
+Ignored or concurrently edited working files cannot become compiler input. The
+original checkout is checked again before and after building. It requires the
+exact `toolchain` version from go.mod (Go 1.27.2), readonly modules, disabled CGO,
+trimmed paths, fixed target baselines and commit-time metadata. Caller GOFLAGS and
 workspaces are disabled. It does not deploy anything.
+
+Before a tag exists, use the same packaging path in explicit candidate mode:
+
+```sh
+candidate_sha="$(git rev-parse HEAD)"
+scripts/release.sh --candidate "$candidate_sha" /tmp/cutmy-candidate
+```
+
+Candidate versions contain the full source SHA and have `publishable=false` in
+both source and build manifests. Publication verification rejects them. A final
+release tag must pass a new archive gate: its version changes executable bytes.
+All output paths must be outside the checkout and either absent or empty.
 
 ## Artifacts and reproducibility
 
 Five targets: Linux amd64/arm64, macOS amd64/arm64, Windows amd64. Linux/macOS use
 `.tar.gz`; Windows uses `.zip`. Archives contain the executable, project license,
 third-party notices, changelog, installation note and `BUILD.json` with revision,
-toolchain, target and binary checksum. `SHA256SUMS` covers all archives.
+toolchain, target and binary checksum. `SHA256SUMS` covers exactly five archives.
+`SOURCE.json` records immutable inputs; `MANIFEST.json` records every archive,
+the six files inside it, their sizes, permissions and checksums, embedded Go
+build information, builder tools and the two-build comparison.
 FFmpeg/ffprobe remain external; server platform import also needs the pinned
 extractor and Node runtime. Docker bundles server dependencies.
 
-Rebuild the same tag with the same Go and Python/zlib toolchain:
+One invocation builds every target twice and refuses any archive or manifest
+disagreement. To verify an independently supplied source and manifest identity:
 
 ```sh
-scripts/release.sh v0.2.1 /tmp/cutmy-release-first
-scripts/release.sh v0.2.1 /tmp/cutmy-release-second
-cmp /tmp/cutmy-release-first/SHA256SUMS /tmp/cutmy-release-second/SHA256SUMS
-cd /tmp/cutmy-release-first
-sha256sum --check SHA256SUMS
+python3 scripts/release_manifest.py verify \
+  --directory /tmp/cutmy-release \
+  --source /tmp/resolved-source/SOURCE.json \
+  --expected-source-sha256 EXPECTED_SOURCE_SHA256 \
+  --expected-manifest-sha256 EXPECTED_MANIFEST_SHA256
 ```
 
-Use empty output directories; archives are written exclusively. File names,
-permissions, owners, gzip headers and timestamps are normalized. Build time is
-commit time, not wall-clock time. Release CI checks two builds in the same runner;
-this does not imply identical archives across different toolchain/zlib versions.
+Get expected digests from the resolver and packaging job, not from an untrusted
+download. The verifier refuses missing, extra, duplicate or unsafe members,
+mixed source/document/binary identities and checksum disagreement. It bounds
+decompression and archive metadata before parsing. Embedded dependency modules
+from all five binaries must have entries in the shipped notices.
+
+File names, permissions, owners, gzip headers and timestamps are normalized.
+Build time is commit time, not wall-clock time. The two builds use separate
+outputs on one runner and may reuse its Go cache. This does not establish an
+independent hermetic rebuild or identical archives across toolchain/zlib versions.
 Checksums detect mismatched downloads; they are not independent signatures or
 provenance attestations.
 
 ## Automation
 
-The [release workflow](../.github/workflows/release.yml) reruns full CI, builds
-twice, compares checksums and saves verified artifacts. A `v*` tag push creates a
-**draft** GitHub release using that version's changelog entry. Prerelease tags
-receive the prerelease flag. Inspect artifacts before publishing the draft.
-Manual dispatch rebuilds an existing tag and saves artifacts without publication.
-Failed checks prevent packaging/publication.
+The [release workflow](../.github/workflows/release.yml) resolves source once,
+passes that commit to the existing source CI, packages it twice and uploads one
+sealed bundle. Five native jobs download that exact artifact ID, verify its
+workflow run and ZIP digest, safely extract their archive and execute its
+absolute binary path. They require its version/commit/build-time/native target,
+local inspect/MP4/copy/MP3 diagnostics, descendant-process cancellation and a real
+API/worker upload/preview/export/download/deletion flow against disposable
+PostgreSQL. They do not rebuild `cutmy`. A separately built process-test helper
+has its own source and binary receipts and cannot replace the archived program.
+
+The aggregate gate requires all five targets and every required scenario, with
+matching source, manifest, archive, binary and run identities. Missing reports,
+tools or scenarios, skipped work and changed binaries fail. Raw execution
+evidence is retained even on failure. A separate publisher with repository write
+permission rechecks the tag and uploads the same verified bytes as a **draft**;
+it runs only on tag pushes. Pull requests produce nonpublishable candidates.
+Evidence artifacts are scoped to the run and attempt. Retry the entire workflow
+when a new attempt is needed; partial reruns cannot reuse an earlier attempt
+under a new identity.
+
+Manual dispatch verifies an existing tag containing this archive protocol without
+publication; older tags are refused rather than rebuilt with newer scripts. Neither path
+deploys production. Inspect the draft before publishing it.
 
 Current-source CI uses Go 1.27.2 and requires runtime/media/cancellation plus
 the PostgreSQL API/worker path on every shipped Linux, macOS and Windows target.
-These native jobs gate packaging along with the upgrade/recovery acceptance.
+These source jobs gate packaging along with upgrade/recovery acceptance. The
+historical upgrade/restore source gate remains required. A separate Linux amd64
+job uses the captured executable from this same archive bundle for all nine
+upgrade/restore scenarios and eleven decoded media observations. It builds only
+the immutable historical v0.2.1 program. Current archive bytes, source and run
+receipts are checked before and after recovery; the aggregate requires this
+result too. This does not imply native historical restore acceptance on every OS.
 Release checks include the full Ubuntu/FFmpeg 6.1 suite and targeted copy/HLS
 timeline regressions in the pinned Bookworm runtime base with FFmpeg 5.1.
+Published v0.2.1 archives predate this sealed-bundle and extracted-binary gate;
+new checks do not retroactively validate them. Archive identities and checksums
+are receipts, not independent provenance attestations or OS signing/notarization.
 Website production deployment is separate and must preserve persistent volumes;
 see [operations](operations.md).

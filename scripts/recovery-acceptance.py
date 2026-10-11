@@ -10,13 +10,16 @@ import ctypes
 import hashlib
 import http.client
 from http.cookies import SimpleCookie
+import importlib.util
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import shutil
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import tarfile
@@ -83,6 +86,95 @@ def run(command, *, env=None, cwd=None, stdin=None, stdout=subprocess.PIPE, time
             log.write_bytes(result.stderr)
         raise RuntimeError(f"{Path(command[0]).name} failed (exit {result.returncode}); see private command log")
     return result.stdout
+
+
+def release_protocol():
+    # The default source recovery protocol also works on revisions which predate
+    # archive packaging. Load its verifier only for an explicitly external CLI.
+    spec = importlib.util.spec_from_file_location("recovery_release_manifest", ROOT / "scripts/release_manifest.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def archive_receipt(args, protocol, source):
+    if not args.archive_receipt:
+        return None
+    receipt = protocol.read_json(args.archive_receipt)
+    fields = {"schema_version", "repository", "run_id", "artifact_id", "artifact_name",
+              "artifact_sha256", "artifact_bytes", "source_commit", "source_sha256"}
+    require(set(receipt) == fields and type(receipt["schema_version"]) is int and receipt["schema_version"] == 1
+            and type(receipt["run_id"]) is int and receipt["run_id"] > 0
+            and type(receipt["artifact_id"]) is int and receipt["artifact_id"] > 0
+            and type(receipt["artifact_bytes"]) is int and receipt["artifact_bytes"] > 0
+            and isinstance(receipt["repository"], str)
+            and re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", receipt["repository"])
+            and isinstance(receipt["artifact_name"], str) and receipt["artifact_name"]
+            and protocol.HASH.fullmatch(receipt["artifact_sha256"])
+            and receipt["source_commit"] == source["commit"]
+            and receipt["source_sha256"] == args.expected_source_sha256,
+            "External archive receipt identity/source mismatch")
+    for field, environment in (("repository", "GITHUB_REPOSITORY"), ("run_id", "GITHUB_RUN_ID")):
+        if os.environ.get(environment):
+            require(str(receipt[field]) == os.environ[environment], "External archive receipt differs from this CI run")
+    return {**receipt, "sha256": digest(args.archive_receipt)}
+
+
+def prepare_current_binary(args, work, report):
+    """Capture and execute the supplied archive bytes; never build a fallback."""
+    protocol = release_protocol()
+    source = protocol.load_source(args.source, ROOT, args.expected_source_sha256)
+    receipt = archive_receipt(args, protocol, source)
+    require(sys.platform == "linux" and platform.machine() in ("x86_64", "AMD64"),
+            "External archive recovery requires a native Linux amd64 runner")
+    path = args.current_binary
+    require(path.is_absolute() and path.is_file() and not path.is_symlink(),
+            "External current binary must be an absolute regular nonsymlink file")
+    require(protocol.HASH.fullmatch(args.expected_current_binary_sha256), "Invalid external current binary SHA256")
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, "rb") as stream:
+        identity = os.fstat(stream.fileno())
+        require(stat.S_ISREG(identity.st_mode) and 0 < identity.st_size <= 128 * 1024 * 1024,
+                "External current binary is not a bounded regular file")
+        data = stream.read(128 * 1024 * 1024 + 1)
+    require(len(data) == identity.st_size and hashlib.sha256(data).hexdigest() == args.expected_current_binary_sha256,
+            "External current binary differs from its expected SHA256")
+    current = work / "cutmy-current"
+    with current.open("xb") as stream:
+        stream.write(data)
+    current.chmod(0o700)
+
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            require(key not in value, "Duplicate external binary version field")
+            value[key] = item
+        return value
+
+    version = json.loads(run([str(current), "version"], cwd=work, timeout=10), object_pairs_hook=unique)
+    expected_version = {"version": source["version"], "commit": source["commit"],
+                        "build_time": source["build_time"], "go_version": source["toolchain"],
+                        "os": "linux", "arch": "amd64"}
+    require(version == expected_version, "External current binary version/source/native-target identity mismatch")
+    captured_sha256 = digest(current)
+    require(captured_sha256 == args.expected_current_binary_sha256,
+            "Captured external current binary changed while reporting its version")
+    proof = {"source_sha256": args.expected_source_sha256, "source_commit": source["commit"],
+             "source_tree": source["tree"], "expected_binary_sha256": args.expected_current_binary_sha256,
+             "captured_binary_sha256_before": captured_sha256, "captured_binary_sha256_after": None,
+             "runtime_version": version, "current_application_built": False}
+    if receipt is not None:
+        proof["archive_receipt"] = receipt
+    report["current_external_archive"] = proof
+    return current
+
+
+def verify_current_binary(args, current, report):
+    if args.current_binary:
+        actual = digest(current)
+        report["current_external_archive"]["captured_binary_sha256_after"] = actual
+        require(actual == args.expected_current_binary_sha256, "Captured external current binary changed during recovery")
+        release_protocol().load_source(args.source, ROOT, args.expected_source_sha256)
 
 
 def sql_string(value):
@@ -235,6 +327,9 @@ class Acceptance:
         print("PASS " + name, flush=True)
 
     def build(self):
+        # Reject the external identity before any historical build or database
+        # operation, and retain the private captured bytes for all scenarios.
+        current = self.build_current() if self.args.current_binary else None
         historical = self.work / "historical"
         historical.mkdir()
         archive = self.work / "historical.tar"
@@ -244,13 +339,14 @@ class Acceptance:
             files.extractall(historical)
         archive.unlink()
         old = self.work / "cutmy-v0.2.1"
-        current = self.work / "cutmy-current"
-        for directory, binary, version, revision in (
-                (historical, old, "v0.2.1", HISTORICAL_REVISION),
-                (ROOT, current, "recovery-acceptance", run(["git", "rev-parse", "HEAD"], cwd=ROOT).decode().strip())):
+        for directory, binary, version, revision in ((historical, old, "v0.2.1", HISTORICAL_REVISION),):
             run([self.args.go, "build", "-mod=readonly", "-trimpath", "-ldflags",
                  f"-X main.version={version} -X main.commit={revision}", "-o", str(binary), "./cmd/cutmy"], cwd=directory, timeout=300)
+        if current is None:
+            current = self.build_current()
         self.old, self.current = old, current
+        if self.args.current_binary:
+            release_protocol().load_source(self.args.source, ROOT, self.args.expected_source_sha256)
         self.report["current_revision"] = run(["git", "rev-parse", "HEAD"], cwd=ROOT).decode().strip()
         self.report["current_worktree_diff_sha256"] = hashlib.sha256(run(["git", "diff", "HEAD", "--", "cmd", "internal", "pkg", "go.mod", "go.sum"], cwd=ROOT)).hexdigest()
         source_hash = hashlib.sha256()
@@ -277,7 +373,18 @@ class Acceptance:
              "-t", "8", "-c:v", "libx264", "-preset", "ultrafast", "-g", "25", "-pix_fmt", "yuv420p",
              "-c:a", "aac", "-threads", "1", "-movflags", "+faststart", str(fixture)])
         self.fixture = fixture
-        self.check("immutable_v0.2.1_and_current_binaries_built")
+        self.check("current_external_archive_verified" if self.args.current_binary
+                   else "immutable_v0.2.1_and_current_binaries_built")
+
+    def build_current(self):
+        if self.args.current_binary:
+            return prepare_current_binary(self.args, self.work, self.report)
+        current = self.work / "cutmy-current"
+        revision = run(["git", "rev-parse", "HEAD"], cwd=ROOT).decode().strip()
+        run([self.args.go, "build", "-mod=readonly", "-trimpath", "-ldflags",
+             f"-X main.version=recovery-acceptance -X main.commit={revision}",
+             "-o", str(current), "./cmd/cutmy"], cwd=ROOT, timeout=300)
+        return current
 
     def environment(self, database, port):
         return {**os.environ, "DATABASE_URL": self.pg.dsn(database), "DATA_DIR": str(self.media),
@@ -583,6 +690,7 @@ class Acceptance:
         self.check("restored_media_ledger_files_and_counters_match")
         self.report["final_counts"] = {table: len(rows) for table, rows in final_snapshot.items()}
         self.report["schema_versions"] = json.loads(self.pg.sql(restored, "SELECT jsonb_agg(version ORDER BY version) FROM app_schema_versions"))
+        verify_current_binary(self.args, self.current, self.report)
         self.report["ok"] = True
 
     def close(self):
@@ -605,12 +713,27 @@ class Acceptance:
         return failures
 
 
-def main():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--go", default="go")
     parser.add_argument("--work-dir", help="Parent for disposable files; defaults to RECOVERY_WORK_DIR or TMPDIR")
     parser.add_argument("--keep-work-dir", action="store_true", help="Keep private process logs, synthetic outputs and backup on success")
-    args = parser.parse_args()
+    parser.add_argument("--current-binary", type=Path, help="Verified extracted Linux amd64 CLI; current application is never rebuilt")
+    parser.add_argument("--expected-current-binary-sha256")
+    parser.add_argument("--source", type=Path, help="Independently resolved archive SOURCE.json")
+    parser.add_argument("--expected-source-sha256")
+    parser.add_argument("--archive-receipt", type=Path, help="Verified packaging download.json receipt for this CI run")
+    args = parser.parse_args(argv)
+    external = (args.current_binary, args.expected_current_binary_sha256, args.source, args.expected_source_sha256)
+    if any(value is not None for value in external) and not all(value is not None for value in external):
+        parser.error("External current binary requires all four binary/source identity flags")
+    if args.archive_receipt and not args.current_binary:
+        parser.error("--archive-receipt requires external current binary identity flags")
+    return args
+
+
+def main():
+    args = parse_args()
     require(sys.platform == "linux", "Recovery acceptance currently requires Linux")
     require(bool(os.environ.get("RECOVERY_DATABASE_URL")), "Set RECOVERY_DATABASE_URL to an isolated PostgreSQL with CREATE DATABASE permission")
     os.umask(0o077)
@@ -627,6 +750,12 @@ def main():
         if cleanup_failures:
             acceptance.report["ok"] = False
             acceptance.report["cleanup_failures"] = cleanup_failures
+        if args.current_binary and hasattr(acceptance, "current"):
+            try:
+                verify_current_binary(args, acceptance.current, acceptance.report)
+            except Exception as error:
+                acceptance.report["ok"] = False
+                acceptance.report["failure"] = str(error)
         report_path = acceptance.work / "verification.json"
         report_path.write_text(json.dumps(acceptance.report, indent=2) + "\n")
         destination = os.environ.get("RECOVERY_REPORT_PATH")

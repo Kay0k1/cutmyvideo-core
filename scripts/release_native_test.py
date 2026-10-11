@@ -1,0 +1,292 @@
+"""Synthetic negative controls for the external archive consumer; no Go/PG."""
+import argparse
+from copy import deepcopy
+import importlib.util
+import json
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import Mock
+from unittest.mock import patch
+
+SPEC = importlib.util.spec_from_file_location('release_native', Path(__file__).with_name('release-native.py'))
+n = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(n)
+
+
+def source():
+    return {'commit': 'a' * 40, 'tree': 'b' * 40, 'mode': 'candidate',
+            'version': 'v0.0.0-candidate.g' + 'a' * 40, 'build_time': '2026-10-11T00:00:00Z',
+            'toolchain': 'go1.27.2', 'sha256': 'c' * 64}
+
+
+def receipt():
+    return {'schema_version': 1, 'repository': 'owner/repository', 'run_id': 123,
+            'artifact_id': 456, 'artifact_name': 'candidate-archives', 'artifact_sha256': 'f' * 64,
+            'artifact_bytes': 100, 'source_commit': 'a' * 40, 'source_sha256': 'c' * 64}
+
+
+def report(target_os='linux'):
+    value = {'schema_version': 1, 'ok': True, 'required_groups': list(n.REQUIRED_GROUPS), 'errors': [],
+             'target': {'os': target_os, 'arch': 'amd64'}, 'source': source(), 'manifest_sha256': 'd' * 64,
+             'archive': {'name': 'candidate.tar.gz', 'sha256': 'e' * 64, 'bytes': 100},
+             'binary': {'absolute_path': '/tmp/extracted/cutmy', 'bytes': 100,
+                        'sha256_before': 'f' * 64, 'sha256_after': 'f' * 64},
+             'artifact_receipt': dict(receipt(), sha256='e' * 64),
+             'runtime_version': {'version': source()['version'], 'commit': source()['commit'],
+                                 'build_time': source()['build_time'], 'go_version': 'go1.27.2',
+                                 'os': target_os, 'arch': 'amd64'},
+             'tools': {}, 'run': {'id': 'local', 'attempt': 'local', 'job': 'local', 'workflow_sha': 'local'}}
+    value['groups'] = {group: {'status': 'pass', 'checks': [{'name': check, 'ok': True} for check in checks],
+                               'evidence': {}} for group, checks in n.required_checks(target_os).items()}
+    value['groups']['archive']['evidence']['binary_sha256'] = 'f' * 64
+    return value
+
+
+class NativeControls(unittest.TestCase):
+    def test_exact_required_report_passes_for_unix_and_windows(self):
+        n.validate_report(report())
+        n.validate_report(report('windows'))
+
+    def reject(self, value):
+        with self.assertRaises((RuntimeError, KeyError, TypeError)):
+            n.validate_report(value)
+
+    def test_missing_extra_and_not_run_group_rejected(self):
+        for mutation in ('missing', 'extra', 'not_run', 'skip', 'fail'):
+            with self.subTest(mutation=mutation):
+                value = report()
+                if mutation == 'missing':
+                    del value['groups']['service']
+                elif mutation == 'extra':
+                    value['groups']['optional'] = deepcopy(value['groups']['service'])
+                else:
+                    value['groups']['service']['status'] = mutation
+                self.reject(value)
+
+    def test_missing_extra_duplicate_failed_and_skipped_check_rejected(self):
+        for mutation in ('missing', 'extra', 'duplicate', 'failed', 'skip'):
+            with self.subTest(mutation=mutation):
+                value = report()
+                checks = value['groups']['media']['checks']
+                if mutation == 'missing':
+                    checks.pop()
+                elif mutation == 'extra':
+                    checks.append({'name': 'wishful_check', 'ok': True})
+                elif mutation == 'duplicate':
+                    checks.append(dict(checks[0]))
+                elif mutation == 'failed':
+                    checks[0]['ok'] = False
+                else:
+                    checks[0]['skip'] = True
+                self.reject(value)
+
+    def test_no_unix_signal_substitution_by_timeout(self):
+        value = report()
+        value['groups']['process']['checks'] = value['groups']['process']['checks'][:3]
+        self.reject(value)
+
+    def test_changed_binary_and_suppressed_errors_rejected(self):
+        for mutation in ('before', 'after', 'archive', 'errors', 'ok'):
+            with self.subTest(mutation=mutation):
+                value = report()
+                if mutation in ('before', 'after'):
+                    value['binary']['sha256_' + mutation] = '0' * 64
+                elif mutation == 'archive':
+                    value['groups']['archive']['evidence']['binary_sha256'] = '0' * 64
+                elif mutation == 'errors':
+                    value['errors'].append('service failed')
+                else:
+                    value['ok'] = False
+                self.reject(value)
+
+    def test_wrong_executed_version_target_commit_and_extra_field_rejected(self):
+        for key in ('version', 'commit', 'build_time', 'go_version', 'os', 'arch', 'extra'):
+            with self.subTest(key=key):
+                value = report()
+                value['runtime_version'][key] = 'wrong'
+                self.reject(value)
+
+    def test_wrong_source_and_artifact_hash_rejected(self):
+        for container, key in (('source', 'sha256'), ('artifact_receipt', 'source_sha256'),
+                               ('artifact_receipt', 'source_commit'), ('archive', 'sha256')):
+            with self.subTest(container=container, key=key):
+                value = report()
+                value[container][key] = 'invalid'
+                self.reject(value)
+
+    def test_executable_requires_absolute_regular_exact_path_and_hash(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            file = root / 'cutmy'
+            file.write_bytes(b'not an application; structural test fixture only')
+            expected = n.file_hash(file)
+            self.assertEqual(n.checked_binary(file, expected), file)
+            for path, sha in ((Path('cutmy'), expected), (root / 'missing', expected), (root, expected), (file, '0' * 64)):
+                with self.subTest(path=str(path), sha=sha), self.assertRaises(RuntimeError):
+                    n.checked_binary(path, sha)
+            file.write_bytes(b'replaced executable')
+            with self.assertRaises(RuntimeError):
+                n.checked_binary(file, expected)
+
+    def test_app_invocation_cannot_fall_back_to_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runner = object.__new__(n.Native)
+            runner.binary = Path(directory).resolve() / 'missing-cutmy'
+            runner.expected_binary_sha = '0' * 64
+            runner.commands = Mock()
+            with self.assertRaises(RuntimeError):
+                runner.app('version')
+            runner.commands.run.assert_not_called()
+
+    def test_artifact_receipt_immutable_source_and_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'download.json'
+            value = receipt()
+            path.write_text(json.dumps(value))
+            self.assertEqual(n.validate_receipt(path, 'c' * 64, 'a' * 40)['artifact_id'], 456)
+            for mutation in ('source_commit', 'source_sha256', 'artifact_sha256', 'run_id', 'artifact_bytes', 'extra'):
+                changed = dict(value)
+                changed[mutation] = 0 if mutation in ('run_id', 'artifact_bytes') else 'wrong'
+                path.write_text(json.dumps(changed))
+                with self.subTest(mutation=mutation), self.assertRaises(RuntimeError):
+                    n.validate_receipt(path, 'c' * 64, 'a' * 40)
+
+    def test_error_json_must_be_one_envelope_with_exact_exit_and_empty_stdout(self):
+        valid = b'{"error":{"code":"timeout","message":"deadline exceeded"}}\n'
+        n.error_envelope(b'', valid, 124, 124, 'timeout')
+        for stdout, stderr, status in ((b'success', valid, 124), (b'', valid + valid, 124),
+                                       (b'', b'plain diagnostic', 124), (b'', valid, 1),
+                                       (b'', valid.replace(b'timeout', b'cancelled'), 124)):
+            with self.subTest(stdout=stdout, stderr=stderr, status=status), self.assertRaises(RuntimeError):
+                n.error_envelope(stdout, stderr, status, 124, 'timeout')
+
+    def test_native_target_mismatch_rejected_before_evidence_or_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            args = argparse.Namespace(target='windows/amd64', directory=Path(directory),
+                                      evidence_dir=Path(directory) / 'evidence')
+            with patch.object(n, 'native_target', return_value=('linux', 'amd64')), self.assertRaises(RuntimeError):
+                n.Native(args)
+            self.assertFalse(args.evidence_dir.exists())
+
+    def test_no_stale_or_bundle_internal_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            bundle, evidence = root / 'bundle', root / 'evidence'
+            bundle.mkdir()
+            evidence.mkdir()
+            for destination in (evidence, bundle / 'evidence'):
+                args = argparse.Namespace(target='linux/amd64', directory=bundle, evidence_dir=destination)
+                with patch.object(n, 'native_target', return_value=('linux', 'amd64')), self.assertRaises(RuntimeError):
+                    n.Native(args)
+
+    def test_manifest_digest_failure_precedes_bundle_verification_or_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'MANIFEST.json').write_bytes(b'{"wrong":true}')
+            runner = object.__new__(n.Native)
+            runner.directory = root
+            runner.args = argparse.Namespace(source=root / 'SOURCE.json', expected_source_sha256='c' * 64,
+                                            expected_manifest_sha256='0' * 64)
+            with patch.object(n.m, 'load_source', return_value=source()), patch.object(n.m, 'verify') as verify:
+                with self.assertRaises(RuntimeError):
+                    runner.archive()
+                verify.assert_not_called()
+
+    def test_stage_cannot_claim_missing_checks_as_pass(self):
+        runner = object.__new__(n.Native)
+        runner.target = ('linux', 'amd64')
+        runner.report = report()
+        with patch.object(runner, 'save'), self.assertRaises(RuntimeError):
+            runner.stage('service', lambda: (['real_server_and_worker'], {}))
+        self.assertEqual(runner.report['groups']['service']['status'], 'fail')
+        self.assertTrue(runner.report['errors'])
+
+    def test_post_smoke_binary_change_fails_final_verdict(self):
+        value = report()
+        value['binary']['sha256_after'] = '0' * 64
+        self.reject(value)
+
+    def test_database_cannot_override_the_loopback_isolation(self):
+        for url in ('postgres://test@production.example/test',
+                    'postgres://test@127.0.0.1/test?host=production.example',
+                    'postgres://test@127.0.0.1/test?service=production',
+                    'postgres://test@127.0.0.1/host%3Dproduction.example'):
+            with self.subTest(url=url), self.assertRaises(RuntimeError):
+                n.PostgreSQL(url, Mock(), 'psql')
+        with patch.dict(n.os.environ, {'PGHOSTADDR': '203.0.113.1', 'PGSERVICE': 'unrelated', 'PGOPTIONS': 'unrelated'}):
+            pg = n.PostgreSQL('postgres://test@127.0.0.1/test?sslmode=disable', Mock(), 'psql')
+            self.assertNotIn('PGHOSTADDR', pg.env)
+            self.assertNotIn('PGSERVICE', pg.env)
+            self.assertNotIn('PGOPTIONS', pg.env)
+            self.assertEqual(pg.env['PGHOST'], '127.0.0.1')
+
+    def test_shared_http_transcript_retains_both_owner_and_foreign_requests(self):
+        with tempfile.TemporaryDirectory() as directory:
+            shared = []
+            owner = n.Client(1234, Path(directory), shared)
+            foreign = n.Client(1234, Path(directory), shared)
+            for client, status in ((owner, 200), (foreign, 404), (owner, 204)):
+                response = Mock()
+                response.status = status
+                response.read.return_value = b''
+                response.getheaders.return_value = []
+                response.getheader.return_value = None
+                connection = Mock()
+                connection.getresponse.return_value = response
+                with patch.object(n.http.client, 'HTTPConnection', return_value=connection):
+                    client.request('GET', '/owned-synthetic', expected=status)
+            actual = json.loads((Path(directory) / 'http.json').read_text())
+            self.assertEqual([row['status'] for row in actual], [200, 404, 204])
+
+    def test_shutdown_attempts_all_services_after_one_failure(self):
+        runner = object.__new__(n.Native)
+        runner.target = ('linux', 'amd64')
+        server, worker = Mock(pid=100, returncode=0), Mock(pid=101, returncode=1)
+        server.poll.return_value = None
+        worker.poll.side_effect = [None, 1]
+        runner.processes = [(server, 'server'), (worker, 'worker')]
+        runner.service_records = [{'pid': 100}, {'pid': 101}]
+        with self.assertRaises(RuntimeError):
+            runner.stop_services()
+        server.send_signal.assert_called_once_with(n.signal.SIGTERM)
+        server.wait.assert_called_once_with(timeout=15)
+        worker.send_signal.assert_called_once_with(n.signal.SIGTERM)
+        self.assertEqual(runner.processes, [])
+
+    def test_already_exited_worker_is_failure_and_server_still_stops(self):
+        runner = object.__new__(n.Native)
+        runner.target = ('linux', 'amd64')
+        server, worker = Mock(pid=100, returncode=0), Mock(pid=101, returncode=1)
+        server.poll.return_value = None
+        worker.poll.return_value = 1
+        runner.processes = [(server, 'server'), (worker, 'worker')]
+        runner.service_records = [{'pid': 100}, {'pid': 101}]
+        with self.assertRaisesRegex(RuntimeError, 'worker exited unexpectedly'):
+            runner.stop_services()
+        server.wait.assert_called_once_with(timeout=15)
+
+    def test_directory_cleanup_failure_cannot_leave_success_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runner = object.__new__(n.Native)
+            runner.target = ('linux', 'amd64')
+            runner.evidence = Path(directory)
+            runner.work = Path(directory) / 'work'
+            runner.work.mkdir()
+            runner.binary = runner.work / 'cutmy'
+            runner.binary.write_bytes(b'synthetic fixture; never executed')
+            runner.pg = None
+            runner.report = report()
+            for name in n.REQUIRED_GROUPS:
+                setattr(runner, name, lambda name=name: (list(n.required_checks('linux')[name]), {}))
+            with patch.object(runner, 'preserve_media'), patch.object(runner, 'stop_services'), \
+                    patch.object(n, 'validate_report'), patch.object(n.shutil, 'rmtree', side_effect=OSError('owned directory busy')):
+                with self.assertRaises(RuntimeError):
+                    runner.run()
+            actual = json.loads((Path(directory) / 'native-report.json').read_text())
+            self.assertIs(actual['ok'], False)
+            self.assertTrue(any('owned directory busy' in value for value in actual['errors']))
+
+
+if __name__ == '__main__':
+    unittest.main()

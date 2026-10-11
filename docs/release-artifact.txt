@@ -15,9 +15,14 @@ For slow/long local exports, set --timeout (default 30m); FFmpeg is a separate p
 
 BUILD.json records source revision, target and binary checksum. Verify the archive
 against SHA256SUMS from the same GitHub release before installation.
+New release bundles also include SOURCE.json and MANIFEST.json. A candidate is
+explicitly nonpublishable; do not treat it as a tagged stable release. Checksums
+and build receipts are not independent signatures or provenance attestations.
 
 Release checks require native media, exclusive publication, process cancellation
 and the PostgreSQL API/worker path on every shipped Linux/macOS/Windows target.
+The archive gate executes these exact extracted binaries and verifies their
+source/version/target identities; it does not replace source/library testing.
 Outputs require a filesystem that supports hard links and reliable file/directory
 synchronization. An uncertain publication retains its final name; inspect it
 before retrying. See the platform and operation guides in the source repository.

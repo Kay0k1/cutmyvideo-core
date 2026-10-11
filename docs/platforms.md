@@ -19,6 +19,14 @@ unsupported publication or skipped required tests fail the gate. JSON test
 reports and tool versions are retained as CI artifacts. The Linux full suite
 also covers fault injection, HTTP contracts and historical upgrade/restore.
 
+The [archive gate](releases.md#automation) additionally runs the actual extracted
+CLI packages on these same five targets. It checks independently supplied source
+and archive identities, actual embedded version output, local media and errors,
+timeout cancellation, an external server/worker and deletion/accounting. Unix
+also exercises SIGINT/SIGTERM. Windows timeout acceptance does not establish
+console Ctrl-C delivery. The archived executable is not rebuilt during these
+jobs; source/library tests remain a separate prerequisite.
+
 Current-source checks additionally require a separate media-contract report on
 each target: rotation and sample-aspect-ratio normalization, variable-frame-rate
 timestamps, known-signal PQ/HLG tone mapping and compatible copy, default-audio
@@ -30,7 +38,8 @@ copy/HLS timeline checks. The gate rejects missing tests and skipped subtests.
 
 These are the tested OS baselines, not a promise for every older release,
 network filesystem, external provider or hardware controller. Official
-v0.2.1 archives predate native macOS/Windows verification. New source changes
+v0.2.1 archives predate native macOS/Windows verification and archive execution.
+New source changes
 must pass all native checks before publishing a release with these guarantees.
 
 ## Windows local CLI
@@ -97,7 +106,9 @@ tests exercise HTTP handlers and a worker against PostgreSQL on each platform;
 they do not establish OS-specific service installation, Windows service-manager
 integration or macOS launchd configuration. These remain operator choices.
 
-The [coordinated upgrade/backup/restore gate](backup-recovery.md) runs on Linux.
+The [coordinated upgrade/backup/restore gate](backup-recovery.md) runs on Linux,
+including a separate Linux amd64 check using the executable extracted from the
+sealed archive bundle.
 Restore media at the same canonical `DATA_DIR`; the database currently stores
 absolute file paths. Follow the [migration policy](migrations.md) before changing
 database versions or rolling back a binary.
