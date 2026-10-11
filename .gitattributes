@@ -1,3 +1,4 @@
 # Embedded SQL/checksums and executable scripts must have identical bytes on
 # Windows, macOS and Linux. Binary files remain untouched by text conversion.
 * text=auto eol=lf
+verification/2026-10-11-current-pair-common-tools-n3/RESULTS.csv -text
