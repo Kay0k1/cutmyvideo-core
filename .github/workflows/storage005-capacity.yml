@@ -1,4 +1,4 @@
-name: Storage005 capacity pilot
+name: Storage normal operational capacity
 
 on:
   workflow_dispatch:
@@ -10,14 +10,14 @@ on:
         options: ['1000', '10000']
   pull_request:
     paths:
-      - benchmarks/storage005/**
+      - benchmarks/storage-normal-capacity/**
       - .github/workflows/storage005-capacity.yml
 
 permissions:
   contents: read
 
 concurrency:
-  group: storage005-capacity-pilot
+  group: storage-normal-capacity-pilot
   cancel-in-progress: false
 
 jobs:
@@ -31,7 +31,7 @@ jobs:
       - name: Pure fixtures (all actual children and network calls denied)
         env:
           PYTHONDONTWRITEBYTECODE: '1'
-        run: python3 -m unittest discover -s benchmarks/storage005 -p protocol_test.py -v
+        run: python3 -m unittest discover -s benchmarks/storage-normal-capacity -p protocol_test.py -v
   fixed-postgres-pilot:
     if: github.event_name == 'workflow_dispatch'
     needs: pure-protocol
@@ -56,7 +56,7 @@ jobs:
       - name: Exact current schema005 source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: f80cb9bba29f2ba97b37152bbf3388735d4a3173
+          ref: d594cc4681dc1cab61664cec8c92bdf9a3e9444c
           path: .comparison/after
           fetch-depth: 2
           persist-credentials: false
@@ -64,16 +64,16 @@ jobs:
         with:
           go-version: '1.27.2'
           cache: false
-      - name: Common fixed-source pilot (all original failures remain failures)
+      - name: New normal profile (legacy5ms results remain separate)
         env:
-          GOCACHE: ${{ runner.temp }}/storage005-go-cache
-          CUTMY_STORAGE005_MAXIMUM_SIZE: ${{ inputs.maximum_size }}
-        run: python3 benchmarks/storage005/run_hosted.py
+          GOCACHE: ${{ runner.temp }}/storage-normal-go-cache
+          CUTMY_STORAGE_NORMAL_MAXIMUM_SIZE: ${{ inputs.maximum_size }}
+        run: python3 benchmarks/storage-normal-capacity/run_hosted.py
       - name: Preserve original measurements and refusals
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: storage005-pilot-${{ github.sha }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/storage005-pilot/
+          name: storage-normal-pilot-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/storage-normal-pilot/
           if-no-files-found: warn
           retention-days: 30

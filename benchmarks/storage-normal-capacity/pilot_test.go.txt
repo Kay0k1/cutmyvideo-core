@@ -1,0 +1,820 @@
+package app
+
+// This identical test-only file is added to each fixed, clean source checkout.
+// Canonical tracked files, including the original capacity gates, stay intact.
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
+	"strconv"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+type comparisonAuditor interface {
+	auditSourcePinUnit(context.Context) (bool, bool, error)
+}
+
+func comparisonSHA(raw []byte) string {
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
+func comparisonSQL(t *testing.T, schema int) string {
+	t.Helper()
+	if schema == 4 {
+		return capacityRuntimeSQL(t, "storage_lifecycle.go", "cleanupStorageBatch", "DELETE FROM sources")
+	}
+	set := token.NewFileSet()
+	file, err := parser.ParseFile(set, "source_retention.go", nil, 0)
+	if err != nil {
+		t.Fatal("candidate selector source is missing")
+	}
+	var found []string
+	for _, declaration := range file.Decls {
+		group, ok := declaration.(*ast.GenDecl)
+		if !ok || group.Tok != token.CONST {
+			continue
+		}
+		for _, specification := range group.Specs {
+			value, ok := specification.(*ast.ValueSpec)
+			if !ok || len(value.Names) != 1 || value.Names[0].Name != "sourceRetentionSQL" || len(value.Values) != 1 {
+				continue
+			}
+			literal, ok := value.Values[0].(*ast.BasicLit)
+			if !ok || literal.Kind != token.STRING {
+				t.Fatal("selector is not an actual source literal")
+			}
+			text, err := strconv.Unquote(literal.Value)
+			if err != nil {
+				t.Fatal("invalid selector literal")
+			}
+			found = append(found, text)
+		}
+	}
+	if len(found) != 1 {
+		t.Fatal("selector declaration is missing or ambiguous")
+	}
+	return found[0]
+}
+
+func comparisonRuntime(t *testing.T, f capacityFixture) map[string]any {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	role := newID("comparison_role")
+	name := pgx.Identifier{role}.Sanitize()
+	namespace := pgx.Identifier{f.schema}.Sanitize()
+	capacityExec(t, f.admin, "CREATE ROLE "+name+" NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION")
+	t.Cleanup(func() {
+		f.api.DB.Close()
+		f.maintenance.DB.Close()
+		capacityExec(t, f.admin, "DROP OWNED BY "+name+"; DROP ROLE "+name)
+	})
+	capacityExec(t, f.admin, "REVOKE ALL ON ALL TABLES IN SCHEMA "+namespace+" FROM PUBLIC; REVOKE ALL ON ALL FUNCTIONS IN SCHEMA "+namespace+" FROM PUBLIC; GRANT USAGE ON SCHEMA "+namespace+" TO "+name)
+	rows, err := f.admin.Query(ctx, "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND c.relkind='r' ORDER BY c.relname", f.schema)
+	if err != nil {
+		t.Fatal("runtime table inventory failed")
+	}
+	tables, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatal("runtime table inventory failed")
+	}
+	for _, table := range tables {
+		privileges := "SELECT,INSERT,UPDATE,DELETE"
+		if table == "app_schema_versions" || table == "app_schema_migrations" {
+			privileges = "SELECT,MAINTAIN"
+		}
+		capacityExec(t, f.admin, "GRANT "+privileges+" ON "+pgx.Identifier{f.schema, table}.Sanitize()+" TO "+name)
+	}
+	for _, store := range []*Store{f.api, f.maintenance} {
+		config := store.DB.Config().Copy()
+		config.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+			_, err := conn.Exec(ctx, "SET ROLE "+name)
+			return err
+		}
+		store.DB.Close()
+		store.DB, err = pgxpool.NewWithConfig(ctx, config)
+		if err != nil {
+			t.Fatal("runtime pool setup failed")
+		}
+		var current string
+		var super, create, ledgerWrite, sourceWrite bool
+		if err = store.DB.QueryRow(ctx, "SELECT current_user,rolsuper,has_schema_privilege(current_user,$1,'CREATE'),has_table_privilege(current_user,'app_schema_migrations','INSERT,UPDATE,DELETE'),has_table_privilege(current_user,'sources','INSERT') AND has_table_privilege(current_user,'sources','UPDATE') AND has_table_privilege(current_user,'sources','DELETE') AND has_table_privilege(current_user,'sources','SELECT') FROM pg_roles WHERE rolname=current_user", f.schema).Scan(&current, &super, &create, &ledgerWrite, &sourceWrite); err != nil || current != role || super || create || ledgerWrite || !sourceWrite {
+			t.Fatal("effective runtime role differs")
+		}
+	}
+	return map[string]any{"pass": true, "effective_role": role, "session_login_is_fixture_admin": true, "superuser": false, "schema_create": false, "migration_ledger_insert": false, "ordinary_table_dml": true, "function_execute_granted": false}
+}
+
+func comparisonSnapshot(t *testing.T, f capacityFixture) json.RawMessage {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var raw json.RawMessage
+	err := f.api.DB.QueryRow(ctx, `SELECT jsonb_build_object(
+'sources',(SELECT jsonb_build_object('rows',count(*),'digest',md5(COALESCE(string_agg(to_jsonb(s)::text,',' ORDER BY id),''))) FROM sources s),
+'jobs',(SELECT jsonb_build_object('rows',count(*),'digest',md5(COALESCE(string_agg(to_jsonb(j)::text,',' ORDER BY id),''))) FROM jobs j),
+'reservations',(SELECT jsonb_build_object('rows',count(*),'digest',md5(COALESCE(string_agg(to_jsonb(r)::text,',' ORDER BY id),''))) FROM storage_reservations r),
+'files',(SELECT jsonb_build_object('rows',count(*),'digest',md5(COALESCE(string_agg(to_jsonb(f)::text,',' ORDER BY path),''))) FROM storage_files f),
+'totals',(SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM storage_counters s))`).Scan(&raw)
+	if err != nil {
+		t.Fatal("rollback snapshot failed", err)
+	}
+	return raw
+}
+
+func comparisonPlans(t *testing.T, f capacityFixture, sql string) map[string]any {
+	t.Helper()
+	query := capacityQuery{Name: "source_retention", SQL: sql}
+	before := comparisonSnapshot(t, f)
+	client, execution, fence := []float64{}, []float64{}, []float64{}
+	var sampleRows []map[string]int64
+	for range 20 {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		start := time.Now()
+		tx, err := f.api.storageTx(ctx)
+		fence = append(fence, float64(time.Since(start).Microseconds())/1000)
+		if err != nil {
+			cancel()
+			t.Fatal("selector fence failed")
+		}
+		start = time.Now()
+		var raw []byte
+		err = tx.QueryRow(ctx, "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "+sql, float64(3600), storageBatch).Scan(&raw)
+		client = append(client, float64(time.Since(start).Microseconds())/1000)
+		var retained, expired int64
+		if err == nil {
+			err = tx.QueryRow(ctx, "SELECT count(*) FILTER(WHERE id LIKE 'retained-source-%'),count(*) FILTER(WHERE id LIKE 'expired-source-%') FROM sources").Scan(&retained, &expired)
+		}
+		rollbackStorage(tx)
+		cancel()
+		if err != nil {
+			t.Fatal("selector plan failed")
+		}
+		if retained != int64(f.retained) || expired != 0 {
+			t.Fatal("selector lost a pinned source or did not delete its200 eligible rows", retained, expired)
+		}
+		sampleRows = append(sampleRows, map[string]int64{"retained_pinned_remaining": retained, "expired_remaining": expired, "eligible_deleted": storageBatch})
+		var plan []struct {
+			Execution float64 `json:"Execution Time"`
+		}
+		if err = json.Unmarshal(raw, &plan); err != nil || len(plan) != 1 {
+			t.Fatal("selector plan malformed")
+		}
+		execution = append(execution, plan[0].Execution)
+		query.Plans = append(query.Plans, json.RawMessage(raw))
+	}
+	after := comparisonSnapshot(t, f)
+	if string(before) != string(after) {
+		t.Fatal("selector rollback changed persisted rows or accounting")
+	}
+	query.Client, query.Execution = summarizeCapacityLatency(client), summarizeCapacityLatency(execution)
+	return map[string]any{"pass": true, "samples": 20, "query": query, "fence": summarizeCapacityLatency(fence), "rollback_after_each_sample": true, "before": before, "after": after, "sample_rows": sampleRows, "distribution": "retained pinned prefix then200 expired eligible sources"}
+}
+
+func comparisonAudit(t *testing.T, f capacityFixture, schema int) map[string]any {
+	t.Helper()
+	auditor, ok := any(f.maintenance).(comparisonAuditor)
+	if schema == 4 {
+		if ok {
+			t.Fatal("004 unexpectedly implements005 audit")
+		}
+		return map[string]any{"applicable": false, "reason": "schema004 has no source-pin audit", "pass": true}
+	}
+	if !ok {
+		t.Fatal("005 real audit is missing")
+	}
+	capacityExec(t, f.api.DB, `INSERT INTO sources(id,owner,title,duration_ms,kind,created_at) VALUES('comparison-a-hot','comparison','hot',1,'platform','1900-01-01'),('comparison-b-free','comparison','free',1,'platform','1900-01-02');
+INSERT INTO jobs(id,owner,source_id,request,items) SELECT 'comparison-job-'||lpad(i::text,4,'0'),'comparison','comparison-a-hot','{}','[]' FROM generate_series(1,129) i;
+INSERT INTO storage_reservations(id,owner,kind,size_bytes,expires_at,job_id) SELECT 'comparison-preview-'||lpad(i::text,4,'0'),'comparison','preview',1,'2100-01-01','comparison-a-hot' FROM generate_series(1,129) i;
+UPDATE sources SET retention_job_pins=999,retention_preview_pins=999 WHERE id IN ('comparison-a-hot','comparison-b-free')`)
+	var calls []map[string]any
+	for index := 1; index <= 10; index++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		start := time.Now()
+		done, eligible, err := auditor.auditSourcePinUnit(ctx)
+		elapsed := float64(time.Since(start).Microseconds()) / 1000
+		cancel()
+		call := map[string]any{"unit": index, "elapsed_ms": elapsed, "done": done, "repaired_eligible": eligible}
+		if err != nil {
+			call["error"] = err.Error()
+			calls = append(calls, call)
+			return map[string]any{"applicable": true, "pass": false, "calls": calls, "stage_error": true}
+		}
+		calls = append(calls, call)
+	}
+	var partial json.RawMessage
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := f.api.DB.QueryRow(ctx, `SELECT jsonb_build_object('cursor',(SELECT jsonb_agg(to_jsonb(a)) FROM source_retention_audit a),'partial',(SELECT COALESCE(jsonb_agg(to_jsonb(p) ORDER BY source_id),'[]') FROM source_pin_audit_progress p))`).Scan(&partial); err != nil {
+		t.Fatal("audit progress read failed")
+	}
+	var jobs, previews, free int64
+	if err := f.api.DB.QueryRow(ctx, "SELECT job_count,preview_count FROM source_pin_audit_progress WHERE source_id='comparison-a-hot'").Scan(&jobs, &previews); err != nil || jobs != 128 || previews != 128 {
+		t.Fatal("audit partial bound or durable progress differs")
+	}
+	if err := f.api.DB.QueryRow(ctx, "SELECT retention_job_pins+retention_preview_pins FROM sources WHERE id='comparison-b-free'").Scan(&free); err != nil || free != 0 {
+		t.Fatal("hot source starved healthy audit successor")
+	}
+	// Keep the following common foreground workload equivalent. Audit receipts
+	// retain the partial state; cleanup here does not claim child completion.
+	capacityExec(t, f.api.DB, `DELETE FROM jobs WHERE id LIKE 'comparison-job-%'; DELETE FROM storage_reservations WHERE id LIKE 'comparison-preview-%'; DELETE FROM sources WHERE id IN ('comparison-a-hot','comparison-b-free'); DELETE FROM source_pin_audit_progress; DELETE FROM source_retention_audit`)
+	return map[string]any{"applicable": true, "pass": true, "calls": calls, "progress": partial, "hot_job_count": jobs, "hot_preview_count": previews, "healthy_successor_repaired": true, "complete_child_audit_claimed": false, "audit_only_fixture_removed": true}
+}
+
+func comparisonDML(t *testing.T, f capacityFixture) map[string]any {
+	t.Helper()
+	before := comparisonSnapshot(t, f)
+	queries := []struct{ name, sql string }{
+		{"job_status_only", `UPDATE jobs SET status='failed',updated_at='2001-01-01' WHERE id='retained-job-1'`},
+		{"job_membership_insert", `INSERT INTO jobs(id,owner,source_id,request,items) VALUES('comparison-dml-job','comparison','retained-source-1','{}','[]')`},
+		{"preview_membership_insert", `INSERT INTO storage_reservations(id,owner,kind,size_bytes,expires_at,job_id) VALUES('comparison-dml-preview','comparison','preview',1,'2100-01-01','retained-source-1')`},
+	}
+	var measured []capacityQuery
+	for _, q := range queries {
+		measured = append(measured, capacityMeasureQuery(t, f, q.name, q.sql, nil, 20))
+	}
+	after := comparisonSnapshot(t, f)
+	if string(before) != string(after) {
+		t.Fatal("foreground rollback changed persisted membership or accounting")
+	}
+	return map[string]any{"pass": true, "samples_per_operation": 20, "queries": measured, "before": before, "after": after, "scope": "status-only update and one job/preview insert; each actual EXPLAIN executes triggers then rolls back"}
+}
+
+func comparisonFence(t *testing.T, f capacityFixture) map[string]any {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	blocker, err := f.admin.Begin(ctx)
+	if err != nil {
+		t.Fatal("fence blocker setup failed")
+	}
+	defer rollbackStorage(blocker)
+	if _, err = blocker.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", storageLock); err != nil {
+		t.Fatal("fence blocker acquisition failed")
+	}
+	var attempts []map[string]any
+	pass := true
+	for _, budget := range []time.Duration{5 * time.Millisecond, 50 * time.Millisecond} {
+		wait, stop := context.WithTimeout(context.Background(), budget)
+		start := time.Now()
+		tx, waitErr := f.api.storageTx(wait)
+		if tx != nil {
+			rollbackStorage(tx)
+		}
+		wall := float64(time.Since(start).Microseconds()) / 1000
+		stop()
+		deadline := errors.Is(waitErr, context.DeadlineExceeded)
+		pass = pass && deadline
+		attempts = append(attempts, map[string]any{"budget_ms": float64(budget.Microseconds()) / 1000, "wall_ms": wall, "deadline": deadline, "error_type": fmt.Sprintf("%T", waitErr), "unexpected_acquisition": waitErr == nil})
+	}
+	rollbackStorage(blocker)
+	recovery, stop := context.WithTimeout(context.Background(), time.Second)
+	defer stop()
+	tx, err := f.api.storageTx(recovery)
+	if tx != nil {
+		rollbackStorage(tx)
+	}
+	return map[string]any{"pass": pass && err == nil, "attempts": attempts, "acquired_after_release": err == nil, "wall_limit_claimed": false}
+}
+
+func TestStorageNormalCapacityPilot(t *testing.T) {
+	if os.Getenv("CUTMY_STORAGE_NORMAL_PILOT") != "1" {
+		t.Skip("manual fixed-source hosted pilot only")
+	}
+	size, err := strconv.Atoi(os.Getenv("CUTMY_STORAGE_NORMAL_SIZE"))
+	if err != nil || (size != 1000 && size != 10000) {
+		t.Fatal("pilot permits only1000 or10000;100k needs a new reviewed gate")
+	}
+	schema, err := strconv.Atoi(os.Getenv("CUTMY_STORAGE_NORMAL_SCHEMA"))
+	if err != nil || (schema != 4 && schema != 5) {
+		t.Fatal("unknown exact schema")
+	}
+	output := os.Getenv("CUTMY_STORAGE_REPORT_DIR")
+	if !filepath.IsAbs(output) {
+		t.Fatal("report directory must be absolute")
+	}
+	if err = os.MkdirAll(output, 0700); err != nil {
+		t.Fatal("report directory unavailable")
+	}
+	report := map[string]any{"format": 1, "kind": "storage-normal-capacity-pilot", "size": size, "schema": schema, "complete": false, "pass": false, "current_stage": "fixture_setup", "stages": map[string]any{}, "failures": []string{}}
+	failures := []string{}
+	defer func() {
+		report["failures"] = failures
+		payload, err := json.MarshalIndent(report, "", "  ")
+		if err == nil {
+			file, e := os.OpenFile(filepath.Join(output, "pilot.json"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+			if e == nil {
+				_, e = file.Write(append(payload, '\n'))
+				_ = file.Close()
+			}
+			err = e
+		}
+		if err != nil {
+			t.Error("report finalization failed")
+		}
+	}()
+	start := time.Now()
+	f := newCapacityFixture(t, size)
+	report["setup_ms"] = float64(time.Since(start).Microseconds()) / 1000
+	var observed int
+	startupRead, cancelStartup := context.WithTimeout(context.Background(), 10*time.Second)
+	err = f.api.DB.QueryRow(startupRead, "SELECT max(position) FROM app_schema_migrations").Scan(&observed)
+	cancelStartup()
+	if err != nil || observed != schema {
+		t.Fatal("actual schema boundary differs")
+	}
+	// Freeze equivalent chronology without changing membership or admission.
+	capacityExec(t, f.api.DB, `UPDATE sources SET created_at='2000-01-01'::timestamptz+(CASE WHEN id LIKE 'retained-source-%' THEN substring(id from '[0-9]+$')::integer ELSE 100000+substring(id from '[0-9]+$')::integer END)*interval '1 microsecond'; UPDATE jobs SET created_at='2000-01-01'; UPDATE artifacts SET created_at='2000-01-01',expires_at=CASE WHEN expires_at<now() THEN '2000-01-01'::timestamptz ELSE '2100-01-01'::timestamptz END`)
+	report["runtime_role"] = comparisonRuntime(t, f)
+	ctx, stop := context.WithTimeout(context.Background(), 10*time.Second)
+	var settings json.RawMessage
+	if err = f.api.DB.QueryRow(ctx, `SELECT jsonb_build_object('server_version',current_setting('server_version'),'server_version_num',current_setting('server_version_num'),'shared_buffers',current_setting('shared_buffers'),'work_mem',current_setting('work_mem'),'max_connections',current_setting('max_connections'),'jit',current_setting('jit'),'fsync',current_setting('fsync'),'synchronous_commit',current_setting('synchronous_commit'))`).Scan(&settings); err != nil {
+		stop()
+		t.Fatal("PostgreSQL configuration evidence missing")
+	}
+	stop()
+	report["postgresql_settings"] = settings
+	report["initial_rows"] = comparisonSnapshot(t, f)
+	sql := comparisonSQL(t, schema)
+	if comparisonSHA([]byte(sql)) != os.Getenv("CUTMY_STORAGE_NORMAL_SQL_SHA256") {
+		t.Fatal("actual selector SQL differs from the fixed source binding")
+	}
+	report["sql_sha256"] = comparisonSHA([]byte(sql))
+	stages := report["stages"].(map[string]any)
+	report["current_stage"] = "source_ttl"
+	stages["source_ttl"] = comparisonPlans(t, f, sql)
+	report["current_stage"] = "foreground_dml"
+	stages["foreground_dml"] = comparisonDML(t, f)
+	report["current_stage"] = "held_fence"
+	stages["held_fence"] = comparisonFence(t, f)
+	report["current_stage"] = "persisted_audit"
+	stages["persisted_audit"] = comparisonAudit(t, f, schema)
+	if stages["persisted_audit"].(map[string]any)["pass"] != true {
+		failures = append(failures, "persisted_audit")
+		t.Error("audit stage did not complete; raw failure retained")
+		return
+	}
+	// This new profile has ordinary10s maintenance/5s reads; the legacy helper stays byte-exact.
+	report["current_stage"] = "foreground_maintenance"
+	stages["foreground_maintenance"] = normalConcurrent(t, f)
+	if stages["foreground_maintenance"].(map[string]any)["pass"] != true {
+		failures = append(failures, "foreground_maintenance")
+	}
+	report["current_stage"] = "normal_maintenance"
+	stages["normal_maintenance"] = normalOperational(t, size, schema, false)
+	report["current_stage"] = "normal_api_bootstrap"
+	stages["normal_api_bootstrap"] = normalOperational(t, size, schema, true)
+	for _, stage := range []string{"held_fence", "normal_maintenance", "normal_api_bootstrap"} {
+		if stages[stage].(map[string]any)["pass"] != true {
+			failures = append(failures, stage)
+		}
+	}
+	report["complete"], report["pass"], report["current_stage"] = true, len(failures) == 0, "completed"
+	if len(failures) > 0 {
+		t.Errorf("pilot failed stages: %v; other measured stages do not relabel thisPASS", failures)
+	}
+}
+
+func normalConcurrent(t *testing.T, f capacityFixture) map[string]any {
+	t.Helper()
+	schema := int(capacityCount(t, f.api.DB, "SELECT max(position) FROM app_schema_migrations"))
+	physical := normalSeedFiles(t, f, false)
+	protectedBefore := normalRead(t, f, physical, schema, false)
+	// Refresh through the real writer before timed calls so longer plan/scan
+	// experiments do not turn the five-minute cache TTL into a load failure.
+	source, info := metadataCacheFixture()
+	source.ID, source.Owner, source.URL = "retained-source-1", "retained-owner-0", "https://www.youtube.com/watch?v=fixture1"
+	refreshCtx, stopRefresh := context.WithTimeout(context.Background(), 5*time.Second)
+	defer stopRefresh()
+	if err := f.api.CachePlatformMetadata(refreshCtx, source, info); err != nil {
+		t.Fatal(err)
+	}
+	const workers, operations = 4, 20
+	start := make(chan struct{})
+	done := make(chan struct{})
+	errs := make(chan error, workers+3)
+	var group sync.WaitGroup
+	var mu sync.Mutex
+	reserve, publish, cleanup, cache := []float64{}, []float64{}, []float64{}, []float64{}
+	var lockSamples, blockedSamples, maxBlocked int
+	monitorDone := make(chan struct{})
+	go func() {
+		defer close(monitorDone)
+		ticker := time.NewTicker(5 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				var n int
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				err := f.admin.QueryRow(ctx, "SELECT count(*) FROM pg_stat_activity WHERE application_name LIKE $1 AND wait_event_type='Lock' AND wait_event='advisory'", f.schema+"_%").Scan(&n)
+				cancel()
+				if err != nil {
+					errs <- fmt.Errorf("normal lock monitor: %w", err)
+					return
+				}
+				if err == nil {
+					lockSamples++
+					if n > 0 {
+						blockedSamples++
+					}
+					maxBlocked = max(maxBlocked, n)
+				}
+			}
+		}
+	}()
+	for worker := range workers {
+		group.Go(func() {
+			<-start
+			for operation := range operations {
+				owner := fmt.Sprintf("capacity-owner-%d-%d", worker, operation)
+				id := fmt.Sprintf("capacity-published-%d-%d", worker, operation)
+				token := id
+				path := filepath.Join(f.c.DataDir, "sources", id)
+				if err := os.WriteFile(path, []byte("synthetic completed file"), 0600); err != nil {
+					errs <- err
+					return
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				begin := time.Now()
+				err := f.api.ReserveSource(ctx, f.c, owner, token)
+				elapsed := float64(time.Since(begin).Microseconds()) / 1000
+				mu.Lock()
+				reserve = append(reserve, elapsed)
+				mu.Unlock()
+				if err != nil {
+					cancel()
+					errs <- err
+					return
+				}
+				begin = time.Now()
+				err = f.api.AddSource(ctx, Source{ID: id, Owner: owner, Title: "Synthetic publication", Kind: "upload", Path: path, DurationMS: 1000, StorageToken: token})
+				elapsed = float64(time.Since(begin).Microseconds()) / 1000
+				cancel()
+				mu.Lock()
+				publish = append(publish, elapsed)
+				mu.Unlock()
+				if err != nil {
+					errs <- err
+					return
+				}
+			}
+		})
+	}
+	group.Go(func() {
+		<-start
+		for range operations {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			begin := time.Now()
+			paths, err := f.maintenance.Cleanup(ctx, time.Hour, time.Hour)
+			// Cleanup can return committed paths together with a cache-stage
+			// failure. Drain those paths before reporting either cause.
+			err = errors.Join(err, f.maintenance.DrainStorageDeletes(ctx, f.c, paths))
+			elapsed := float64(time.Since(begin).Microseconds()) / 1000
+			cancel()
+			mu.Lock()
+			cleanup = append(cleanup, elapsed)
+			mu.Unlock()
+			if err != nil {
+				errs <- err
+				return
+			}
+		}
+	})
+	group.Go(func() {
+		<-start
+		for range operations * workers {
+			begin := time.Now()
+			readCtx, stopRead := context.WithTimeout(context.Background(), 5*time.Second)
+			_, hit := f.api.RecentPlatformMetadata(readCtx, "retained-owner-0", "https://www.youtube.com/watch?v=fixture1")
+			readErr := readCtx.Err()
+			stopRead()
+			elapsed := float64(time.Since(begin).Microseconds()) / 1000
+			mu.Lock()
+			cache = append(cache, elapsed)
+			mu.Unlock()
+			if !hit || readErr != nil {
+				errs <- errors.New("owner-scoped synthetic metadata cache miss under load")
+				return
+			}
+		}
+	})
+	begin := time.Now()
+	close(start)
+	group.Wait()
+	close(done)
+	<-monitorDone
+	close(errs)
+	var failures []string
+	for err := range errs {
+		failures = append(failures, err.Error())
+	}
+	count := capacityCount(t, f.api.DB, "SELECT count(*) FROM sources WHERE id LIKE 'capacity-published-%'")
+	stored := capacityCount(t, f.api.DB, "SELECT stored_bytes::bigint FROM storage_counters WHERE id=1")
+	files := capacityCount(t, f.api.DB, "SELECT COALESCE(sum(size_bytes),0) FROM storage_files")
+	reserved := capacityCount(t, f.api.DB, "SELECT reserved_bytes::bigint FROM storage_counters WHERE id=1")
+	reservations := capacityCount(t, f.api.DB, "SELECT COALESCE(sum(size_bytes),0) FROM storage_reservations")
+	active := capacityCount(t, f.api.DB, "SELECT count(*) FROM storage_reservations WHERE kind='source'")
+	protectedAfter := normalRead(t, f, physical, schema, false)
+	protectedPass := protectedBefore.ProtectedSHA == protectedAfter.ProtectedSHA && protectedAfter.BadPins == 0 && protectedAfter.BadHealthyCharges == 0 && protectedAfter.Physical
+	return map[string]any{"maintenance_budget_ms": 10000, "api_and_metadata_budget_ms": 5000, "monitor_budget_ms": 1000, "monitor_errors_are_failures": true, "admission_workers": workers, "operations_per_worker": operations, "duration_ms": float64(time.Since(begin).Microseconds()) / 1000,
+		"reserve_source": summarizeCapacityLatency(reserve), "durable_source_publication": summarizeCapacityLatency(publish), "retention_batch": summarizeCapacityLatency(cleanup), "persisted_metadata_hit": summarizeCapacityLatency(cache),
+		"advisory_lock_samples": lockSamples, "samples_with_waiters": blockedSamples, "max_observed_waiters": maxBlocked, "sampling_interval_ms": 5,
+		"published_sources": count, "source_reservations_remaining": active, "counters_match_actual_ledger": stored == files && reserved == reservations, "errors": failures,
+		"protected_before": protectedBefore, "protected_after": protectedAfter, "protected_pass": protectedPass,
+		"pass": protectedPass && len(failures) == 0 && count == workers*operations && active == 0 && stored == files && reserved == reservations}
+}
+
+// Independent oracle contexts do not extend either product call or repair it.
+// Eight finite caller budgets are a new profile; no legacy5ms verdict is read.
+type normalFixtureFiles struct {
+	paths   []string
+	sizes   []int64
+	healthy []string
+}
+
+type normalObserved struct {
+	Charges           map[string]int64 `json:"committed_path_charges"`
+	HealthyCharges    map[string]int64 `json:"healthy_path_charges"`
+	BadHealthyCharges int64            `json:"bad_healthy_charges"`
+	ProtectedSnapshot string           `json:"-"`
+	ProtectedSHA      string           `json:"protected_rows_sha256"`
+	Sources           int64            `json:"retained_sources"`
+	Jobs              int64            `json:"retained_jobs"`
+	Artifacts         int64            `json:"healthy_artifacts"`
+	Previews          int64            `json:"preview_pins"`
+	BadPins           int64            `json:"bad_derived_pins"`
+	BadCharges        int64            `json:"bad_path_charges"`
+	Physical          bool             `json:"physical_files_intact"`
+	Stored            int64            `json:"stored_bytes"`
+	Ledger            int64            `json:"file_ledger_bytes"`
+	Reserved          int64            `json:"reserved_bytes"`
+	Reservations      int64            `json:"reservation_ledger_bytes"`
+	Marker            int64            `json:"initialization_markers"`
+	CompletedKinds    int64            `json:"completed_scan_kinds"`
+	OwnedReservation  int64            `json:"owned_api_reservation"`
+	OracleMS          float64          `json:"oracle_ms"`
+}
+
+func normalSeedFiles(t *testing.T, f capacityFixture, scan bool) normalFixtureFiles {
+	t.Helper()
+	var files normalFixtureFiles
+	for i := 1; i <= f.retained; i++ {
+		if i%100 == 1 {
+			continue
+		} // These original fixture artifacts intentionally expire.
+		path := filepath.Join(f.c.DataDir, "artifacts", fmt.Sprintf("retained-%d", i))
+		if err := os.WriteFile(path, []byte("healthy-artifact"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		files.healthy = append(files.healthy, path)
+	}
+	if scan {
+		for i := 0; i < f.retained+1024; i++ {
+			var content []byte
+			if i < 1024 {
+				content = []byte("synthetic")
+			}
+			path := filepath.Join(f.c.DataDir, "artifacts", fmt.Sprintf("normal-scan-%06d", i))
+			if err := os.WriteFile(path, content, 0600); err != nil {
+				t.Fatal(err)
+			}
+			files.paths = append(files.paths, path)
+			files.sizes = append(files.sizes, int64(len(content)))
+		}
+		// Only this fresh owned fixture loses its initial steady-state marker.
+		capacityExec(t, f.api.DB, "DELETE FROM storage_state WHERE id=$1", f.c.DataDir)
+	}
+	return files
+}
+
+func normalRead(t *testing.T, f capacityFixture, files normalFixtureFiles, schema int, api bool) normalObserved {
+	t.Helper()
+	start := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	// A new role-bound pool reads acknowledged DB state rather than session memory.
+	config := f.api.DB.Config().Copy()
+	config.MaxConns = 1
+	pool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		t.Fatal("normal oracle reopen failed", err)
+	}
+	defer pool.Close()
+	if err = pool.Ping(ctx); err != nil {
+		t.Fatal("normal oracle connection failed", err)
+	}
+	result := normalObserved{Charges: map[string]int64{}, HealthyCharges: map[string]int64{}, Physical: true}
+	badPinsSQL := "0::bigint"
+	if schema == 5 {
+		badPinsSQL = `(SELECT count(*) FROM sources s WHERE id LIKE 'retained-source-%'
+ AND (NOT retention_pins_valid OR retention_job_pins<>(SELECT count(*) FROM jobs j WHERE j.source_id=s.id)
+ OR retention_preview_pins<>(SELECT count(*) FROM storage_reservations r WHERE r.kind='preview' AND r.job_id=s.id)))`
+	}
+	query := `SELECT jsonb_build_object(
+ 'sources',(SELECT jsonb_agg((to_jsonb(s)-ARRAY['retention_job_pins','retention_preview_pins','retention_pins_valid','retention_pin_revision']) ORDER BY id) FROM sources s WHERE id LIKE 'retained-source-%'),
+ 'jobs',(SELECT jsonb_agg(to_jsonb(j) ORDER BY id) FROM jobs j WHERE id LIKE 'retained-job-%'),
+ 'artifacts',(SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM artifacts a WHERE id LIKE 'retained-artifact-%' AND substring(id from '[0-9]+$')::integer%100<>1),
+ 'previews',(SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM storage_reservations r WHERE id LIKE 'preview-reservation-%'))::text,
+ (SELECT count(*) FROM sources WHERE id LIKE 'retained-source-%'),
+ (SELECT count(*) FROM jobs WHERE id LIKE 'retained-job-%'),
+ (SELECT count(*) FROM artifacts WHERE id LIKE 'retained-artifact-%' AND substring(id from '[0-9]+$')::integer%100<>1),
+ (SELECT count(*) FROM storage_reservations WHERE id LIKE 'preview-reservation-%'),` + badPinsSQL + `,
+ stored_bytes,(SELECT coalesce(sum(size_bytes),0)::bigint FROM storage_files),
+ reserved_bytes,(SELECT coalesce(sum(size_bytes),0)::bigint FROM storage_reservations),
+ (SELECT count(*) FROM storage_state WHERE id=$1),
+ (SELECT count(*) FROM storage_scan_progress WHERE data_dir=$1 AND scan_kind=ANY($2) AND completed_at IS NOT NULL),
+ (SELECT count(*) FROM storage_reservations WHERE id='source:normal-owner' AND owner='normal-owner' AND token='normal-token' AND size_bytes=$3)
+ FROM storage_counters WHERE id=1`
+	kinds := []string{"bootstrap_sources", "bootstrap_artifacts", "bootstrap_work"}
+	if !api {
+		kinds = append(kinds, "reconcile_sources", "reconcile_artifacts")
+	}
+	if err = pool.QueryRow(ctx, query, f.c.DataDir, kinds, f.c.MaxSourceBytes).Scan(&result.ProtectedSnapshot, &result.Sources, &result.Jobs, &result.Artifacts, &result.Previews, &result.BadPins, &result.Stored, &result.Ledger, &result.Reserved, &result.Reservations, &result.Marker, &result.CompletedKinds, &result.OwnedReservation); err != nil {
+		t.Fatal("normal independent state oracle failed", err)
+	}
+	result.ProtectedSHA = comparisonSHA([]byte(result.ProtectedSnapshot))
+	result.ProtectedSnapshot = "" // Do not multiply full retained-row JSON by every bounded call.
+	rows, err := pool.Query(ctx, "SELECT path,size_bytes,delete_pending FROM storage_files WHERE path=ANY($1) ORDER BY path", append(append([]string{}, files.paths...), files.healthy...))
+	if err != nil {
+		t.Fatal("normal per-path oracle failed", err)
+	}
+	expected := map[string]int64{}
+	for i, path := range files.paths {
+		expected[path] = files.sizes[i]
+	}
+	for rows.Next() {
+		var path string
+		var size int64
+		var pending bool
+		if err = rows.Scan(&path, &size, &pending); err != nil {
+			rows.Close()
+			t.Fatal(err)
+		}
+		if want, ok := expected[path]; ok {
+			if pending || size != want {
+				result.BadCharges++
+			}
+			result.Charges[path] = size
+		} else {
+			if pending || size != 16 {
+				result.BadHealthyCharges++
+			}
+			result.HealthyCharges[path] = size
+		}
+	}
+	err = rows.Err()
+	rows.Close()
+	result.BadHealthyCharges += int64(len(files.healthy) - len(result.HealthyCharges))
+	if err != nil {
+		t.Fatal("normal per-path read failed", err)
+	}
+	for i, path := range files.paths {
+		if ctx.Err() != nil {
+			t.Fatal("normal physical oracle budget expired")
+		}
+		info, e := os.Lstat(path)
+		if e != nil || !info.Mode().IsRegular() {
+			result.Physical = false
+			continue
+		}
+		raw, e := os.ReadFile(path)
+		want := ""
+		if i < 1024 {
+			want = "synthetic"
+		}
+		if e != nil || string(raw) != want {
+			result.Physical = false
+		}
+	}
+	for _, path := range files.healthy {
+		if ctx.Err() != nil {
+			t.Fatal("normal protected-file oracle budget expired")
+		}
+		info, e := os.Lstat(path)
+		if e != nil || !info.Mode().IsRegular() {
+			result.Physical = false
+			continue
+		}
+		raw, e := os.ReadFile(path)
+		if e != nil || string(raw) != "healthy-artifact" {
+			result.Physical = false
+		}
+	}
+	result.OracleMS = float64(time.Since(start).Microseconds()) / 1000
+	return result
+}
+
+// Original leaves must all be attributable. A PgError/connection/constraint
+// error mixed with a deadline is never converted to an expected deferral.
+func normalOnlyError(err, target error) bool {
+	if err == target {
+		return true
+	}
+	if multi, ok := err.(interface{ Unwrap() []error }); ok {
+		children := multi.Unwrap()
+		if len(children) == 0 {
+			return false
+		}
+		for _, child := range children {
+			if !normalOnlyError(child, target) {
+				return false
+			}
+		}
+		return true
+	}
+	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
+		return normalOnlyError(wrapped.Unwrap(), target)
+	}
+	return false
+}
+
+func normalOperational(t *testing.T, size, schema int, api bool) map[string]any {
+	t.Helper()
+	f := newCapacityFixture(t, size) // Separate fresh namespace for each stage.
+	role := comparisonRuntime(t, f)
+	files := normalSeedFiles(t, f, true)
+	initial := normalRead(t, f, files, schema, api)
+	expectedHealthy := int64(size - size/100)
+	valid := initial.Marker == 0 && len(initial.Charges) == 0 && initial.Sources == int64(size) && initial.Jobs == int64(size) && initial.Artifacts == expectedHealthy && initial.Previews == 200 && initial.BadPins == 0 && initial.BadHealthyCharges == 0 && initial.Physical && initial.Stored == initial.Ledger && initial.Reserved == initial.Reservations
+	budget := 10 * time.Second
+	kinds := int64(5)
+	entrypoint := "RunMaintenance_one_shot"
+	if api {
+		budget = 5 * time.Second
+		kinds = 3
+		entrypoint = "ReserveSource_database_admission"
+	}
+	calls := []map[string]any{}
+	previous := initial.Charges
+	complete := false
+	for index := 1; index <= 8 && valid && !complete; index++ {
+		parent, stop := context.WithTimeout(context.Background(), budget)
+		deadline, hasDeadline := parent.Deadline()
+		effective := time.Until(deadline)
+		begin := time.Now()
+		var err error
+		if api {
+			err = f.api.ReserveSource(parent, f.c, "normal-owner", "normal-token")
+		} else {
+			err = RunMaintenance(parent, f.c, f.maintenance)
+		}
+		elapsed := float64(time.Since(begin).Microseconds()) / 1000
+		parentErr := parent.Err()
+		stop()
+		outcome := "acknowledged"
+		if err == nil && parentErr != nil {
+			outcome = "late_acknowledged"
+		} else if err != nil {
+			if parentErr == context.DeadlineExceeded && normalOnlyError(err, context.DeadlineExceeded) {
+				outcome = "caller_deadline_pending"
+			} else if parentErr == nil && normalOnlyError(err, ErrStorageInitializing) {
+				outcome = "initializing_pending"
+			} else {
+				outcome = "genuine_error"
+			}
+		}
+		observed := normalRead(t, f, files, schema, api)
+		monotonic := true
+		for path, charge := range previous {
+			if current, ok := observed.Charges[path]; !ok || current != charge {
+				monotonic = false
+			}
+		}
+		preserved := observed.ProtectedSHA == initial.ProtectedSHA && observed.BadPins == 0 && observed.BadHealthyCharges == 0 && observed.Physical && observed.Stored == observed.Ledger && observed.Reserved == observed.Reservations && observed.BadCharges == 0
+		valid = valid && hasDeadline && effective > 0 && effective <= budget && monotonic && preserved && outcome != "genuine_error" && outcome != "late_acknowledged"
+		complete = valid && err == nil && parentErr == nil && observed.Marker == 1 && observed.CompletedKinds == kinds && len(observed.Charges) == size+1024 && (!api || observed.OwnedReservation == 1)
+		call := map[string]any{"call": index, "caller_budget_ms": float64(budget.Milliseconds()), "effective_deadline_ms": float64(effective.Microseconds()) / 1000, "wall_ms": elapsed, "outcome": outcome, "parent_expired": parentErr == context.DeadlineExceeded, "acknowledged": err == nil, "error_type": fmt.Sprintf("%T", err), "committed_progress_monotonic": monotonic, "protected_pass": preserved, "completed": complete, "independent_reopened_state": observed}
+		calls = append(calls, call)
+		previous = observed.Charges
+	}
+	// Releasing only this profile's reservation is a separately bounded product
+	// operation, never a bootstrap/reconciliation fallback or verdict repair.
+	releaseOK := true
+	if api && complete {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := f.api.ReleaseSource(ctx, "normal-owner", "normal-token")
+		releaseOK = err == nil && ctx.Err() == nil
+		cancel()
+	}
+	final := normalRead(t, f, files, schema, api)
+	preserved := final.ProtectedSHA == initial.ProtectedSHA && final.BadPins == 0 && final.BadHealthyCharges == 0 && final.Physical && final.BadCharges == 0 && final.Stored == final.Ledger && final.Reserved == final.Reservations
+	pass := complete && valid && releaseOK && preserved && (!api || final.OwnedReservation == 0)
+	return map[string]any{"pass": pass, "profile": "normal10s5s", "entrypoint": entrypoint, "caller_budget_ms": budget.Milliseconds(), "maximum_calls": 8, "calls": calls, "initial": initial, "final": final, "runtime_role": role, "expected_healthy_paths": files.healthy, "expected_scan_paths": files.paths, "expected_scan_sizes": files.sizes, "expected_protected_physical_files": len(files.healthy), "expected_scan_physical_files": size + 1024, "fresh_independent_fixture": true, "unbounded_repair_calls": 0, "derived_pin_validation_applicable": schema == 5, "release_acknowledged": releaseOK, "complete": complete, "service_SLA_claimed": false}
+}
