@@ -34,7 +34,7 @@ jobs:
       PR_HEAD: ${{ github.event.pull_request.head.sha }}
       PR_BASE: ${{ github.event.pull_request.base.sha }}
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.sha }}
           fetch-depth: 0
@@ -83,7 +83,7 @@ jobs:
       artifact-id: ${{ steps.save.outputs.artifact-id }}
       artifact-sha256: ${{ steps.save.outputs.artifact-digest }}
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve.outputs.commit }}
           fetch-depth: 0
@@ -132,7 +132,7 @@ jobs:
       CUTMY_REQUIRE_DURABLE_FS: '1'
       TEST_DATABASE_URL: postgres://cutmy:native-test-only@127.0.0.1:55439/cutmy_native?sslmode=disable
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.resolve.outputs.commit }}
           fetch-depth: 0
@@ -245,7 +245,7 @@ jobs:
       GOTOOLCHAIN: local
       RECOVERY_DATABASE_URL: postgres://cutmy:archive-test-only@localhost:5432/cutmy_archive?sslmode=disable
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve.outputs.commit }}
           fetch-depth: 0
@@ -326,7 +326,7 @@ jobs:
           (Path(os.environ['RUNNER_TEMP'])/'archive-verdict/gate-status.json').write_text(json.dumps(results,indent=2)+'\n')
           if set(results.values())!={'success'}:raise SystemExit('Archive prerequisites failed or were skipped.')
           PYTHON
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve.outputs.commit }}
           fetch-depth: 0
@@ -385,7 +385,7 @@ jobs:
       ARTIFACT_SHA256: ${{ needs.packages.outputs.artifact-sha256 }}
       VERDICT_SHA256: ${{ needs.native-gate.outputs.verdict-sha256 }}
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve.outputs.commit }}
           fetch-depth: 0
@@ -453,7 +453,7 @@ jobs:
       SBOM_SHA256: ${{ needs.trust.outputs.sbom-sha256 }}
       TRUST_SHA256: ${{ needs.trust.outputs.trust-sha256 }}
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve.outputs.commit }}
           fetch-depth: 0
@@ -533,7 +533,7 @@ jobs:
       TRUST_ARTIFACT_ID: ${{ needs.attest.outputs.artifact-id }}
       TRUST_ARTIFACT_SHA256: ${{ needs.attest.outputs.artifact-sha256 }}
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve.outputs.commit }}
           fetch-depth: 0
