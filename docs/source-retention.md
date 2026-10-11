@@ -56,6 +56,14 @@ complete. One continuously changing popular source can keep resetting its own
 partial audit; other sources still receive turns. Completion requires a stable
 membership interval long enough to finish that source's chunks.
 
+Expiry of the audit's own slice leaves work pending while the parent maintenance
+request is still live. It preserves earlier acknowledged repairs and returns
+without an error only when that expiry is the entire cause of the failed unit.
+It does not report a completed sweep or count an unacknowledged commit as a
+repair. The next unit reads durable progress again, including when a commit
+acknowledgement was lost. Parent cancellation, database failures and mixed errors
+still propagate; committed media paths remain available for deletion.
+
 An underflow caused by bad counts quarantines the source without blocking a
 legitimate membership deletion. Positive-count drift requires the independent
 all-source audit: it cannot be discovered through the eligible index. With eight
@@ -71,7 +79,8 @@ Normal truthful-count selection bypasses this audit lag.
 `source_pin_audit_progress` contains incomplete child passes, their revision,
 child cursors/counts and completion flags. Read these records to distinguish a
 sweep wrap from unfinished hot-source work. `source pin audit pending` reports
-an audit timeout/database error while already committed paths remain drainable.
+parent cancellation or an audit database error while already committed paths
+remain drainable. Expiry of only the audit's own slice does not emit this warning.
 The tables have the existing application DML privilege model. Runtime writes can
 corrupt derived counts/progress; they are never an authorization boundary. Final
 reference checks and subsequent independent sweeps remain required.
@@ -86,7 +95,9 @@ and counters after completed stable audits. If the required stable interval or
 recovery time is unavailable, stop writers and recover from a verified coordinated
 backup; no automatic full-table repair runs under the runtime fence.
 
-This packet has prepared source/tests, not measured PostgreSQL performance or
-accepted platform/upgrade evidence. The old 32×5ms reconciliation/bootstrap
-stress requirements stay unchanged and are separate from source TTL. Migration
-startup/backfill and rollback rules are in [migrations](migrations.md).
+PostgreSQL and native regression checks cover continuation, acknowledged repairs,
+parent cancellation and unknown commit recovery. They do not measure storage
+capacity or establish a latency guarantee. The 32×5ms reconciliation/bootstrap
+stress requirements stay unchanged and are separate from source TTL; the latest
+capacity run must be evaluated against its own exact runtime and harness.
+Migration startup/backfill and rollback rules are in [migrations](migrations.md).

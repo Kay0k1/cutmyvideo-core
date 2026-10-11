@@ -5,6 +5,7 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 ## Unreleased
 
 ### Added
+- Publish the [matched 1080p before/after benchmark](benchmarks/main1080-n20-2026-10-11/RESULTS.md), with twenty observations per scenario, raw timings, fixture attribution and a frozen reproduction harness. Results compare v0.2.1 with the earlier `06bb74b` candidate and include both improvements and regressions; they do not measure later storage changes.
 - Prepare migration 5 with transactional source job/exact-preview pin counts, indexed bounded source TTL selection and persisted bounded drift audits. This runtime/schema transition requires fresh PostgreSQL/native/upgrade acceptance and matched measurements; existing same-schema hosting evidence does not cover it.
 - Verify all 13 downloaded signed-release assets with one portable consumer command, fixed GitHub certificate policy, exact subjects and source/version hashes, and remote tag object/commit checks before and after verification. No Go SDK, checkout or unpublished gate receipt is required; real signing still requires an approved new tag.
 - Prepare a standalone public Linux amd64 hosting profile with HTTPS, separate administrative/migration/runtime roles, bounded containers, exact project-owned egress rules, immutable image/source identity and coordinated database/media upgrade/restore checks on a disposable CI host.
@@ -19,6 +20,8 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 - Executable HTTP/OpenAPI contract checks, including byte-length limits, preview priority, download range errors and database unavailability.
 
 ### Fixed
+- Continue bounded source-pin audits after their own time slice expires, preserving acknowledged repairs and durable retry state while propagating parent cancellation and genuine database failures.
+- Batch storage scan-root registration and combine fair class/directory scheduling within the existing transaction and storage fence, preserving rollback and acknowledged scan progress.
 - Check physical storage headroom on macOS and Windows as well as Linux, including outstanding reservations and safety bytes; refuse failed measurements and invalid paths, and measure the nearest existing parent before data-directory creation.
 - Recover retained export submissions by their session/idempotency key before changed admission limits or the new-export allowance can reject a replay; new keys still use current admission checks.
 - Warn that an uncertain source registration may already be saved when reporting database failures or request/source deadlines, preserving existing status codes and private commit causes.
