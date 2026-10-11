@@ -4,6 +4,15 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
+### Added
+- Versioned JSON cutting plans and local batch CLI/Go APIs with named intervals and corrective range diagnostics.
+- Separate files or one joined result in submitted order, with actual source/output segment manifests; accurate encoding and compatible packet copy remain explicit choices.
+- Inspected indexed audio tracks with language/title/channel/rate metadata, selected audio or silent video in both export and selection-aware private previews.
+- MKV original-stream copy and clipped/rebased plain text subtitles for local MP4/MKV copy; output manifests explain every included/excluded track.
+
+### Changed
+- Idle workers listen for committed queue notifications, retaining periodic claims and reconnect fallback. End-to-end preview/export observations include receipt of the complete output.
+
 ## 1.0.2 - 2026-10-11
 
 ### Added

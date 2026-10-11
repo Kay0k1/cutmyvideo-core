@@ -19,6 +19,7 @@ const usage = `cutmy — manually cut local media or run the self-hosted API
 Usage:
   cutmy inspect --input recording.mp4
   cutmy clip --input recording.mp4 --start 00:01:00 --end 00:01:30 --output clip.mp4
+  cutmy batch --plan cuts.json --output ./clips
   cutmy server                 Start the HTTP API (PostgreSQL required)
   cutmy worker                 Process queued exports
   cutmy maintenance            Run one bounded storage cleanup cycle

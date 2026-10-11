@@ -436,12 +436,12 @@ func exportInputs(ctx context.Context, c Config, inputs []mediaInput, r Range, r
 	return exportInputsProgress(ctx, c, inputs, r, request, out, nil)
 }
 
-func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r Range, request ExportRequest, out string, report func(int64)) (int64, int64, error) {
-	selection, err := probeInputSelection(ctx, c, inputs)
+func exportInputsCoreProgress(ctx context.Context, c Config, inputs []mediaInput, r Range, request ExportRequest, out string, report func(int64)) (int64, int64, error) {
+	selection, err := probeInputSelectionOptions(ctx, c, inputs, request)
 	if err != nil {
 		return 0, 0, err
 	}
-	if request.Format == "mp3" && selection.Audio == nil || len(inputs) == 2 && selection.Audio == nil {
+	if request.Format == "mp3" && selection.Audio == nil || len(inputs) == 2 && selection.Audio == nil && !request.NoAudio {
 		return 0, 0, errNoAudio
 	}
 	if request.Format != "mp3" && selection.Video == nil {
@@ -467,6 +467,9 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 	copySeek, copyShift := int64(0), int64(0)
 	copyTrim := false
 	if request.CutMode == "copy" {
+		if err := validateCopyContainer(selection, request.Format); err != nil {
+			return 0, 0, err
+		}
 		if request.Quality != "best" {
 			_, displayHeight, err := videoDisplayGeometry(selection.Video)
 			if err != nil {
@@ -564,8 +567,11 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 			args = append(args, "-vf", filter, "-fps_mode:v", "passthrough", "-enc_time_base:v", encoderTimeBase)
 			args = append(args, hdrOutputColorArgs(hdr)...)
 		}
-		args = append(args, "-movflags", "+faststart")
+		if request.Format == "mp4" {
+			args = append(args, "-movflags", "+faststart")
+		}
 	}
+	args = append(args, audioMetadataArgs(selection.Audio)...)
 	args = append(args, "-threads", threads, "-map_metadata", "-1", "-map_chapters", "-1", "-fs", strconv.FormatInt(limit, 10), out)
 	var commandErr error
 	if report == nil {
@@ -590,7 +596,7 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 	if err != nil {
 		return 0, 0, err
 	}
-	if request.Format == "mp4" {
+	if request.Format != "mp3" {
 		if p.selectedVideo() == nil {
 			return 0, 0, errors.New("result has no video stream")
 		}

@@ -40,11 +40,16 @@ func RunWorker(ctx context.Context, c Config, s *Store) error {
 	}
 	stopMaintenance := startWorkerMaintenance(ctx, c, s)
 	defer stopMaintenance()
+	wakeup := startWorkerWakeup(ctx, s)
+	defer wakeup.close()
 	runWorkerPool(ctx, c.WorkerConcurrency, func() {
 		for {
 			if ctx.Err() != nil {
 				return
 			}
+			// Capture before claiming so a commit between the empty claim and
+			// waiting cannot lose its wakeup. The lease still decides ownership.
+			notified := wakeup.snapshot()
 			job, token, err := claimWorkerJob(ctx, s)
 			if errors.Is(err, ErrNotFound) {
 				health.Touch()
@@ -52,6 +57,7 @@ func RunWorker(ctx context.Context, c Config, s *Store) error {
 				case <-ctx.Done():
 					return
 				case <-time.After(time.Second):
+				case <-notified:
 				}
 				continue
 			}
@@ -288,8 +294,22 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 		finishFailure("server_error", "Storage does not permit reliable result publication")
 		return
 	}
+	var sourceManifest []TrackSelection
+	if source.Path != "" {
+		sourceManifest, err = SelectExportTracks(source.Tracks, j.Request)
+		if err != nil {
+			problem := exportProblem(err)
+			finishFailure(problem.code, problem.message)
+			return
+		}
+	}
 	for i := range j.Items {
 		item := &j.Items[i]
+		joined := j.Request.OutputMode == "joined"
+		selected := j.Request.Ranges[i]
+		if joined {
+			selected = joinedOutputRange(j.Request)
+		}
 		if item.Status == "succeeded" && item.Artifact != nil {
 			if path, _, e := s.ArtifactPath(ctx, item.Artifact.ID, j.Owner); e == nil {
 				if _, e = os.Stat(path); e == nil {
@@ -314,6 +334,8 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 		out := filepath.Join(work, item.ID+"."+j.Request.Format)
 		encodeStarted := time.Now()
 		var start, end int64
+		var segments []ArtifactSegment
+		trackManifest := sourceManifest
 		var e error
 		var lastProgressSave time.Time
 		report := func(ms int64) {
@@ -336,8 +358,24 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 					return
 				}
 			} else {
-				reserve := outputBudget(c, j.Request.Ranges[i], j.Request)
+				reserve := outputBudget(c, selected, j.Request)
+				if !joined {
+					subtitles, reserveErr := subtitleWorkBudget(c, j.Request, reserve)
+					if reserveErr != nil || subtitles > (1<<63-1)-reserve {
+						storageOK = false
+					} else {
+						reserve += subtitles
+					}
+				}
+				if joined {
+					var reserveErr error
+					reserve, reserveErr = joinedWorkBudget(c, j.Request, len(streams) > 0)
+					storageOK = reserveErr == nil
+				}
 				for _, f := range streams {
+					if joined {
+						break
+					}
 					if isHLS(f) {
 						if inputBudget(c, j.Request.Ranges[i], j.Request) > ((1<<63-1)-reserve)/2 {
 							storageOK = false
@@ -362,41 +400,44 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 
 				return
 			}
-			itemInputs := append([]mediaInput(nil), inputs...)
 			fragmentDir := filepath.Join(work, item.ID)
-			e = nil
-			for k, f := range streams {
-				if !isHLS(f) {
-					continue
-				}
-				if e = os.MkdirAll(fragmentDir, 0700); e != nil {
-					break
-				}
-				var path string
-				var offset int64
-				j.Stage = "fetching"
-				fragmentConfig := c
-				fragmentConfig.MaxFetchBytes = inputBudget(c, j.Request.Ranges[i], j.Request)
-				path, offset, e = stageHLSProgress(ctx, fragmentConfig, guard, f, playlists[k], j.Request.Ranges[i], fragmentDir, k, func(done, total int) {
-					j.Message = fmt.Sprintf("Preparing fragment %d of %d: %d%% downloaded", i+1, len(j.Items), done*100/max(1, total))
-					if time.Since(lastProgressSave) >= time.Second {
-						lastProgressSave = time.Now()
-						persist()
-					}
-				})
-				if e != nil {
-					break
-				}
-				itemInputs[k] = mediaInput{Path: path, OffsetMS: offset}
+			ranges := []Range{selected}
+			if joined {
+				ranges = j.Request.Ranges
 			}
+			segmentInputs, stageErr := stageWorkerSegments(ctx, c, j.Request, guard, streams, playlists, inputs, ranges, fragmentDir, func(segmentIndex, done, total int) {
+				j.Stage = "fetching"
+				fragment, count := i+1, len(j.Items)
+				if joined {
+					fragment, count = segmentIndex+1, len(ranges)
+				}
+				j.Message = fmt.Sprintf("Preparing fragment %d of %d: %d%% downloaded", fragment, count, done*100/max(1, total))
+				if time.Since(lastProgressSave) >= time.Second {
+					lastProgressSave = time.Now()
+					persist()
+				}
+			})
+			e = stageErr
+
 			if e == nil {
 				j.Stage = "processing"
 				j.Message = fmt.Sprintf("Processing fragment %d of %d", i+1, len(j.Items))
+				if joined {
+					j.Message = "Joining selected fragments"
+				}
 				if !persist() {
 					return
 				}
-				start, end, e = exportInputsProgress(ctx, c, itemInputs, j.Request.Ranges[i], j.Request, out, report)
+				if joined {
+					segments, e = exportJoinedSegmentInputsProgress(ctx, c, segmentInputs, ranges, j.Request, out, report)
+					if e == nil && len(segments) > 0 {
+						start, end = 0, segments[len(segments)-1].OutputEndMS
+					}
+				} else {
+					start, end, e = exportInputsProgress(ctx, c, segmentInputs[0], selected, j.Request, out, report)
+				}
 			}
+
 			_ = os.RemoveAll(fragmentDir)
 			if e == nil || !cachedMetadata || cacheRefreshUsed || !cachedAddressDenied(e) || ctx.Err() != nil {
 				break
@@ -483,6 +524,13 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 			continue
 		}
 		a := Artifact{ID: id, Filename: fmt.Sprintf("cut-%02d-%s.%s", i+1, item.ID[5:13], j.Request.Format), SizeBytes: info.Size(), DownloadURL: "/api/v1/artifacts/" + id + "/download", ActualStartMS: start, ActualEndMS: end}
+		if joined {
+			a.Segments = &segments
+			a.Filename = "cut-joined-" + item.ID[5:13] + "." + j.Request.Format
+		}
+		if trackManifest != nil {
+			a.TrackManifest = &trackManifest
+		}
 		previous := *item
 		item.Status = "succeeded"
 		item.ProgressMS = item.EndMS - item.StartMS

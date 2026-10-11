@@ -8,7 +8,7 @@ func LocalErrorCode(err error) string {
 	var problem *sourceProblem
 	if errors.As(err, &problem) {
 		switch problem.code {
-		case "audio_missing", "output_limit", "copy_incompatible", "copy_quality_unsupported", "hdr_conversion_unavailable":
+		case "audio_missing", "output_limit", "copy_incompatible", "copy_quality_unsupported", "hdr_conversion_unavailable", "audio_track_unavailable", "subtitle_unsupported", "subtitle_unavailable", "join_incompatible":
 			return problem.code
 		case "unsupported_stream":
 			return "unsupported_media"

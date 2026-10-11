@@ -25,11 +25,13 @@ func runClip(args []string, stdout, stderr io.Writer) error {
 	f := flag.NewFlagSet("clip", flag.ContinueOnError)
 	f.SetOutput(stderr)
 	input := f.String("input", "", "local input file")
-	output := f.String("output", "", "output .mp4 or .mp3 file")
+	output := f.String("output", "", "output .mp4, .mp3, or .mkv (copy) file")
 	start := f.String("start", "0", "start in seconds or HH:MM:SS.mmm")
 	end := f.String("end", "", "end in seconds or HH:MM:SS.mmm")
 	quality := f.String("quality", "best", "best, 1080p, or 720p")
 	mode := f.String("mode", "accurate", "accurate or copy")
+	audio := f.String("audio-track", "default", "default, none, or inspected absolute audio stream index")
+	subtitles := f.String("subtitles", "omit", "omit or preserve compatible text subtitles")
 	profile := f.String("profile", "fast", "fast (larger files) or compact")
 	threads := f.Int("threads", 2, "FFmpeg threads, 1 through 32")
 	timeout := f.Duration("timeout", 30*time.Minute, "whole export timeout, including inspection")
@@ -59,17 +61,35 @@ func runClip(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return invalidCLI(err)
 	}
+	audioTrack, noAudio, err := parseAudioSelection(*audio)
+	if err != nil {
+		return invalidCLI(err)
+	}
 	// Media commands run in their own process group. Cancel their context before
 	// exiting on a terminal signal so neither the encoder nor its children leak.
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	ctx, cancel := context.WithTimeout(signalCtx, *timeout)
 	defer cancel()
-	result, err := engine.New(engine.Config{FFmpegPath: os.Getenv("FFMPEG_PATH"), FFprobePath: os.Getenv("FFPROBE_PATH"), EncodeProfile: *profile, FFmpegThreads: *threads, ExportTimeout: *timeout}).Export(ctx, *input, *output, engine.Range{StartMS: startMS, EndMS: endMS}, engine.Options{Quality: *quality, CutMode: *mode})
+	result, err := engine.New(engine.Config{FFmpegPath: os.Getenv("FFMPEG_PATH"), FFprobePath: os.Getenv("FFPROBE_PATH"), EncodeProfile: *profile, FFmpegThreads: *threads, ExportTimeout: *timeout}).ExportWithOptions(ctx, *input, *output, engine.Range{StartMS: startMS, EndMS: endMS}, engine.AdvancedOptions{Options: engine.Options{Quality: *quality, CutMode: *mode}, AudioTrack: audioTrack, NoAudio: noAudio, SubtitleMode: *subtitles})
 	if err != nil {
 		return err
 	}
 	return json.NewEncoder(stdout).Encode(result)
+}
+
+func parseAudioSelection(value string) (*int, bool, error) {
+	switch value {
+	case "default":
+		return nil, false, nil
+	case "none":
+		return nil, true, nil
+	}
+	index, err := strconv.Atoi(value)
+	if err != nil || index < 0 || index > 2147483647 {
+		return nil, false, errors.New("audio-track must be default, none, or a nonnegative audio stream index from inspect")
+	}
+	return &index, false, nil
 }
 
 func parseTime(value string) (int64, error) {

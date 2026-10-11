@@ -10,12 +10,17 @@ FS_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
 CLI_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/cmd/cutmy"
 
 REQUIRED = [
-    {"TestEngineInspectAndExportActualMedia", "TestConcurrentPublicationHasExactlyOneCompleteWinner", "TestCLIInspectAndClipActualMedia"},
+    {"TestEngineInspectAndExportActualMedia", "TestConcurrentPublicationHasExactlyOneCompleteWinner", "TestCLIInspectAndClipActualMedia", "TestCLIBatchSavedPlanRelativeInputAndJoinedAudio", "TestPlanRoundTripActualOutputsAndPartialPublication"},
     {"TestProcessCancellationTerminatesDescendants", "TestProcessOutputStopsUnboundedProducer"},
     {"TestNativeServiceUploadExportAndDownload", "TestPreviewMediaPolicyUpgradeDoesNotReuseLegacyCache",
      "TestLocalMediaDimensionsRefreshFencesLegacyDecoderCapacity",
      "TestLocalMediaDimensionsRefreshPreservesIdentityAndCancellation",
-     "TestLocalMediaDimensionsRefreshKeepsUnknownInputConservative"},
+     "TestLocalMediaDimensionsRefreshKeepsUnknownInputConservative",
+     "TestHTTPTracksAreFreshOwnerProtectedAndRemoteExplicit",
+     "TestSeparateBatchPartialFailureKeepsCompletedDownload",
+     "TestJoinedLostPublicationAcknowledgementResumesWithoutRendering",
+     "TestWorkerNotificationWakesAfterCommitAndClosesOnCancellation",
+     "TestInsertedJobEmitsQueueNotification"},
     {"TestStorageAdmissionChecksFilesystemSpaceIndependentlyOfLogicalCap",
      "TestStorageAdmissionChecksNearestExistingFilesystem",
      "TestStorageAdmissionIncludesOutstandingReservationsAndSafetyHeadroom",
@@ -53,7 +58,8 @@ REQUIRED = [
      "TestMediaContractCopyQualityUsesSelectedVideo", "TestEngineInspectSeparatesCodedAndDisplayDimensions",
      "TestHLSMediaContractRotationAndSAR", "TestHLSMediaContractDefaultAudio", "TestHLSMediaContractHDRTags",
      "TestHLSMediaContractContinuityMetadata", "TestHLSMediaContractFingerprintUsesSelectedTracks",
-     "TestHDRCapabilityFailureKeepsProcessCause", "TestHDRFailurePreservesCancellationAndLimits"},
+     "TestHDRCapabilityFailureKeepsProcessCause", "TestHDRFailurePreservesCancellationAndLimits",
+     "TestBatchAudioSelectionSubtitlesAndJoinedTimeline"},
 ]
 
 REQUIRED_PACKAGES = [
@@ -75,6 +81,7 @@ BOOKWORM_REQUIRED = {
     "TestHLSMediaContractRotationAndSAR", "TestHLSMediaContractDefaultAudio", "TestHLSMediaContractHDRTags",
     "TestHLSMediaContractContinuityMetadata", "TestHLSMediaContractFingerprintUsesSelectedTracks",
     "TestHDRCapabilityFailureKeepsProcessCause", "TestHDRFailurePreservesCancellationAndLimits",
+    "TestBatchAudioSelectionSubtitlesAndJoinedTimeline",
 }
 
 
@@ -97,7 +104,7 @@ def verify(filenames):
 if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "--bookworm":
         verify_report(sys.argv[2], BOOKWORM_REQUIRED, {APP_PACKAGE})
-        print("Bookworm's 19 required media and timeline checks passed without skips.")
+        print(f"Bookworm's {len(BOOKWORM_REQUIRED)} required media and timeline checks passed without skips.")
     else:
         verify(sys.argv[1:])
         print("Native media contract, filesystem, CLI, process tree, API/worker and storage checks passed without skips.")

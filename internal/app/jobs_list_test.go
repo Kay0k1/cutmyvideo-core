@@ -67,3 +67,53 @@ func TestJobHistoryIsPrivateBoundedAndKeepsActiveJobs(t *testing.T) {
 		t.Fatal("anonymous history allowed")
 	}
 }
+
+func TestJobHistoryRetainsManifestsWithAuthoritativeArtifactFields(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	source := storedSource(t, s, "manifest-owner")
+	request := requestFor(source)
+	request.OutputMode = "joined"
+	request.Ranges = append(request.Ranges, Range{EndMS: 1000, Label: "Earlier"})
+	if _, err := s.CreateJob(ctx, source.Owner, request, ""); err != nil {
+		t.Fatal(err)
+	}
+	job, token, err := s.Claim(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	segments := []ArtifactSegment{{Index: 0, Label: "Test", SourceStartMS: 1000, SourceEndMS: 3000, OutputEndMS: 2000}, {Index: 1, Label: "Earlier", SourceEndMS: 1000, OutputStartMS: 2000, OutputEndMS: 3000}}
+	tracks := []TrackSelection{{Track: Track{Index: 2, Type: "audio", Codec: "aac", Language: "rus"}, Included: true, Reason: "selected_audio"}, {Track: Track{Index: 1, Type: "audio", Codec: "aac", Language: "eng"}, Reason: "audio_not_selected"}}
+	artifact := Artifact{ID: newID("art"), Filename: "joined.mp4", SizeBytes: 42, ActualEndMS: 3000, Segments: &segments, TrackManifest: &tracks}
+	if err := s.AddArtifact(ctx, source.Owner, job.ID, "/private/retained-result", token, artifact); err != nil {
+		t.Fatal(err)
+	}
+	job.Items[0].Status, job.Items[0].Artifact = "succeeded", &artifact
+	job.Status = "succeeded"
+	if err := s.SaveJob(ctx, job, token); err != nil {
+		t.Fatal(err)
+	}
+	// Base artifact values and expiry come from its live owner-checked row;
+	// only optional manifests are taken from the immutable published snapshot.
+	if _, err := s.DB.Exec(ctx, "UPDATE artifacts SET filename='authoritative.mp4',size_bytes=84,actual_end_ms=3010,expires_at=now()+interval '1 hour' WHERE id=$1", artifact.ID); err != nil {
+		t.Fatal(err)
+	}
+	summaries, err := s.Jobs(ctx, source.Owner)
+	if err != nil || len(summaries) != 1 || len(summaries[0].Files) != 1 {
+		t.Fatal("retained joined summary missing", summaries, err)
+	}
+	result := summaries[0].Files[0]
+	if result.Filename != "authoritative.mp4" || result.SizeBytes != 84 || result.ActualEndMS != 3010 || result.ExpiresAt == nil || result.DownloadURL != "/api/v1/artifacts/"+artifact.ID+"/download" || result.Segments == nil || len(*result.Segments) != 2 || (*result.Segments)[1].Label != "Earlier" || result.TrackManifest == nil || len(*result.TrackManifest) != 2 || (*result.TrackManifest)[0].Language != "rus" {
+		t.Fatal("history lost manifests or overrode authoritative artifact", result)
+	}
+	if other, err := s.Jobs(ctx, "other-owner"); err != nil || len(other) != 0 {
+		t.Fatal("history manifests cross owner", other, err)
+	}
+	if _, err := s.DB.Exec(ctx, "DELETE FROM artifacts WHERE id=$1", artifact.ID); err != nil {
+		t.Fatal(err)
+	}
+	summaries, err = s.Jobs(ctx, source.Owner)
+	if err != nil || len(summaries[0].Files) != 0 {
+		t.Fatal("expired manifest resurrected deleted artifact", summaries, err)
+	}
+}

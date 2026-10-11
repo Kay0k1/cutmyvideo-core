@@ -78,6 +78,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/sources/{id}", s.withSession(s.source))
 	mux.HandleFunc("GET /api/v1/sources/{id}/media", s.withSession(s.sourceMedia))
 	mux.HandleFunc("GET /api/v1/sources/{id}/preview", s.withSession(s.sourcePreview))
+	mux.HandleFunc("GET /api/v1/sources/{id}/tracks", s.withSession(s.sourceTracks))
 	mux.HandleFunc("GET /api/v1/sources/{id}/thumbnail", s.withSession(s.sourceThumbnail))
 	mux.HandleFunc("POST /api/v1/jobs", s.withSession(s.createJob))
 	mux.HandleFunc("GET /api/v1/jobs", s.withSession(s.listJobs))
@@ -716,6 +717,58 @@ func (s *Server) sourceMedia(w http.ResponseWriter, r *http.Request, owner strin
 	serveFile(w, r, v.Path, v.Title, false)
 }
 
+func (s *Server) sourceTracks(w http.ResponseWriter, r *http.Request, owner string) {
+	source, err := s.databaseSource(r.Context(), r.PathValue("id"), owner)
+	if err != nil {
+		lookupError(w, err)
+		return
+	}
+	if source.Path == "" {
+		writeError(w, http.StatusUnprocessableEntity, "tracks_unavailable", "Source track inspection requires an uploaded file; upload the video to choose an audio track")
+		return
+	}
+	if !s.allow("tracks:"+owner, 30) {
+		writeError(w, http.StatusTooManyRequests, "rate_limit", "Too many track inspections; wait a minute")
+		return
+	}
+	timeout := s.Config.SourceTimeout
+	if timeout <= 0 {
+		timeout = 2 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	defer cancel()
+	release, err := s.pinSourceInspection(ctx, source, timeout)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			lookupError(w, err)
+		} else {
+			writeSourceAdmissionError(w, ctx, err)
+		}
+		return
+	}
+	defer release()
+	inspected, err := InspectLocal(ctx, s.Config, source.Path)
+	if err != nil {
+		if r.Context().Err() != nil {
+			internalError(w, r.Context().Err())
+			return
+		}
+		if ctx.Err() != nil {
+			writeError(w, http.StatusGatewayTimeout, "source_timeout", "Source track inspection timed out; try again")
+			return
+		}
+		writeError(w, http.StatusUnprocessableEntity, "unsupported_media", "Could not inspect source tracks; upload a supported media file")
+		return
+	}
+	if inspected.Tracks == nil {
+		inspected.Tracks = []Track{}
+	}
+	w.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(w, http.StatusOK, struct {
+		Tracks []Track `json:"tracks"`
+	}{inspected.Tracks})
+}
+
 func (s *Server) createJob(w http.ResponseWriter, r *http.Request, owner string) {
 	var request ExportRequest
 	if err := decodeJSON(w, r, &request); err != nil {
@@ -749,6 +802,35 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request, owner string)
 	if err = request.Validate(s.Config, v); err != nil {
 		writeError(w, 400, "invalid_export", err.Error())
 		return
+	}
+	if v.Path != "" && (request.AudioTrack != nil || request.SubtitleMode == "preserve") {
+		timeout := s.Config.SourceTimeout
+		if timeout <= 0 {
+			timeout = 2 * time.Minute
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), timeout)
+		release, pinErr := s.pinSourceInspection(ctx, v, timeout)
+		if pinErr != nil {
+			cancel()
+			if errors.Is(pinErr, ErrNotFound) {
+				lookupError(w, pinErr)
+			} else {
+				writeSourceAdmissionError(w, r.Context(), pinErr)
+			}
+			return
+		}
+		_, inspectionErr := InspectExportLocal(ctx, s.Config, v.Path, request)
+		cancel()
+		release()
+		if inspectionErr != nil {
+			if r.Context().Err() != nil {
+				internalError(w, r.Context().Err())
+				return
+			}
+			problem := exportProblem(inspectionErr)
+			writeError(w, http.StatusUnprocessableEntity, problem.code, problem.message)
+			return
+		}
 	}
 	if !s.allow("export:"+owner, 10) {
 		writeError(w, 429, "rate_limit", "Too many exports; wait a minute")

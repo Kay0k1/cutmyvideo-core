@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -85,7 +86,7 @@ func validateArtifactPublication(j Job, path string, a Artifact) error {
 	matches := 0
 	for _, item := range j.Items {
 		if item.Artifact != nil && item.Artifact.ID == a.ID {
-			if item.Status != "succeeded" || *item.Artifact != a {
+			if item.Status != "succeeded" || !reflect.DeepEqual(*item.Artifact, a) {
 				return errors.New("invalid artifact publication item")
 			}
 			matches++
@@ -141,6 +142,9 @@ func publishArtifactTransaction(ctx context.Context, tx pgx.Tx, j Job, path, tok
 				budget = outputBudget(c, Range{StartMS: item.StartMS, EndMS: item.EndMS}, j.Request)
 				break
 			}
+		}
+		if j.Request.OutputMode == "joined" {
+			budget = joinedOutputBudget(c, j.Request)
 		}
 		if a.SizeBytes < 0 || a.SizeBytes > budget {
 			return &ArtifactPublicationError{cause: errStorageUnavailable}

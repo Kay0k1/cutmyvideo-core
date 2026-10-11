@@ -8,6 +8,18 @@ Extract this archive and run its cutmy executable (cutmy.exe on Windows).
   cutmy inspect --input interview.mp4
   cutmy clip --input interview.mp4 --start 10 --end 40 --output moment.mp4
   cutmy clip --input interview.mp4 --start 10 --end 40 --mode copy --output original.mp4
+  cutmy clip --input interview.mp4 --start 10 --end 40 --audio-track 2 --output selected.mp4
+  cutmy clip --input interview.mp4 --start 10 --end 40 --mode copy --subtitles preserve --output original.mkv
+  cutmy batch --plan cuts.json --output ./clips
+
+Save a JSON plan beside its source (relative input paths resolve beside the plan):
+  {"version":1,"input":"interview.mp4","ranges":[{"label":"Quote","start_ms":10000,"end_ms":40000}],"output_mode":"separate","options":{"format":"mp4","quality":"best","cut_mode":"accurate"}}
+Separate mode needs an existing output directory. For one file, change output_mode
+to joined and pass --output highlights.mp4. Inspect lists absolute audio stream
+indices; --audio-track none exports silent video. Copy also supports MKV and
+compatible plain text subtitles. Result manifests report retained/excluded tracks
+and actual per-segment source/output boundaries; unsupported preservation fails
+explicitly. It never switches encoding mode or quality automatically.
 
 Existing outputs are never overwritten. Accurate mode re-encodes; copy mode may
 move the beginning to a preceding keyframe. The JSON result reports actual bounds.

@@ -33,7 +33,7 @@ func inspect(args []string, stdout, stderr io.Writer) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	info, err := engine.New(engine.Config{FFmpegPath: os.Getenv("FFMPEG_PATH"), FFprobePath: os.Getenv("FFPROBE_PATH"), InspectTimeout: *timeout}).Inspect(ctx, *input)
+	info, err := engine.New(engine.Config{FFmpegPath: os.Getenv("FFMPEG_PATH"), FFprobePath: os.Getenv("FFPROBE_PATH"), InspectTimeout: *timeout}).InspectWithTracks(ctx, *input)
 	if err != nil {
 		return err
 	}

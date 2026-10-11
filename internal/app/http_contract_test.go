@@ -264,6 +264,43 @@ func TestHTTPPublicContract(t *testing.T) {
 	}
 	request("succeeded-job", "GET", "/api/v1/jobs/{id}", "/api/v1/jobs/"+jobID, nil, nil, 200)
 	request("retained-history", "GET", "/api/v1/jobs", "/api/v1/jobs", nil, nil, 200)
+	// A bounded fixture probe exercises actual track/admission handlers while
+	// keeping public-contract verification independent of installed media tools.
+	fixtureProbe := filepath.Join(c.DataDir, "fixture-probe")
+	probeJSON := `{"streams":[{"index":0,"codec_type":"video","codec_name":"h264","width":32,"height":32},{"index":1,"codec_type":"audio","codec_name":"aac","channels":2,"sample_rate":"48000","disposition":{"default":1},"tags":{"language":"rus","title":"Russian"}},{"index":2,"codec_type":"subtitle","codec_name":"subrip","tags":{"language":"eng","title":"Captions"}}],"format":{"duration":"10.0"}}`
+	if err := os.WriteFile(fixtureProbe, []byte("#!/bin/sh\ncat <<'JSON'\n"+probeJSON+"\nJSON\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	server.Config.FFprobe = fixtureProbe
+	request("source-tracks", "GET", "/api/v1/sources/{id}/tracks", "/api/v1/sources/"+source.ID+"/tracks", nil, nil, 200)
+	remoteTracks := Source{ID: newID("src"), Owner: owner, Title: "Remote track fixture", Kind: "platform", DurationMS: 10000, URL: "https://www.youtube.com/watch?v=fixture"}
+	if err := store.AddSource(context.Background(), remoteTracks); err != nil {
+		t.Fatal(err)
+	}
+	request("remote-tracks-unavailable", "GET", "/api/v1/sources/{id}/tracks", "/api/v1/sources/"+remoteTracks.ID+"/tracks", nil, nil, 422)
+	joinedRequest := map[string]any{"source_id": source.ID, "ranges": []any{map[string]any{"start_ms": 5000, "end_ms": 7000, "label": "Later"}, map[string]any{"start_ms": 1000, "end_ms": 3000, "label": "Earlier"}}, "format": "mkv", "quality": "best", "cut_mode": "copy", "output_mode": "joined", "audio_track": 1, "subtitle_mode": "preserve"}
+	joinedAccepted := request("joined-mkv-submission", "POST", "/api/v1/jobs", "/api/v1/jobs", joinedRequest, map[string]string{"Idempotency-Key": "joined-mkv-contract"}, 202)
+	joinedID := joinedAccepted["body"].(map[string]any)["id"].(string)
+	joinedJob, joinedToken, err := store.Claim(context.Background())
+	if err != nil || joinedJob.ID != joinedID {
+		t.Fatal("joined contract claim", joinedJob.ID, err)
+	}
+	segments := []ArtifactSegment{{Index: 0, Label: "Later", SourceStartMS: 5000, SourceEndMS: 7000, OutputStartMS: 0, OutputEndMS: 2000}, {Index: 1, Label: "Earlier", SourceStartMS: 1000, SourceEndMS: 3000, OutputStartMS: 2000, OutputEndMS: 4000}}
+	tracks := []TrackSelection{{Track: Track{Index: 0, Type: "video", Codec: "h264"}, Included: true, Reason: "selected_video"}, {Track: Track{Index: 1, Type: "audio", Codec: "aac", Language: "rus", Title: "Russian", Default: true}, Included: true, Reason: "selected_audio"}, {Track: Track{Index: 2, Type: "subtitle", Codec: "subrip", Language: "eng", Title: "Captions"}, Included: true, Reason: "subtitles_preserved"}}
+	joinedArtifact := Artifact{ID: newID("art"), Filename: "joined.mkv", SizeBytes: int64(thumbnail.Len()), ActualEndMS: 4000, Segments: &segments, TrackManifest: &tracks}
+	joinedJob.Items[0].Status, joinedJob.Items[0].Artifact = "succeeded", &joinedArtifact
+	if err := store.PublishArtifact(context.Background(), joinedJob, path, joinedToken, joinedArtifact); err != nil {
+		t.Fatal(err)
+	}
+	joinedJob.Status, joinedJob.Stage = "succeeded", "finished"
+	if err := store.SaveJob(context.Background(), joinedJob, joinedToken); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ReleaseJobStorage(context.Background(), joinedJob.ID, joinedToken); err != nil {
+		t.Fatal(err)
+	}
+	request("joined-artifact-manifests", "GET", "/api/v1/jobs/{id}", "/api/v1/jobs/"+joinedID, nil, nil, 200)
+	request("history-with-joined-manifests", "GET", "/api/v1/jobs", "/api/v1/jobs", nil, nil, 200)
 	failed, err := store.CreateJob(context.Background(), owner, requestFor(source), "diagnostic-fixture")
 	if err != nil {
 		t.Fatal(err)

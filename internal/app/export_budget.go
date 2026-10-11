@@ -6,6 +6,7 @@ import "math"
 // enforced by the producer. A ten-second clip must not reserve a 16 GiB file.
 // Allow container headers, decoder context and the final muxer's metadata.
 const exportContainerAllowance int64 = 16 << 20
+const subtitleStageAllowance int64 = maxMediaStreams * (8 << 20)
 
 func boundedMediaBytes(durationMS, bitsPerSecond, allowance, limit int64) int64 {
 	if limit <= 0 || durationMS <= 0 || bitsPerSecond <= 0 {
@@ -57,6 +58,81 @@ func outputBudget(c Config, r Range, request ExportRequest) int64 {
 		}
 	}
 	return boundedMediaBytes(duration, rate, exportContainerAllowance, c.MaxOutputBytes)
+}
+
+func joinedOutputRange(request ExportRequest) Range {
+	var duration int64
+	for _, selected := range request.Ranges {
+		duration += selected.EndMS - selected.StartMS
+	}
+	return Range{EndMS: duration}
+}
+
+func joinedOutputBudget(c Config, request ExportRequest) int64 {
+	outputRange := joinedOutputRange(request)
+	if request.CutMode == "copy" {
+		for _, selected := range request.Ranges {
+			preroll := min(int64(30_000), selected.StartMS)
+			if preroll > math.MaxInt64-outputRange.EndMS {
+				return c.MaxOutputBytes
+			}
+			outputRange.EndMS += preroll
+		}
+	}
+	return outputBudget(c, outputRange, request)
+}
+
+func subtitleWorkBudget(c Config, request ExportRequest, output int64) (int64, error) {
+	if request.SubtitleMode != "preserve" {
+		return 0, nil
+	}
+	// The preserved text and subtitle-free media coexist until the final
+	// mux passes verification. Text extraction has a bounded stream ceiling.
+	if output > math.MaxInt64-subtitleStageAllowance {
+		return 0, errStorageUnavailable
+	}
+	return output + subtitleStageAllowance, nil
+}
+
+// Joined exports retain their intermediate segments until the final mux is
+// verified. Remote HLS stages are retained as well, since each has its own
+// source offset. Reserve both producers, including both staging representations.
+func joinedWorkBudget(c Config, request ExportRequest, platform bool) (int64, error) {
+	size := joinedOutputBudget(c, request)
+	if size <= 0 {
+		return 0, errStorageUnavailable
+	}
+	subtitles, err := subtitleWorkBudget(c, request, size)
+	if err != nil || subtitles > math.MaxInt64-size {
+		return 0, errStorageUnavailable
+	}
+	size += subtitles
+	var copyTransient int64
+	for _, selected := range request.Ranges {
+		budget := outputBudget(c, selected, request)
+		if request.CutMode == "copy" {
+			copyTransient = max(copyTransient, budget)
+		}
+		if budget <= 0 || budget > math.MaxInt64-size {
+			return 0, errStorageUnavailable
+		}
+		size += budget
+		if platform {
+			staging := inputBudget(c, selected, request)
+			if staging < 0 || staging > (math.MaxInt64-size)/2 {
+				return 0, errStorageUnavailable
+			}
+			size += 2 * staging
+		}
+	}
+	// Copy joins align packet audio with the measured video boundary through
+	// a sequential video/audio remux. Those producers coexist with one segment
+	// output; a single largest-segment ceiling covers that temporary peak.
+	if copyTransient > math.MaxInt64-size {
+		return 0, errStorageUnavailable
+	}
+	size += copyTransient
+	return size, nil
 }
 
 func inputBudget(c Config, r Range, request ExportRequest) int64 {
