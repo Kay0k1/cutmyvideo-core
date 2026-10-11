@@ -1,0 +1,123 @@
+# SOURCE PROPOSAL ONLY. Intended future path: .github/workflows/ttl-preview-probe.yml
+# The self-contained source packet must first be reviewed and placed at
+# benchmarks/ttlpreviewprobe on its own future branch. No dispatch is authorized.
+name: TTL preview query comparison once
+
+on:
+  workflow_dispatch:
+    inputs:
+      authorization_json:
+        description: Exact ROOT once authorization for this future branch and head
+        required: true
+        type: string
+        default: '{}'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ttl-preview-probe-once
+  cancel-in-progress: false
+
+jobs:
+  query-comparison:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GOTOOLCHAIN: local
+      TTL_PACKET: benchmarks/ttlpreviewprobe
+    steps:
+      - name: Read the future reviewed harness head
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6, existing repository pin
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Check actual once authorization before preparing Go or PostgreSQL
+        env:
+          TTL_ROOT_AUTHORIZATION: ${{ inputs.authorization_json }}
+        run: |
+          python3 -I -B - <<'PY'
+          import hashlib, json, os, pathlib, re
+          packet = pathlib.Path(os.environ['TTL_PACKET'])
+          digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+          authority = json.loads(os.environ['TTL_ROOT_AUTHORIZATION'])
+          plan_path = packet/'execution-plan.json'
+          plan = json.loads(plan_path.read_text())
+          assert authority.get('authorized_once') is True
+          assert authority.get('kind') == 'ttl-preview-probe-PG16-once'
+          assert authority.get('execution_mode') == 'github-actions'
+          assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
+          assert os.environ['GITHUB_REPOSITORY'] == plan['repository']
+          assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          assert re.fullmatch('[0-9a-f]{40}', authority.get('harness_commit', ''))
+          assert authority['harness_commit'] == os.environ['GITHUB_SHA']
+          assert os.environ['GITHUB_REF'] == 'refs/heads/'+authority['harness_branch']
+          assert authority.get('allow_locked_dependency_download') is True
+          assert authority.get('allow_pinned_image_pull') is True
+          assert authority.get('plan_sha256') == digest(plan_path)
+          assert authority.get('runner_sha256') == digest(packet/'runner.py')
+          assert authority.get('source_map_sha256') == digest(packet/'source-map.json')
+          assert authority.get('fixture_sha256') == digest(packet/'measurement_test.go.txt')
+          for name, expected in plan['inputs'].items():
+              path = packet/name
+              assert path.is_file() and not path.is_symlink()
+              assert path.stat().st_size == expected['bytes'] and digest(path) == expected['sha256']
+          target = pathlib.Path(os.environ['RUNNER_TEMP'])/'ttl-preview-probe-authorization.json'
+          descriptor = os.open(target, os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o600)
+          with os.fdopen(descriptor, 'w') as output:
+              json.dump(authority, output, indent=2, sort_keys=True)
+              output.write('\n')
+          PY
+
+      - name: Read immutable f80 source in a separate checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: f80cb9bba29f2ba97b37152bbf3388735d4a3173
+          path: ttl-candidate
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Prepare the exact two-file candidate
+        run: |
+          git -C ttl-candidate apply --check "$GITHUB_WORKSPACE/$TTL_PACKET/candidate.patch"
+          git -C ttl-candidate apply "$GITHUB_WORKSPACE/$TTL_PACKET/candidate.patch"
+
+      - name: Prepare the pinned Go version without an action cache
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.2'
+          cache: false
+
+      - name: Run one bounded comparison in owned fresh PostgreSQL
+        run: |
+          python3 -I -B - <<'PY'
+          import os, pathlib, shutil, subprocess, sys
+          packet = pathlib.Path(os.environ['TTL_PACKET']).resolve()
+          workspace = pathlib.Path(os.environ['GITHUB_WORKSPACE'])
+          temporary = pathlib.Path(os.environ['RUNNER_TEMP'])
+          binary = shutil.which('go')
+          if not binary:
+              raise RuntimeError('prepared Go binary absent')
+          command = [sys.executable, '-I', '-B', str(packet/'runner.py'),
+                     '--authorization', str(temporary/'ttl-preview-probe-authorization.json'),
+                     '--worktree', str(workspace/'ttl-candidate'),
+                     '--output', str(temporary/'ttl-preview-probe-once'), '--go', binary]
+          raise SystemExit(subprocess.run(command, check=False).returncode)
+          PY
+
+      - name: Preserve original output after success or failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4, existing repository pin
+        with:
+          name: ttl-preview-probe-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/ttl-preview-probe-once
+            ${{ runner.temp }}/ttl-preview-probe-authorization.json
+            !${{ runner.temp }}/ttl-preview-probe-once/runtime/**
+            !${{ runner.temp }}/ttl-preview-probe-once/go-cache/**
+            !${{ runner.temp }}/ttl-preview-probe-once/go-tmp/**
+            !${{ runner.temp }}/ttl-preview-probe-once/module-cache/**
+            !${{ runner.temp }}/ttl-preview-probe-once/gopath/**
+          if-no-files-found: warn
+          retention-days: 30

@@ -1,0 +1,51 @@
+{
+  "actual_ci_run": null,
+  "actual_compilation_result": null,
+  "actual_docker_execution": null,
+  "actual_explain_plans": null,
+  "actual_go_execution": null,
+  "actual_gofmt_execution": null,
+  "actual_network_use": null,
+  "actual_performance_result": null,
+  "actual_sql_execution": null,
+  "baseline_sql_exact_f80_literal": true,
+  "basis_sha256": "37e4bb171b0ac2927d84412a26158627c746cc5a98eda9d540590462310363e9",
+  "changed_product_files": [
+    "internal/app/source_retention.go",
+    "internal/app/source_retention_test.go"
+  ],
+  "compiled_candidate_sql_bytes_from_source_only": true,
+  "copied_v1_inputs_unchanged": true,
+  "effective_role_helper_identical_except_function_name": true,
+  "executed_source_only_checks": [
+    "Python AST parse runner and two workflow inline blocks (no import)",
+    "all304candidate file bytes/modes vs frozen source map",
+    "Git HEAD/tree/parent/status and diff --check",
+    "302protected files vs baseline hashes",
+    "existing test bytes with only new semantic test removed",
+    "exact two SQL literals and seven prepared input identities",
+    "same15schema005 tables in snapshot source",
+    "retained runtime role helper byte equality except function name",
+    "six v1 files exact copied bytes",
+    "workflow_dispatch-only source text and false authorization template"
+  ],
+  "existing_test_bytes_preserved": true,
+  "fixture_sha256": "3e15eadb4386b561a701357dd61bfecf54122dd8a8213f045797d42c05501e67",
+  "format": 1,
+  "independent_review_fixed_findings": [
+    "ambiguous worktree creation: reconcile exact owned path and Git registration before cleanup",
+    "measurement directory cap: finalpostreap check covers failure and quick final writes"
+  ],
+  "kind": "ttl-preview-probe-executable-source-preparation-v2",
+  "plan_sha256": "8eb19f7c58e2e35fb16fc8e6294948350cb7c017a6d8cf2f30450d2d6a8acfe4",
+  "protected_unchanged_files": 302,
+  "role_helper_origin": "/root/video_cut/core-storage-capacity-current-pilot/benchmarks/storage005/pilot_test.go.txt",
+  "role_helper_origin_sha256": "ddaa0f59251344dbc164c60d81ed4c451a58cf908a02b76235eae0641dbe42e6",
+  "runner_sha256": "9106044f2697190c1384670c6033f208aea4853ac59c16d500a598278df642fd",
+  "schema005_snapshot_tables": 15,
+  "source_files": 304,
+  "speedup_claim": null,
+  "status": "SOURCE_ONLY_PREPARED_NOT_AUTHORIZED_NOT_RUN",
+  "workflow_proposal_sha256": "9b39cf89a0f22391f9e7e9de485ac7d42bccb15cd9f135f23d949194d438501e",
+  "worktree": "/root/video_cut/core-storage-ttl-preview-probe"
+}

@@ -1,0 +1,54 @@
+{
+  "actual_ci_run": null,
+  "actual_go_execution": null,
+  "actual_sql_execution": null,
+  "all_prior_test_bytes_preserved": true,
+  "application_files": 172,
+  "base_commit": "f80cb9bba29f2ba97b37152bbf3388735d4a3173",
+  "base_tree": "79055414abf21788dc696b73e2e8b1d3bf0afb37",
+  "baseline_source_map_sha256": "2b1024f25b418267f5db913c5bedb6d2236292c8983ebf6e31e5b415dd375d33",
+  "branch": "perf/storage-ttl-preview-probe",
+  "changed_file_pins": {
+    "internal/app/source_retention.go": {
+      "bytes": 11174,
+      "git_blob_at_base": "30267df8ed8e305d5ab5331d5c9c9cb77f051d64",
+      "mode": "100644",
+      "sha256": "8c44c8c1a8c9aeb132cf992c7f6177c4a6bd3be0e4367c67bc2a3f79f4d0412c"
+    },
+    "internal/app/source_retention_test.go": {
+      "bytes": 29966,
+      "git_blob_at_base": "80582a18749727ab9441106c520c3074643364ec",
+      "mode": "100644",
+      "sha256": "103b86853ede768897ffffb7cd276c1a7432274e1e952db8f7338f2db959d517"
+    }
+  },
+  "changed_files": [
+    "internal/app/source_retention.go",
+    "internal/app/source_retention_test.go"
+  ],
+  "constraints": [
+    "storage candidates remain MATERIALIZED with LIMIT 200",
+    "job EXISTS unchanged",
+    "exact preview kind and matching source ID remain authoritative",
+    "empty reservation ID is a non-NULL pin",
+    "lateral probe returns at most one row per source",
+    "quarantine and deletion CTEs unchanged",
+    "storage fence, audit, accounting, commit and recovery code byte-identical"
+  ],
+  "executed_readonly_checks": [
+    "git diff --check",
+    "base source byte comparison",
+    "complete tracked file bytes/modes comparison"
+  ],
+  "format": 1,
+  "kind": "ttl-preview-probe-source-only",
+  "patch_sha256": "9f63947f2e6a1a311fb1bf299530b3c0bb831ff48df9cbc0f1bc6270c4b8ee2d",
+  "performance_result": null,
+  "production_change_is_exact_replacement": true,
+  "protected_unchanged_files": 302,
+  "schema_and_migration_files_unchanged": true,
+  "source_map_sha256": "6a6c8826433f01907f7d4617bb314eba9937ad66de95b5750c6f5e6eca064c04",
+  "status": " M internal/app/source_retention.go\n M internal/app/source_retention_test.go\n",
+  "tracked_source_files": 304,
+  "worktree": "/root/video_cut/core-storage-ttl-preview-probe"
+}
