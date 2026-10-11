@@ -5,6 +5,7 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 ## Unreleased
 
 ### Added
+- Prepare migration 5 with transactional source job/exact-preview pin counts, indexed bounded source TTL selection and persisted bounded drift audits. This runtime/schema transition requires fresh PostgreSQL/native/upgrade acceptance and matched measurements; existing same-schema hosting evidence does not cover it.
 - Prepare a standalone public Linux amd64 hosting profile with HTTPS, separate administrative/migration/runtime roles, bounded containers, exact project-owned egress rules, immutable image/source identity and coordinated database/media upgrade/restore checks on a disposable CI host.
 - Derive deterministic SPDX 2.3 and trust sidecars from the five verified CLI binaries, with exact Go module checksums and shipped notice hashes. Prepare separate tag-only GitHub provenance/SPDX attestations and require certificate identity, every signed subject and the original archive/verdict identity before draft creation; signing still needs an approved new release tag.
 - Verify one immutable source and reproducible five-target archive bundle before release: safe manifests/checksums, nonpublishable PR candidates, native execution of the extracted CLI/API/worker and a separate draft publisher gated by all five results.

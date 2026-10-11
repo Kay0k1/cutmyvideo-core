@@ -551,6 +551,10 @@ func cleanupFiles(ctx context.Context, c Config, s *Store) error {
 			slog.Warn("metadata cache cleanup pending", "error", batch.cacheErr)
 			problems = append(problems, batch.cacheErr)
 		}
+		if batch.auditErr != nil {
+			slog.Warn("source pin audit pending", "error", batch.auditErr)
+			problems = append(problems, batch.auditErr)
+		}
 		if err != nil {
 			slog.Error("cleanup failed", "error", err)
 			problems = append(problems, err)
@@ -563,7 +567,7 @@ func cleanupFiles(ctx context.Context, c Config, s *Store) error {
 				break
 			}
 		}
-		if !batch.full {
+		if !batch.full && !batch.auditMore {
 			break
 		}
 	}

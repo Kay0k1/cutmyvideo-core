@@ -206,6 +206,7 @@ func newCapacityFixture(t *testing.T, retained int) capacityFixture {
 
 // Read current runtime SQL literals with Go's parser. A changed query is
 // measured as changed SQL, and a moved/dynamic query fails until reviewed.
+// The separately reviewed source selector uses its actual compiled constant.
 func capacityRuntimeSQL(t *testing.T, file, function, prefix string) string {
 	t.Helper()
 	parsed, err := parser.ParseFile(token.NewFileSet(), file, nil, 0)
@@ -317,7 +318,10 @@ func capacityPlans(t *testing.T, f capacityFixture, repeats int) []capacityQuery
 	}
 	var result []capacityQuery
 	for _, q := range queries {
-		sql := capacityRuntimeSQL(t, q.file, q.function, q.prefix)
+		sql := sourceRetentionSQL
+		if q.name != "source_retention" {
+			sql = capacityRuntimeSQL(t, q.file, q.function, q.prefix)
+		}
 		args := q.args
 		if q.name == "cache_retention" && strings.Contains(sql, "$1") {
 			args = []any{storageBatch}

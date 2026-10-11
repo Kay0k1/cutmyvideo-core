@@ -22,7 +22,9 @@ BEGIN
 END $grants$;
 GRANT USAGE ON SCHEMA public TO cutmy_runtime;
 GRANT CONNECT ON DATABASE cutmy TO cutmy_runtime;
--- Current schema has no sequences. Its only public function is the invoker
--- trigger update_storage_counter(): triggers check EXECUTE when created by the
--- schema owner; runtime DML does not need a blanket function EXECUTE grant.
+-- Current schema has no sequences. Accounting/source-pin functions are invoker
+-- triggers: EXECUTE is checked when the schema owner creates each trigger;
+-- runtime DML does not need a blanket function EXECUTE grant. Derived pin counts
+-- and audit progress have the same application-table DML grants as sources.
+-- They are accelerators, not an authorization boundary or deletion authority.
 COMMIT;

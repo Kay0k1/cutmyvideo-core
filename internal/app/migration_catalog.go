@@ -35,14 +35,16 @@ SELECT jsonb_build_object(
    FROM pg_index i JOIN pg_class ic ON ic.oid=i.indexrelid WHERE i.indrelid=c.oid),'{}'::jsonb),
   'Triggers',COALESCE((SELECT jsonb_object_agg(t.tgname,jsonb_build_object(
    'Function',pn.nspname || '.' || p.proname,'Type',t.tgtype,
-   'Enabled',t.tgenabled::text,'OldTable',COALESCE(t.tgoldtable,''),'NewTable',COALESCE(t.tgnewtable,'')))
+   'Enabled',t.tgenabled::text,'OldTable',COALESCE(t.tgoldtable,''),'NewTable',COALESCE(t.tgnewtable,''),
+   'Columns',(SELECT jsonb_agg(a.attname ORDER BY selected.position) FROM unnest(t.tgattr::smallint[]) WITH ORDINALITY selected(number,position) JOIN pg_attribute a ON a.attrelid=t.tgrelid AND a.attnum=selected.number),
+   'When',COALESCE(pg_get_expr(t.tgqual,t.tgrelid,true),'')))
    FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid JOIN pg_namespace pn ON pn.oid=p.pronamespace
    WHERE t.tgrelid=c.oid AND NOT t.tgisinternal),'{}'::jsonb)
  )) FROM managed c),'{}'::jsonb),
  'Functions',COALESCE((SELECT jsonb_object_agg(p.proname,
   concat_ws(E'\n',l.lanname,p.prorettype::regtype::text,p.provolatile::text,p.prosecdef::text,COALESCE(p.proconfig::text,''),p.prosrc))
   FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_language l ON l.oid=p.prolang
-  WHERE n.nspname=current_schema() AND p.proname='update_storage_counter' AND p.pronargs=0),'{}'::jsonb)
+  WHERE n.nspname=current_schema() AND p.proname=ANY($2::text[]) AND p.pronargs=0),'{}'::jsonb)
 )`
 
 func readSchemaShape(ctx context.Context, tx pgx.Tx) (schemaShape, error) {
@@ -51,8 +53,13 @@ func readSchemaShape(ctx context.Context, tx pgx.Tx) (schemaShape, error) {
 		names = append(names, name)
 	}
 	slices.Sort(names)
+	functions := make([]string, 0, len(latestSchemaShape().Functions))
+	for name := range latestSchemaShape().Functions {
+		functions = append(functions, name)
+	}
+	slices.Sort(functions)
 	var payload []byte
-	if err := tx.QueryRow(ctx, schemaShapeSQL, names).Scan(&payload); err != nil {
+	if err := tx.QueryRow(ctx, schemaShapeSQL, names, functions).Scan(&payload); err != nil {
 		return schemaShape{}, err
 	}
 	var shape schemaShape
@@ -68,9 +75,12 @@ func readSchemaShape(ctx context.Context, tx pgx.Tx) (schemaShape, error) {
 	}
 	for name, table := range shape.Tables {
 		for key, trigger := range table.Triggers {
-			if trigger.Function == namespace+".update_storage_counter" {
-				trigger.Function = "update_storage_counter"
-				table.Triggers[key] = trigger
+			for _, function := range functions {
+				if trigger.Function == namespace+"."+function {
+					trigger.Function = function
+					table.Triggers[key] = trigger
+					break
+				}
 			}
 		}
 		shape.Tables[name] = table

@@ -64,17 +64,25 @@ func pendingStoragePaths(ctx context.Context, tx pgx.Tx) ([]string, error) {
 }
 
 type storageCleanupBatch struct {
-	paths    []string
-	full     bool
-	cacheErr error
+	paths     []string
+	full      bool
+	cacheErr  error
+	auditErr  error
+	auditMore bool
 }
 
 func (s *Store) Cleanup(ctx context.Context, artifactTTL, sourceTTL time.Duration) ([]string, error) {
 	batch, err := s.cleanupStorageBatch(ctx, artifactTTL, sourceTTL)
-	return batch.paths, errors.Join(batch.cacheErr, err)
+	return batch.paths, errors.Join(batch.cacheErr, batch.auditErr, err)
 }
 
 func (s *Store) cleanupStorageBatch(ctx context.Context, artifactTTL, sourceTTL time.Duration) (batch storageCleanupBatch, err error) {
+	return s.cleanupStorageBatchCommit(ctx, artifactTTL, sourceTTL, func(ctx context.Context, tx pgx.Tx) error { return tx.Commit(ctx) })
+}
+
+// A private commit boundary lets PostgreSQL tests lose an acknowledgement after
+// a real COMMIT. Production always uses pgx Commit; retry reads durable state.
+func (s *Store) cleanupStorageBatchCommit(ctx context.Context, artifactTTL, sourceTTL time.Duration, commit func(context.Context, pgx.Tx) error) (batch storageCleanupBatch, err error) {
 	// Cache expiry has its own small slice of the retention budget and does not
 	// hold the storage fence. A blocked cache must leave time for media cleanup.
 	cacheBudget := 250 * time.Millisecond
@@ -112,9 +120,8 @@ WHERE cache.source_id=ANY(ARRAY(SELECT source_id FROM metadata_retention_candida
 	// Materialize at most one deletion batch, then match its IDs directly through
 	// the primary key instead of scanning the table again in a semi join. OFFSET 0
 	// keeps artifact/job pin probes correlated: the small expired candidate set
-	// must not require hashing all retained dependency rows. Sources intentionally
-	// retain their set-based pin checks; an old, mostly pinned source backlog can
-	// make per-source indexed probes substantially slower than one hash anti join.
+	// must not require hashing all retained dependency rows. Source candidates
+	// use an eligibility index and authoritative probes within its bounded batch.
 	// Either expiry partition can contribute at most the whole batch. Taking its
 	// oldest eligible batch first preserves the global created_at order while
 	// allowing the legacy NULL-expiry index to stop without sorting every row.
@@ -165,26 +172,22 @@ DELETE FROM jobs AS j WHERE j.id=ANY(ARRAY(SELECT id FROM job_retention_candidat
 		return storageCleanupBatch{}, err
 	}
 	full = full || jobs.RowsAffected() == storageBatch
-	rows, err = tx.Query(ctx, `WITH source_retention_candidates AS MATERIALIZED (
- SELECT source.id FROM sources source
- WHERE source.created_at<now()-($1*interval '1 second')
- AND NOT EXISTS(SELECT 1 FROM jobs WHERE source_id=source.id)
- AND NOT EXISTS(SELECT 1 FROM storage_reservations WHERE kind='preview' AND job_id=source.id)
- ORDER BY source.created_at LIMIT $2
-)
-DELETE FROM sources AS source WHERE source.id=ANY(ARRAY(SELECT id FROM source_retention_candidates))
-RETURNING source.path,source.thumbnail_path,source.owner`, sourceTTL.Seconds(), storageBatch)
+	rows, err = tx.Query(ctx, sourceRetentionSQL, sourceTTL.Seconds(), storageBatch)
 	if err != nil {
 		return storageCleanupBatch{}, err
 	}
 	files = nil
-	sourceCount := 0
+	candidateCount, quarantinedCount := int64(0), int64(0)
 	for rows.Next() {
-		sourceCount++
-		var path, thumb, owner string
-		if err = rows.Scan(&path, &thumb, &owner); err != nil {
+		var kind, path, thumb, owner string
+		var candidates, quarantined int64
+		if err = rows.Scan(&kind, &path, &thumb, &owner, &candidates, &quarantined); err != nil {
 			rows.Close()
 			return storageCleanupBatch{}, err
+		}
+		if kind == "progress" {
+			candidateCount, quarantinedCount = candidates, quarantined
+			continue
 		}
 		for _, p := range []string{path, thumb} {
 			if p != "" {
@@ -203,10 +206,13 @@ RETURNING source.path,source.thumbnail_path,source.owner`, sourceTTL.Seconds(), 
 	if err != nil {
 		return storageCleanupBatch{}, err
 	}
-	if err = tx.Commit(ctx); err != nil {
+	if err = commit(ctx, tx); err != nil {
 		return storageCleanupBatch{}, err
 	}
-	return storageCleanupBatch{paths: paths, full: full || sourceCount == storageBatch || len(paths) == storageBatch}, nil
+	// Audit failure is separate from successfully committed paths. The worker
+	// still drains these tombstones and reports the audit for a later retry.
+	moreAudit, repairedEligible, auditErr := s.auditSourcePins(ctx)
+	return storageCleanupBatch{paths: paths, full: full || candidateCount == storageBatch || quarantinedCount > 0 || len(paths) == storageBatch || repairedEligible, auditErr: auditErr, auditMore: moreAudit}, nil
 }
 
 func (s *Store) DeleteSource(ctx context.Context, id, owner string) ([]string, error) {

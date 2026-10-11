@@ -52,7 +52,7 @@ calls, preserving the normal five-minute TTL even after longer scan experiments.
 The gate records:
 
 - Twenty runs of the actual runtime retention, cache and admission SQL, extracted
-  through the Go parser. Each `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` executes the
+  through the Go parser (the source selector uses its exact runtime constant). Each `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` executes the
   real statement, including DML and triggers. Mutating plan runs roll back so
   every sample starts with the same eligible rows. The first warm-up is retained;
   these are repeated warm-cache samples, not a cold-cache claim.

@@ -23,7 +23,7 @@ import (
 var ErrSchemaIncompatible = errors.New("database schema is incompatible with this binary")
 
 const storeStartupTimeout = 30 * time.Second
-const schemaVersion = "20261010-cache-retention-v1"
+const schemaVersion = "20261011-source-retention-v1"
 
 // Migration SQL is immutable. Append a migration and update the expected shape;
 // never edit a shipped file or reinterpret an existing marker/checksum.
@@ -42,7 +42,8 @@ var schemaMigrations = []schemaMigration{
 	{"20261005-storage-queue-v3", "migrations/001_20261005_storage_queue_v3.sql", "migrations/001_schema.json"},
 	{"20261010-ordered-migrations-v1", "migrations/002_20261010_ordered_migrations_v1.sql", "migrations/002_schema.json"},
 	{"20261010-storage-maintenance-v1", "migrations/003_20261010_storage_maintenance_v1.sql", "migrations/003_schema.json"},
-	{schemaVersion, "migrations/004_20261010_cache_retention_v1.sql", "migrations/004_schema.json"},
+	{"20261010-cache-retention-v1", "migrations/004_20261010_cache_retention_v1.sql", "migrations/004_schema.json"},
+	{schemaVersion, "migrations/005_20261011_source_retention_v1.sql", "migrations/005_schema.json"},
 }
 
 func migrationSQL(m schemaMigration) string {
@@ -239,6 +240,8 @@ type schemaIndex struct {
 type schemaTrigger struct {
 	Function, Enabled, OldTable, NewTable string
 	Type                                  int
+	Columns                               []string
+	When                                  string
 }
 
 type schemaTable struct {
@@ -283,6 +286,18 @@ func latestSchemaShape() schemaShape {
 }
 
 func checkSchemaShape(actual, expected schemaShape, legacy bool) error {
+	// Only managed names are read. A future managed object under an older
+	// marker is inconsistent, even if every older required object still exists.
+	for name := range actual.Tables {
+		if _, ok := expected.Tables[name]; !ok {
+			return incompatibleSchema("managed table does not match migration position")
+		}
+	}
+	for name := range actual.Functions {
+		if _, ok := expected.Functions[name]; !ok {
+			return incompatibleSchema("managed function does not match migration position")
+		}
+	}
 	for name, table := range expected.Tables {
 		found, ok := actual.Tables[name]
 		if !ok {

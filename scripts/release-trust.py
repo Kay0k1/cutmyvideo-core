@@ -41,7 +41,7 @@ LICENSES = {
 GO_NOTICE = '07e803b805ec67f8d2a26183c1a1e3bd7ef8f0c7c44cd4b35c7b775980630c4c'
 PROJECT_LICENSE = 'dbd22263d7218a09000bf90ab07b53de55b246220392696d52e71b4b0b4b1548'
 SCHEMAS = {'20261005-storage-queue-v3', '20261010-cache-retention-v1',
-           '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1'}
+           '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1', '20261011-source-retention-v1'}
 
 
 def identifier(kind, value):
@@ -198,7 +198,7 @@ def validate_verdict(verdict, source, manifest, run):
     recovery = verdict.get('linux_archive_recovery', {})
     linux = next(r for r in manifest['archives'] if (r['os'], r['arch']) == ('linux', 'amd64'))
     m.require(recovery.get('required_groups') == 9 and recovery.get('decoded_media_observations') == 11
-              and set(recovery.get('schema_versions', [])) == SCHEMAS and len(recovery['schema_versions']) == 4
+              and set(recovery.get('schema_versions', [])) == SCHEMAS and len(recovery['schema_versions']) == 5
               and recovery.get('binary_sha256') == linux['contents']['cutmy']['sha256']
               and m.HASH.fullmatch(recovery.get('report_sha256', '')), 'Actual Linux archive recovery verdict missing.')
 

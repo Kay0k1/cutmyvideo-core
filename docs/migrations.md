@@ -26,6 +26,7 @@ There are no invented `v1`/`v2` markers for those unversioned installations.
 | 2 | `20261010-ordered-migrations-v1` | Adds the ordered migration ledger and records the verified baseline and its checksums. Existing versioned application rows and tables are not rewritten. |
 | 3 | `20261010-storage-maintenance-v1` | Adds persisted directory scan progress, a workspace cleanup queue, and deletion retry times/failure counts. Pending files stay charged and are immediately eligible after upgrade. |
 | 4 | `20261010-cache-retention-v1` | Replaces the cache expiry index with `(expires_at, source_id)` for ordered, bounded cache cleanup. Leaves cache payloads, scan progress, deletion retries and storage accounting unchanged. |
+| 5 | `20261011-source-retention-v1` | Adds derived job/preview pin counts, exact membership triggers, an eligible-source index and durable bounded audit progress. Backfills counts while excluding membership writers; leaves original source values, jobs, media and byte accounting intact. |
 
 SQL files and expected catalog layouts live in
 [`internal/app/migrations`](../internal/app/migrations). `app_schema_versions`
@@ -41,7 +42,8 @@ checkouts or source archives cannot create a different migration identity.
 Before issuing migration DDL, startup rejects unknown or newer version markers,
 missing predecessors, inconsistent ledger records/checksums, and unsupported
 schema structure. It checks column types, nullability/defaults, constraints,
-required indexes, accounting triggers and the accounting function. Manually
+required indexes, accounting/source-pin trigger targets, UPDATE column lists,
+conditions and function bodies/attributes. Manually
 added columns or changed managed constraints/functions are not automatically
 adopted. These checks inspect PostgreSQL catalogs and the small migration
 history; they do not scan retained jobs, media files or storage-ledger rows.
@@ -64,6 +66,34 @@ still ignore markers added by newer releases. A known version marker also does
 not prove that an old binary supports a later schema. Stop writers, preserve the
 database/media backup and test the intended rollback against that backup before
 starting an older binary. See [upgrade and recovery](operations.md#upgrade-and-recover).
+
+## Migration 5 upgrade and rollback
+
+Stop API/worker/maintenance writers and take a coordinated database/media backup
+before the schema-owner upgrade. Migration 5 also takes the storage advisory
+fence and locks sources/jobs/reservations against direct membership writers
+before DDL/backfill/trigger installation. The existing 30-second startup cap
+covers this whole transaction; the initial one-time backfill is not bounded by
+200 rows. Test the restored retained-data copy against that cap before upgrade.
+A lock wait or cancelled backfill rolls back columns, counts, triggers and
+migration records together; retry with the compatible new binary.
+
+After a successful migration, versions 1–5 and their original checksums are
+required. An older schema-guarded binary refuses the new marker/columns. There
+is no in-place reverse migration: rollback to a pre-005 binary requires restoring
+its coordinated pre-upgrade backup to a separate installation. Retain failed
+instance state for diagnosis; never remove ledger records or derived columns to
+force an older binary to start.
+
+The original A1 public image-upgrade acceptance requires byte-identical runtime
+sources and tests a same-schema transition. It intentionally rejects this
+runtime change. Migration 5 needs its own reviewed schema-transition/restore
+acceptance, including runtime-role trigger execution and truthful/drifted pin
+fixtures; historical A1/c911/638 results do not establish it. Five native archive
+checks and archive recovery must also run for the actual candidate.
+
+See [source retention and drift recovery](source-retention.md) for the bounded
+runtime work and the separate corruption-recovery limits.
 
 ## Adding a migration
 

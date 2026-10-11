@@ -263,6 +263,13 @@ and a small share of the remaining retention deadline. A cache-stage failure is
 reported while successfully committed media deletions still proceed; cache-only
 backlogs can use the worker's existing eight-batch retention limit.
 
+Source TTL selects at most 200 oldest indexed candidates and checks their actual
+job/exact-preview references under the storage fence. Pin mutations maintain
+derived counts transactionally. A separate audit corrects drift in bounded
+source/child units after media COMMIT; an audit error does not discard committed
+tombstones. Healthy counts bypass a pinned prefix; corruption repair has separate
+limits and may take many cycles. See [source retention](source-retention.md).
+
 Failed physical deletion remains charged. Its persisted retry delay increases
 from 30 seconds to one hour, allowing other due files to proceed. The row is
 released only after the file is absent and the parent directory has synchronized.

@@ -98,9 +98,10 @@ Runtime cannot modify the ledger, create schema objects, create roles, truncate
 tables, create temporary objects, or use administrator server-file functions.
 
 The current schema has no sequences. Grants are applied after every migration,
-with writers stopped. There is no blanket function `EXECUTE` grant: the only
-public function is the existing invoker storage-counter trigger, installed by
-the schema owner. Future sequences/functions require a reviewed grant change.
+with writers stopped. There is no blanket function `EXECUTE` grant: accounting
+and source-pin invoker triggers are installed by the schema owner. Runtime DML
+also covers derived counts/audit progress; authoritative reference checks remain
+required. Future sequences/privilege changes require a reviewed grant change.
 These privilege claims still require the real acceptance checks below.
 
 ## Immutable image and private state
@@ -246,6 +247,13 @@ path is a separate offline migration. No lifecycle command deletes volumes or
 preexisting installations; never use `down -v` on retained state.
 
 ## Required acceptance before supported status
+
+Migration 5 changes runtime sources and the schema. The unchanged acceptance
+below deliberately refuses this candidate at the runtime-source identity gate.
+It must receive a separate reviewed 004→005 upgrade, reduced-role execution and
+005 backup/restore gate before supported status. Earlier successful runs remain
+historical evidence for their exact commits; they do not transfer to this change.
+See [migration recovery](migrations.md#migration-5-upgrade-and-rollback).
 
 The prepared image-upgrade test pins the immutable baseline **A1** to
 `0f93cd654a998be7740ba1d6fee4a44a6f7b3464` (tree

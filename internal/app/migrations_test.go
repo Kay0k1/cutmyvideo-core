@@ -282,6 +282,32 @@ INSERT INTO storage_reservations(id,owner,kind,size_bytes,expires_at) VALUES('pe
 	}
 }
 
+// Apply exactly one known immutable step to observe an intermediate upgrade
+// boundary before OpenStore advances to the current version.
+func applyMigrationFixture(t *testing.T, f migrationFixture, position int) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	tx, err := f.db.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rollbackStorage(tx)
+	migration := schemaMigrations[position]
+	if _, err = tx.Exec(ctx, migrationSQL(migration)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(ctx, "INSERT INTO app_schema_versions(version) VALUES($1)", migration.version); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(ctx, "INSERT INTO app_schema_migrations(position,version,checksum) VALUES($1,$2,$3)", position+1, migration.version, migrationChecksum(migration)); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestMigrationsUpgradeMaintenancePredecessorPreservesProgressRetriesAndCache(t *testing.T) {
 	f := newMigrationFixture(t)
 	installHistoricalSchema(t, f, "storage-maintenance-v1")
@@ -295,11 +321,15 @@ INSERT INTO storage_scan_progress(data_dir,scan_kind,path,position,prefix_digest
  VALUES('/fixture/data','bootstrap_sources','/fixture/data/sources',1024,repeat('a',64),123456789,4096);
 INSERT INTO storage_work_cleanup(data_dir,path) VALUES('/fixture/data','/fixture/data/work/old-lease');`)
 	before := historicalRowsSnapshot(t, f.db)
-	snapshot := func() string {
+	snapshot := func(retainSourceXmin bool) string {
 		t.Helper()
 		var value string
+		sourceRow := `jsonb_build_object('row',to_jsonb(s)-'retention_job_pins'-'retention_preview_pins'-'retention_pins_valid'-'retention_pin_revision','xmin',s.xmin::text)`
+		if !retainSourceXmin {
+			sourceRow = `jsonb_build_object('row',to_jsonb(s)-'retention_job_pins'-'retention_preview_pins'-'retention_pins_valid'-'retention_pin_revision','xmin','005-derived-count-backfill')`
+		}
 		if err := f.db.QueryRow(context.Background(), `SELECT jsonb_build_object(
- 'sources',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(s),'xmin',s.xmin::text) ORDER BY id) FROM sources s),
+ 'sources',(SELECT jsonb_agg(`+sourceRow+` ORDER BY id) FROM sources s),
  'jobs',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(j),'xmin',j.xmin::text) ORDER BY id) FROM jobs j),
  'artifacts',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(a),'xmin',a.xmin::text) ORDER BY id) FROM artifacts a),
  'files',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(f),'xmin',f.xmin::text) ORDER BY path) FROM storage_files f),
@@ -313,11 +343,18 @@ INSERT INTO storage_work_cleanup(data_dir,path) VALUES('/fixture/data','/fixture
 		}
 		return value
 	}
-	accounting := snapshot()
+	// First preserve the original 003→004 no-row-rewrite guarantee, including
+	// source tuple identity, before allowing the separate 005 derived backfill.
+	accounting004 := snapshot(true)
+	applyMigrationFixture(t, f, 3)
+	if historicalRowsSnapshot(t, f.db) != before || snapshot(true) != accounting004 {
+		t.Fatal("cache-index migration 004 rewrote predecessor records, retries, progress or migration history")
+	}
+	accounting005 := snapshot(false)
 	s := openMigrationStore(t, f)
 	assertMigrationLedger(t, s)
-	if historicalRowsSnapshot(t, f.db) != before || snapshot() != accounting {
-		t.Fatal("cache-index migration rewrote predecessor records, retries, progress or migration history")
+	if historicalRowsSnapshot(t, f.db) != before || snapshot(false) != accounting005 {
+		t.Fatal("source-pin upgrade changed original source values, other predecessor records, retries, progress or migration history")
 	}
 	var stored, reserved int64
 	if err := s.DB.QueryRow(context.Background(), "SELECT stored_bytes,reserved_bytes FROM storage_counters WHERE id=1").Scan(&stored, &reserved); err != nil || stored != 108 || reserved != 99 {
@@ -515,6 +552,7 @@ func TestMigrationSQLChecksumsArePinnedAcrossWindowsNewlines(t *testing.T) {
 		"20261010-ordered-migrations-v1":  "17caf6f352044a62dd4bbfee154d02965d9c411ca6783422b96db5eed6b40e57",
 		"20261010-storage-maintenance-v1": "1c06b5c041a45201496d20655078515b5ca4b7896e2a43c3c848d51b2aa00627",
 		"20261010-cache-retention-v1":     "d7654c6a981edea4506d7265057e9349ab9fee85cd3ce3a63412384374e4709a",
+		"20261011-source-retention-v1":    "b460686dc29fa1a156cbf74ca73da8afd2e4394cc7f2a3d6465f72e047b7c0e0",
 	}
 	for _, migration := range schemaMigrations {
 		t.Run(migration.version, func(t *testing.T) {

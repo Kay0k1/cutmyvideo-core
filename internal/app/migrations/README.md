@@ -13,10 +13,18 @@ cleanup and deletion retries. `004_20261010_cache_retention_v1.sql` replaces the
 cache expiry index with an expiry/source ordering for bounded cleanup; it does
 not rewrite application rows or accounting state.
 
-The corresponding `*_schema.json` files capture catalog metadata after each
-position on isolated PostgreSQL 17: column types/defaults/nullability,
-constraints, required index definitions, accounting triggers and accounting
-function body/attributes. Namespace names in owned trigger targets are
+`005_20261011_source_retention_v1.sql` adds derived source pin counts, membership
+triggers/indexes and durable bounded audit progress. Its consistent one-time
+backfill runs under the storage fence and writer-excluding table locks within the
+existing startup cap. Positions 1–4 remain unchanged. The new shape is prepared
+from the declared SQL; isolated PostgreSQL catalog validation is required before
+this candidate can be released.
+
+Positions 1–4 `*_schema.json` files capture catalog metadata observed on isolated
+PostgreSQL 17. Position 5 is a declared, unobserved candidate shape pending its
+actual PostgreSQL gate. These describe column types/defaults/nullability,
+constraints, required indexes, owned trigger targets/column lists/conditions and
+function bodies/attributes. Namespace names in owned trigger targets are
 normalized; application data is not included. Startup uses these small manifests
 to reject incompatible managed schema before changing it.
 
