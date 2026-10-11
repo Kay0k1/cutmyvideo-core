@@ -1,0 +1,211 @@
+{
+  "actual_execution": null,
+  "actual_go_test_argv": [
+    "SHA548_GO_BINARY",
+    "test",
+    "-json",
+    "-race",
+    "-count=1",
+    "-timeout=6m",
+    "-p=1",
+    "-failfast",
+    "./internal/app",
+    "-run",
+    "^(TestSourcePinMembershipTransitionsAndRollback|TestSourcePinBirthBulkAndIDMoveIncludesHistoricalPreview|TestSourcePinFenceSerializesDirectPreviewWithDeletion|TestSourceRetentionFalseZerosContinueToHealthyTail|TestSourceRetentionFalsePreviewZerosPreservePinsAndBatchLimit|TestSourcePinAuditPartialRestartRevisionAndFairness|TestSourcePinUnderflowQuarantinesUntilAuthoritativeAudit|TestSourceRetentionLostCommitAcknowledgementKeepsTombstoneCharge|TestSourcePinMigrationBackfillHistoryCancellationAndRestart|TestSourcePinCatalogRejectsBodyPrivilegeColumnAndForeignTargetDrift|TestSourcePinInvokerTriggersWorkWithoutRuntimeFunctionExecute|TestSourcePinCatalogManifestsDeclareExactManagedFunctionsAndTriggerColumns|TestRetentionPreservesExplicitExpiryAndAllPins|TestRetentionBatchesInterleaveLegacyAndExplicitExpiry|TestRetentionLimitsJobsAndMetadataOnlySourcesIndependently|TestTTLPreviewProbeSavedPlans)$"
+  ],
+  "actual_measured_speedup": null,
+  "amd64_child": "66aafa11cf15800a3c94763f7e11d1e7b2e37e5e84bc4ce027cb6e1e4bfaf4df",
+  "argv_after_ROOT_authorization": [
+    "python3",
+    "-I",
+    "-B",
+    "/root/video_cut/reports/storage-maintenance-2026-10-11/ttl-preview-offset-probe-executable-source-v3/runner.py",
+    "--authorization",
+    "ABS_ROOT_AUTHORIZATION_JSON",
+    "--worktree",
+    "ABS_ROOT_REVIEWED_F80_PLUS_OFFSET_CANDIDATE",
+    "--output",
+    "ABS_FRESH_ROOT_APPROVED_OUTPUT",
+    "--go",
+    "ABS_SHA548_GO_BINARY"
+  ],
+  "base": "f80cb9bba29f2ba97b37152bbf3388735d4a3173",
+  "cleanup_fix_evidence": {
+    "ROOT_actual_pure4_receipt_sha256": "eb6264620f2e4fbcf4704d7225ab1b366c63ff5e65ea055be485e6c128c739e8",
+    "accepted_helper_runner_sha256": "63af380dd282f1e141fb09615be572b63ba8f5667a1cf512ef162154a9ea4d32",
+    "exit": 0,
+    "outer_extra_hard_watchdog_installed": false,
+    "outer_observed_seconds": 0.219024854,
+    "product_execution_authority": null,
+    "pure_controls_count": 4,
+    "pure_controls_uid_gid": 65534,
+    "reaped_PID": 350310
+  },
+  "execution_authority": "SOURCE_ONLY_NOT_AUTHORIZED_NOT_RUN",
+  "expected_success": "Go16actuallyrun/pass/noFAILorSKIP/process+packageexit0; original40plans+40snapshots; settings/role/SQLhashes; source304beforeafter; schema/role0/container/networkabsent/noOOM; ownruntime/cache removed. Anyfailure staysFAIL; no automaticretry or timeoutincrease.",
+  "format": 1,
+  "go_sha256": "548d3c32f83fa81152f543eb1526be7884cfe0526eb5e9ce29d3eca14786e7e0",
+  "go_version": "go version go1.27.2 linux/amd64",
+  "history_preserved": "OriginalCDE335run38138782219 failed short/bootstrap32x5ms. OriginalTTLrun38143536108 attempt1 staysFAIL due ephemeralcache cleanup; its16PASS/40plans showed no LATERAL indexedpreview/p50 improvement and are not adopted/retried. This new query-only study removes previewOFFSET0 from f80; no fullmaintenance/capacity/platform/1.0 claim.",
+  "hosted_mode": {
+    "artifact": "always preserve runnerrawoutput on failure/cleanup; exclude/remove ownedbuild/module caches; noauto rerun",
+    "authorized_preparation": "oneGo moddownload fromfixedpublicproxy/sumdb andonepull ofimmutablePG index beforeproductrun; rootauthoritymustexplicitlyallowboth",
+    "event": "workflow_dispatch only; attempt1; exactfutureharness commitandbranch from ROOTonceJSON",
+    "fresh_owned_pg": "runnercreates ownfresh labelednetwork/container+loopback+512MiBtmpfs; noservicePG/noexternalDB/prodvolumes",
+    "go_binary": "setupGo1.27.2 binary mustmatch exact548SHA orrefuse beforeproductrun",
+    "paths": "GITHUB_WORKSPACE/ttl-candidate patched from exactf80 checkout; RUNNER_TEMP/ttl-preview-offset-probe-once output",
+    "source_after_download_guard": "go.mod/go.sum andall304source files muststillmatch frozenmap; offline productcompile/test",
+    "workflow_proposal": "ttl-preview-probe.yml.txt, outsideappCI"
+  },
+  "image": "postgres@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826",
+  "index": "3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826",
+  "inputs": {
+    "baseline-f80-source-retention.sql": {
+      "bytes": 1106,
+      "sha256": "8f40530566bd0bd9bf3ae12ca9604ff20baa5a58a932ea244ee9b5c01ebe8fb7"
+    },
+    "baseline-source-map.json": {
+      "bytes": 69842,
+      "sha256": "2b1024f25b418267f5db913c5bedb6d2236292c8983ebf6e31e5b415dd375d33"
+    },
+    "candidate-source-retention.sql": {
+      "bytes": 1097,
+      "sha256": "e85e5fab8f20375a9fad988f69553f94f17570de964d8f55c46030f36d4bc019"
+    },
+    "candidate.patch": {
+      "bytes": 3944,
+      "sha256": "d08a0cd7a3e24f9029bf91bb4dd8a4107dc7b0a3e81bd02b38c9e3ccb5e7b3ac"
+    },
+    "measurement_test.go.txt": {
+      "bytes": 12689,
+      "sha256": "3e15eadb4386b561a701357dd61bfecf54122dd8a8213f045797d42c05501e67"
+    },
+    "source-map.json": {
+      "bytes": 72274,
+      "sha256": "5aad135e0cc3dc961f66c364c6cbfa84c2231fb273370551934d43329d066c90"
+    },
+    "source-review.json": {
+      "bytes": 2561,
+      "sha256": "cb68ae8f961522d1d791f7a8b1414177e9dbd541e89688e95f6287bc97e0f7b3"
+    }
+  },
+  "kind": "ttl-preview-offset-probe-executable-once-plan",
+  "limits": {
+    "all_stream_bytes_cap": 100663296,
+    "cleanup_stream_reserve_bytes": 4194304,
+    "go_each_stdout_stderr_cap_bytes": 33554432,
+    "go_soft_memory": "128MiB",
+    "go_test_hard_timeout_seconds": 420,
+    "go_test_timeout": "6m",
+    "go_threads": 2,
+    "host_min_available_memory_bytes": 3221225472,
+    "host_min_cpus": 2,
+    "host_min_disk_free_bytes": 2147483648,
+    "hosted_locked_dependency_download_invocations_max": 1,
+    "local_dependency_download_invocations": 0,
+    "measurement_directory_operational_cap_bytes": 16777216,
+    "measurement_each_file_cap_bytes": 1048576,
+    "metadata_go_version_invocations_max": 1,
+    "non_go_each_stdout_stderr_cap_bytes": 2097152,
+    "postgres_cpus": 2,
+    "postgres_extra_swap_bytes": 0,
+    "postgres_fsync": "on",
+    "postgres_hard_memory_bytes": 1073741824,
+    "postgres_jit": "off",
+    "postgres_max_connections": 32,
+    "postgres_owned_tmpfs_bytes": 536870912,
+    "postgres_pids": 128,
+    "postgres_shared_buffers": "128MB",
+    "postgres_swap_total_bytes": 1073741824,
+    "postgres_synchronous_commit": "on",
+    "postgres_work_mem": "4MB",
+    "product_go_test_invocations_max": 1
+  },
+  "local_mode": {
+    "authority_paths": "exactworktree/output absolutepaths in ROOTonceJSON",
+    "go_modules": "existing /root/go/pkg/mod; GOPROXYoff/GOSUMDBoff; no download",
+    "image": "mustalreadyexist and exactconfig/indexpins; pullnever",
+    "resource_threshold_not_lowered_to_fit": "ROOT observedlocal2.31GBavailable <3GiB; observationisnotpermission/refusalresult, runnerNOTRUN"
+  },
+  "measurement_test": "TestTTLPreviewProbeSavedPlans",
+  "owned_cleanup_timeout_seconds": 120,
+  "parent": "48397dc32b2da438c4d6d55e3d68df522677ecc4",
+  "registry_config": "589f742565e4f6d22149176b032974f55f8201a8a37b71ed587ec5c6902e689f",
+  "repository": "Kay0k1/cutmyvideo-core",
+  "retained_runner_basis": {
+    "explicit_deltas": [
+      "newROOTauthorizationgate andselfcontained relativeinputpins",
+      "ownruntimeworktree+exactpatch+exclusivefixtureinjection lifecycle",
+      "PG1GiB128MBshared32connections matchingcomparison settings; 512MiBtmpfs storageis common tobothqueries",
+      "3GiBmemory2GiBdisk2CPUadmission; no loweredthreshold",
+      "cappedpipewriter withstream/global limits and4MiBcleanupreserve; 900sinner+120scleanup",
+      "exact15semantic tests plus1measurement,40pairedplans withstrictpost-run originalfilebinding",
+      "hosted mode permits explicitlockeddependency/image preparation; local offline unchanged",
+      "query-only result andnoexisting history/reportrelabeling",
+      "accepted directory-only owned module-cache removal preparation; actual unprivileged pure4 PASS incl oldPermissionErrorgo.mod before fix; originalFAIL preserved"
+    ],
+    "path": "/root/video_cut/reports/storage-maintenance-2026-10-11/source-storage-scan-roundtrips-c135-targeted-runner-preparation/runner.py",
+    "reused_pattern": "fresh ownednetwork/container; exactimageconfig; loopbackbinding; actualTCP and SQLreadiness; bounded owned processgroups; exactGoJSON testnames; namespace/role0 cleanup; stop/remove andlabelabsence; sourcebeforeafter",
+    "sha256": "37e4bb171b0ac2927d84412a26158627c746cc5a98eda9d540590462310363e9"
+  },
+  "same_database_pairing": {
+    "actual_explain_queries": 40,
+    "after_each_sample": "acknowledged rollback; same complete15-table row+xmin snapshot; exact counters vs ledger sums",
+    "all_samples_preserved": true,
+    "arguments": [
+      3600,
+      200
+    ],
+    "baseline_sql": "exactf80 schema005 sourceRetentionSQL literal",
+    "candidate_sql": "actualcompiledconstant of f80+TTLtwofilepatch",
+    "each_query": "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)",
+    "excluded_warmups": 0,
+    "expired_eligible_sources": 200,
+    "initial_preview_reservations": 200,
+    "inside_transaction_oracles": {
+      "expired_sources": 0,
+      "retained_sources": 1000
+    },
+    "measurement_role": "fresh owned NOLOGIN role ordinary tableDML; migrationsSELECT,MAINTAIN; noCREATE/ledgerDML/functionEXECUTE grants",
+    "ordering": "odd pairs baseline/candidate; even pairs candidate/baseline",
+    "pairs": 20,
+    "retained_pinned_sources": 1000,
+    "same_trigger_index_fk_bodies": "installed from unchanged immutable005 SQL/catalog; no planner GUCs or schema changes during comparison",
+    "samples_per_query": 20,
+    "schema": 5,
+    "snapshot_rows_are_hashes_not_full_row_archive": true
+  },
+  "semantic_test_names": [
+    "TestSourcePinMembershipTransitionsAndRollback",
+    "TestSourcePinBirthBulkAndIDMoveIncludesHistoricalPreview",
+    "TestSourcePinFenceSerializesDirectPreviewWithDeletion",
+    "TestSourceRetentionFalseZerosContinueToHealthyTail",
+    "TestSourceRetentionFalsePreviewZerosPreservePinsAndBatchLimit",
+    "TestSourcePinAuditPartialRestartRevisionAndFairness",
+    "TestSourcePinUnderflowQuarantinesUntilAuthoritativeAudit",
+    "TestSourceRetentionLostCommitAcknowledgementKeepsTombstoneCharge",
+    "TestSourcePinMigrationBackfillHistoryCancellationAndRestart",
+    "TestSourcePinCatalogRejectsBodyPrivilegeColumnAndForeignTargetDrift",
+    "TestSourcePinInvokerTriggersWorkWithoutRuntimeFunctionExecute",
+    "TestSourcePinCatalogManifestsDeclareExactManagedFunctionsAndTriggerColumns",
+    "TestRetentionPreservesExplicitExpiryAndAllPins",
+    "TestRetentionBatchesInterleaveLegacyAndExplicitExpiry",
+    "TestRetentionLimitsJobsAndMetadataOnlySourcesIndependently"
+  ],
+  "source_branch": "perf/storage-ttl-preview-offset-probe",
+  "source_guards": {
+    "all_existing_test_bodies_immutable": true,
+    "exclusive_fixture_name": "internal/app/ttl_preview_probe_measurement_test.go",
+    "injected_guard": "304+1 exactfixture SHA; only this tempuntracked pathallowed",
+    "original_source_count": 304,
+    "original_source_map_sha256": "5aad135e0cc3dc961f66c364c6cbfa84c2231fb273370551934d43329d066c90",
+    "original_source_unchanged_before_after": true,
+    "remove_fixture_if_unchanged": true,
+    "runtime_before_and_after_fixture_cleanup": "same304files and two modified source files; no untracked extras",
+    "runtime_worktree": "fresh detached f80 under exclusively created output/runtime; exactcandidate.patch applied; originalworktree never receives fixture",
+    "runtime_worktree_removed_after_original_evidence_saved": true
+  },
+  "status": " M internal/app/source_retention.go\n M internal/app/source_retention_test.go\n",
+  "tree": "79055414abf21788dc696b73e2e8b1d3bf0afb37",
+  "whole_runner_timeout_seconds": 900
+}

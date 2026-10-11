@@ -1,0 +1,14 @@
+{
+  "allow_locked_dependency_download": false,
+  "allow_pinned_image_pull": false,
+  "authorized_once": false,
+  "execution_mode": "github-actions",
+  "fixture_sha256": "3e15eadb4386b561a701357dd61bfecf54122dd8a8213f045797d42c05501e67",
+  "harness_branch": "ROOT_MUST_FILL_EXACT_FUTURE_BRANCH",
+  "harness_commit": "ROOT_MUST_FILL_EXACT_FUTURE_PUBLISHED_HEAD",
+  "kind": "ttl-preview-offset-probe-PG16-once",
+  "note": "Templateonly; ROOTmustissue separateactual onceauthorizationafterfullsource review. Localmodeinsteadrequiresexactworktree/outputpaths. Noexecutionauthorityhere.",
+  "plan_sha256": "c29d65934d88afcc02dcc4582bff1d24f291a9450ca2dd0b2c97d3df78e1c26a",
+  "runner_sha256": "30d1dbdbe6ac244f00ffefded16d905eb714c4b30e450af9bbfe9767c3ed2ca2",
+  "source_map_sha256": "5aad135e0cc3dc961f66c364c6cbfa84c2231fb273370551934d43329d066c90"
+}

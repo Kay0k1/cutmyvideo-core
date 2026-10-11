@@ -1,0 +1,255 @@
+package app
+
+// Source-only measurement fixture: injected exclusively into a disposable
+// runtime worktree. Both queries use the same schema005, data, role and fence.
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+const ttlProbeBaselineSHA = "8f40530566bd0bd9bf3ae12ca9604ff20baa5a58a932ea244ee9b5c01ebe8fb7"
+const ttlProbeCandidateSHA = "ea2a015de4c40df0e14121c57b4f0faac2d464e06296ced5d423379b8e74bf89"
+
+func ttlProbeSHA(raw []byte) string {
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
+func ttlProbeSave(t *testing.T, output, name string, raw []byte) {
+	t.Helper()
+	if len(raw) == 0 || len(raw) > 1024*1024 {
+		t.Fatal("measurement file empty or exceeds one MiB", name)
+	}
+	file, err := os.OpenFile(filepath.Join(output, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		t.Fatal("measurement file creation failed", name, err)
+	}
+	_, writeErr := file.Write(raw)
+	closeErr := file.Close()
+	if writeErr != nil || closeErr != nil {
+		t.Fatal("measurement file write failed", name, writeErr, closeErr)
+	}
+}
+
+// Include every schema005 application table and xmin. These reads happen
+// outside the measured EXPLAIN; JSON rows use a fixed C-collated ordering.
+func ttlProbeSnapshot(t *testing.T, f capacityFixture) json.RawMessage {
+	t.Helper()
+	tables := []string{"app_schema_migrations", "app_schema_versions", "artifacts", "jobs", "queue_owners", "source_metadata_cache", "source_pin_audit_progress", "source_retention_audit", "sources", "storage_counters", "storage_files", "storage_reservations", "storage_scan_progress", "storage_state", "storage_work_cleanup"}
+	parts := make([]string, 0, len(tables))
+	for _, table := range tables {
+		parts = append(parts, "'"+table+"',(SELECT jsonb_build_object('rows',count(*),'digest',md5(COALESCE(string_agg(jsonb_build_object('row',to_jsonb(t),'xmin',t.xmin::text)::text,E'\\n' ORDER BY to_jsonb(t)::text COLLATE \"C\"),''))) FROM "+pgx.Identifier{table}.Sanitize()+" t)")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var raw json.RawMessage
+	if err := f.api.DB.QueryRow(ctx, "SELECT jsonb_build_object("+strings.Join(parts, ",")+")").Scan(&raw); err != nil {
+		t.Fatal("measurement snapshot failed", err)
+	}
+	if len(raw) == 0 || len(raw) > 1024*1024 {
+		t.Fatal("measurement snapshot size")
+	}
+	return raw
+}
+
+func ttlProbeAccounting(t *testing.T, f capacityFixture) map[string]string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var stored, reserved, actualStored, actualReserved string
+	err := f.api.DB.QueryRow(ctx, `SELECT stored_bytes::text,reserved_bytes::text,
+ (SELECT COALESCE(sum(size_bytes),0)::text FROM storage_files),
+ (SELECT COALESCE(sum(size_bytes),0)::text FROM storage_reservations)
+ FROM storage_counters WHERE id=1`).Scan(&stored, &reserved, &actualStored, &actualReserved)
+	if err != nil || stored != actualStored || reserved != actualReserved {
+		t.Fatal("measurement accounting differs from actual ledger", stored, reserved, actualStored, actualReserved, err)
+	}
+	return map[string]string{"stored_bytes": stored, "reserved_bytes": reserved, "actual_stored_bytes": actualStored, "actual_reserved_bytes": actualReserved}
+}
+
+func TestTTLPreviewProbeSavedPlans(t *testing.T) {
+	output := os.Getenv("CUTMY_TTL_MEASUREMENT_DIR")
+	baselinePath := os.Getenv("CUTMY_TTL_BASELINE_SQL")
+	if !filepath.IsAbs(output) || !filepath.IsAbs(baselinePath) {
+		t.Fatal("absolute measurement directory and baseline SQL required")
+	}
+	if err := os.Mkdir(output, 0700); err != nil {
+		t.Fatal("fresh measurement directory required", err)
+	}
+	baseline, err := os.ReadFile(baselinePath)
+	if err != nil || ttlProbeSHA(baseline) != ttlProbeBaselineSHA || ttlProbeSHA([]byte(sourceRetentionSQL)) != ttlProbeCandidateSHA || storageBatch != 200 {
+		t.Fatal("fixed baseline/candidate SQL or batch identity differs")
+	}
+	ttlProbeSave(t, output, "baseline.sql", baseline)
+	ttlProbeSave(t, output, "candidate.sql", []byte(sourceRetentionSQL))
+	report := map[string]any{"format": 1, "kind": "ttl-preview-probe-paired-schema005", "complete": false, "pass": false, "schema": 5, "retained_sources": 1000, "expired_sources": 200, "pairs": 20, "samples_per_query": 20, "baseline_sql_sha256": ttlProbeBaselineSHA, "candidate_sql_sha256": ttlProbeCandidateSHA, "current_stage": "setup", "sample_order": "odd pair baseline/candidate; even pair candidate/baseline", "samples": []map[string]any{}, "failure": nil}
+	samples := []map[string]any{}
+	defer func() {
+		report["samples"] = samples
+		report["test_failed"] = t.Failed()
+		if t.Failed() {
+			report["pass"] = false
+		}
+		raw, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			t.Error("measurement report marshal", err)
+			return
+		}
+		ttlProbeSave(t, output, "paired-report.json", append(raw, '\n'))
+	}()
+	f := newCapacityFixture(t, 1000)
+	var schema int
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	err = f.api.DB.QueryRow(ctx, "SELECT max(position) FROM app_schema_migrations").Scan(&schema)
+	cancel()
+	if err != nil || schema != 5 {
+		t.Fatal("measurement schema005 required", schema, err)
+	}
+	// Exact chronology from the original current-capacity pilot; membership
+	// and pin/counter machinery stay intact. ANALYZE is before any timing.
+	capacityExec(t, f.api.DB, `UPDATE sources SET created_at='2000-01-01'::timestamptz+(CASE WHEN id LIKE 'retained-source-%' THEN substring(id from '[0-9]+$')::integer ELSE 100000+substring(id from '[0-9]+$')::integer END)*interval '1 microsecond'; UPDATE jobs SET created_at='2000-01-01'; UPDATE artifacts SET created_at='2000-01-01',expires_at=CASE WHEN expires_at<now() THEN '2000-01-01'::timestamptz ELSE '2100-01-01'::timestamptz END`)
+	capacityExec(t, f.api.DB, "ANALYZE")
+	report["runtime_role"] = ttlProbeRuntime(t, f)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	var settings json.RawMessage
+	err = f.api.DB.QueryRow(ctx, `SELECT jsonb_build_object('server_version',current_setting('server_version'),'server_version_num',current_setting('server_version_num'),'shared_buffers',current_setting('shared_buffers'),'work_mem',current_setting('work_mem'),'max_connections',current_setting('max_connections'),'jit',current_setting('jit'),'fsync',current_setting('fsync'),'synchronous_commit',current_setting('synchronous_commit'))`).Scan(&settings)
+	cancel()
+	if err != nil {
+		t.Fatal("measurement settings evidence missing", err)
+	}
+	report["postgresql_settings"] = settings
+	initial := ttlProbeSnapshot(t, f)
+	ttlProbeSave(t, output, "initial-snapshot.json", initial)
+	report["initial_snapshot_sha256"] = ttlProbeSHA(initial)
+	report["initial_accounting"] = ttlProbeAccounting(t, f)
+	for pair := 1; pair <= 20; pair++ {
+		order := []string{"baseline", "candidate"}
+		if pair%2 == 0 {
+			order = []string{"candidate", "baseline"}
+		}
+		for _, label := range order {
+			ordinal := len(samples) + 1
+			report["current_stage"] = fmt.Sprintf("sample-%02d-%s", ordinal, label)
+			sql := string(baseline)
+			if label == "candidate" {
+				sql = sourceRetentionSQL
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			begin := time.Now()
+			tx, err := f.api.storageTx(ctx)
+			fenceNS := time.Since(begin).Nanoseconds()
+			if err != nil {
+				cancel()
+				t.Fatal("measurement fence failed", err)
+			}
+			// A failed evidence write must also release this sample transaction.
+			defer rollbackStorage(tx)
+			var raw json.RawMessage
+			begin = time.Now()
+			err = tx.QueryRow(ctx, "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "+sql, float64(3600), 200).Scan(&raw)
+			clientNS := time.Since(begin).Nanoseconds()
+			sample := map[string]any{"ordinal": ordinal, "pair": pair, "query": label, "sql_sha256": ttlProbeSHA([]byte(sql)), "fence_elapsed_ns": fenceNS, "client_elapsed_ns": clientNS, "rollback_acknowledged": false}
+			samples = append(samples, sample)
+			if len(raw) != 0 {
+				name := fmt.Sprintf("plan-%02d-%s.json", ordinal, label)
+				ttlProbeSave(t, output, name, raw)
+				sample["plan_file"] = name
+				sample["plan_sha256"] = ttlProbeSHA(raw)
+			}
+			var retained, expired int64
+			if err == nil {
+				err = tx.QueryRow(ctx, "SELECT count(*) FILTER(WHERE id LIKE 'retained-source-%'),count(*) FILTER(WHERE id LIKE 'expired-source-%') FROM sources").Scan(&retained, &expired)
+			}
+			sample["retained_pinned_remaining"], sample["expired_remaining"] = retained, expired
+			rollbackCtx, stopRollback := context.WithTimeout(context.Background(), time.Second)
+			rollbackErr := tx.Rollback(rollbackCtx)
+			stopRollback()
+			cancel()
+			sample["rollback_acknowledged"] = rollbackErr == nil
+			if err != nil || rollbackErr != nil || retained != 1000 || expired != 0 {
+				report["failure"] = "query_or_rollback_or_row_invariant_failed"
+				t.Fatal("measurement query, rollback or row invariant failed", err, rollbackErr, retained, expired)
+			}
+			var plans []struct {
+				Execution float64 `json:"Execution Time"`
+			}
+			if err := json.Unmarshal(raw, &plans); err != nil || len(plans) != 1 || plans[0].Execution < 0 {
+				t.Fatal("measurement EXPLAIN JSON malformed", err)
+			}
+			sample["postgres_execution_ms"] = plans[0].Execution
+			persisted := ttlProbeSnapshot(t, f)
+			if string(persisted) != string(initial) {
+				t.Fatal("measurement rollback changed application rows or xmin")
+			}
+			name := fmt.Sprintf("snapshot-%02d-%s.json", ordinal, label)
+			ttlProbeSave(t, output, name, persisted)
+			sample["persisted_snapshot_file"] = name
+			sample["persisted_snapshot_sha256"] = ttlProbeSHA(persisted)
+			sample["accounting"] = ttlProbeAccounting(t, f)
+		}
+	}
+	report["final_accounting"] = ttlProbeAccounting(t, f)
+	report["current_stage"] = "complete"
+	report["complete"], report["pass"] = true, true
+}
+
+func ttlProbeRuntime(t *testing.T, f capacityFixture) map[string]any {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	role := newID("comparison_role")
+	name := pgx.Identifier{role}.Sanitize()
+	namespace := pgx.Identifier{f.schema}.Sanitize()
+	capacityExec(t, f.admin, "CREATE ROLE "+name+" NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION")
+	t.Cleanup(func() {
+		f.api.DB.Close()
+		f.maintenance.DB.Close()
+		capacityExec(t, f.admin, "DROP OWNED BY "+name+"; DROP ROLE "+name)
+	})
+	capacityExec(t, f.admin, "REVOKE ALL ON ALL TABLES IN SCHEMA "+namespace+" FROM PUBLIC; REVOKE ALL ON ALL FUNCTIONS IN SCHEMA "+namespace+" FROM PUBLIC; GRANT USAGE ON SCHEMA "+namespace+" TO "+name)
+	rows, err := f.admin.Query(ctx, "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND c.relkind='r' ORDER BY c.relname", f.schema)
+	if err != nil {
+		t.Fatal("runtime table inventory failed")
+	}
+	tables, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatal("runtime table inventory failed")
+	}
+	for _, table := range tables {
+		privileges := "SELECT,INSERT,UPDATE,DELETE"
+		if table == "app_schema_versions" || table == "app_schema_migrations" {
+			privileges = "SELECT,MAINTAIN"
+		}
+		capacityExec(t, f.admin, "GRANT "+privileges+" ON "+pgx.Identifier{f.schema, table}.Sanitize()+" TO "+name)
+	}
+	for _, store := range []*Store{f.api, f.maintenance} {
+		config := store.DB.Config().Copy()
+		config.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+			_, err := conn.Exec(ctx, "SET ROLE "+name)
+			return err
+		}
+		store.DB.Close()
+		store.DB, err = pgxpool.NewWithConfig(ctx, config)
+		if err != nil {
+			t.Fatal("runtime pool setup failed")
+		}
+		var current string
+		var super, create, ledgerWrite, sourceWrite bool
+		if err = store.DB.QueryRow(ctx, "SELECT current_user,rolsuper,has_schema_privilege(current_user,$1,'CREATE'),has_table_privilege(current_user,'app_schema_migrations','INSERT,UPDATE,DELETE'),has_table_privilege(current_user,'sources','INSERT') AND has_table_privilege(current_user,'sources','UPDATE') AND has_table_privilege(current_user,'sources','DELETE') AND has_table_privilege(current_user,'sources','SELECT') FROM pg_roles WHERE rolname=current_user", f.schema).Scan(&current, &super, &create, &ledgerWrite, &sourceWrite); err != nil || current != role || super || create || ledgerWrite || !sourceWrite {
+			t.Fatal("effective runtime role differs")
+		}
+	}
+	return map[string]any{"pass": true, "effective_role": role, "session_login_is_fixture_admin": true, "superuser": false, "schema_create": false, "migration_ledger_insert": false, "ordinary_table_dml": true, "function_execute_granted": false}
+}
+
