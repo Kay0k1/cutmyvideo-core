@@ -1,0 +1,69 @@
+name: Storage005 capacity pilot
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - benchmarks/storage005/**
+      - .github/workflows/storage005-capacity.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: storage005-capacity-pilot
+  cancel-in-progress: false
+
+jobs:
+  pure-protocol:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Pure fixtures (all actual children and network calls denied)
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -m unittest discover -s benchmarks/storage005 -p protocol_test.py -v
+  fixed-postgres-pilot:
+    if: github.event_name == 'workflow_dispatch'
+    needs: pure-protocol
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      GOMAXPROCS: '2'
+      GOMEMLIMIT: 128MiB
+      GOTOOLCHAIN: local
+      PYTHONDONTWRITEBYTECODE: '1'
+      GOCACHE: ${{ runner.temp }}/storage005-go-cache
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Exact schema004 source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: 63873e935626d51087d0a26b84f1de9a7ed86a28
+          path: .comparison/before
+          persist-credentials: false
+      - name: Exact schema005 source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: cf612b3b2c7610e4f8cac3dba22258b756f129a4
+          path: .comparison/after
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.2'
+          cache: false
+      - name: Common fixed-source pilot (all original failures remain failures)
+        run: python3 benchmarks/storage005/run_hosted.py
+      - name: Preserve original measurements and refusals
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: storage005-pilot-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/storage005-pilot/
+          if-no-files-found: warn
+          retention-days: 30
