@@ -6,6 +6,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import signal
 import ssl
 import subprocess
@@ -1118,6 +1119,116 @@ class HostAndEvidenceControls(unittest.TestCase):
         self.assertIn('safe diagnostic', clean)
         for secret in ('known-cookie', 'known-password', 'future-cookie', 'PRIVATE KEY-----', '\nsecret\n'):
             self.assertNotIn(secret, clean)
+
+
+class RuntimeCounterControls(unittest.TestCase):
+    """Execute the roles flow against a schema-derived transactional SQL model."""
+    def reservation(self, query):
+        schema = (ROOT.parent / 'internal/app/migrations/001_20261005_storage_queue_v3.sql').read_text()
+        block = re.search(r'CREATE TABLE IF NOT EXISTS storage_reservations \((.*?)\n\);', schema, re.S)[1]
+        mandatory = set()
+        for definition in block.split(','):
+            column = re.match(r'\s*(\w+)\s+(.*)', definition, re.S)
+            if column and ('PRIMARY KEY' in column[2] or 'NOT NULL' in column[2] and 'DEFAULT' not in column[2]):
+                mandatory.add(column[1])
+        match = re.fullmatch(r"BEGIN; INSERT INTO storage_reservations\(([^()]*)\) VALUES\((.*)\); "
+                             r"SELECT reserved_bytes FROM storage_counters WHERE id=1; ROLLBACK;", query)
+        self.assertIsNotNone(match, 'the runtime probe must read its trigger delta and roll back in the same transaction')
+        columns, values = match[1].split(','), match[2].split(',')
+        self.assertEqual(len(columns), len(set(columns)))
+        self.assertEqual(len(columns), len(values))
+        row = dict(zip(columns, values))
+        for column in mandatory:
+            if column not in row or row[column].upper() == 'NULL':
+                raise RuntimeError('model schema NOT NULL violation: ' + column)
+        self.assertEqual(row['id'], "'acceptance_bace259051'")
+        self.assertEqual(row['owner'], "'acceptance_bace259051'")
+        self.assertRegex(row['owner'], r"^'[a-z0-9_]{1,80}'$")
+        self.assertEqual(row['kind'], "'acceptance_counter'")
+        self.assertEqual(row['size_bytes'], '7')
+        self.assertEqual(row['expires_at'], "clock_timestamp()+interval '1 minute'")
+        return row
+
+    def flow(self, *, trigger_delta=7, durable_delta=0, dml_failure=False):
+        obj = a.Acceptance.__new__(a.Acceptance)
+        obj.token = 'bace259051'; obj.current = {'state': Path('/owned/current')}
+        obj.compose = Mock(return_value=['docker', 'compose', '--project-name', 'cutmy_pure'])
+        obj.wrapper = Mock(); obj.catalog = Mock(return_value={'history': ['immutable']})
+        obj.accounting = Mock(return_value=({'reserved_bytes': 100}, [])); obj.check = Mock()
+        state = {'counter': 100, 'transactions': [], 'counter_reads': 0}
+        def run(command, *, input, expected, timeout):
+            self.assertEqual(command[:5], ['docker', 'compose', '--project-name', 'cutmy_pure', 'exec'])
+            self.assertEqual(command[-5:-1], ['-T', 'postgres', 'sh', '-c'])
+            script = command[-1]
+            self.assertIn('PGCONNECT_TIMEOUT=2', script)
+            self.assertIn('psql -X -qAt -v ON_ERROR_STOP=1 -h 127.0.0.1', script)
+            self.assertEqual(timeout, 120)
+            prefix = b'\\set VERBOSITY verbose\n'
+            self.assertTrue(input.startswith(prefix) and input.endswith(b'\n'))
+            query = input[len(prefix):-1].decode()
+            runtime = '-U cutmy_runtime -d cutmy' in script
+            self.assertIn('PGPASSWORD="$CUTMY_APP_PASSWORD"' if runtime else 'PGPASSWORD="$POSTGRES_PASSWORD"', script)
+            if query == 'SELECT current_user,session_user':
+                self.assertTrue(runtime); self.assertEqual(expected, 0)
+                return b'cutmy_runtime|cutmy_runtime\n'
+            if expected is None:
+                self.assertTrue(runtime)
+                return 3, b'', b'ERROR: 42501: permission denied\n'
+            if query == 'SELECT reserved_bytes FROM storage_counters WHERE id=1':
+                self.assertFalse(runtime); self.assertEqual(expected, 0)
+                state['counter_reads'] += 1
+                return str(state['counter']).encode() + b'\n'
+            self.assertTrue(runtime); self.assertEqual(expected, 0)
+            self.reservation(query); state['transactions'].append(query)
+            if dml_failure:
+                raise RuntimeError('bounded command returned unexpected exit')
+            state['counter'] += durable_delta
+            return str(100 + trigger_delta).encode() + b'\n'
+        obj.run = Mock(side_effect=run)
+        return obj, state
+
+    def test_roles_transaction_satisfies_real_schema_and_checks_trigger_rollback_maintenance(self):
+        obj, state = self.flow()
+        with patch.object(a.subprocess, 'Popen') as popen:
+            obj.roles()
+        popen.assert_not_called()
+        self.assertEqual(state['counter'], 100)
+        self.assertEqual(state['counter_reads'], 2)
+        self.assertEqual(len(state['transactions']), 1)
+        self.assertEqual([call.args[1] for call in obj.wrapper.call_args_list], ['up', 'stop', 'maintenance', 'up'])
+        self.assertEqual(obj.catalog.call_count, 3)
+        self.assertEqual([call.args[0] for call in obj.check.call_args_list], list(a.GROUPS['roles']))
+        obj.accounting.assert_called_once_with(obj.current)
+
+    def test_original_ownerless_and_null_owner_reservations_fail_schema_contract(self):
+        original = ("BEGIN; INSERT INTO storage_reservations(id,kind,size_bytes,expires_at) VALUES('acceptance_bace259051',"
+                    "'acceptance_counter',7,clock_timestamp()+interval '1 minute'); "
+                    "SELECT reserved_bytes FROM storage_counters WHERE id=1; ROLLBACK;")
+        null_owner = original.replace('(id,kind,', '(id,owner,kind,').replace("'acceptance_counter',7", "NULL,'acceptance_counter',7")
+        for query in (original, null_owner):
+            with self.subTest(query=query), self.assertRaisesRegex(RuntimeError, 'NOT NULL violation: owner'):
+                self.reservation(query)
+
+    def test_wrong_trigger_delta_cannot_complete_roles_receipt(self):
+        obj, _ = self.flow(trigger_delta=8)
+        with self.assertRaisesRegex(RuntimeError, 'did not execute counter trigger'):
+            obj.roles()
+        self.assertNotIn('reduced_grant_counter_and_maintenance', [call.args[0] for call in obj.check.call_args_list])
+        self.assertNotIn('maintenance', [call.args[1] for call in obj.wrapper.call_args_list])
+
+    def test_durable_rollback_change_cannot_complete_roles_receipt(self):
+        obj, _ = self.flow(durable_delta=1)
+        with self.assertRaisesRegex(RuntimeError, 'changed durable accounting'):
+            obj.roles()
+        self.assertNotIn('reduced_grant_counter_and_maintenance', [call.args[0] for call in obj.check.call_args_list])
+        self.assertNotIn('maintenance', [call.args[1] for call in obj.wrapper.call_args_list])
+
+    def test_runtime_dml_error_cannot_be_a_success_receipt(self):
+        obj, _ = self.flow(dml_failure=True)
+        with self.assertRaisesRegex(RuntimeError, 'unexpected exit'):
+            obj.roles()
+        self.assertNotIn('reduced_grant_counter_and_maintenance', [call.args[0] for call in obj.check.call_args_list])
+        self.assertNotIn('maintenance', [call.args[1] for call in obj.wrapper.call_args_list])
 
 
 if __name__ == '__main__':

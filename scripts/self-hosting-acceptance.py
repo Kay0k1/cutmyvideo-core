@@ -1539,8 +1539,8 @@ class Acceptance:
         self.check('unchanged_schema_and_history', {'sha256': digest(canonical(before))})
         self.wrapper(self.current, 'stop')
         initial = int(self.sql(self.current, 'SELECT reserved_bytes FROM storage_counters WHERE id=1'))
-        statement = ("BEGIN; INSERT INTO storage_reservations(id,kind,size_bytes,expires_at) VALUES('acceptance_" + self.token
-                     + "','acceptance_counter',7,clock_timestamp()+interval '1 minute'); "
+        statement = ("BEGIN; INSERT INTO storage_reservations(id,owner,kind,size_bytes,expires_at) VALUES('acceptance_" + self.token
+                     + "','acceptance_" + self.token + "','acceptance_counter',7,clock_timestamp()+interval '1 minute'); "
                      "SELECT reserved_bytes FROM storage_counters WHERE id=1; ROLLBACK;")
         require(int(self.sql(self.current, statement, runtime=True)) == initial + 7, 'runtime DML did not execute counter trigger')
         require(int(self.sql(self.current, 'SELECT reserved_bytes FROM storage_counters WHERE id=1')) == initial,
