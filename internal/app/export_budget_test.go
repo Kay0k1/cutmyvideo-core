@@ -91,6 +91,14 @@ func TestDurationBasedBudgetIsUsedForAdmissionClaimAndPublication(t *testing.T) 
 	s.ConfigureStorage(c)
 	ctx := context.Background()
 	source := storedSource(t, s, "duration-budget-owner")
+	sourceFile, err := os.Stat(source.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceBytes, initialReserved := ledgerBytes(t, s)
+	if sourceFile.Size() <= 0 || sourceBytes != sourceFile.Size() || initialReserved != 0 {
+		t.Fatal("completed source is not charged exactly once", sourceBytes, sourceFile.Size(), initialReserved)
+	}
 	request := requestFor(source)
 	request.Ranges = []Range{{StartMS: 1000, EndMS: 3000}, {StartMS: 1000, EndMS: 5000}}
 	if _, err := s.CreateJobLimited(ctx, source.Owner, request, "", 3, 32); err != nil {
@@ -112,7 +120,7 @@ func TestDurationBasedBudgetIsUsedForAdmissionClaimAndPublication(t *testing.T) 
 		t.Fatalf("publication still tried to debit the global output ceiling: %v", err)
 	}
 	files, after := ledgerBytes(t, s)
-	if files != 4096 || after != second {
-		t.Fatalf("publication lost storage accounting: files=%d remaining=%d", files, after)
+	if files-sourceBytes != 4096 || after != second {
+		t.Fatalf("publication lost storage accounting: source=%d files=%d remaining=%d", sourceBytes, files, after)
 	}
 }

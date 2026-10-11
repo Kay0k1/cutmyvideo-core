@@ -379,7 +379,7 @@ func stageHLSProgress(ctx context.Context, c Config, g *networkGuard, f platform
 func stageHLSGroup(ctx context.Context, c Config, g *networkGuard, f platformFormat, segments []hlsSegment, dir string, index int, downloaded *atomic.Int64, limit, muxLimit int64, progress func(int, int)) (string, int64, error) {
 	var e error
 	raw := filepath.Join(dir, fmt.Sprintf("stream-%d.media", index))
-	out := filepath.Join(dir, fmt.Sprintf("stream-%d.mkv", index))
+	var out string
 	file, e := os.OpenFile(raw, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if e != nil {
 		return "", 0, e
@@ -406,16 +406,33 @@ func stageHLSGroup(ctx context.Context, c Config, g *networkGuard, f platformFor
 	}
 	// Restrict protocols/demuxers even after staging. HLS, concat and arbitrary
 	// network or file references are not accepted by FFmpeg.
-	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-max_alloc", "268435456", "-protocol_whitelist", "file", "-format_whitelist", mediaFormats}
-	args = append(args, mediaInputBounds(c)...)
-	args = append(args, "-fflags", "+genpts", "-i", raw, "-map", "0:v:0?", "-map", "0:a:0?", "-c", "copy", "-avoid_negative_ts", "make_zero", "-map_metadata", "-1", "-fs", strconv.FormatInt(muxLimit, 10), out)
-	_, e = runCommand(ctx, c.FFmpeg, args...)
+	rawInfo, e := probeStreams(ctx, c, raw, false)
 	if e != nil {
 		return "", 0, e
 	}
+	selection := mediaSelection{Video: rawInfo.selectedVideo(), Audio: rawInfo.selectedAudio()}
+	if selection.Video == nil && selection.Audio == nil {
+		return "", 0, errUnsupportedStream
+	}
+	// Older Matroska muxers silently discard display matrices. A rotated
+	// selected video uses MP4 so both later rendering and stream copy retain
+	// its presentation; its selected codecs must therefore be MP4 compatible.
+	out = filepath.Join(dir, fmt.Sprintf("stream-%d.%s", index, hlsStageExtension(selection.Video)))
+	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-max_alloc", "268435456", "-protocol_whitelist", "file", "-format_whitelist", mediaFormats}
+	args = append(args, mediaInputBounds(c)...)
+	args = append(args, "-fflags", "+genpts", "-i", raw)
+	args = append(args, selection.mapArgs("mp4")...)
+	args = append(args, "-c", "copy", "-avoid_negative_ts", "make_zero", "-map_metadata", "-1", "-fs", strconv.FormatInt(muxLimit, 10), out)
+	_, e = runCommand(ctx, c.FFmpeg, args...)
+	if e != nil {
+		return "", 0, hlsRemuxFailure(e, selection.Video)
+	}
 	info, duration, e := probe(ctx, c, out, false)
+	if e != nil {
+		return "", 0, e
+	}
 	expected := segments[len(segments)-1].EndMS - segments[0].StartMS
-	if e != nil || math.Abs(float64(duration-expected)) > 1000 {
+	if math.Abs(float64(duration-expected)) > 1000 || !sameHLSPresentation(rawInfo, info) {
 		return "", 0, errUnsupportedStream
 	}
 	stat, e := os.Stat(out)
@@ -426,26 +443,14 @@ func stageHLSGroup(ctx context.Context, c Config, g *networkGuard, f platformFor
 	// EXTINF's timeline is anchored to the first video presentation timestamp,
 	// not the muxer's earliest audio/DTS. Preserve that relation explicitly.
 	anchor := math.NaN()
-	for _, stream := range info.Streams {
-		if stream.CodecType == "video" {
-			value, err := strconv.ParseFloat(stream.StartTime, 64)
-			if err != nil {
-				return "", 0, errUnsupportedStream
-			}
-			anchor = value
-			break
-		}
+	anchorStream := info.selectedVideo()
+	if anchorStream == nil {
+		anchorStream = info.selectedAudio()
 	}
-	if math.IsNaN(anchor) {
-		for _, stream := range info.Streams {
-			if stream.CodecType == "audio" {
-				value, err := strconv.ParseFloat(stream.StartTime, 64)
-				if err != nil {
-					return "", 0, errUnsupportedStream
-				}
-				anchor = value
-				break
-			}
+	if anchorStream != nil {
+		anchor, e = strconv.ParseFloat(anchorStream.StartTime, 64)
+		if e != nil {
+			return "", 0, errUnsupportedStream
 		}
 	}
 	if math.IsNaN(anchor) || math.IsInf(anchor, 0) || anchor < 0 || anchor > 2 {

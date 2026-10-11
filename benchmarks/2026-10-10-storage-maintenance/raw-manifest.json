@@ -1,0 +1,76 @@
+{
+  "format": 1,
+  "compression": "gzip, mtime=0, empty filename, level=9",
+  "files": [
+    {
+      "path": "baseline/rows-10000.json.gz",
+      "uncompressed_bytes": 2054800,
+      "uncompressed_sha256": "f5f5113190784c896c29c4845cc8f60273aae2b8135431fd2f4ec42db7df84a7",
+      "gzip_bytes": 49705,
+      "gzip_sha256": "46c28f707ef4f62b0b769fc7cd84ca7f9bf64f0b6be134fd2553e5ba41736b97"
+    },
+    {
+      "path": "baseline/rows-100000.json.gz",
+      "uncompressed_bytes": 2085493,
+      "uncompressed_sha256": "955e184ecbdd9724db4b433c485dc88e98e6eb324506739bf95a5c80e74aa34e",
+      "gzip_bytes": 56281,
+      "gzip_sha256": "020c40580659d583b67c6ce4b82909924328d08e9566ebfd9930102f7ac966b1"
+    },
+    {
+      "path": "baseline/environment.json.gz",
+      "uncompressed_bytes": 3023148,
+      "uncompressed_sha256": "b808519cada69114f118b4a50371a4d9e7c64ce58e75bed7fd1bf551624748fc",
+      "gzip_bytes": 78743,
+      "gzip_sha256": "6a2106a4290d8b8671725c03f35f9c99fb4247a697fd22b9616fa54f87401f67"
+    },
+    {
+      "path": "baseline/workload.log.gz",
+      "uncompressed_bytes": 608,
+      "uncompressed_sha256": "1a713c3c4d151f0cff3de091770ee21ff37b2ed538a5555aa5bc86ccedb01c70",
+      "gzip_bytes": 241,
+      "gzip_sha256": "8e0bb6a29a08ddd80f8fc7cb44ce8b4f453876363bae33a7eae5484ef184a53e"
+    },
+    {
+      "path": "baseline/build.log.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "gzip_bytes": 20,
+      "gzip_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "path": "after/rows-10000.json.gz",
+      "uncompressed_bytes": 1688209,
+      "uncompressed_sha256": "e363f18a4f5640e41289e24053c183e731343493bebb7840cfdb44beb96add5a",
+      "gzip_bytes": 37898,
+      "gzip_sha256": "4561174fca9648620d2746022780b4b77cf7e6f64127b78a1157809e968bcf15"
+    },
+    {
+      "path": "after/rows-100000.json.gz",
+      "uncompressed_bytes": 1635519,
+      "uncompressed_sha256": "ccd104acc46fb758251b138c9bd7397d4e9848948bc325f06328715424856613",
+      "gzip_bytes": 38966,
+      "gzip_sha256": "7a10038ff5756a6e6ded5ff0ddf489db3c70cb6b8c4f94d1e661eba181b790bf"
+    },
+    {
+      "path": "after/environment.json.gz",
+      "uncompressed_bytes": 1863436,
+      "uncompressed_sha256": "95df86fb5fad6aa3740cb5975731af368ca9e71065d2fbe94050b64dcaf98c3d",
+      "gzip_bytes": 57353,
+      "gzip_sha256": "0c06b9c8a599e3be4690d6b3ee110f9a65c507e8eaf92978edbbb95f45edb76c"
+    },
+    {
+      "path": "after/workload.log.gz",
+      "uncompressed_bytes": 546,
+      "uncompressed_sha256": "4e89ad763182f8ea499eab45734cb5cab71d858cfd1f26f8adad47152ef0fdad",
+      "gzip_bytes": 206,
+      "gzip_sha256": "f0138bb02a4855a203ec69742a8dedc8c3a7cd37a60193538d5db4181c4bf297"
+    },
+    {
+      "path": "after/build.log.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "gzip_bytes": 20,
+      "gzip_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    }
+  ]
+}

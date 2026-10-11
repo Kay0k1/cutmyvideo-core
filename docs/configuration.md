@@ -7,7 +7,10 @@ database and `DATA_DIR` for all three. `clip` and `inspect` only read
 Byte values are decimal integers, not `1GiB` strings. Durations use Go syntax
 (`30s`, `2m`, `12h`), must be positive and may not exceed 30 days. These are
 **code defaults**; the [Compose example](../deploy/compose.example.yml) uses
-smaller upload/output/storage/range budgets for a local trial.
+smaller upload/output/storage/range budgets for a local trial. The separately
+prepared [public profile](self-hosting.md) also constrains container resources,
+private temporary storage, database roles and checked network policy; it awaits
+real container acceptance.
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -42,6 +45,11 @@ smaller upload/output/storage/range budgets for a local trial.
 | `GOMEMLIMIT` | Go default; `128MiB` in Docker | Soft Go memory target; does not limit FFmpeg/container |
 
 Positive byte limits are required; reservation arithmetic is checked for overflow.
+Native storage admission checks free space on Linux, macOS and Windows, including
+outstanding reservations and `STORAGE_SAFETY_BYTES`. A missing `DATA_DIR` uses its
+nearest existing parent; query errors and invalid paths refuse admission. Windows
+uses the free bytes available to the caller, including per-user quotas. These
+snapshots do not reserve physical disk space or replace a real volume quota.
 A session can retain 20 source records and three active jobs. Source preparation
 admits one per session and four globally. See the [API](api.md) for request limits
 and fixed diagnostics.
@@ -69,6 +77,15 @@ PostgreSQL pools default to four connections per process. Explicit `pool_max_con
 public hosting uses one API because IP rate limits are process-local. Multiple
 workers share durable state; processing/RAM budgets remain local.
 
-For custom `LISTEN_ADDR`, probe its `/readyz` directly: `cutmy healthcheck` currently
-uses `http://127.0.0.1:8080/readyz`. Worker health validates successful queue/lease
-access within 30 seconds rather than the existence of a process.
+API database stages have a fixed five-second deadline, including connection-pool
+acquisition and SQL lock waits. An earlier caller deadline wins. Media transfer
+and processing retain their separate deadlines; the database deadline does not
+limit the duration of an upload, export or download. Unavailable database
+operations return HTTP 503 `database_unavailable`; this response does not prove
+that a submitted mutation was never committed. See the [API error contract](api.md)
+before retrying a mutation.
+
+`cutmy healthcheck` uses `LISTEN_ADDR`, including custom ports. Wildcard listen
+addresses are probed through local loopback; it requests `/readyz`. Worker health
+validates successful queue/lease access within 30 seconds rather than the
+existence of a process.

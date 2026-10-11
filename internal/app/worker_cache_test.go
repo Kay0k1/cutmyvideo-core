@@ -62,6 +62,22 @@ func TestWorkerCachedDenialRefreshesOnceAndKeepsFreshFailuresTerminal(t *testing
 			if err != nil {
 				t.Fatal(err)
 			}
+			// The controlled encoder does not fetch the example upstream URLs.
+			// Its input probe must nevertheless describe real media, and output
+			// validation must continue to inspect the actual published result.
+			input := filepath.Join(c.DataDir, "controlled-input.mp4")
+			if _, err := runCommand(ctx, actualFFmpeg, "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=25", "-f", "lavfi", "-i", "sine=frequency=800:sample_rate=48000", "-t", "4", "-c:v", "libx264", "-threads", "1", "-c:a", "aac", input); err != nil {
+				t.Fatal(err)
+			}
+			actualProbe, err := exec.LookPath(c.FFprobe)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.FFprobe = filepath.Join(c.DataDir, "controlled-probe")
+			probeScript := "#!/bin/sh\nfor value do\ncase \"$value\" in\nhttp://127.0.0.1:*) exec " + workerFixtureQuote(actualProbe) + " -v error -show_entries " + workerFixtureQuote(mediaProbeEntries) + " -show_data_hash sha256 -of json " + workerFixtureQuote(input) + ";;\nesac\ndone\nexec " + workerFixtureQuote(actualProbe) + " \"$@\"\n"
+			if err := os.WriteFile(c.FFprobe, []byte(probeScript), 0700); err != nil {
+				t.Fatal(err)
+			}
 			encodeCount := filepath.Join(c.DataDir, "encode-count")
 			c.FFmpeg = filepath.Join(c.DataDir, "fixture-encoder")
 			deny := "[ \"$count\" -eq 1 ]"

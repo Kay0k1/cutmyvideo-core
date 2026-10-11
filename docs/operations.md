@@ -2,6 +2,11 @@
 
 ## Install
 
+The new [public profile](self-hosting.md) is prepared separately and awaits its
+container acceptance run. Its wrapper retains HTTPS settings, role separation
+and policy checks throughout the lifecycle. The commands below describe the
+existing local trial; they do not install that public profile.
+
 Use the [README quick start](../README.en.md#self-hosting) and
 [Compose example](../deploy/compose.example.yml) for a local trial. Docker includes
 the binary, FFmpeg/ffprobe, checksum-pinned yt-dlp and Node runtime. Native CLI
@@ -22,6 +27,13 @@ egress, and keep unrelated host files/secrets out of media containers. See the
 [security model](security-model.md). The product UI is maintained privately; all
 instructions below work with this repository alone.
 
+For the local trial, use a Bash command array so later lifecycle commands keep
+the same configuration. Run from the repository root:
+
+```sh
+compose=(docker compose --env-file .env -f deploy/compose.example.yml)
+```
+
 ## HTTPS with Caddy
 
 This example exposes the API on your domain with Caddy running **directly on the
@@ -37,8 +49,9 @@ Keep the existing private `.env` and add the domain (replace the example):
 
 ```sh
 printf '\nCUTMY_DOMAIN=video.example.org\n' >> .env
-docker compose --env-file .env \
-  -f deploy/compose.example.yml -f deploy/compose.https.example.yml up --build -d
+compose=(docker compose --env-file .env \
+  -f deploy/compose.example.yml -f deploy/compose.https.example.yml)
+"${compose[@]}" up --build -d
 ```
 
 The [HTTPS overlay](../deploy/compose.https.example.yml) sets
@@ -85,14 +98,16 @@ from Caddy's inbound HTTPS rules and test it after Docker/host restarts.
 ## Health and capacity
 
 ```sh
-docker compose --env-file .env -f deploy/compose.example.yml ps
+"${compose[@]}" ps
 curl --fail http://localhost:8080/healthz
 curl --fail http://localhost:8080/readyz
-docker compose --env-file .env -f deploy/compose.example.yml exec -T worker cutmy worker-healthcheck
+"${compose[@]}" exec -T worker cutmy worker-healthcheck
 ```
 
 Readiness checks PostgreSQL; worker health independently requires successful
-queue/lease access within 30 seconds. Keep its marker container-local. Monitor
+queue/lease access within 30 seconds. `cutmy healthcheck` uses `LISTEN_ADDR`,
+including custom ports; wildcard addresses are probed through local loopback.
+Keep the worker marker container-local. Monitor
 health failures, restarts, queue/storage wait, disk headroom and export errors.
 Logs include stage timings and sanitized errors; preserve privacy when sharing.
 
@@ -101,21 +116,67 @@ backups, OS and logs. Large/unknown video inputs occupy a worker's whole pool;
 concurrency does not promise throughput. Measure representative load before
 raising it.
 
+## Output publication guarantees
+
+Current-source local exports, uploaded/direct sources, thumbnails, window
+previews and server artifacts synchronize completed file data and the required
+directory entries before reporting success or committing their database
+metadata. Publication never replaces an existing output. Local export checks
+hard-link and synchronization support in the destination filesystem before
+encoding; use a filesystem that provides these operations reliably. The
+containing directory hierarchy of a local export must already be persistent.
+The service creates and synchronizes each missing directory in its owned media
+hierarchy. It synchronizes known parents, not unrelated ancestors created by
+the caller immediately before an export.
+
+If a final name was created but directory synchronization fails, local export
+returns `publication_uncertain` and retains that name. Inspect the destination
+before retrying; an existing result is never overwritten or unlinked to guess
+away an uncertain outcome.
+
+A database connection failure during COMMIT can leave its outcome unknown.
+Sources, previews and workers retain possibly committed files and recover from authoritative database
+state instead of deleting those results. API HTTP 503, 408 and 504 similarly do
+not prove that a mutation was not applied. Reuse an export's `Idempotency-Key`
+when recovering its retained submission, including after admission limits change.
+For an uncertain source registration, check the same session's source list
+before deciding to import/upload again. Do not turn transient diagnostics into
+automatic retries of arbitrary mutations.
+
+These guarantees depend on the filesystem and storage honoring synchronization;
+they do not replace backups or protect against failed hardware. The new
+synchronization contract applies to newly published files; existing files are
+not retroactively verified or synchronized. Unsupported filesystems fail rather
+than silently acknowledging weaker publication. Native CI exercises the same
+barriers on Linux, macOS and Windows; it cannot simulate a physical power loss.
+
 ## Upgrade and recover
 
 Pin a release/image revision. Read [CHANGELOG](../CHANGELOG.md), record the old
 revision/image and back up database/media before upgrading. Schema migrations run
-when API/worker/maintenance opens the store. Do not assume an older binary reads
-a newer schema; test upgrades against a restored copy first.
+when API/worker/maintenance opens the store. Current source uses immutable,
+ordered migrations and verifies known schema shape, version markers and SQL
+checksums before applying changes. Unknown/future versions or inconsistent
+schemas fail startup with the stable CLI code `schema_incompatible`; successful
+current-schema restarts perform no DDL. Historical releases lack this guard and
+must not be started against an upgraded database. See [migration rules](migrations.md)
+and the required [upgrade/recovery acceptance gate](backup-recovery.md).
+Test upgrades against a restored copy first.
+
+For a versioned Docker build, supply `VERSION`, `VCS_REF` and `BUILD_TIME` build
+arguments from the reviewed tag, exact commit and commit timestamp. `cutmy version`
+then identifies the deployed binary. Unspecified values remain `dev`/`unknown`
+rather than advertising an official release. The native CLI archive builder
+sets these values automatically from its clean tagged checkout.
 
 From the example, after checking out the intended release:
 
 ```sh
-docker compose --env-file .env -f deploy/compose.example.yml stop api worker
-docker compose --env-file .env -f deploy/compose.example.yml build api
-docker compose --env-file .env -f deploy/compose.example.yml up -d api worker
+"${compose[@]}" stop api worker
+"${compose[@]}" build api
+"${compose[@]}" up -d api worker
 curl --fail http://localhost:8080/readyz
-docker compose --env-file .env -f deploy/compose.example.yml exec -T worker cutmy worker-healthcheck
+"${compose[@]}" exec -T worker cutmy worker-healthcheck
 ```
 
 API shutdown drains in-flight requests for up to ten seconds, then forcibly closes remaining connections before database cleanup. Preserve PostgreSQL/media volumes. Interrupted jobs recover through leases within
@@ -130,19 +191,20 @@ retained installation: it deletes its database and media volumes.
 PostgreSQL stores ownership, queue and file accounting; media volumes store actual
 files. Back up both while API/worker writes are stopped for a simple consistent
 snapshot. Record release/image versions and store configuration privately.
-Restrict/encrypt backups containing user media. Run from the repository root:
+Restrict/encrypt backups containing user media. Use the same `compose` array from installation (including the HTTPS overlay
+when configured):
 
 ```sh
 set -euo pipefail
 umask 077
 backup_dir="backups/$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$backup_dir"
-docker compose --env-file .env -f deploy/compose.example.yml stop api worker
-docker compose --env-file .env -f deploy/compose.example.yml exec -T postgres \
+"${compose[@]}" stop api worker
+"${compose[@]}" exec -T postgres \
   pg_dump -U cutmy -d cutmy -Fc > "$backup_dir/database.dump"
-docker compose --env-file .env -f deploy/compose.example.yml run --rm -T --no-deps \
+"${compose[@]}" run --rm -T --no-deps \
   --entrypoint tar api -C /data -czf - . > "$backup_dir/media.tar.gz"
-docker compose --env-file .env -f deploy/compose.example.yml up -d api worker
+"${compose[@]}" up -d api worker
 ```
 
 Verify both commands succeed before resuming or treating the snapshot as complete.
@@ -155,12 +217,12 @@ the backed-up release, with the old service stopped or a separate port:
 ```sh
 set -euo pipefail
 export COMPOSE_PROJECT_NAME=cutmy-restore
-docker compose --env-file .env -f deploy/compose.example.yml up -d --wait postgres
-docker compose --env-file .env -f deploy/compose.example.yml exec -T postgres \
+"${compose[@]}" up -d --wait postgres
+"${compose[@]}" exec -T postgres \
   pg_restore --exit-on-error --no-owner --no-privileges -U cutmy -d cutmy < "$backup_dir/database.dump"
-docker compose --env-file .env -f deploy/compose.example.yml run --rm -T --no-deps \
+"${compose[@]}" run --rm -T --no-deps \
   --entrypoint tar api -C /data -xzf - < "$backup_dir/media.tar.gz"
-docker compose --env-file .env -f deploy/compose.example.yml up -d api worker
+"${compose[@]}" up -d api worker
 ```
 
 Verify API/worker health, source listing and a synthetic export/download before
@@ -173,11 +235,49 @@ Worker maintenance deletes expired unpinned media and reconciles abandoned files
 Run a bounded cycle independently while the worker is stopped:
 
 ```sh
-docker compose --env-file .env -f deploy/compose.example.yml run --rm -T --no-deps api maintenance
+"${compose[@]}" run --rm -T --no-deps api maintenance
 ```
 
 Each cycle has a ten-second budget; backlogs may need multiple cycles. Active jobs
-pin inputs/results. Failed physical deletion remains charged and retries later.
+pin inputs/results. Retention, file reconciliation and workspace cleanup receive
+separate budgets, so an error or long scan in one stage does not consume every
+stage's time. Completed directory batches and workspace scheduling positions
+are persisted in PostgreSQL and survive API/worker restarts.
+
+Initial accounting finishes before new source/preview/worker disk admission.
+Large restored trees may return `503 storage_initializing` with `Retry-After: 2`;
+the worker and retrying admissions advance the same stored progress. Directory
+membership changes reset that directory's coverage, and completed roots are
+checked again before admission opens. A call retains at most three directory
+readers and advances each reader after its database batch commits. An unchanged
+directory is read once during that call, with bounded names/stat/SQL batches.
+Readers close on exit, cancellation, changed membership or uncertain commit;
+workspace readers close before physical removal, including on Windows.
+Across calls and restarts, resume verifies the saved prefix in fixed chunks.
+That verification remains O(prefix); frequent interruptions, path switches or
+constantly changing directories can still repeat work. Batches bound memory
+and transactions, not total traversal time. Keep media
+directories private and finish restoration before starting writers.
+
+Expired metadata cache cleanup deletes at most 200 entries per statement in
+expiry/source order and skips locked rows. It receives at most 250 milliseconds
+and a small share of the remaining retention deadline. A cache-stage failure is
+reported while successfully committed media deletions still proceed; cache-only
+backlogs can use the worker's existing eight-batch retention limit.
+
+Source TTL selects at most 200 oldest indexed candidates and checks their actual
+job/exact-preview references under the storage fence. Pin mutations maintain
+derived counts transactionally. A separate audit corrects drift in bounded
+source/child units after media COMMIT; an audit error does not discard committed
+tombstones. Healthy counts bypass a pinned prefix; corruption repair has separate
+limits and may take many cycles. See [source retention](source-retention.md).
+
+Failed physical deletion remains charged. Its persisted retry delay increases
+from 30 seconds to one hour, allowing other due files to proceed. The row is
+released only after the file is absent and the parent directory has synchronized.
+Filesystem, database or acknowledgement failures preserve the charge for retry;
+an uncertain acknowledgement may already have committed and is reconciled from
+the authoritative database state on the next attempt.
 Prefer owner-safe API deletion to manually removing live media trees. Waiting
 jobs have finite persisted deadlines and remain cancellable. See
 [configuration](configuration.md) and

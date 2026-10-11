@@ -147,11 +147,15 @@ type Source struct {
 	ThumbnailURL     *string    `json:"thumbnail_url"`
 	Width            int        `json:"width,omitempty"`
 	Height           int        `json:"height,omitempty"`
-	Path             string     `json:"-"`
-	URL              string     `json:"-"`
-	Owner            string     `json:"-"`
-	StorageToken     string     `json:"-"`
-	ProviderID       string     `json:"-"`
+	// Display dimensions are computed only by fresh local inspection. They are
+	// not persisted in the source table or exposed by HTTP source responses.
+	DisplayWidth  int    `json:"-"`
+	DisplayHeight int    `json:"-"`
+	Path          string `json:"-"`
+	URL           string `json:"-"`
+	Owner         string `json:"-"`
+	StorageToken  string `json:"-"`
+	ProviderID    string `json:"-"`
 }
 
 type Range struct {

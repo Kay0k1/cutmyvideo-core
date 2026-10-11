@@ -1,0 +1,8 @@
+# Tooling only; not part of the CLI or server runtime.
+PyYAML==6.0.3
+jsonschema==4.25.1
+attrs==25.1.0
+jsonschema-specifications==2025.9.1
+referencing==0.37.0
+rpds-py==0.30.0
+typing_extensions==4.16.0

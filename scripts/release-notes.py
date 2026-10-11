@@ -10,4 +10,4 @@ match = re.search(r'^## \[?' + re.escape(version) + r'\]?\s+-\s+\d{4}-\d{2}-\d{2
 if not match or not match.group(1).strip():
     sys.exit(f'CHANGELOG.md needs a nonempty "## {version} - YYYY-MM-DD" release entry.')
 print(match.group(1).strip())
-print('\nCLI archives require external FFmpeg/ffprobe. BUILD.json records the source revision; SHA256SUMS verifies downloads. Linux media tests run in CI; other targets are cross-built.')
+print('\nCLI archives require external FFmpeg/ffprobe. BUILD.json records the source revision; SHA256SUMS verifies downloads. The current release gate requires native source and extracted CLI checks on Linux amd64/arm64, macOS amd64/arm64 and Windows amd64 before signing. See docs/platforms.md for the tested OS baselines and runtime coverage.')

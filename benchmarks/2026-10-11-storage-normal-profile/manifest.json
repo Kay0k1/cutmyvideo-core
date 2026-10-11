@@ -1,0 +1,106 @@
+{
+  "100000_authorized": false,
+  "artifacts": [
+    {
+      "ROOT_acceptance_sha256": "f048d1bbb5c50ff979f3808683ff8957f093d829ce2cf220e7d0074346a9d3e2",
+      "artifact_id": 11707092392,
+      "artifact_name": "storage-normal-pilot-e7bf76434c593fda7cef25a07eb3f209e919f1b6-1",
+      "bytes": 496636,
+      "expanded_bytes": 6557106,
+      "file": "normal1000-38152420022-attempt1.zip",
+      "maximum_size": 1000,
+      "members": 127,
+      "original_collection_manifest_sha256": "8da3e9591be800d98aada836e638247e9b21749138fd9ba081fc7c49f5abe412",
+      "original_member_CRCs_verified": true,
+      "peer_acceptance_sha256": "705572eea44a487d59c9bed0e8236c0e99079bd39d4eb11dcf7c69e1eb247aa4",
+      "promotion_ready": true,
+      "run_attempt": 1,
+      "run_id": 38152420022,
+      "sha256": "c8e8622e8bceaee9fe3b20b324f5adba8a3de2a224db7ea8b1bd2fa6dee989ba",
+      "sizes": [
+        1000
+      ],
+      "strict_summary_sha256": "1c80203a426f524d1d6181a0ac8d83108acaf96117c3e855adffca73b819ad0b",
+      "verifier_context": {
+        "attempt": 1,
+        "event": "workflow_dispatch",
+        "fixture_sha256": "b384edab31464a30e094bfead2906dc9598b05fc2b2a5b58854bc30cc5ae43e9",
+        "format": 1,
+        "maximum_size": 1000,
+        "preparation_review_sha256": "abe278f1f47e8e41952698ea7bdb717f84132430e81540776576cff98d365750",
+        "repository": "Kay0k1/cutmyvideo-core",
+        "reviewed_harness_commit": "e7bf76434c593fda7cef25a07eb3f209e919f1b6",
+        "run_id": 38152420022,
+        "runtime_commits": {
+          "after": "d594cc4681dc1cab61664cec8c92bdf9a3e9444c",
+          "before": "63873e935626d51087d0a26b84f1de9a7ed86a28"
+        },
+        "workflow_ref": "Kay0k1/cutmyvideo-core/.github/workflows/storage005-capacity.yml@refs/heads/feat/storage-normal-capacity"
+      },
+      "verifier_context_sha256": "18d4864fea884133f4ce633848ccecf862e6b6d377de575a944306b90b7d8f05",
+      "workload_pass": true
+    },
+    {
+      "ROOT_acceptance_sha256": "e74a392458309de6f459f57b4542bee310726e9a8c5fb3e6f19501c735dd3aa8",
+      "artifact_id": 11707746644,
+      "artifact_name": "storage-normal-pilot-e7bf76434c593fda7cef25a07eb3f209e919f1b6-1",
+      "bytes": 1591794,
+      "expanded_bytes": 39143884,
+      "file": "normal1000-to10000-38153402987-attempt1.zip",
+      "maximum_size": 10000,
+      "members": 185,
+      "original_collection_manifest_sha256": "45b0edb05938be22de6f38888796b692fa708a627f491112a2b7844e79a9bff2",
+      "original_member_CRCs_verified": true,
+      "peer_acceptance_sha256": "d7183c4c603f2e304877565cb727fde9e1c2bcbe53ffcf5bc4cce033ceb1f2e6",
+      "promotion_ready": true,
+      "run_attempt": 1,
+      "run_id": 38153402987,
+      "sha256": "c39e14d30415dc00e6bd3fb8949e68892103474417373a81d91abc4a2cd84093",
+      "sizes": [
+        1000,
+        10000
+      ],
+      "strict_summary_sha256": "44d944208b00dad8de6cc5bb08ca342017e8311290452027cd164267c39cb740",
+      "verifier_context": {
+        "attempt": 1,
+        "event": "workflow_dispatch",
+        "fixture_sha256": "b384edab31464a30e094bfead2906dc9598b05fc2b2a5b58854bc30cc5ae43e9",
+        "format": 1,
+        "maximum_size": 10000,
+        "preparation_review_sha256": "abe278f1f47e8e41952698ea7bdb717f84132430e81540776576cff98d365750",
+        "repository": "Kay0k1/cutmyvideo-core",
+        "reviewed_harness_commit": "e7bf76434c593fda7cef25a07eb3f209e919f1b6",
+        "run_id": 38153402987,
+        "runtime_commits": {
+          "after": "d594cc4681dc1cab61664cec8c92bdf9a3e9444c",
+          "before": "63873e935626d51087d0a26b84f1de9a7ed86a28"
+        },
+        "workflow_ref": "Kay0k1/cutmyvideo-core/.github/workflows/storage005-capacity.yml@refs/heads/feat/storage-normal-capacity"
+      },
+      "verifier_context_sha256": "c8a2e06609b18134e7a22520d4ab3d05b3169ea1c44d3a7e26f5ac55a7defe3e",
+      "workload_pass": true
+    }
+  ],
+  "fixture_sha256": "b384edab31464a30e094bfead2906dc9598b05fc2b2a5b58854bc30cc5ae43e9",
+  "format": 1,
+  "harness_head": "e7bf76434c593fda7cef25a07eb3f209e919f1b6",
+  "kind": "normal-storage-operational-measurement-artifacts",
+  "old_5ms_result_relabelled": false,
+  "performance_claim": false,
+  "postgres_memory_observation": {
+    "OOMKilled": false,
+    "after10000_cumulative_peak_bytes": 1073741824,
+    "checkpoint": "after10000",
+    "cumulative_shared_container": true,
+    "hard_limit_bytes": 1073741824,
+    "memory_events_not_captured": true,
+    "memory_headroom_claim": false,
+    "no_OOM_events_claim": false,
+    "stage_specific_memory_comparison_claim": false
+  },
+  "profile": "normal10s5s",
+  "runtime_commits": {
+    "after": "d594cc4681dc1cab61664cec8c92bdf9a3e9444c",
+    "before": "63873e935626d51087d0a26b84f1de9a7ed86a28"
+  }
+}

@@ -1,8 +1,44 @@
 # Changelog
 
-Notable changes follow semantic versioning. The project is pre-1.0; the API is versioned under `/api/v1`.
+Notable changes follow semantic versioning. The documented 1.x Go library, CLI and `/api/v1` contracts are stable.
 
 ## Unreleased
+
+## 1.0.0 - 2026-10-11
+
+### Added
+- Migration 5 adds transactional source job/exact-preview pin counts, indexed bounded source TTL selection and persisted bounded drift audits. Release checks require fresh PostgreSQL/native/004→005 upgrade and coordinated restore acceptance.
+- Verify all 13 downloaded signed-release assets with one portable consumer command, fixed GitHub certificate policy, exact subjects and source/version hashes, and remote tag object/commit checks before and after verification. No Go SDK, checkout or unpublished gate receipt is required. Publication requires real signature verification of the downloaded assets on all five native targets.
+- Add a standalone public Linux amd64 hosting profile with HTTPS, separate administrative/migration/runtime roles, bounded containers, exact project-owned egress rules, immutable image/source identity and coordinated database/media upgrade/restore checks on a disposable CI host.
+- Derive deterministic SPDX 2.3 and trust sidecars from the five verified CLI binaries, with exact Go module checksums and shipped notice hashes. Generate tag-only GitHub provenance/SPDX attestations and require certificate identity, every signed subject and the original archive/verdict identity before draft creation; only the original release tag push can sign.
+- Verify one immutable source and reproducible five-target archive bundle before release: safe manifests/checksums, nonpublishable PR candidates, native execution of the extracted CLI/API/worker and a separate draft publisher gated by all five results.
+- Add fresh SDK/CLI `display_width`/`display_height` inspection fields while preserving coded dimensions and persisted HTTP source responses; document shared stream, geometry, timing and color policies.
+- Persisted storage scan/workspace progress and fair deletion retries, with a retryable `storage_initializing` admission diagnostic and an upgrade from the ordered migration predecessor.
+- Immutable ordered database migrations with schema/checksum validation and a stable `schema_incompatible` startup diagnostic.
+- Required real v0.2.1 upgrade, interrupted-job and coordinated PostgreSQL/media backup/restore acceptance checks.
+- Native CI for every shipped Linux, macOS and Windows architecture, exercising actual media, exclusive publication, process-tree cancellation and the PostgreSQL API/worker path without skipped prerequisites.
+- Public library error codes with preserved underlying causes, optional JSON CLI diagnostics, and documented exit codes.
+- Executable HTTP/OpenAPI contract checks, including byte-length limits, preview priority, download range errors and database unavailability.
+
+### Fixed
+- Batch storage scheduling and cursor/known-path reads while retaining the storage fence, binary timestamp decoding, rollback and acknowledged directory progress; use smaller local reads when little deadline remains. Require the new cancellation, permission, non-ISO timestamp and false-preview-pin checks on every native target.
+- Allow PostgreSQL to simplify the exact-preview pin existence check without changing the 200-source candidate limit or authoritative pin protection. The matched warm 1,000-row query experiment improves; global preview membership cost and memory at larger sizes remain unmeasured.
+- Move the unchanged 32-by-five-millisecond progress test to the explicit `storagecapacity` benchmark tag. Its recorded failures and original gates remain visible; ordinary CI requires deterministic storage correctness, and a separate 1,000-row observation checks the five-second API and ten-second one-shot maintenance budgets.
+- Check physical storage headroom on macOS and Windows as well as Linux, including outstanding reservations and safety bytes; refuse failed measurements and invalid paths, and measure the nearest existing parent before data-directory creation.
+- Recover retained export submissions by their session/idempotency key before changed admission limits or the new-export allowance can reject a replay; new keys still use current admission checks.
+- Warn that an uncertain source registration may already be saved when reporting database failures or request/source deadlines, preserving existing status codes and private commit causes.
+- Accept either iptables serialization order of the exact `ESTABLISHED,RELATED` conntrack return rule while still refusing changed states, flags, targets and rule priorities. Report fixed egress refusal codes without exposing private exception text.
+- Wait for PostgreSQL's final TCP listener rather than its temporary initialization socket. Bound lifecycle subprocess groups and rediscover only verified owned helper containers after a failed or interrupted client.
+- Select the first playable video excluding attached cover art, and default audio otherwise first audio, across local export/preview and HLS staging. Normalize sample aspect ratio and display orientation for accurate video, retain variable export cadence, and convert known PQ/HLG HDR to BT.709 SDR with a fixed `hdr_conversion_unavailable` capability diagnostic; compatible copy preserves selected-stream metadata.
+- Preserve rotated HLS display matrices on FFmpeg 5.1 through MP4-compatible staging; refresh historical local-source dimensions before decoder admission and invalidate old preview renditions while retaining their storage charges until eviction. Avoid a reproduced mono AAC encoder hang, with original synthetic inputs and matched decoded-media verification.
+- Reuse bounded directory readers within one maintenance call after acknowledged database commits, while verifying persisted prefixes on restart and closing readers before workspace removal. Bound metadata-cache expiry to 200 unlocked rows per query without letting a blocked cache stop committed media deletion; preserve existing progress/retry/accounting records through migration 4.
+- Keep interrupted storage accounting batches across restarts; separate retention, reconciliation and workspace-cleanup budgets, and schedule source/artifact/work scan classes fairly. Fence physical deletion against live references, synchronize parent directories before releasing charged bytes, and defer failed paths so they cannot block healthy files.
+- Publish uploaded/direct source files, thumbnails and window previews from private staging names; synchronize files and newly created parent directories before database acknowledgement, retaining uncertain commits for recovery.
+- Contain Windows media tools in a private process job before they can spawn children and cancel the complete descendant tree. Open Windows directory handles with the write access required for synchronization.
+- Honor `LISTEN_ADDR` in API health checks and accept version/revision/build-time metadata in Docker builds.
+- Bound API database stages, including connection-pool acquisition and SQL lock waits, without shortening media uploads, exports or downloads. Report unavailable database operations with a stable HTTP 503 diagnostic.
+- Synchronize completed output data and required directory entries before acknowledging local exports or registering server artifacts. Preserve exclusive output publication and uncertain database commit recovery.
+- Check required filesystem publication capabilities before local encoding rather than discovering unsupported hard links after processing.
 
 ## 0.2.1 - 2026-10-10
 

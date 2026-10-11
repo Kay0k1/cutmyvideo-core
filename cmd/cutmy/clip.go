@@ -37,27 +37,27 @@ func runClip(args []string, stdout, stderr io.Writer) error {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
-		return err
+		return invalidCLI(err)
 	}
 	if f.NArg() != 0 {
-		return errors.New("clip accepts named flags only; use clip --help")
+		return invalidCLI(errors.New("clip accepts named flags only; use clip --help"))
 	}
 	if *input == "" || *output == "" || *end == "" {
-		return errors.New("clip requires --input, --output, and --end")
+		return invalidCLI(errors.New("clip requires --input, --output, and --end"))
 	}
 	if (*profile != "fast" && *profile != "compact") || *threads < 1 || *threads > 32 {
-		return errors.New("use --profile fast|compact and --threads 1..32")
+		return invalidCLI(errors.New("use --profile fast|compact and --threads 1..32"))
 	}
 	if *timeout <= 0 {
-		return errors.New("timeout must be positive")
+		return invalidCLI(errors.New("timeout must be positive"))
 	}
 	startMS, err := parseTime(*start)
 	if err != nil {
-		return err
+		return invalidCLI(err)
 	}
 	endMS, err := parseTime(*end)
 	if err != nil {
-		return err
+		return invalidCLI(err)
 	}
 	// Media commands run in their own process group. Cancel their context before
 	// exiting on a terminal signal so neither the encoder nor its children leak.

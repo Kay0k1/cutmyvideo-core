@@ -114,7 +114,7 @@ func (s *Store) resolvePlatformMetadata(ctx context.Context, source Source, reso
 		return info, false, err
 	}
 	rollback := func() {
-		rollbackCtx, cancelRollback := context.WithTimeout(ctx, platformMetadataDBTimeout)
+		rollbackCtx, cancelRollback := context.WithTimeout(context.WithoutCancel(ctx), platformMetadataDBTimeout)
 		defer cancelRollback()
 		_ = tx.Rollback(rollbackCtx)
 	}

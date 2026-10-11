@@ -58,7 +58,7 @@ func TestSourceAdmissionReservesOwnerBeforeReadingQuota(t *testing.T) {
 }
 
 func TestHTTPSourceAdmissionPreservesFailureReason(t *testing.T) {
-	for _, code := range []string{"source_busy", "server_busy", "storage_limit", "internal"} {
+	for _, code := range []string{"source_busy", "server_busy", "storage_limit", "database_unavailable"} {
 		t.Run(code, func(t *testing.T) {
 			s := testStore(t)
 			c := Config{DataDir: t.TempDir(), MaxSourceBytes: 1 << 20, MaxOwnerBytes: 2 << 20, MaxStorageBytes: 10 << 20, SourceTimeout: time.Second, MutationsPerMinute: 20}
@@ -76,9 +76,9 @@ func TestHTTPSourceAdmissionPreservesFailureReason(t *testing.T) {
 				}
 			case "storage_limit":
 				server.Config.MaxStorageBytes = 1
-			case "internal":
+			case "database_unavailable":
 				s.DB.Close()
-				status = 500
+				status = 503
 			}
 			response := httptest.NewRecorder()
 			server.Handler().ServeHTTP(response, request)
@@ -89,7 +89,7 @@ func TestHTTPSourceAdmissionPreservesFailureReason(t *testing.T) {
 			if response.Code != status || body.Error.Code != code {
 				t.Fatalf("got %d %+v, expected %d %s", response.Code, body.Error, status, code)
 			}
-			if code == "internal" && (len(server.preparing) != 0 || len(server.slots) != 0) {
+			if code == "database_unavailable" && (len(server.preparing) != 0 || len(server.slots) != 0) {
 				t.Fatal("failed admission leaked a source reservation")
 			}
 		})

@@ -1,0 +1,93 @@
+name: Signed release consumer acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact existing release tag; dispatch this workflow at that tag
+        required: true
+        type: string
+      expected_commit:
+        description: Independently reviewed full source commit
+        required: true
+        type: string
+      release_id:
+        description: Exact existing draft release ID
+        required: true
+        type: string
+      source_sha256:
+        description: SOURCE.json digest from the reviewed tag release resolver
+        required: true
+        type: string
+      manifest_sha256:
+        description: MANIFEST.json digest from the reviewed tag packaging job
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: signed-consumer-${{ inputs.version }}-${{ inputs.release_id }}
+  cancel-in-progress: false
+
+jobs:
+  native:
+    name: Signed downloads (${{ matrix.os }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: ubuntu-24.04, os: linux, arch: amd64}
+          - {runner: ubuntu-24.04-arm, os: linux, arch: arm64}
+          - {runner: macos-15, os: darwin, arch: arm64}
+          - {runner: macos-15-intel, os: darwin, arch: amd64}
+          - {runner: windows-2025, os: windows, arch: amd64}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.expected_commit }}
+          persist-credentials: false
+      - name: Download the exact draft, verify actual signatures and smoke the native binary
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          SOURCE_SHA256: ${{ inputs.source_sha256 }}
+          MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+          TARGET_OS: ${{ matrix.os }}
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          python_command=python3
+          if [ "$RUNNER_OS" = Windows ]; then python_command=python; fi
+          consumer_evidence_path=$("$python_command" -c 'import os, sys; from pathlib import Path; sys.stdout.write(str((Path(os.environ["RUNNER_TEMP"]) / "signed-release-consumer").resolve()))')
+          "$python_command" -B scripts/release-consumer-download.py \
+            --version "$RELEASE_VERSION" --expected-commit "$EXPECTED_COMMIT" \
+            --release-id "$RELEASE_ID" --source-sha256 "$SOURCE_SHA256" \
+            --manifest-sha256 "$MANIFEST_SHA256" \
+            --target-os "$TARGET_OS" --target-arch "$TARGET_ARCH" \
+            --evidence "$consumer_evidence_path"
+      - name: Retain original downloads and bounded command results even on refusal
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: signed-consumer-${{ matrix.os }}-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/signed-release-consumer
+          if-no-files-found: warn
+          retention-days: 14
+  gate:
+    name: All five signed release consumers
+    if: always()
+    needs: native
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require every native download and signature check
+        env:
+          NATIVE_RESULT: ${{ needs.native.result }}
+        run: test "$NATIVE_RESULT" = success

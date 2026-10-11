@@ -1,0 +1,1976 @@
+{
+  "GET /healthz": {
+    "parameters": {},
+    "responses": {
+      "200": {}
+    },
+    "response_headers": {
+      "200": {}
+    }
+  },
+  "GET /readyz": {
+    "parameters": {},
+    "responses": {
+      "200": {},
+      "503": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "response_headers": {
+      "200": {},
+      "503": {}
+    }
+  },
+  "GET /api/v1/session": {
+    "parameters": {},
+    "responses": {
+      "200": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "type": "boolean",
+                "const": true
+              },
+              "limits": {
+                "type": "object",
+                "properties": {
+                  "max_source_bytes": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_output_bytes": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_fetch_bytes": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_ranges": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 128
+                  },
+                  "max_range_ms": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_job_ms": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "429": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "response_headers": {
+      "200": {},
+      "429": {}
+    }
+  },
+  "GET /api/v1/sources": {
+    "parameters": {},
+    "responses": {
+      "200": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "sources"
+            ],
+            "properties": {
+              "sources": {
+                "type": "array",
+                "maxItems": 20,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "title",
+                    "duration_ms",
+                    "kind",
+                    "provider",
+                    "provider_video_id",
+                    "source_url",
+                    "preview_kind",
+                    "preview_url",
+                    "embed_url",
+                    "thumbnail_url",
+                    "expires_at",
+                    "retention_blocked"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "expires_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time"
+                    },
+                    "retention_blocked": {
+                      "type": "boolean"
+                    },
+                    "duration_ms": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "upload",
+                        "direct",
+                        "youtube",
+                        "platform"
+                      ]
+                    },
+                    "provider": {
+                      "type": "string",
+                      "enum": [
+                        "upload",
+                        "direct",
+                        "generic",
+                        "youtube",
+                        "twitch",
+                        "rutube",
+                        "tiktok",
+                        "instagram",
+                        "vimeo",
+                        "dailymotion",
+                        "vk",
+                        "facebook",
+                        "x",
+                        "reddit",
+                        "ok",
+                        "bilibili",
+                        "streamable",
+                        "rumble"
+                      ]
+                    },
+                    "provider_video_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "source_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "preview_kind": {
+                      "type": "string",
+                      "enum": [
+                        "native",
+                        "youtube",
+                        "window",
+                        "none"
+                      ]
+                    },
+                    "preview_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "embed_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "thumbnail_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "width": {
+                      "type": "integer"
+                    },
+                    "height": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "default": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "response_headers": {
+      "200": {},
+      "default": {}
+    }
+  },
+  "POST /api/v1/sources": {
+    "parameters": {},
+    "request_required": true,
+    "request": {
+      "application/json": {
+        "schema": {
+          "type": "object",
+          "required": [
+            "url"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "url": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "201": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "id",
+              "title",
+              "duration_ms",
+              "kind",
+              "provider",
+              "provider_video_id",
+              "source_url",
+              "preview_kind",
+              "preview_url",
+              "embed_url",
+              "thumbnail_url",
+              "expires_at",
+              "retention_blocked"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "expires_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "retention_blocked": {
+                "type": "boolean"
+              },
+              "duration_ms": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "upload",
+                  "direct",
+                  "youtube",
+                  "platform"
+                ]
+              },
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "upload",
+                  "direct",
+                  "generic",
+                  "youtube",
+                  "twitch",
+                  "rutube",
+                  "tiktok",
+                  "instagram",
+                  "vimeo",
+                  "dailymotion",
+                  "vk",
+                  "facebook",
+                  "x",
+                  "reddit",
+                  "ok",
+                  "bilibili",
+                  "streamable",
+                  "rumble"
+                ]
+              },
+              "provider_video_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "preview_kind": {
+                "type": "string",
+                "enum": [
+                  "native",
+                  "youtube",
+                  "window",
+                  "none"
+                ]
+              },
+              "preview_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "embed_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "thumbnail_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "width": {
+                "type": "integer"
+              },
+              "height": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "408": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "default": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "response_headers": {
+      "201": {},
+      "408": {},
+      "default": {}
+    }
+  },
+  "POST /api/v1/uploads": {
+    "parameters": {},
+    "request_required": true,
+    "request": {
+      "multipart/form-data": {
+        "schema": {
+          "type": "object",
+          "required": [
+            "file"
+          ],
+          "properties": {
+            "file": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "201": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "id",
+              "title",
+              "duration_ms",
+              "kind",
+              "provider",
+              "provider_video_id",
+              "source_url",
+              "preview_kind",
+              "preview_url",
+              "embed_url",
+              "thumbnail_url",
+              "expires_at",
+              "retention_blocked"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "expires_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "retention_blocked": {
+                "type": "boolean"
+              },
+              "duration_ms": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "upload",
+                  "direct",
+                  "youtube",
+                  "platform"
+                ]
+              },
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "upload",
+                  "direct",
+                  "generic",
+                  "youtube",
+                  "twitch",
+                  "rutube",
+                  "tiktok",
+                  "instagram",
+                  "vimeo",
+                  "dailymotion",
+                  "vk",
+                  "facebook",
+                  "x",
+                  "reddit",
+                  "ok",
+                  "bilibili",
+                  "streamable",
+                  "rumble"
+                ]
+              },
+              "provider_video_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "preview_kind": {
+                "type": "string",
+                "enum": [
+                  "native",
+                  "youtube",
+                  "window",
+                  "none"
+                ]
+              },
+              "preview_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "embed_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "thumbnail_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "width": {
+                "type": "integer"
+              },
+              "height": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "default": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "response_headers": {
+      "201": {},
+      "default": {}
+    }
+  },
+  "DELETE /api/v1/sources/{id}": {
+    "parameters": {
+      "path:id": {
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "204": {},
+      "409": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "default": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "response_headers": {
+      "204": {},
+      "409": {},
+      "default": {}
+    }
+  },
+  "GET /api/v1/sources/{id}": {
+    "parameters": {
+      "path:id": {
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "id",
+              "title",
+              "duration_ms",
+              "kind",
+              "provider",
+              "provider_video_id",
+              "source_url",
+              "preview_kind",
+              "preview_url",
+              "embed_url",
+              "thumbnail_url",
+              "expires_at",
+              "retention_blocked"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "expires_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "retention_blocked": {
+                "type": "boolean"
+              },
+              "duration_ms": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "upload",
+                  "direct",
+                  "youtube",
+                  "platform"
+                ]
+              },
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "upload",
+                  "direct",
+                  "generic",
+                  "youtube",
+                  "twitch",
+                  "rutube",
+                  "tiktok",
+                  "instagram",
+                  "vimeo",
+                  "dailymotion",
+                  "vk",
+                  "facebook",
+                  "x",
+                  "reddit",
+                  "ok",
+                  "bilibili",
+                  "streamable",
+                  "rumble"
+                ]
+              },
+              "provider_video_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "preview_kind": {
+                "type": "string",
+                "enum": [
+                  "native",
+                  "youtube",
+                  "window",
+                  "none"
+                ]
+              },
+              "preview_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "embed_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "thumbnail_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "width": {
+                "type": "integer"
+              },
+              "height": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "default": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "response_headers": {
+      "200": {},
+      "default": {}
+    }
+  },
+  "GET /api/v1/sources/{id}/media": {
+    "parameters": {
+      "path:id": {
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "200": {},
+      "206": {},
+      "304": {},
+      "default": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "response_headers": {
+      "200": {},
+      "206": {},
+      "304": {},
+      "default": {}
+    }
+  },
+  "GET /api/v1/sources/{id}/preview": {
+    "parameters": {
+      "path:id": {
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "query:start_ms": {
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "video/mp4": {
+          "schema": {
+            "type": "string",
+            "format": "binary"
+          }
+        }
+      },
+      "default": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "response_headers": {
+      "200": {
+        "x-preview-cache": {
+          "required": true,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "hit",
+              "miss"
+            ]
+          }
+        },
+        "x-preview-start-ms": {
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        "x-preview-end-ms": {
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      },
+      "default": {}
+    }
+  },
+  "GET /api/v1/sources/{id}/thumbnail": {
+    "parameters": {
+      "path:id": {
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "200": {},
+      "206": {},
+      "304": {},
+      "default": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "response_headers": {
+      "200": {},
+      "206": {},
+      "304": {},
+      "default": {}
+    }
+  },
+  "GET /api/v1/jobs": {
+    "parameters": {},
+    "responses": {
+      "200": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "jobs"
+            ],
+            "properties": {
+              "jobs": {
+                "type": "array",
+                "maxItems": 30,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "source_id",
+                    "title",
+                    "status",
+                    "stage",
+                    "created_at",
+                    "total",
+                    "files"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "source_id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "running",
+                        "waiting_storage",
+                        "succeeded",
+                        "failed",
+                        "cancelled"
+                      ]
+                    },
+                    "stage": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "files": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "filename",
+                          "size_bytes",
+                          "download_url",
+                          "actual_start_ms",
+                          "actual_end_ms",
+                          "expires_at"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "expires_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          },
+                          "filename": {
+                            "type": "string"
+                          },
+                          "size_bytes": {
+                            "type": "integer"
+                          },
+                          "download_url": {
+                            "type": "string"
+                          },
+                          "actual_start_ms": {
+                            "type": "integer"
+                          },
+                          "actual_end_ms": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "default": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "response_headers": {
+      "200": {},
+      "default": {}
+    }
+  },
+  "POST /api/v1/jobs": {
+    "parameters": {
+      "header:Idempotency-Key": {
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 128
+        }
+      }
+    },
+    "request_required": true,
+    "request": {
+      "application/json": {
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source_id",
+            "ranges",
+            "format",
+            "quality",
+            "cut_mode"
+          ],
+          "properties": {
+            "source_id": {
+              "type": "string"
+            },
+            "ranges": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "start_ms",
+                  "end_ms"
+                ],
+                "properties": {
+                  "start_ms": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end_ms": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "label": {
+                    "type": "string",
+                    "x-maxBytes": 200,
+                    "x-trimSpace": true
+                  }
+                }
+              }
+            },
+            "format": {
+              "type": "string",
+              "enum": [
+                "mp4",
+                "mp3"
+              ]
+            },
+            "quality": {
+              "type": "string",
+              "enum": [
+                "1080p",
+                "720p",
+                "best"
+              ]
+            },
+            "cut_mode": {
+              "type": "string",
+              "enum": [
+                "accurate",
+                "copy"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "202": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "id",
+              "status",
+              "stage",
+              "message",
+              "items",
+              "storage_wait_until"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "running",
+                  "waiting_storage",
+                  "succeeded",
+                  "failed",
+                  "cancelled"
+                ]
+              },
+              "storage_wait_until": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "stage": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "label",
+                    "start_ms",
+                    "end_ms",
+                    "status",
+                    "artifact"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "start_ms": {
+                      "type": "integer"
+                    },
+                    "end_ms": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "running",
+                        "succeeded",
+                        "failed",
+                        "cancelled"
+                      ]
+                    },
+                    "progress_ms": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error_code": {
+                      "type": "string",
+                      "enum": [
+                        "audio_missing",
+                        "output_limit",
+                        "platform_access_required",
+                        "platform_unavailable",
+                        "unsupported_stream",
+                        "live_not_supported",
+                        "unsupported_collection",
+                        "media_upstream_denied",
+                        "media_upstream_unavailable",
+                        "media_network_timeout",
+                        "media_network_reset",
+                        "copy_incompatible",
+                        "copy_quality_unsupported",
+                        "media_processing_failed",
+                        "source_expired",
+                        "source_changed",
+                        "source_timeline_changed",
+                        "source_timeout",
+                        "job_timeout",
+                        "storage_full",
+                        "storage_timeout",
+                        "storage_limit",
+                        "server_error",
+                        "cancelled"
+                      ]
+                    },
+                    "artifact": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "filename",
+                            "size_bytes",
+                            "download_url",
+                            "actual_start_ms",
+                            "actual_end_ms",
+                            "expires_at"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "expires_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "filename": {
+                              "type": "string"
+                            },
+                            "size_bytes": {
+                              "type": "integer"
+                            },
+                            "download_url": {
+                              "type": "string"
+                            },
+                            "actual_start_ms": {
+                              "type": "integer"
+                            },
+                            "actual_end_ms": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "408": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "default": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "response_headers": {
+      "202": {},
+      "408": {},
+      "default": {}
+    }
+  },
+  "GET /api/v1/jobs/{id}": {
+    "parameters": {
+      "path:id": {
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "id",
+              "status",
+              "stage",
+              "message",
+              "items",
+              "storage_wait_until"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "running",
+                  "waiting_storage",
+                  "succeeded",
+                  "failed",
+                  "cancelled"
+                ]
+              },
+              "storage_wait_until": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "stage": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "label",
+                    "start_ms",
+                    "end_ms",
+                    "status",
+                    "artifact"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "start_ms": {
+                      "type": "integer"
+                    },
+                    "end_ms": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "running",
+                        "succeeded",
+                        "failed",
+                        "cancelled"
+                      ]
+                    },
+                    "progress_ms": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error_code": {
+                      "type": "string",
+                      "enum": [
+                        "audio_missing",
+                        "output_limit",
+                        "platform_access_required",
+                        "platform_unavailable",
+                        "unsupported_stream",
+                        "live_not_supported",
+                        "unsupported_collection",
+                        "media_upstream_denied",
+                        "media_upstream_unavailable",
+                        "media_network_timeout",
+                        "media_network_reset",
+                        "copy_incompatible",
+                        "copy_quality_unsupported",
+                        "media_processing_failed",
+                        "source_expired",
+                        "source_changed",
+                        "source_timeline_changed",
+                        "source_timeout",
+                        "job_timeout",
+                        "storage_full",
+                        "storage_timeout",
+                        "storage_limit",
+                        "server_error",
+                        "cancelled"
+                      ]
+                    },
+                    "artifact": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "filename",
+                            "size_bytes",
+                            "download_url",
+                            "actual_start_ms",
+                            "actual_end_ms",
+                            "expires_at"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "expires_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "filename": {
+                              "type": "string"
+                            },
+                            "size_bytes": {
+                              "type": "integer"
+                            },
+                            "download_url": {
+                              "type": "string"
+                            },
+                            "actual_start_ms": {
+                              "type": "integer"
+                            },
+                            "actual_end_ms": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "default": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "response_headers": {
+      "200": {},
+      "default": {}
+    }
+  },
+  "POST /api/v1/jobs/{id}/cancel": {
+    "parameters": {
+      "path:id": {
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "id",
+              "status",
+              "stage",
+              "message",
+              "items",
+              "storage_wait_until"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "running",
+                  "waiting_storage",
+                  "succeeded",
+                  "failed",
+                  "cancelled"
+                ]
+              },
+              "storage_wait_until": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "stage": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "label",
+                    "start_ms",
+                    "end_ms",
+                    "status",
+                    "artifact"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "start_ms": {
+                      "type": "integer"
+                    },
+                    "end_ms": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "running",
+                        "succeeded",
+                        "failed",
+                        "cancelled"
+                      ]
+                    },
+                    "progress_ms": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error_code": {
+                      "type": "string",
+                      "enum": [
+                        "audio_missing",
+                        "output_limit",
+                        "platform_access_required",
+                        "platform_unavailable",
+                        "unsupported_stream",
+                        "live_not_supported",
+                        "unsupported_collection",
+                        "media_upstream_denied",
+                        "media_upstream_unavailable",
+                        "media_network_timeout",
+                        "media_network_reset",
+                        "copy_incompatible",
+                        "copy_quality_unsupported",
+                        "media_processing_failed",
+                        "source_expired",
+                        "source_changed",
+                        "source_timeline_changed",
+                        "source_timeout",
+                        "job_timeout",
+                        "storage_full",
+                        "storage_timeout",
+                        "storage_limit",
+                        "server_error",
+                        "cancelled"
+                      ]
+                    },
+                    "artifact": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "filename",
+                            "size_bytes",
+                            "download_url",
+                            "actual_start_ms",
+                            "actual_end_ms",
+                            "expires_at"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "expires_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "filename": {
+                              "type": "string"
+                            },
+                            "size_bytes": {
+                              "type": "integer"
+                            },
+                            "download_url": {
+                              "type": "string"
+                            },
+                            "actual_start_ms": {
+                              "type": "integer"
+                            },
+                            "actual_end_ms": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "default": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "response_headers": {
+      "200": {},
+      "default": {}
+    }
+  },
+  "GET /api/v1/artifacts/{id}/download": {
+    "parameters": {
+      "path:id": {
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "200": {},
+      "206": {},
+      "default": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "response_headers": {
+      "200": {},
+      "206": {},
+      "default": {}
+    }
+  }
+}

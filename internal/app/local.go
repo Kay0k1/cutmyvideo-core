@@ -7,15 +7,16 @@ import "context"
 func InspectLocal(ctx context.Context, c Config, path string) (Source, error) {
 	p, duration, err := probe(ctx, c, path, false)
 	if err != nil {
-		return Source{}, err
+		return Source{}, &localInspectionFailure{cause: err}
 	}
 	s := Source{DurationMS: duration, Path: path, Kind: "upload"}
-	for _, v := range p.Streams {
-		if v.CodecType == "video" {
-			s.Width = v.Width
-			s.Height = v.Height
-			break
-		}
+	if v := p.selectedVideo(); v != nil {
+		s.Width = v.Width
+		s.Height = v.Height
+		// Unknown display geometry must not prevent inspecting the coded
+		// stream or extracting an unrelated audio track. Rendering validates
+		// geometry when an operation actually needs it.
+		s.DisplayWidth, s.DisplayHeight, _ = videoDisplayGeometry(v)
 	}
 	return s, nil
 }

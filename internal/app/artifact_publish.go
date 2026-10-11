@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -30,17 +33,49 @@ func (e *ArtifactPublicationError) Error() string {
 func (e *ArtifactPublicationError) Unwrap() error { return e.cause }
 
 // PublishArtifact atomically registers the result and saves the job snapshot.
-// The caller supplies a running job with exactly one succeeded item referencing
-// a, and retains the file on an ArtifactPublicationError with CommitUncertain.
+// Completed file data and its known directory entries are synchronized before
+// the bounded database transaction begins. The caller supplies a running job
+// with exactly one succeeded item referencing a, and retains the file on an
+// ArtifactPublicationError with CommitUncertain.
 func (s *Store) PublishArtifact(ctx context.Context, j Job, path, token string, a Artifact) error {
+	return s.publishArtifact(ctx, j, path, token, a, fsdurable.Sync)
+}
+
+func (s *Store) publishArtifact(ctx context.Context, j Job, path, token string, a Artifact, synchronize func(string, ...string) (fs.FileInfo, error)) error {
 	if err := validateArtifactPublication(j, path, a); err != nil {
 		return &ArtifactPublicationError{cause: err}
 	}
-	tx, err := s.DB.Begin(ctx)
+	if err := ctx.Err(); err != nil {
+		return &ArtifactPublicationError{cause: err}
+	}
+	c := s.storageConfig()
+	var directories []string
+	if c.DataDir != "" {
+		if relative, err := filepath.Rel(c.DataDir, path); err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			// The worker created artifacts under DATA_DIR. Both the artifact
+			// directory entry and DATA_DIR's own entry must precede DB success.
+			directories = []string{c.DataDir, filepath.Dir(c.DataDir)}
+		}
+	}
+	info, err := synchronize(path, directories...)
 	if err != nil {
 		return &ArtifactPublicationError{cause: err}
 	}
-	return publishArtifactTransaction(ctx, tx, j, path, token, a, s.storageConfig())
+	if info.Size() != a.SizeBytes {
+		return &ArtifactPublicationError{cause: errors.New("artifact size does not match the synchronized file")}
+	}
+	if err = ctx.Err(); err != nil {
+		return &ArtifactPublicationError{cause: err}
+	}
+	// Synchronizing a completed file can be slow. Keep the processing deadline
+	// throughout that barrier and give SQL its own budget only once it passes.
+	databaseCtx, databaseCancel := context.WithTimeout(ctx, workerDatabaseTimeout)
+	defer databaseCancel()
+	tx, err := s.DB.Begin(databaseCtx)
+	if err != nil {
+		return &ArtifactPublicationError{cause: err}
+	}
+	return publishArtifactTransaction(databaseCtx, tx, j, path, token, a, c)
 }
 
 func validateArtifactPublication(j Job, path string, a Artifact) error {

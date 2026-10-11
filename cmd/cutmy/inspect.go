@@ -23,13 +23,13 @@ func inspect(args []string, stdout, stderr io.Writer) error {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
-		return err
+		return invalidCLI(err)
 	}
 	if *input == "" || f.NArg() != 0 {
-		return errors.New("inspect requires --input and accepts named flags only")
+		return invalidCLI(errors.New("inspect requires --input and accepts named flags only"))
 	}
 	if *timeout <= 0 {
-		return errors.New("timeout must be positive")
+		return invalidCLI(errors.New("timeout must be positive"))
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

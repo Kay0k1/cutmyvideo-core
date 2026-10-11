@@ -1,0 +1,2 @@
+CREATE INDEX source_metadata_cache_retention_idx ON source_metadata_cache(expires_at,source_id);
+DROP INDEX source_metadata_cache_expiry_idx;

@@ -1,68 +1,577 @@
-name: CLI release
+name: Verified CLI archives
 
 on:
+  pull_request:
   push:
     tags: ['v*']
   workflow_dispatch:
     inputs:
       version:
-        description: Existing release tag to rebuild (does not publish)
+        description: Existing tag containing the archive protocol (does not publish)
         required: true
         type: string
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
-  group: cli-release-${{ github.event_name }}-${{ github.ref }}
+  group: cli-archives-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  checks:
-    uses: ./.github/workflows/ci.yml
-    with:
-      ref: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
-  packages:
-    needs: checks
+  resolve:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    permissions:
-      contents: write
+    timeout-minutes: 5
+    outputs:
+      commit: ${{ steps.source.outputs.commit }}
+      tree: ${{ steps.source.outputs.tree }}
+      version: ${{ steps.source.outputs.version }}
+      source-sha256: ${{ steps.source.outputs.source-sha256 }}
+      artifact-id: ${{ steps.save.outputs.artifact-id }}
     env:
-      RELEASE_VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+      RELEASE_TAG: ${{ github.event_name == 'pull_request' && '' || (github.event_name == 'push' && github.ref_name || inputs.version) }}
+      PR_HEAD: ${{ github.event.pull_request.head.sha }}
+      PR_BASE: ${{ github.event.pull_request.base.sha }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ env.RELEASE_VERSION }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.sha }}
+          fetch-depth: 0
+      - name: Resolve immutable source once
+        id: source
+        shell: bash
+        run: |
+          test -f scripts/release_manifest.py || { echo "This source predates the archive verification protocol." >&2; exit 1; }
+          mkdir "$RUNNER_TEMP/release-source"
+          if [ -n "$RELEASE_TAG" ]; then
+            python3 scripts/release_manifest.py resolve --repo . --release "$RELEASE_TAG" --output "$RUNNER_TEMP/release-source/SOURCE.json"
+          else
+            commit=$(git rev-parse HEAD)
+            python3 scripts/release_manifest.py resolve --repo . --candidate "$commit" --output "$RUNNER_TEMP/release-source/SOURCE.json"
+          fi
+          python3 - <<'PYTHON'
+          import hashlib,json,os
+          from pathlib import Path
+          source=Path(os.environ['RUNNER_TEMP'])/'release-source/SOURCE.json'
+          data=json.loads(source.read_bytes())
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              for key,value in {'commit':data['commit'],'tree':data['tree'],'version':data['version'],'source-sha256':hashlib.sha256(source.read_bytes()).hexdigest()}.items():
+                  print(f'{key}={value}',file=output)
+          resolution={'source_commit':data['commit'],'source_tree':data['tree'],'event_sha':os.environ['GITHUB_SHA'],'pr_head':os.environ['PR_HEAD'],'pr_base':os.environ['PR_BASE'],'run_id':int(os.environ['GITHUB_RUN_ID']),'run_attempt':int(os.environ['GITHUB_RUN_ATTEMPT'])}
+          source.with_name('resolution.json').write_text(json.dumps(resolution,indent=2)+'\n')
+          PYTHON
+      - name: Save resolved source
+        id: save
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-source-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-source/*
+          if-no-files-found: error
+          retention-days: 14
+  checks:
+    needs: resolve
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.resolve.outputs.commit }}
+  packages:
+    needs: resolve
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      manifest-sha256: ${{ steps.identity.outputs.manifest-sha256 }}
+      artifact-id: ${{ steps.save.outputs.artifact-id }}
+      artifact-sha256: ${{ steps.save.outputs.artifact-digest }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
           fetch-depth: 0
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: '1.27.2'
           cache: true
-      - name: Require release notes for this version
-        run: python3 scripts/release-notes.py "$RELEASE_VERSION" > /tmp/cutmy-release-notes.md
-      - name: Build twice and verify deterministic archives
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.resolve.outputs.artifact-id }}
+          path: ${{ runner.temp }}/resolved-source
+          merge-multiple: true
+      - name: Build the same resolved source twice and seal exact archives
+        env:
+          SOURCE_SHA256: ${{ needs.resolve.outputs.source-sha256 }}
+        run: scripts/release.sh --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" "$RUNNER_TEMP/release-bundle"
+      - name: Record the sealed manifest identity
+        id: identity
         run: |
-          scripts/release.sh "$RELEASE_VERSION" "$RUNNER_TEMP/release-first"
-          scripts/release.sh "$RELEASE_VERSION" "$RUNNER_TEMP/release-second"
-          cmp "$RUNNER_TEMP/release-first/SHA256SUMS" "$RUNNER_TEMP/release-second/SHA256SUMS"
-          cd "$RUNNER_TEMP/release-first"
-          sha256sum --check SHA256SUMS
-      - name: Save verified archives
+          manifest_sha256=$(sha256sum "$RUNNER_TEMP/release-bundle/MANIFEST.json" | cut -d ' ' -f 1)
+          echo "manifest-sha256=$manifest_sha256" >> "$GITHUB_OUTPUT"
+      - name: Save sealed archive bytes once
+        id: save
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: cutmyvideo-core-${{ env.RELEASE_VERSION }}
-          path: ${{ runner.temp }}/release-first/*
+          name: release-bundle-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-bundle/*
           if-no-files-found: error
           retention-days: 14
-      - name: Create draft GitHub release
-        if: github.event_name == 'push'
+  native:
+    name: Archived CLI (${{ matrix.os }}/${{ matrix.arch }})
+    needs: [resolve, packages]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: ubuntu-24.04, os: linux, arch: amd64}
+          - {runner: ubuntu-24.04-arm, os: linux, arch: arm64}
+          - {runner: macos-15, os: darwin, arch: arm64}
+          - {runner: macos-15-intel, os: darwin, arch: amd64}
+          - {runner: windows-2025, os: windows, arch: amd64}
+    env:
+      GOTOOLCHAIN: local
+      CUTMY_REQUIRE_DURABLE_FS: '1'
+      TEST_DATABASE_URL: postgres://cutmy:native-test-only@127.0.0.1:55439/cutmy_native?sslmode=disable
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: 1.27.2
+          cache: true
+      - name: Linux media dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg python3 postgresql-client
+      - name: macOS media dependencies
+        if: runner.os == 'macOS'
+        run: |
+          media_formula=ffmpeg-full
+          if [ "$RUNNER_ARCH" = X64 ]; then media_formula=ffmpeg@7; fi
+          brew install "$media_formula" postgresql@17
+          echo "$(brew --prefix "$media_formula")/bin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix postgresql@17)/bin" >> "$GITHUB_PATH"
+      - name: Windows media dependencies (pinned archive and checksum)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'ffmpeg.zip'
+          Invoke-WebRequest 'https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-10-13-04/ffmpeg-n8.1.3-17-gc389840894-win64-gpl-8.1.zip' -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '2a7921874ac122ba731c181c2f235542ab9de790a67c08ec58fe0b54ff763647') { throw 'FFmpeg checksum mismatch' }
+          $media = Join-Path $env:RUNNER_TEMP 'cutmy-media'
+          Expand-Archive $archive -DestinationPath $media
+          (Get-ChildItem $media -Recurse -Filter ffmpeg.exe | Select-Object -First 1).DirectoryName >> $env:GITHUB_PATH
+      - name: Isolated Linux PostgreSQL
+        if: runner.os == 'Linux'
+        run: |
+          docker run --rm --detach --name cutmy-native-db -e POSTGRES_USER=cutmy -e POSTGRES_PASSWORD=native-test-only -e POSTGRES_DB=cutmy_native -p 127.0.0.1:55439:5432 postgres:17.11-bookworm
+          for attempt in $(seq 1 30); do
+            if docker exec cutmy-native-db pg_isready -U cutmy -d cutmy_native; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Isolated macOS PostgreSQL
+        if: runner.os == 'macOS'
+        run: |
+          pg_bin="$(brew --prefix postgresql@17)/bin"
+          "$pg_bin/initdb" -D "$RUNNER_TEMP/cutmy-pg" -U cutmy -A trust --encoding=UTF8
+          "$pg_bin/pg_ctl" -D "$RUNNER_TEMP/cutmy-pg" -l "$RUNNER_TEMP/cutmy-pg.log" -o '-h 127.0.0.1 -p 55439' -w start
+          "$pg_bin/createdb" -h 127.0.0.1 -p 55439 -U cutmy cutmy_native
+      - name: Isolated Windows PostgreSQL
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:PGBIN >> $env:GITHUB_PATH
+          $data = Join-Path $env:RUNNER_TEMP 'cutmy-pg'
+          & (Join-Path $env:PGBIN 'initdb.exe') -D $data -U cutmy -A trust --encoding=UTF8
+          if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL initialization failed' }
+          & (Join-Path $env:PGBIN 'pg_ctl.exe') -D $data -l (Join-Path $env:RUNNER_TEMP 'cutmy-pg.log') -o '-h 127.0.0.1 -p 55439' -w start
+          if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL startup failed' }
+          & (Join-Path $env:PGBIN 'createdb.exe') -h 127.0.0.1 -p 55439 -U cutmy cutmy_native
+          if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL database creation failed' }
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.resolve.outputs.artifact-id }}
+          path: ${{ runner.temp }}/resolved-source
+          merge-multiple: true
+      - name: Verify the packaging artifact and run only extracted executables
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+          SOURCE_SHA256: ${{ needs.resolve.outputs.source-sha256 }}
+          MANIFEST_SHA256: ${{ needs.packages.outputs.manifest-sha256 }}
+          ARTIFACT_ID: ${{ needs.packages.outputs.artifact-id }}
+          ARTIFACT_SHA256: ${{ needs.packages.outputs.artifact-sha256 }}
+          TARGET: ${{ matrix.os }}/${{ matrix.arch }}
         run: |
-          extra_flags=()
-          if [[ "$RELEASE_VERSION" == *-* ]]; then extra_flags+=(--prerelease); fi
-          gh release create "$RELEASE_VERSION" "$RUNNER_TEMP"/release-first/* \
-            --verify-tag --draft "${extra_flags[@]}" \
-            --title "cutmyvideo-core $RELEASE_VERSION" --notes-file /tmp/cutmy-release-notes.md
+          python_command=python3
+          if [ "$RUNNER_OS" = Windows ]; then python_command=python; fi
+          "$python_command" scripts/release-fetch.py --repo "$GITHUB_REPOSITORY" --artifact-id "$ARTIFACT_ID" --run-id "$GITHUB_RUN_ID" --artifact-name "release-bundle-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --expected-artifact-sha256 "$ARTIFACT_SHA256" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --directory "$RUNNER_TEMP/release-bundle" --evidence-dir "$RUNNER_TEMP/release-fetch"
+          "$python_command" scripts/release_manifest.py verify-source --repo . --source "$RUNNER_TEMP/resolved-source/SOURCE.json"
+          helper="$RUNNER_TEMP/release-process-helper"
+          if [ "$RUNNER_OS" = Windows ]; then helper="$helper.exe"; fi
+          CGO_ENABLED=0 GOENV=off GOFLAGS= GOWORK=off go build -trimpath -buildvcs=false -o "$helper" ./scripts/testdata/release-process-helper.go
+          helper_sha256=$("$python_command" -c 'import hashlib,sys; from pathlib import Path; print(hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest())' "$helper")
+          "$python_command" scripts/release-native.py --process-helper "$helper" --expected-process-helper-sha256 "$helper_sha256" --directory "$RUNNER_TEMP/release-bundle" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --expected-manifest-sha256 "$MANIFEST_SHA256" --target "$TARGET" --artifact-receipt "$RUNNER_TEMP/release-fetch/download.json" --evidence-dir "$RUNNER_TEMP/native-evidence"
+      - name: Retain archive execution evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: archive-native-${{ matrix.os }}-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/native-evidence/
+            ${{ runner.temp }}/release-fetch/download.json
+          if-no-files-found: error
+          retention-days: 14
+  archive-recovery:
+    name: Archived Linux upgrade and restore
+    needs: [resolve, packages]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17.11-bookworm
+        env:
+          POSTGRES_USER: cutmy
+          POSTGRES_PASSWORD: archive-test-only
+          POSTGRES_DB: cutmy_archive
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cutmy -d cutmy_archive"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      GOTOOLCHAIN: local
+      RECOVERY_DATABASE_URL: postgres://cutmy:archive-test-only@localhost:5432/cutmy_archive?sslmode=disable
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - name: Media and PostgreSQL clients
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg postgresql-client
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.resolve.outputs.artifact-id }}
+          path: ${{ runner.temp }}/resolved-source
+          merge-multiple: true
+      - name: Extract the verified Linux executable and recover with its captured bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RECOVERY_PG_CONTAINER: ${{ job.services.postgres.id }}
+          RECOVERY_WORK_DIR: ${{ runner.temp }}/archive-recovery-work
+          RECOVERY_REPORT_PATH: ${{ runner.temp }}/archive-recovery-verification.json
+          SOURCE_SHA256: ${{ needs.resolve.outputs.source-sha256 }}
+          MANIFEST_SHA256: ${{ needs.packages.outputs.manifest-sha256 }}
+          ARTIFACT_ID: ${{ needs.packages.outputs.artifact-id }}
+          ARTIFACT_SHA256: ${{ needs.packages.outputs.artifact-sha256 }}
+        run: |
+          python3 scripts/release-fetch.py --repo "$GITHUB_REPOSITORY" --artifact-id "$ARTIFACT_ID" --run-id "$GITHUB_RUN_ID" --artifact-name "release-bundle-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --expected-artifact-sha256 "$ARTIFACT_SHA256" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --directory "$RUNNER_TEMP/release-bundle" --evidence-dir "$RUNNER_TEMP/release-fetch"
+          python3 scripts/release_manifest.py verify --directory "$RUNNER_TEMP/release-bundle" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --expected-manifest-sha256 "$MANIFEST_SHA256" --repo .
+          python3 - <<'PYTHON'
+          import os,sys
+          from pathlib import Path
+          sys.path.insert(0,'scripts')
+          import release_manifest as m
+          directory=Path(os.environ['RUNNER_TEMP'])/'release-bundle'
+          source=m.load_source(directory/'SOURCE.json',expected_sha256=os.environ['SOURCE_SHA256'])
+          manifest=m.read_json(directory/'MANIFEST.json')
+          entry=next(item for item in manifest['archives'] if (item['os'],item['arch'])==('linux','amd64'))
+          contents=m.read_archive(directory/entry['name'],source,'linux','amd64')
+          binary=Path(os.environ['RUNNER_TEMP'])/'archived-cutmy'
+          with binary.open('xb') as output:output.write(contents['cutmy'])
+          binary.chmod(0o755)
+          m.require(m.digest(binary.read_bytes())==entry['contents']['cutmy']['sha256'],'Extracted Linux binary mismatch.')
+          PYTHON
+          binary_sha256=$(sha256sum "$RUNNER_TEMP/archived-cutmy" | cut -d ' ' -f 1)
+          python3 scripts/recovery-acceptance.py --go go --current-binary "$RUNNER_TEMP/archived-cutmy" --expected-current-binary-sha256 "$binary_sha256" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --archive-receipt "$RUNNER_TEMP/release-fetch/download.json"
+      - name: Retain archive-bound upgrade and restore evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: archive-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/archive-recovery-verification.json
+            ${{ runner.temp }}/release-fetch/download.json
+          if-no-files-found: error
+          retention-days: 14
+  native-gate:
+    name: Verified archive gate
+    if: always()
+    needs: [resolve, checks, packages, native, archive-recovery]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      verdict-sha256: ${{ steps.gate.outputs.verdict-sha256 }}
+      artifact-id: ${{ steps.save.outputs.artifact-id }}
+    steps:
+      - name: Require all prerequisite jobs
+        env:
+          RESOLVE_RESULT: ${{ needs.resolve.result }}
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          PACKAGES_RESULT: ${{ needs.packages.result }}
+          NATIVE_RESULT: ${{ needs.native.result }}
+          RECOVERY_RESULT: ${{ needs.archive-recovery.result }}
+        run: |
+          mkdir "$RUNNER_TEMP/archive-verdict"
+          python3 - <<'PYTHON'
+          import json,os
+          from pathlib import Path
+          results={key:os.environ[key] for key in ('RESOLVE_RESULT','CHECKS_RESULT','PACKAGES_RESULT','NATIVE_RESULT','RECOVERY_RESULT')}
+          (Path(os.environ['RUNNER_TEMP'])/'archive-verdict/gate-status.json').write_text(json.dumps(results,indent=2)+'\n')
+          if set(results.values())!={'success'}:raise SystemExit('Archive prerequisites failed or were skipped.')
+          PYTHON
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.resolve.outputs.artifact-id }}
+          path: ${{ runner.temp }}/resolved-source
+          merge-multiple: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: archive-native-*-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/native-reports
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: archive-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/recovery-reports
+      - name: Bind all required native reports and archive recovery to the sealed artifact
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA256: ${{ needs.resolve.outputs.source-sha256 }}
+          MANIFEST_SHA256: ${{ needs.packages.outputs.manifest-sha256 }}
+          ARTIFACT_ID: ${{ needs.packages.outputs.artifact-id }}
+          ARTIFACT_SHA256: ${{ needs.packages.outputs.artifact-sha256 }}
+        run: |
+          python3 scripts/release-fetch.py --repo "$GITHUB_REPOSITORY" --artifact-id "$ARTIFACT_ID" --run-id "$GITHUB_RUN_ID" --artifact-name "release-bundle-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --expected-artifact-sha256 "$ARTIFACT_SHA256" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --directory "$RUNNER_TEMP/release-bundle" --evidence-dir "$RUNNER_TEMP/release-fetch"
+          python3 scripts/release-gate.py --directory "$RUNNER_TEMP/release-bundle" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --expected-manifest-sha256 "$MANIFEST_SHA256" --reports-dir "$RUNNER_TEMP/native-reports" --recovery-report "$RUNNER_TEMP/recovery-reports/archive-recovery-verification.json" --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --event-sha "$GITHUB_SHA" --artifact-id "$ARTIFACT_ID" --expected-artifact-sha256 "$ARTIFACT_SHA256" --output "$RUNNER_TEMP/archive-verdict/verdict.json"
+          verdict_sha256=$(sha256sum "$RUNNER_TEMP/archive-verdict/verdict.json" | cut -d ' ' -f 1)
+          echo "verdict-sha256=$verdict_sha256" >> "$GITHUB_OUTPUT"
+      - name: Retain required archive verdict
+        id: save
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: archive-verdict-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/archive-verdict/
+          if-no-files-found: error
+          retention-days: 14
+  trust:
+    name: SPDX from verified executable bytes
+    needs: [resolve, packages, native-gate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      sbom-sha256: ${{ steps.identity.outputs.sbom-sha256 }}
+      trust-sha256: ${{ steps.identity.outputs.trust-sha256 }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA256: ${{ needs.resolve.outputs.source-sha256 }}
+      MANIFEST_SHA256: ${{ needs.packages.outputs.manifest-sha256 }}
+      ARTIFACT_ID: ${{ needs.packages.outputs.artifact-id }}
+      ARTIFACT_SHA256: ${{ needs.packages.outputs.artifact-sha256 }}
+      VERDICT_SHA256: ${{ needs.native-gate.outputs.verdict-sha256 }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.resolve.outputs.artifact-id }}
+          path: ${{ runner.temp }}/resolved-source
+          merge-multiple: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.native-gate.outputs.artifact-id }}
+          path: ${{ runner.temp }}/archive-verdict
+          merge-multiple: true
+      - name: Derive the SBOM twice without rebuilding and retain original archive identity
+        id: identity
+        shell: bash
+        run: |
+          python3 scripts/release-fetch.py --repo "$GITHUB_REPOSITORY" --artifact-id "$ARTIFACT_ID" --run-id "$GITHUB_RUN_ID" --artifact-name "release-bundle-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --expected-artifact-sha256 "$ARTIFACT_SHA256" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --directory "$RUNNER_TEMP/release-bundle" --evidence-dir "$RUNNER_TEMP/release-fetch"
+          trust_args=(--repo . --directory "$RUNNER_TEMP/release-bundle" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --expected-manifest-sha256 "$MANIFEST_SHA256" --verdict "$RUNNER_TEMP/archive-verdict/verdict.json" --expected-verdict-sha256 "$VERDICT_SHA256" --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --event-sha "$GITHUB_SHA" --artifact-id "$ARTIFACT_ID" --expected-artifact-sha256 "$ARTIFACT_SHA256")
+          python3 scripts/release-trust.py generate "${trust_args[@]}" --output "$RUNNER_TEMP/release-trust"
+          python3 scripts/release-trust.py generate "${trust_args[@]}" --output "$RUNNER_TEMP/release-trust-repeat"
+          cmp "$RUNNER_TEMP/release-trust/SBOM.spdx.json" "$RUNNER_TEMP/release-trust-repeat/SBOM.spdx.json"
+          cmp "$RUNNER_TEMP/release-trust/TRUST.json" "$RUNNER_TEMP/release-trust-repeat/TRUST.json"
+          cmp "$RUNNER_TEMP/release-trust/ATTESTATION-SUBJECTS.sha256" "$RUNNER_TEMP/release-trust-repeat/ATTESTATION-SUBJECTS.sha256"
+          sbom_sha256=$(sha256sum "$RUNNER_TEMP/release-trust/SBOM.spdx.json" | cut -d ' ' -f 1)
+          trust_sha256=$(sha256sum "$RUNNER_TEMP/release-trust/TRUST.json" | cut -d ' ' -f 1)
+          echo "sbom-sha256=$sbom_sha256" >> "$GITHUB_OUTPUT"
+          echo "trust-sha256=$trust_sha256" >> "$GITHUB_OUTPUT"
+      - name: Retain unsigned candidate or release trust inputs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-trust-prepared-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/release-trust/SBOM.spdx.json
+            ${{ runner.temp }}/release-trust/TRUST.json
+            ${{ runner.temp }}/release-trust/ATTESTATION-SUBJECTS.sha256
+          if-no-files-found: error
+          retention-days: 14
+  attest:
+    name: Attest the tested release archives
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: [resolve, packages, native-gate, trust]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
+    outputs:
+      artifact-id: ${{ steps.save.outputs.artifact-id }}
+      artifact-sha256: ${{ steps.save.outputs.artifact-digest }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+      SOURCE_SHA256: ${{ needs.resolve.outputs.source-sha256 }}
+      MANIFEST_SHA256: ${{ needs.packages.outputs.manifest-sha256 }}
+      ARTIFACT_ID: ${{ needs.packages.outputs.artifact-id }}
+      ARTIFACT_SHA256: ${{ needs.packages.outputs.artifact-sha256 }}
+      VERDICT_SHA256: ${{ needs.native-gate.outputs.verdict-sha256 }}
+      SBOM_SHA256: ${{ needs.trust.outputs.sbom-sha256 }}
+      TRUST_SHA256: ${{ needs.trust.outputs.trust-sha256 }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.resolve.outputs.artifact-id }}
+          path: ${{ runner.temp }}/resolved-source
+          merge-multiple: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.native-gate.outputs.artifact-id }}
+          path: ${{ runner.temp }}/archive-verdict
+          merge-multiple: true
+      - name: Re-fetch exact archives and refuse moved tags or changed unsigned trust inputs
+        shell: bash
+        run: |
+          python3 scripts/release-fetch.py --repo "$GITHUB_REPOSITORY" --artifact-id "$ARTIFACT_ID" --run-id "$GITHUB_RUN_ID" --artifact-name "release-bundle-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --expected-artifact-sha256 "$ARTIFACT_SHA256" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --directory "$RUNNER_TEMP/release-bundle" --evidence-dir "$RUNNER_TEMP/release-fetch"
+          git fetch --force --no-tags origin "refs/tags/$RELEASE_VERSION:refs/tags/$RELEASE_VERSION"
+          python3 scripts/release-trust.py prepare-signing --repo . --directory "$RUNNER_TEMP/release-bundle" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --expected-manifest-sha256 "$MANIFEST_SHA256" --verdict "$RUNNER_TEMP/archive-verdict/verdict.json" --expected-verdict-sha256 "$VERDICT_SHA256" --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --event-sha "$GITHUB_SHA" --artifact-id "$ARTIFACT_ID" --expected-artifact-sha256 "$ARTIFACT_SHA256" --event-name "$GITHUB_EVENT_NAME" --ref "$GITHUB_REF" --expected-sbom-sha256 "$SBOM_SHA256" --expected-trust-sha256 "$TRUST_SHA256" --output "$RUNNER_TEMP/release-trust"
+      - name: Sign explicit archive, SBOM and trust hashes with GitHub provenance
+        id: provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-checksums: ${{ runner.temp }}/release-trust/ATTESTATION-SUBJECTS.sha256
+          create-storage-record: false
+      - name: Sign the SPDX composition of the five tested archives
+        id: sbom
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-checksums: ${{ runner.temp }}/release-bundle/SHA256SUMS
+          sbom-path: ${{ runner.temp }}/release-trust/SBOM.spdx.json
+          create-storage-record: false
+      - name: Verify every signature and exact subject before retaining bundles
+        env:
+          PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+          SBOM_BUNDLE: ${{ steps.sbom.outputs.bundle-path }}
+        run: |
+          git fetch --force --no-tags origin "refs/tags/$RELEASE_VERSION:refs/tags/$RELEASE_VERSION"
+          python3 scripts/release-trust.py finalize --repo . --directory "$RUNNER_TEMP/release-bundle" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --expected-manifest-sha256 "$MANIFEST_SHA256" --verdict "$RUNNER_TEMP/archive-verdict/verdict.json" --expected-verdict-sha256 "$VERDICT_SHA256" --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --event-sha "$GITHUB_SHA" --artifact-id "$ARTIFACT_ID" --expected-artifact-sha256 "$ARTIFACT_SHA256" --event-name "$GITHUB_EVENT_NAME" --ref "$GITHUB_REF" --prepared "$RUNNER_TEMP/release-trust" --provenance-bundle "$PROVENANCE_BUNDLE" --sbom-bundle "$SBOM_BUNDLE" --output "$RUNNER_TEMP/release-attested"
+          git fetch --force --no-tags origin "refs/tags/$RELEASE_VERSION:refs/tags/$RELEASE_VERSION"
+          python3 scripts/release_manifest.py verify-source --repo . --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --publishable
+      - name: Retain exact verified sidecars and signature bundles
+        id: save
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-attested-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/release-attested/SBOM.spdx.json
+            ${{ runner.temp }}/release-attested/TRUST.json
+            ${{ runner.temp }}/release-attested/provenance.sigstore.json
+            ${{ runner.temp }}/release-attested/sbom.sigstore.json
+            ${{ runner.temp }}/release-attested/ATTESTATIONS.json
+          if-no-files-found: error
+          retention-days: 14
+  draft:
+    name: Draft from verified archives
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: [resolve, packages, native-gate, trust, attest]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+      SOURCE_SHA256: ${{ needs.resolve.outputs.source-sha256 }}
+      MANIFEST_SHA256: ${{ needs.packages.outputs.manifest-sha256 }}
+      ARTIFACT_ID: ${{ needs.packages.outputs.artifact-id }}
+      ARTIFACT_SHA256: ${{ needs.packages.outputs.artifact-sha256 }}
+      VERDICT_SHA256: ${{ needs.native-gate.outputs.verdict-sha256 }}
+      TRUST_ARTIFACT_ID: ${{ needs.attest.outputs.artifact-id }}
+      TRUST_ARTIFACT_SHA256: ${{ needs.attest.outputs.artifact-sha256 }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.resolve.outputs.artifact-id }}
+          path: ${{ runner.temp }}/resolved-source
+          merge-multiple: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.native-gate.outputs.artifact-id }}
+          path: ${{ runner.temp }}/archive-verdict
+          merge-multiple: true
+      - name: Recheck tag, verdict and the exact publishable bytes
+        run: |
+          python3 scripts/release-fetch.py --repo "$GITHUB_REPOSITORY" --artifact-id "$ARTIFACT_ID" --run-id "$GITHUB_RUN_ID" --artifact-name "release-bundle-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --expected-artifact-sha256 "$ARTIFACT_SHA256" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --directory "$RUNNER_TEMP/release-bundle" --evidence-dir "$RUNNER_TEMP/release-fetch"
+          git fetch --force --no-tags origin "refs/tags/$RELEASE_VERSION:refs/tags/$RELEASE_VERSION"
+          python3 scripts/release_manifest.py verify --directory "$RUNNER_TEMP/release-bundle" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --expected-manifest-sha256 "$MANIFEST_SHA256" --repo . --publishable
+          python3 scripts/release-trust.py fetch-attested --repo "$GITHUB_REPOSITORY" --artifact-id "$TRUST_ARTIFACT_ID" --run-id "$GITHUB_RUN_ID" --artifact-name "release-attested-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --expected-artifact-sha256 "$TRUST_ARTIFACT_SHA256" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --directory "$RUNNER_TEMP/release-attested" --evidence-dir "$RUNNER_TEMP/trust-fetch"
+          python3 scripts/release-trust.py verify-attested --repo . --directory "$RUNNER_TEMP/release-bundle" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --expected-manifest-sha256 "$MANIFEST_SHA256" --verdict "$RUNNER_TEMP/archive-verdict/verdict.json" --expected-verdict-sha256 "$VERDICT_SHA256" --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --event-sha "$GITHUB_SHA" --artifact-id "$ARTIFACT_ID" --expected-artifact-sha256 "$ARTIFACT_SHA256" --event-name "$GITHUB_EVENT_NAME" --ref "$GITHUB_REF" --sidecars "$RUNNER_TEMP/release-attested"
+          git fetch --force --no-tags origin "refs/tags/$RELEASE_VERSION:refs/tags/$RELEASE_VERSION"
+          python3 scripts/release_manifest.py verify-source --repo . --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --publishable
+          python3 scripts/release-notes.py "$RELEASE_VERSION" > "$RUNNER_TEMP/release-notes.md"
+      - name: Create draft from the same verified bundle without rebuilding
+        run: |
+          python3 - <<'PYTHON'
+          import json,os,subprocess
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          manifest=json.loads((root/'release-bundle/MANIFEST.json').read_bytes())
+          bundle=[root/'release-bundle'/name for name in ['SOURCE.json','MANIFEST.json','SHA256SUMS']+[r['name'] for r in manifest['archives']]]
+          sidecars=[root/'release-attested'/name for name in ['SBOM.spdx.json','TRUST.json','provenance.sigstore.json','sbom.sigstore.json','ATTESTATIONS.json']]
+          version=os.environ['RELEASE_VERSION']
+          command=['gh','release','create',version,*map(str,bundle+sidecars),'--verify-tag','--draft','--title','cutmyvideo-core '+version,'--notes-file',str(root/'release-notes.md')]
+          if '-' in version: command.append('--prerelease')
+          subprocess.run(command,check=True)
+          PYTHON

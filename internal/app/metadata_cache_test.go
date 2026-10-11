@@ -9,11 +9,14 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func metadataCacheFixture() (Source, platformInfo) {
@@ -481,14 +484,29 @@ func TestMetadataCacheExpiryCorruptionAndFailureFallback(t *testing.T) {
 	if _, hit := readPlatformMetadataCache(ctx, s.DB, source); hit {
 		t.Fatal("failed resolution was cached")
 	}
+	c := ledgerConfig(t)
+	path := metadataRetentionArtifact(t, s, c)
 	if _, err := s.DB.Exec(ctx, `DROP TABLE source_metadata_cache`); err != nil {
 		t.Fatal(err)
 	}
 	if _, hit, err := s.resolvePlatformMetadata(ctx, source, func() (platformInfo, error) { return info, nil }); err != nil || hit {
 		t.Fatal("unavailable cache failed a valid fresh resolution")
 	}
-	if _, err := s.Cleanup(ctx, time.Hour, time.Hour); err != nil {
-		t.Fatal("unavailable optional cache stopped retention")
+	paths, err := s.Cleanup(ctx, time.Hour, time.Hour)
+	var databaseErr *pgconn.PgError
+	if !errors.As(err, &databaseErr) || databaseErr.Code != "42P01" || len(paths) != 1 || paths[0] != path {
+		t.Fatal("unavailable cache hid its cause or stopped committed media retention", paths, err)
+	}
+	var artifact, pending bool
+	if err := s.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM artifacts WHERE id='cache-error-artifact'),
+ EXISTS(SELECT 1 FROM storage_files WHERE path=$1 AND delete_pending)`, path).Scan(&artifact, &pending); err != nil || artifact || !pending {
+		t.Fatal("unavailable cache prevented the media retention transaction", artifact, pending, err)
+	}
+	if err := s.DrainStorageDeletes(ctx, c, paths); err != nil {
+		t.Fatal("unavailable cache prevented draining committed media paths", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("media survived cache-independent retention", err)
 	}
 }
 

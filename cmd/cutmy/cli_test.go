@@ -67,11 +67,13 @@ func TestCLIInspectAndClipActualMedia(t *testing.T) {
 		t.Fatal(err)
 	}
 	var inspected struct {
-		Duration int64 `json:"duration_ms"`
-		Width    int   `json:"width"`
-		Height   int   `json:"height"`
+		Duration      int64 `json:"duration_ms"`
+		Width         int   `json:"width"`
+		Height        int   `json:"height"`
+		DisplayWidth  int   `json:"display_width"`
+		DisplayHeight int   `json:"display_height"`
 	}
-	if err := json.Unmarshal(stdout.Bytes(), &inspected); err != nil || inspected.Duration != 2000 || inspected.Width != 160 || inspected.Height != 90 {
+	if err := json.Unmarshal(stdout.Bytes(), &inspected); err != nil || inspected.Duration != 2000 || inspected.Width != 160 || inspected.Height != 90 || inspected.DisplayWidth != 160 || inspected.DisplayHeight != 90 {
 		t.Fatalf("inspection: %s, %v", &stdout, err)
 	}
 	stdout.Reset()
@@ -85,5 +87,14 @@ func TestCLIInspectAndClipActualMedia(t *testing.T) {
 	}
 	if err := runArgs(args, &stdout, &stderr); err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Fatalf("existing output was not protected: %v", err)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if status := runCLI([]string{"--json-errors", "clip", "--input", input, "--output", filepath.Join(t.TempDir(), "silent.mp3"), "--end", "1"}, &stdout, &stderr); status != 1 || stdout.Len() != 0 {
+		t.Fatalf("missing-audio failure: %d %s %s", status, &stdout, &stderr)
+	}
+	var failure struct{ Error struct{ Code string } }
+	if err := json.Unmarshal(stderr.Bytes(), &failure); err != nil || failure.Error.Code != "audio_missing" {
+		t.Fatalf("actual missing-audio code: %s %v", &stderr, err)
 	}
 }

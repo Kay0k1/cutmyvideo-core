@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func ledgerConfig(t *testing.T) Config {
@@ -177,6 +180,14 @@ func TestArtifactPublicationConvertsReservationAtomically(t *testing.T) {
 	s.ConfigureStorage(c)
 	ctx := context.Background()
 	source := storedSource(t, s, "owner")
+	sourceFile, err := os.Stat(source.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceBytes, initialReserved := ledgerBytes(t, s)
+	if sourceFile.Size() <= 0 || sourceBytes != sourceFile.Size() || initialReserved != 0 {
+		t.Fatal("completed source is not charged exactly once", sourceBytes, sourceFile.Size(), initialReserved)
+	}
 	req := requestFor(source)
 	req.Ranges = append(req.Ranges, req.Ranges[0])
 	if _, err := s.CreateJob(ctx, source.Owner, req, ""); err != nil {
@@ -192,8 +203,8 @@ func TestArtifactPublicationConvertsReservationAtomically(t *testing.T) {
 		t.Fatal(err)
 	}
 	files, reserved := ledgerBytes(t, s)
-	if files != 4096 || reserved != c.MaxOutputBytes {
-		t.Fatal("publication lost or double-counted storage", files, reserved)
+	if files-sourceBytes != 4096 || reserved != c.MaxOutputBytes {
+		t.Fatal("publication lost or double-counted storage", sourceBytes, files, reserved)
 	}
 	// The expiry is hidden while its parent job pins the result.
 	loaded, err := s.Job(ctx, j.ID, j.Owner)
@@ -237,6 +248,9 @@ func TestTombstoneChargesFailedDeleteUntilPhysicalRemoval(t *testing.T) {
 		t.Fatal("failed delete freed budget", bytes)
 	}
 	if err = os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.DB.Exec(ctx, "UPDATE storage_files SET delete_retry_at=clock_timestamp() WHERE path=$1", path); err != nil {
 		t.Fatal(err)
 	}
 	if err = s.DrainStorageDeletes(ctx, c, paths); err != nil {
@@ -284,17 +298,11 @@ func TestStorageDeleteAcknowledgementFailureKeepsBytesForRetry(t *testing.T) {
 	if _, err := s.DB.Exec(ctx, `INSERT INTO storage_files(path,kind,size_bytes,delete_pending) VALUES($1,'tombstone',19,true)`, path); err != nil {
 		t.Fatal(err)
 	}
-	lock, err := s.storageTx(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rollbackStorage(lock)
-	bounded, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
-	err = s.DrainStorageDeletes(bounded, c, []string{path})
-	cancel()
-	rollbackStorage(lock)
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatal("blocked acknowledgement must return its deadline", err)
+	ops := systemStorageDeleteOperations()
+	ops.commit = func(context.Context, pgx.Tx) error { return io.ErrUnexpectedEOF }
+	err := s.drainStorageDeletes(ctx, c, []string{path}, ops)
+	if !errors.Is(err, io.ErrUnexpectedEOF) || storageDeletionRetryOnly(err) {
+		t.Fatal("lost acknowledgement must stop the database batch", err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatal("test did not reach the physical removal before acknowledgement", err)
@@ -670,9 +678,10 @@ func TestWaitingStorageHTTPExposesFiniteDeadlineAndSourceListIsolation(t *testin
 func TestWorkerStorageFailureWaitsInsteadOfFailingAcceptedJob(t *testing.T) {
 	s := testStore(t)
 	c := ledgerConfig(t)
+	c.FFprobe = mediaConfig(t).FFprobe
 	s.ConfigureStorage(c)
 	ctx := context.Background()
-	source := storedSource(t, s, "owner")
+	source := workerSourceFixture(t, s, c)
 	c.FFmpeg = filepath.Join(c.DataDir, "ffmpeg-no-space")
 	if err := os.WriteFile(c.FFmpeg, []byte("#!/bin/sh\nprintf 'No space left on device\\n' >&2\nexit 1\n"), 0700); err != nil {
 		t.Fatal(err)

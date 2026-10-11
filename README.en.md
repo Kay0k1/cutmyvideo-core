@@ -7,7 +7,7 @@ An open tool for manually trimming video and audio: choose a source and interval
 [![Core checks](https://github.com/Kay0k1/cutmyvideo-core/actions/workflows/ci.yml/badge.svg)](https://github.com/Kay0k1/cutmyvideo-core/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-The project is **0.x**. Local trimming, durable exports, recovery, bounded previews and long exports are implemented; individual platforms can restrict access. CI exercises real media on Linux. macOS and Windows archives are cross-built; native runtime verification is not yet claimed. See the [changelog](CHANGELOG.md) and [source catalogue](docs/providers.md) for changes and boundaries.
+**The 1.x line** stabilizes the documented Go library, CLI and `/api/v1` contracts: error codes, limits, idempotency and recovery. Local trimming, bounded previews and long exports are implemented; individual providers can restrict access. Releases require real media, durable publication, process cancellation and API/worker operation on Linux, macOS and Windows across all five shipped architectures, plus native execution of every extracted CLI archive. Historical v0.2.1 was runtime-tested on Linux and predates these guarantees. See [platform support](docs/platforms.md), the [changelog](CHANGELOG.md) and [source catalogue](docs/providers.md).
 
 ## Features
 
@@ -22,6 +22,8 @@ The project is **0.x**. Local trimming, durable exports, recovery, bounded previ
 ## Local trimming
 
 Install **FFmpeg and ffprobe** with libx264, AAC and libmp3lame. Download your OS/architecture archive from [GitHub Releases](https://github.com/Kay0k1/cutmyvideo-core/releases), verify it against `SHA256SUMS`, and extract it. FFmpeg is external. Building from source requires Go 1.26.9+; CI and releases use Go 1.27.2.
+
+The 1.x release archives include [provenance and dependency composition verification](docs/releases.md#consumer-verification-of-a-new-signed-release), binding tested hashes to the reviewed source commit and release workflow. Downloaded signed assets are checked on all five targets before publication. Follow the instructions to verify the complete 13-file set; historical v0.2.1 does not contain this protocol.
 
 ```sh
 git clone https://github.com/Kay0k1/cutmyvideo-core.git
@@ -41,6 +43,12 @@ go build -trimpath -o cutmy ./cmd/cutmy
 
 Output is JSON with path, byte size and actual bounds. Existing outputs are never overwritten. Options include `--quality best|1080p|720p`, `--profile fast|compact`, `--threads 1..32` and `--timeout 30m`. Accurate mode re-encodes; copy begins at a preceding keyframe and preserves resolution. MP3 requires accurate mode. Local intervals can span up to 24 hours; default limits are 10 GiB per output and 30 minutes per export. The library can change byte/deadline limits. See the [user and library guide](docs/usage.md).
 
+Builds from the current source include public library error codes and optional
+`cutmy --json-errors clip …` diagnostics. The output directory must support hard
+links and synchronization to storage; these capabilities are checked before
+encoding. Local export success follows synchronization of the file and directory
+entry. See the [guide](docs/usage.md) for the contract and limits.
+
 ## Self-hosting
 
 Docker Compose runs PostgreSQL, API and worker with shared media storage. The example listens only on `127.0.0.1:8080` and deliberately uses lower budgets than the server defaults.
@@ -55,6 +63,8 @@ curl --fail http://localhost:8080/readyz
 Keep `.env` private. Public hosting needs HTTPS, an exact `PUBLIC_ORIGIN`, `COOKIE_SECURE=true`, resource limits and network isolation. Use `TRUST_PROXY=true` only when the API is reachable solely through a trusted proxy that normalizes `X-Forwarded-For`. The current boundary is one API instance: its IP limiter lives in the process. Queue leases and disk reservations are shared through PostgreSQL. A worker can process 1–8 jobs; start with one.
 
 [Independent HTTPS hosting](docs/operations.md#https-with-caddy) · [Operations, upgrades and backups](docs/operations.md) · [All configuration](docs/configuration.md) · [Security model](docs/security-model.md)
+
+A separate [prepared public hosting profile](docs/self-hosting.md) supplies HTTPS, distinct database roles, container limits, verified scoped egress rules, upgrades and coordinated database/media backups on Linux amd64. Required installation acceptance runs on a disposable CI host; local refusal controls do not establish an installation result. Native Linux, macOS and Windows CLI archives have separate execution checks.
 
 ### Minimal API request
 

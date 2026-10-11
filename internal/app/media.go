@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
 )
 
 const mediaFormats = "mov,matroska,webm,mp3,wav,flac,ogg,aac,avi,mpegts"
@@ -77,6 +79,9 @@ func (e *mediaProcessFailure) Unwrap() error { return e.cause }
 // A category is diagnostic evidence, never permission to retry an export.
 func mediaFailureCategory(stderr string) string {
 	text := strings.ToLower(stderr)
+	if strings.Contains(text, "no such filter") && (strings.Contains(text, "zscale") || strings.Contains(text, "tonemap")) {
+		return "hdr_conversion_unavailable"
+	}
 	if strings.Contains(text, "stream map") && strings.Contains(text, ":a:") && strings.Contains(text, "matches no streams") {
 		return "missing_audio"
 	}
@@ -144,13 +149,12 @@ func runCommand(ctx context.Context, path string, args ...string) ([]byte, error
 
 func runCommandOutput(ctx context.Context, path string, args []string, stdout io.Writer) error {
 	cmd := exec.CommandContext(ctx, path, args...)
-	configureProcess(cmd)
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=/nonexistent", "LANG=C.UTF-8", "LC_ALL=C.UTF-8"}
 	cmd.WaitDelay = 2 * time.Second
 	stderr := &limitedBuffer{limit: 16 << 10}
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	if err := cmd.Run(); err != nil {
+	if err := runProcess(cmd); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -164,50 +168,42 @@ type probeInfo struct {
 		Duration  string `json:"duration"`
 		StartTime string `json:"start_time"`
 	} `json:"format"`
-	Streams []struct {
-		CodecType     string `json:"codec_type"`
-		CodecName     string `json:"codec_name"`
-		SampleRate    string `json:"sample_rate"`
-		Channels      int    `json:"channels"`
-		TimeBase      string `json:"time_base"`
-		ExtradataHash string `json:"extradata_hash"`
-		StartTime     string `json:"start_time"`
-		Width         int    `json:"width"`
-		Height        int    `json:"height"`
-	} `json:"streams"`
+	Streams []probeStream `json:"streams"`
 }
 
 func probe(ctx context.Context, c Config, path string, remote bool) (probeInfo, int64, error) {
-	protocols := "file"
-	if remote {
-		protocols = "http,tcp"
-	}
-	// Large user-controlled tags, dispositions and side data are unused. Ask
-	// ffprobe only for the fields needed by inspection and output validation.
-	args := []string{"-v", "error", "-max_alloc", "268435456", "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats}
-	args = append(args, mediaInputBounds(c)...)
-	args = append(args, "-show_entries", "format=duration,start_time:stream=codec_type,codec_name,start_time,width,height,sample_rate,channels,time_base,extradata_hash", "-show_data_hash", "sha256", "-of", "json", path)
-	b, err := runCommand(ctx, c.FFprobe, args...)
-	var p probeInfo
+	p, err := probeStreams(ctx, c, path, remote)
 	if err != nil {
-		return p, 0, err
-	}
-	if err = json.Unmarshal(b, &p); err != nil {
 		return p, 0, err
 	}
 	duration, err := strconv.ParseFloat(p.Format.Duration, 64)
 	if err != nil || math.IsNaN(duration) || math.IsInf(duration, 0) || duration <= 0 || duration > 30*24*3600 {
 		return p, 0, errors.New("source has no supported finite duration")
 	}
-	if len(p.Streams) == 0 || len(p.Streams) > maxMediaStreams {
-		return p, 0, errors.New("source contains no supported streams")
-	}
-	for _, stream := range p.Streams {
-		if stream.CodecType == "video" && (stream.Width <= 0 || stream.Height <= 0 || stream.Width > maxMediaPixels/stream.Height) {
-			return p, 0, errors.New("source video dimensions exceed the decoder limit")
-		}
-	}
 	return p, int64(math.Round(duration * 1000)), nil
+}
+
+// HLS staging can have no finite duration until timestamps have been remuxed.
+// Stream selection still uses the same bounded probe and validation as files.
+func probeStreams(ctx context.Context, c Config, path string, remote bool) (probeInfo, error) {
+	protocols := "file"
+	if remote {
+		protocols = "http,tcp"
+	}
+	// Request named selection/rendering fields only, not arbitrary tags or
+	// complete side data such as a user-controlled display-matrix dump.
+	args := []string{"-v", "error", "-max_alloc", "268435456", "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats}
+	args = append(args, mediaInputBounds(c)...)
+	args = append(args, "-show_entries", mediaProbeEntries, "-show_data_hash", "sha256", "-of", "json", path)
+	b, err := runCommand(ctx, c.FFprobe, args...)
+	var p probeInfo
+	if err != nil {
+		return p, err
+	}
+	if err = json.Unmarshal(b, &p); err != nil {
+		return p, err
+	}
+	return p, p.validateStreams()
 }
 
 type platformInfo struct {
@@ -366,7 +362,7 @@ type copyKeyframe struct {
 	HasDTS   bool
 }
 
-func nearestKeyframe(ctx context.Context, c Config, path string, start int64, remote bool) (copyKeyframe, error) {
+func nearestKeyframe(ctx context.Context, c Config, path string, start int64, remote bool, streamIndex int) (copyKeyframe, error) {
 	from := start - 30000
 	if from < 0 {
 		from = 0
@@ -384,7 +380,7 @@ func nearestKeyframe(ctx context.Context, c Config, path string, start int64, re
 	}
 	args := []string{"-v", "error", "-max_alloc", "268435456", "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats}
 	args = append(args, mediaInputBounds(c)...)
-	args = append(args, "-select_streams", "v:0", "-read_intervals", seconds(from)+"%"+seconds(until), "-show_packets", "-show_entries", "packet=pts_time,dts_time,flags", "-of", "json", path)
+	args = append(args, "-select_streams", strconv.Itoa(streamIndex), "-read_intervals", seconds(from)+"%"+seconds(until), "-show_packets", "-show_entries", "packet=pts_time,dts_time,flags", "-of", "json", path)
 	b, err := runCommand(ctx, c.FFprobe, args...)
 	if err != nil {
 		return copyKeyframe{}, err
@@ -441,8 +437,30 @@ func exportInputs(ctx context.Context, c Config, inputs []mediaInput, r Range, r
 }
 
 func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r Range, request ExportRequest, out string, report func(int64)) (int64, int64, error) {
-	if len(inputs) == 0 {
+	selection, err := probeInputSelection(ctx, c, inputs)
+	if err != nil {
+		return 0, 0, err
+	}
+	if request.Format == "mp3" && selection.Audio == nil || len(inputs) == 2 && selection.Audio == nil {
+		return 0, 0, errNoAudio
+	}
+	if request.Format != "mp3" && selection.Video == nil {
 		return 0, 0, errUnsupportedStream
+	}
+	if request.CutMode == "copy" && selection.Video == nil {
+		return 0, 0, errUnsupportedStream
+	}
+	filter, hdr := "", false
+	encoderTimeBase := ""
+	if request.Format != "mp3" && request.CutMode != "copy" {
+		filter, hdr, err = videoRenderFilter(selection.Video, request.Quality, false)
+		if err != nil {
+			return 0, 0, err
+		}
+		encoderTimeBase, err = videoEncoderTimeBase(selection.Video)
+		if err != nil {
+			return 0, 0, err
+		}
 	}
 	limit := outputBudget(c, r, request)
 	start := r.StartMS
@@ -450,7 +468,7 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 	copyTrim := false
 	if request.CutMode == "copy" {
 		if request.Quality != "best" {
-			info, _, err := probe(ctx, c, inputs[0].Path, inputs[0].Remote)
+			_, displayHeight, err := videoDisplayGeometry(selection.Video)
 			if err != nil {
 				return 0, 0, err
 			}
@@ -458,25 +476,24 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 			if request.Quality == "720p" {
 				capHeight = 720
 			}
-			for _, stream := range info.Streams {
-				if stream.CodecType == "video" && stream.Height > capHeight {
-					return 0, 0, &sourceProblem{"copy_quality_unsupported", "Copy mode cannot reduce this video's resolution. Choose original quality or accurate mode"}
-				}
+			if displayHeight > capHeight {
+				return 0, 0, &sourceProblem{"copy_quality_unsupported", "Copy mode cannot reduce this video's resolution. Choose original quality or accurate mode"}
 			}
 		}
-		local, err := nearestKeyframe(ctx, c, inputs[0].Path, start-inputs[0].OffsetMS, inputs[0].Remote)
+		videoInput := inputs[selection.VideoInput]
+		local, err := nearestKeyframe(ctx, c, videoInput.Path, start-videoInput.OffsetMS, videoInput.Remote, selection.Video.Index)
 		if err != nil {
 			return 0, 0, err
 		}
-		start = local.PTS + inputs[0].OffsetMS
+		start = local.PTS + videoInput.OffsetMS
 		if local.HasDTS {
-			copySeek = local.DTS + inputs[0].OffsetMS
+			copySeek = local.DTS + videoInput.OffsetMS
 			copyShift = local.PTS - local.DTS
 			copyTrim = true
 		} else {
 			// First MKV packets can lack DTS until reordering is known. Keep
 			// that first keyframe and remove only its presentation-time offset.
-			copySeek = inputs[0].OffsetMS
+			copySeek = videoInput.OffsetMS
 			copyShift = local.PTS
 		}
 	}
@@ -518,15 +535,10 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 		args = append(args, "-ss", "0")
 	}
 	args = append(args, "-t", seconds(r.EndMS-start+copyShift))
+	args = append(args, selection.mapArgs(request.Format)...)
 	if request.Format == "mp3" {
-		args = append(args, "-map", "0:a:0", "-vn", "-c:a", "libmp3lame", "-b:a", "192k")
+		args = append(args, "-vn", "-c:a", "libmp3lame", "-b:a", "192k")
 	} else {
-		args = append(args, "-map", "0:v:0")
-		if len(inputs) > 1 {
-			args = append(args, "-map", "1:a:0")
-		} else {
-			args = append(args, "-map", "0:a:0?")
-		}
 		if request.CutMode == "copy" {
 			args = append(args, "-c", "copy", "-avoid_negative_ts", "disabled", "-output_ts_offset", seconds(-copyShift))
 		} else {
@@ -540,16 +552,17 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 				// while avoiding expensive motion analysis in the default profile.
 				args = append(args, "-preset", "ultrafast", "-crf", "18", "-coder", "1")
 			}
-			args = append(args, "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k")
-			if request.Quality != "best" {
-				height := 1080
-				if request.Quality == "720p" {
-					height = 720
-				}
-				args = append(args, "-vf", fmt.Sprintf("scale=-2:'trunc(min(%d,ih)/2)*2'", height))
-			} else {
-				args = append(args, "-vf", "scale='trunc(iw/2)*2':'trunc(ih/2)*2'")
+			audioBitrate := "192k"
+			if selection.Audio != nil && selection.Audio.Channels == 1 {
+				// 128 kbit/s is ample for mono AAC and avoids the native encoder's
+				// 192-kbit/s convergence failure on some valid silent/pulsed input.
+				audioBitrate = "128k"
 			}
+			args = append(args, "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", audioBitrate)
+			// Keep the source clock as well as its frame cadence. The default
+			// encoder time base can quantize irregular presentation timestamps.
+			args = append(args, "-vf", filter, "-fps_mode:v", "passthrough", "-enc_time_base:v", encoderTimeBase)
+			args = append(args, hdrOutputColorArgs(hdr)...)
 		}
 		args = append(args, "-movflags", "+faststart")
 	}
@@ -564,7 +577,7 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 		if info, statErr := os.Stat(out); statErr == nil && info.Size() >= limit {
 			return 0, 0, errOutputLimit
 		}
-		return 0, 0, err
+		return 0, 0, renderedMediaFailure(err, hdr)
 	}
 	info, err := os.Stat(out)
 	if err != nil {
@@ -578,15 +591,17 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 		return 0, 0, err
 	}
 	if request.Format == "mp4" {
-		video := false
-		for _, s := range p.Streams {
-			if s.CodecType == "video" {
-				video = true
-			}
-		}
-		if !video {
+		if p.selectedVideo() == nil {
 			return 0, 0, errors.New("result has no video stream")
 		}
+		if request.CutMode != "copy" {
+			if err := validateRenderedVideo(p, selection.Video, request.Quality, false, hdr); err != nil {
+				return 0, 0, err
+			}
+		}
+	}
+	if selection.Audio != nil && p.selectedAudio() == nil {
+		return 0, 0, errors.New("result has no selected audio stream")
 	}
 	// A duration mismatch also catches FFmpeg's graceful -fs truncation.
 	expected := r.EndMS - start
@@ -624,10 +639,13 @@ func copyBounded(dst io.Writer, src io.Reader, limit int64) error {
 
 func makeSourceFile(c Config, id string) (*os.File, string, error) {
 	dir := filepath.Join(c.DataDir, "sources")
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := fsdurable.EnsureDirectory(dir, 0700); err != nil {
 		return nil, "", err
 	}
-	path := filepath.Join(dir, id+".media")
+	if err := fsdurable.Preflight(dir, dir); err != nil {
+		return nil, "", err
+	}
+	path := filepath.Join(dir, id+".media.part")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	return f, path, err
 }

@@ -1,0 +1,159 @@
+# Prepared Linux amd64 profile. Acceptance has not run yet; see docs/self-hosting.md.
+# Use deploy/self-host.py; image identity, role setup and egress are prerequisites.
+x-logging: &logging
+  driver: json-file
+  options: {max-size: 10m, max-file: "3"}
+x-app: &app
+  image: ${CUTMY_IMAGE:?Build and verify an immutable image with self-host.py}
+  pull_policy: never
+  platform: linux/amd64
+  user: "1000:1000"
+  read_only: true
+  tmpfs: ["/tmp:rw,nosuid,nodev,noexec,size=268435456,mode=0700,uid=1000,gid=1000"]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  sysctls:
+    net.ipv6.conf.all.disable_ipv6: "1"
+    net.ipv6.conf.default.disable_ipv6: "1"
+  logging: *logging
+  stop_grace_period: 30s
+  pids_limit: 128
+  # Applications never auto-start ahead of firewall restoration after a daemon
+  # restart. The checked lifecycle up is required; PostgreSQL may auto-restart.
+  restart: "no"
+x-environment: &environment
+  DATABASE_URL: postgres://cutmy_runtime:${CUTMY_APP_PASSWORD:?Use the private configuration}@postgres:5432/cutmy?sslmode=disable&pool_max_conns=4
+  DATA_DIR: /data
+  LISTEN_ADDR: :8080
+  GOMEMLIMIT: 128MiB
+  GOMAXPROCS: "2"
+  WORKER_CONCURRENCY: "1"
+  FFMPEG_THREADS: "2"
+  FFMPEG_PROFILE: fast
+  MAX_SOURCE_BYTES: "1073741824"
+  MAX_FETCH_BYTES: "1073741824"
+  MAX_OUTPUT_BYTES: "1073741824"
+  MAX_STORAGE_BYTES: "10737418240"
+  MAX_OWNER_BYTES: "2147483648"
+  MAX_ACTIVE_JOBS: "32"
+  MAX_RANGES: "12"
+  MAX_RANGE_MS: "600000"
+  MAX_JOB_MS: "3600000"
+  SOURCE_TTL: 24h
+  ARTIFACT_TTL: 24h
+  JOB_TIMEOUT: 2h
+  UPLOAD_TIMEOUT: 30m
+  WORKER_HEALTH_PATH: /tmp/cutmy-worker-health
+services:
+  postgres:
+    image: postgres:17.11-bookworm
+    platform: linux/amd64
+    user: "999:999"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: "1"
+      net.ipv6.conf.default.disable_ipv6: "1"
+    environment:
+      POSTGRES_DB: cutmy
+      POSTGRES_USER: cutmy_admin
+      POSTGRES_PASSWORD: ${CUTMY_ADMIN_PASSWORD:?Use the private configuration}
+      CUTMY_MIGRATION_PASSWORD: ${CUTMY_MIGRATION_PASSWORD:?Use the private configuration}
+      CUTMY_APP_PASSWORD: ${CUTMY_APP_PASSWORD:?Use the private configuration}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=trust
+    command: [postgres, -c, shared_buffers=64MB, -c, work_mem=8MB, -c, max_connections=32, -c, max_wal_size=256MB, -c, min_wal_size=64MB]
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=67108864,mode=1777
+      - /var/run/postgresql:rw,nosuid,nodev,noexec,size=16777216,mode=0775,uid=999,gid=999
+    volumes:
+      - postgres:/var/lib/postgresql/data
+      - ./public-bootstrap.sql:/docker-entrypoint-initdb.d/10-cutmy-roles.sql:ro
+    networks: {database: {ipv4_address: "${CUTMY_DATABASE_PREFIX}.2"}}
+    healthcheck:
+      test: [CMD, pg_isready, -h, 127.0.0.1, -p, "5432", -U, cutmy_admin, -d, cutmy]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 512m
+    cpus: 1
+    pids_limit: 128
+    stop_grace_period: 60s
+    logging: *logging
+    restart: unless-stopped
+  api:
+    <<: *app
+    command: [server]
+    environment: *environment
+    ports: ["127.0.0.1:${CUTMY_HTTP_PORT:?Set the loopback port}:8080"]
+    volumes: [media:/data]
+    networks:
+      database: {ipv4_address: "${CUTMY_DATABASE_PREFIX}.10"}
+      processing: {ipv4_address: "${CUTMY_PROCESSING_PREFIX}.10"}
+    depends_on: {postgres: {condition: service_healthy}}
+    healthcheck:
+      test: [CMD, cutmy, healthcheck]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    mem_limit: 1g
+    cpus: 1
+  worker:
+    <<: *app
+    command: [worker]
+    environment: *environment
+    volumes: [media:/data]
+    networks:
+      database: {ipv4_address: "${CUTMY_DATABASE_PREFIX}.11"}
+      processing: {ipv4_address: "${CUTMY_PROCESSING_PREFIX}.11"}
+    depends_on: {api: {condition: service_healthy}}
+    healthcheck:
+      test: [CMD, cutmy, worker-healthcheck]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    mem_limit: 2g
+    cpus: 2
+  migrate:
+    <<: *app
+    profiles: [operator]
+    command: [maintenance]
+    restart: "no"
+    environment:
+      <<: *environment
+      DATABASE_URL: postgres://cutmy_migrate:${CUTMY_MIGRATION_PASSWORD}@postgres:5432/cutmy?sslmode=disable&pool_max_conns=4
+    volumes: [media:/data]
+    networks: {database: {ipv4_address: "${CUTMY_DATABASE_PREFIX}.12"}}
+    mem_limit: 512m
+    cpus: 1
+  maintenance:
+    <<: *app
+    profiles: [operator]
+    command: [maintenance]
+    restart: "no"
+    environment: *environment
+    volumes: [media:/data]
+    networks: {database: {ipv4_address: "${CUTMY_DATABASE_PREFIX}.13"}}
+    mem_limit: 512m
+    cpus: 1
+networks:
+  database:
+    name: ${CUTMY_PROJECT}_database
+    internal: true
+    enable_ipv6: false
+    labels: {video.cutmy.profile: public-v1, video.cutmy.project: "${CUTMY_PROJECT}"}
+    driver_opts: {com.docker.network.bridge.name: "${CUTMY_DATABASE_BRIDGE}"}
+    ipam: {config: [{subnet: "${CUTMY_DATABASE_PREFIX}.0/24"}]}
+  processing:
+    name: ${CUTMY_PROJECT}_processing
+    enable_ipv6: false
+    labels: {video.cutmy.profile: public-v1, video.cutmy.project: "${CUTMY_PROJECT}"}
+    driver_opts: {com.docker.network.bridge.name: "${CUTMY_BRIDGE}"}
+    ipam: {config: [{subnet: "${CUTMY_PROCESSING_PREFIX}.0/24"}]}
+volumes:
+  postgres:
+    name: ${CUTMY_PROJECT}_postgres
+    labels: {video.cutmy.profile: public-v1, video.cutmy.project: "${CUTMY_PROJECT}"}
+  media:
+    name: ${CUTMY_PROJECT}_media
+    labels: {video.cutmy.profile: public-v1, video.cutmy.project: "${CUTMY_PROJECT}"}

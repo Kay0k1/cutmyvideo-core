@@ -1,0 +1,81 @@
+{
+  "README": {
+    "bytes": 4884,
+    "sha256": "cbe0b730637282103f8ae5bf447bd8a33ce2e96f70aa165dd7ee7f1d6f0c5803"
+  },
+  "application_files": 173,
+  "artifacts": [
+    {
+      "artifact_id": 11709777822,
+      "artifact_name": "storage-normal-memory-ddf1be6d09926bb37b4494a7060de9d86889618e-1",
+      "bytes": 184102,
+      "file": "38158894464-attempt-1-setup-refusal.zip",
+      "first_cause": "boundary_disk_shape",
+      "original_collection_manifest_sha256": "67161a4841dc616ddc120e2a99afdeb7a0ea35805f603cadbad3669a74ea5d70",
+      "run_attempt": 1,
+      "run_id": 38158894464,
+      "sha256": "61ae19bfb87e37961c3eea41d366a1cb808bf143a953b7275a3de9bee8767c9a",
+      "tooling_head": "ddf1be6d09926bb37b4494a7060de9d86889618e",
+      "uncompressed_file_count": 189,
+      "verdict": "FAIL"
+    },
+    {
+      "artifact_id": 11708889439,
+      "artifact_name": "storage-normal-memory-632a5d2c896e432d56fa5d8dfc2122f0e477cb8e-1",
+      "bytes": 1114004,
+      "file": "38159865451-attempt-1-post-final-sample-refusal.zip",
+      "first_cause": "sample_time_gap",
+      "original_collection_manifest_sha256": "d8224e4f7bf1e662544f5edfcb55bbeb3d32ba371cd6fbf5ce2084fe90da64a8",
+      "run_attempt": 1,
+      "run_id": 38159865451,
+      "sha256": "3813c8c8d2a08400376cb97dd9d825d03a78b81a66b3f33065e8129ab39799f0",
+      "tooling_head": "632a5d2c896e432d56fa5d8dfc2122f0e477cb8e",
+      "uncompressed_file_count": 726,
+      "verdict": "FAIL"
+    },
+    {
+      "artifact_id": 11711030859,
+      "artifact_name": "storage-normal-memory-7892ade3fa80e714c6c80eb6ddb6951921f18ef5-1",
+      "bytes": 1178782,
+      "file": "38161439646-attempt-1-final-ACK-pass.zip",
+      "first_cause": null,
+      "original_collection_manifest_sha256": "177e5ec08375f0a345fe938fb27f1401500a69bf6efc3eab0170fd179f96b078",
+      "run_attempt": 1,
+      "run_id": 38161439646,
+      "sha256": "c6398d3e9df5cf3d7f165cf3fe1cc71c25981e5d123edc72d83ed3183b33d766",
+      "tooling_head": "7892ade3fa80e714c6c80eb6ddb6951921f18ef5",
+      "uncompressed_file_count": 757,
+      "verdict": "PASS"
+    }
+  ],
+  "format": 1,
+  "kind": "storage-normal-memory-current10000-diagnostic-results",
+  "postgres": {
+    "CPUs": 2,
+    "OCI_index": "sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826",
+    "amd64_manifest": "sha256:66aafa11cf15800a3c94763f7e11d1e7b2e37e5e84bc4ce027cb6e1e4bfaf4df",
+    "config": "sha256:589f742565e4f6d22149176b032974f55f8201a8a37b71ed587ec5c6902e689f",
+    "memory_max_bytes": 1073741824,
+    "platform": "linux/amd64",
+    "swap_max_bytes": 0,
+    "version": "17.11"
+  },
+  "runtime_head": "d594cc4681dc1cab61664cec8c92bdf9a3e9444c",
+  "successful_observation": {
+    "all_seven_stages_pass": true,
+    "attempt": 1,
+    "final_current_bytes": 413655040,
+    "global_cumulative_peak_bytes": 866168832,
+    "last_to_final_ns": 78428973,
+    "markers": 54,
+    "maximum_periodic_gap_ns": 102948543,
+    "normal_API_ms": 1600.408,
+    "normal_maintenance_ms": 3320.479,
+    "observer_overhead_ns": 11974401195,
+    "performance_or_memory_headroom_claim": false,
+    "run_id": 38161439646,
+    "sampled_current_max_bytes": 839737344,
+    "samples": 496,
+    "saved_verification_sha256": "7d467b17f7a46e469225ab848e56c9b3ec7cd0096eebab988b9b474d7a10f859"
+  }
+}

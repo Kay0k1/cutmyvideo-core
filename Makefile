@@ -1,8 +1,11 @@
 GO ?= go
 PYTHON ?= python3
 VERSION ?=
+STORAGE_REPORT_DIR ?=
+STORAGE_SIZES ?= 10000,100000
+STORAGE_SAMPLES ?= 20
 
-.PHONY: help build fmt fmt-check vet test test-full docs-check notices-check workflows-check vuln check check-full release
+.PHONY: help build fmt fmt-check vet test test-full docs-check api-check native-results-check release-check contract-check recovery-check storage-capacity-check notices-check workflows-check vuln check check-full release
 
 help:
 	@printf '%s\n' 'make build       Build bin/cutmy' 'make check       Format, vet, docs, tests and build (integration tests may skip)' 'make check-full  Require media/extractor/PostgreSQL tools, race tests, workflows and vulnerability scan' 'make release VERSION=vX.Y.Z  Package CLI binaries from a clean tagged checkout'
@@ -24,23 +27,45 @@ test:
 
 test-full:
 	./scripts/check-tools.sh
-	$(GO) test -race -count=1 ./...
+	CUTMY_REQUIRE_CONTRACT=1 CUTMY_CONTRACT_PYTHON=$(PYTHON) $(GO) test -race -count=1 ./...
 
 docs-check:
 	$(PYTHON) scripts/check-docs.py
+
+api-check:
+	$(PYTHON) scripts/check-contract.py
+	$(PYTHON) -m unittest discover -s scripts -p contract_test.py
+
+native-results-check:
+	$(PYTHON) -m unittest discover -s scripts -p native_results_test.py
+
+release-check:
+	$(PYTHON) -m unittest discover -s scripts -p 'release*_test.py'
+	$(PYTHON) -m unittest discover -s scripts -p consumer_process_native_test.py
+
+contract-check: api-check
+	CUTMY_REQUIRE_CONTRACT=1 CUTMY_CONTRACT_PYTHON=$(PYTHON) $(GO) test -count=1 ./internal/app -run '^TestHTTPPublicContract$$'
+
+recovery-check:
+	$(PYTHON) -m unittest discover -s scripts -p recovery_test.py
+	$(PYTHON) scripts/recovery-acceptance.py --go "$(GO)"
+
+storage-capacity-check:
+	@test -n "$(STORAGE_REPORT_DIR)" || { printf '%s\n' 'Set STORAGE_REPORT_DIR to a new evidence directory.' >&2; exit 1; }
+	$(PYTHON) scripts/storage-capacity.py --go "$(GO)" --output "$(STORAGE_REPORT_DIR)" --sizes "$(STORAGE_SIZES)" --samples "$(STORAGE_SAMPLES)"
 
 notices-check:
 	$(PYTHON) scripts/update-notices.py --check
 
 workflows-check:
-	$(GO) run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 -shellcheck= -pyflakes=
+	$(GO) run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= -pyflakes=
 
 vuln:
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
-check: fmt-check vet docs-check test build
+check: fmt-check vet docs-check api-check native-results-check release-check test build
 
-check-full: fmt-check vet docs-check notices-check workflows-check test-full vuln build
+check-full: fmt-check vet docs-check api-check native-results-check release-check notices-check workflows-check test-full vuln build
 
 release:
 	./scripts/release.sh "$(VERSION)"

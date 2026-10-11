@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "scope": "new common-tool paired-method preparation; no execution/install/build/runtime outcome",
+  "asset": {
+    "id": 630815233,
+    "name": "ffmpeg-master-latest-linux64-gpl.tar.xz",
+    "size": 156191208,
+    "digest": "sha256:0a8d7a93f8a53aacf09a81b6d31bfab790f28de5ea707a08c84d04c85eaec5fa",
+    "browser_download_url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz",
+    "created_at": "2026-10-11T13:24:12Z",
+    "updated_at": "2026-10-11T13:24:19Z"
+  },
+  "archive_members": {
+    "ffmpeg": {
+      "member": "ffmpeg-master-latest-linux64-gpl/bin/ffmpeg",
+      "bytes": 175824712,
+      "sha256": "bd3eda8dfc184ef91f13dc32d5f67dd365b29021013d7cc3f4d48390d2481804",
+      "mode": "0o755"
+    },
+    "ffprobe": {
+      "member": "ffmpeg-master-latest-linux64-gpl/bin/ffprobe",
+      "bytes": 175570696,
+      "sha256": "ce9bfa4ff51ebac283a2909ee880bd828873349764ebef5bb1237479955f69a5",
+      "mode": "0o755"
+    }
+  },
+  "upstream_license": {
+    "name": "ffmpeg-master-latest-linux64-gpl/LICENSE.txt",
+    "type": "regular",
+    "bytes": 35147,
+    "mode": "0o644",
+    "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+  },
+  "static_version_token": "N-127367-gb5902e69c7-20261011",
+  "static_configuration": {
+    "ffmpeg": "--prefix=/ffbuild/prefix --pkg-config-flags=--static --pkg-config=pkg-config --cross-prefix=x86_64-ffbuild-linux-gnu- --arch=x86_64 --target-os=linux --enable-gpl --enable-version3 --disable-debug --enable-iconv --enable-zlib --enable-libxml2 --enable-libsoxr --enable-openssl --enable-libvmaf --enable-libxcb --enable-xlib --enable-fontconfig --enable-libharfbuzz --enable-libfreetype --enable-libfribidi --enable-lcms2 --enable-vulkan --enable-libdav1d --enable-libvorbis --enable-librav1e --enable-librsvg --enable-libpulse --enable-gmp --enable-lzma --enable-liblcevc-dec --enable-opencl --enable-amf --enable-libaom --enable-avisynth --enable-chromaprint --enable-libdavs2 --enable-libdvdread --enable-libdvdnav --disable-libfdk-aac --enable-ffnvcodec --enable-cuda-llvm --enable-frei0r --enable-libgme --enable-libkvazaar --enable-libaribb24 --enable-libaribcaption --enable-libass --enable-libbluray --enable-libcurl --enable-libjxl --enable-libmp3lame --enable-libopus --enable-libplacebo --enable-librist --enable-libssh --enable-libtheora --enable-libvpx --enable-libwebp --enable-libzmq --enable-lv2 --enable-libvpl --enable-openal --enable-liboapv --enable-libopencore-amrnb --enable-libopencore-amrwb --enable-libopenh264 --enable-libopenjpeg --enable-libopenmpt --enable-librubberband --disable-schannel --enable-sdl2 --enable-libsnappy --enable-libsrt --enable-libsvtav1 --enable-libtwolame --enable-libuavs3d --enable-libdrm --enable-vaapi --enable-vapoursynth --enable-libvidstab --enable-libvvenc --disable-whisper --enable-libx264 --enable-libx265 --enable-libxavs2 --enable-libxvid --enable-libzimg --enable-libzvbi --extra-cflags=-DLIBTWOLAME_STATIC --extra-cxxflags= --extra-libs='-lgomp -ldl' --extra-ldflags=-pthread --extra-ldexeflags= --cc=x86_64-ffbuild-linux-gnu-gcc --cxx=x86_64-ffbuild-linux-gnu-g++ --ar=x86_64-ffbuild-linux-gnu-gcc-ar --ranlib=x86_64-ffbuild-linux-gnu-gcc-ranlib --nm=x86_64-ffbuild-linux-gnu-gcc-nm --extra-version=20261011",
+    "ffprobe": "--prefix=/ffbuild/prefix --pkg-config-flags=--static --pkg-config=pkg-config --cross-prefix=x86_64-ffbuild-linux-gnu- --arch=x86_64 --target-os=linux --enable-gpl --enable-version3 --disable-debug --enable-iconv --enable-zlib --enable-libxml2 --enable-libsoxr --enable-openssl --enable-libvmaf --enable-libxcb --enable-xlib --enable-fontconfig --enable-libharfbuzz --enable-libfreetype --enable-libfribidi --enable-lcms2 --enable-vulkan --enable-libdav1d --enable-libvorbis --enable-librav1e --enable-librsvg --enable-libpulse --enable-gmp --enable-lzma --enable-liblcevc-dec --enable-opencl --enable-amf --enable-libaom --enable-avisynth --enable-chromaprint --enable-libdavs2 --enable-libdvdread --enable-libdvdnav --disable-libfdk-aac --enable-ffnvcodec --enable-cuda-llvm --enable-frei0r --enable-libgme --enable-libkvazaar --enable-libaribb24 --enable-libaribcaption --enable-libass --enable-libbluray --enable-libcurl --enable-libjxl --enable-libmp3lame --enable-libopus --enable-libplacebo --enable-librist --enable-libssh --enable-libtheora --enable-libvpx --enable-libwebp --enable-libzmq --enable-lv2 --enable-libvpl --enable-openal --enable-liboapv --enable-libopencore-amrnb --enable-libopencore-amrwb --enable-libopenh264 --enable-libopenjpeg --enable-libopenmpt --enable-librubberband --disable-schannel --enable-sdl2 --enable-libsnappy --enable-libsrt --enable-libsvtav1 --enable-libtwolame --enable-libuavs3d --enable-libdrm --enable-vaapi --enable-vapoursynth --enable-libvidstab --enable-libvvenc --disable-whisper --enable-libx264 --enable-libx265 --enable-libxavs2 --enable-libxvid --enable-libzimg --enable-libzvbi --extra-cflags=-DLIBTWOLAME_STATIC --extra-cxxflags= --extra-libs='-lgomp -ldl' --extra-ldflags=-pthread --extra-ldexeflags= --cc=x86_64-ffbuild-linux-gnu-gcc --cxx=x86_64-ffbuild-linux-gnu-g++ --ar=x86_64-ffbuild-linux-gnu-gcc-ar --ranlib=x86_64-ffbuild-linux-gnu-gcc-ranlib --nm=x86_64-ffbuild-linux-gnu-gcc-nm --extra-version=20261011"
+  },
+  "static_compiler": "gcc 16.2.0 (crosstool-NG 1.29.0.7_b1a94f6)",
+  "ffmpeg_source": {
+    "sha": "b5902e69c71bf556958f9fded99d1bcea2d7298c",
+    "date": "2026-10-11T02:37:58Z",
+    "html_url": "https://github.com/FFmpeg/FFmpeg/commit/b5902e69c71bf556958f9fded99d1bcea2d7298c",
+    "title": "avformat/dash: Do not write into zero sized buffers in ff_dash_fill_tmpl_params()"
+  },
+  "same_day_upstream_build_metadata": [
+    {
+      "id": 38138609481,
+      "name": "Build FFmpeg",
+      "head_sha": "63ac3265b0789ea16c7b1f8351cd2ad195a28722",
+      "created_at": "2026-10-11T12:15:59Z",
+      "conclusion": "success",
+      "path": ".github/workflows/build.yml",
+      "html_url": "https://github.com/BtbN/FFmpeg-Builds/actions/runs/38138609481"
+    }
+  ],
+  "source_scope": "Archive contains GPLv3 text, docs and executables; no dependency source/version inventory. Same-day upstream run is metadata context; archive/tool hashes are the decisive byte binding.",
+  "version_line_scope": "Expected runtime lines inferred from static version token and source banner; actual image version preflight still required.",
+  "pinned_base": "ubuntu@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55",
+  "runtime_image_config_id": null,
+  "runtime_rootfs_layers": null,
+  "historical_generation_fixture_manifest_sha256": "3b1e14da1a6abe9409d85eb7ec0d6ada33652b838a139dc14af53500fcf60c05",
+  "historical_runtime_image_id": "sha256:d5b7732e601a8972964e0e1f056190879b798505de32242b3eec9a75766b9742",
+  "postgres_registry_index_digest": "sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826",
+  "postgres_amd64_manifest_digest": "sha256:66aafa11cf15800a3c94763f7e11d1e7b2e37e5e84bc4ce027cb6e1e4bfaf4df",
+  "postgres_execution_config_id": "sha256:589f742565e4f6d22149176b032974f55f8201a8a37b71ed587ec5c6902e689f"
+}
