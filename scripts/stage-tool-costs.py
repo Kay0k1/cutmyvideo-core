@@ -97,8 +97,10 @@ def main():
                           - max(tool['first_seen_s'], boundaries[begin]))
             totals[tool['tool']+'_wall_ms'] += overlap*1000
         costs[phase] = totals
+    metadata = helper.environment_metadata()
+    metadata['captured_utc'] = metadata.pop('started_utc')
     result = {'source_revision': a.revision, 'binary': helper.binary_metadata(a.binary),
-              'environment': helper.environment_metadata(), 'workflow': record, 'events': events,
+              'environment': metadata, 'workflow': record, 'events': events,
               'tools': tools, 'approx_phase_tool_wall_ms': costs,
               'method': 'Separate instrumented workflow; 20 ms requested /proc sampling period; reads tool names, parent PID and process CPU stats only. No argv, environment or URL/cookie data captured. Lifetimes are approximate; tools shorter than one polling period can be missed, and last observed CPU excludes final unsampled work. Observer overhead can affect these workflow timings; use paired uninstrumented report for speed comparison.'}
     a.output.parent.mkdir(parents=True, exist_ok=True)
