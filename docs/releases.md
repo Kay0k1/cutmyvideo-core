@@ -205,12 +205,65 @@ historical v0.2.1 or an unsigned candidate. Obtain the expected full source comm
 from the reviewed release/tag independently of the downloaded JSON sidecars.
 The prepared commands use the flags available in GitHub CLI 2.89.0; consult
 [the CLI verification manual](https://cli.github.com/manual/gh_attestation_verify)
-if using another version. Example for Linux amd64:
+if using another version. Run the example in Bash with Git and GitHub CLI. A
+certificate's tag ref records the signing event; it does not prove that the live
+remote tag still points to the reviewed commit. Check the exact remote tag before
+and after verification. Missing, moved, ambiguous or mismatched tag lookups fail;
+they never select a new expected commit. Both annotated and lightweight tags are
+supported. Example for Linux amd64, after downloading the archive:
 
-```sh
+```bash
+set -euo pipefail
 version=v0.3.0
 expected_commit=REVIEWED_FULL_40_CHARACTER_COMMIT
 archive="cutmyvideo-core_${version}_linux_amd64.tar.gz"
+
+if [[ ! "$expected_commit" =~ ^[0-9a-f]{40}$ ]]; then
+  printf '%s\n' 'Set expected_commit to the independently reviewed full commit.' >&2
+  exit 1
+fi
+git check-ref-format "refs/tags/$version" >/dev/null || exit 1
+
+read_release_tag() {
+  local remote_refs oid ref extra tag_object='' peeled_commit='' commit
+  if ! remote_refs=$(git ls-remote --exit-code --tags \
+      https://github.com/Kay0k1/cutmyvideo-core.git \
+      "refs/tags/$version" "refs/tags/$version^{}"); then
+    printf '%s\n' 'Release tag lookup failed or the tag is missing.' >&2
+    return 1
+  fi
+  while IFS=$' \t' read -r oid ref extra; do
+    if [[ ! "$oid" =~ ^[0-9a-f]{40}$ || -z "$ref" || -n "$extra" ]]; then
+      printf '%s\n' 'Invalid release tag response.' >&2
+      return 1
+    fi
+    case "$ref" in
+      "refs/tags/$version")
+        if [[ -n "$tag_object" ]]; then
+          printf '%s\n' 'Ambiguous release tag response.' >&2
+          return 1
+        fi
+        tag_object=$oid ;;
+      "refs/tags/$version^{}")
+        if [[ -n "$peeled_commit" ]]; then
+          printf '%s\n' 'Ambiguous release tag response.' >&2
+          return 1
+        fi
+        peeled_commit=$oid ;;
+      *)
+        printf '%s\n' 'Unexpected release tag reference.' >&2
+        return 1 ;;
+    esac
+  done <<< "$remote_refs"
+  commit=${peeled_commit:-$tag_object}
+  if [[ -z "$tag_object" || "$commit" != "$expected_commit" ]]; then
+    printf '%s\n' 'Release tag does not identify the reviewed commit.' >&2
+    return 1
+  fi
+  printf '%s %s\n' "$tag_object" "$commit"
+}
+
+release_tag_before=$(read_release_tag) || exit 1
 
 gh attestation verify "$archive" \
   --repo Kay0k1/cutmyvideo-core \
@@ -225,10 +278,19 @@ gh attestation verify "$archive" \
   --source-digest "$expected_commit" --signer-digest "$expected_commit" \
   --source-ref "refs/tags/$version" --deny-self-hosted-runners \
   --predicate-type https://spdx.dev/Document/v2.3 --format json
+
+release_tag_after=$(read_release_tag) || exit 1
+if [[ "$release_tag_after" != "$release_tag_before" ]]; then
+  printf '%s\n' 'Release tag changed during verification.' >&2
+  exit 1
+fi
 ```
 
-Verify `SBOM.spdx.json` and `TRUST.json` with the same provenance policy, then
-require their hashes and archive/SOURCE/MANIFEST hashes to agree with TRUST.
+Apply the same before/after remote-tag boundary when verifying the other
+archives and sidecars. Verify `SBOM.spdx.json` and `TRUST.json` with the same
+provenance policy, then require their hashes and archive/SOURCE/MANIFEST hashes
+to agree with TRUST. The boundary also refuses replacement of an annotated tag
+object during verification even when its peeled commit is unchanged.
 Verify SHA256SUMS, archive manifests and the extracted CLI's version/commit too.
 A checksum downloaded from the same unauthenticated channel does not provide
 independent authentication. Repeat the verification for each downloaded archive;
