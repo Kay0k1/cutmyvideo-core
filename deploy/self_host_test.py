@@ -1,5 +1,6 @@
 """Prepared profile controls: no Docker, firewall, media tools or database calls."""
 from copy import deepcopy
+import contextlib
 import gzip
 import importlib.util
 import io
@@ -215,6 +216,75 @@ class PublicControls(unittest.TestCase):
             with self.assertRaises(c.Refused): e.require_exact_policy(changed, desired)
         with self.assertRaises(c.Refused): e.validate_backend(data.replace(b':DOCKER-USER - [0:0]\n', b''), desired, 'iptables v1.8.9 (nf_tables)')
         with self.assertRaises(c.Refused): e.validate_backend(data, desired, 'nftables v1.1')
+
+    def test_egress_entrypoint_exposes_only_fixed_refusal_code_and_keeps_exit_contract(self):
+        out, err = io.StringIO(), io.StringIO()
+        with patch.object(e, 'main', side_effect=c.Refused('owned_policy_missing_or_modified')), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as exit:
+            e.entrypoint()
+        self.assertEqual(exit.exception.code, 1)
+        self.assertEqual(out.getvalue(), '')
+        self.assertEqual(err.getvalue(), 'Public egress operation refused (owned_policy_missing_or_modified); '
+                         'check prerequisites and private configuration.\n')
+
+    def test_egress_entrypoint_redacts_foreign_refusals_and_other_exception_messages(self):
+        private = 'password=super_private_value /root/private/config.env\nsecond line'
+        for error in (c.Refused(private), c.Refused('a' * 81), c.Refused('UPPERCASE'),
+                      c.Refused(''), OSError(private), ValueError(private), KeyError(private), TypeError(private)):
+            out, err = io.StringIO(), io.StringIO()
+            with self.subTest(kind=type(error).__name__), patch.object(e, 'main', side_effect=error), \
+                    contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as exit:
+                e.entrypoint()
+            self.assertEqual(exit.exception.code, 1)
+            self.assertEqual(out.getvalue(), '')
+            self.assertEqual(err.getvalue(), 'Public egress operation refused (operation_refused); '
+                             'check prerequisites and private configuration.\n')
+            self.assertNotIn('/root/private/config.env', err.getvalue())
+            self.assertNotIn('super_private_value', err.getvalue())
+
+    def test_conntrack_state_order_matches_same_exact_policy_on_both_backends(self):
+        config = configuration(); desired = e.policy(config); original = rules(config)
+        self.assertEqual(original.count(b'--ctstate ESTABLISHED,RELATED'), 3)
+        for count in (1, 2, 3):
+            data = original.replace(b'--ctstate ESTABLISHED,RELATED', b'--ctstate RELATED,ESTABLISHED', count)
+            for backend in ('nf_tables', 'legacy'):
+                with self.subTest(count=count, backend=backend):
+                    e.validate_backend(data, desired, 'iptables v1.8.9 (' + backend + ')\n')
+                    e.require_exact_policy(data, desired)
+        self.assertEqual(rules(config), original)
+
+    def test_conntrack_equivalence_refuses_changed_duplicate_or_extra_states(self):
+        config = configuration(); desired = e.policy(config); original = rules(config)
+        for states in ('ESTABLISHED', 'RELATED', 'NEW', 'INVALID', 'ESTABLISHED,RELATED,NEW',
+                       'RELATED,ESTABLISHED,NEW', 'RELATED,RELATED', 'ESTABLISHED,ESTABLISHED',
+                       'RELATED,ESTABLISHED,RELATED', 'RELATED,ESTABLISHED,', 'related,ESTABLISHED'):
+            changed = original.replace(b'--ctstate ESTABLISHED,RELATED', ('--ctstate ' + states).encode(), 1)
+            with self.subTest(states=states), self.assertRaises(c.Refused):
+                e.require_exact_policy(changed, desired)
+
+    def test_conntrack_equivalence_refuses_negation_flags_target_rule_order_and_duplicates(self):
+        config = configuration(); desired = e.policy(config); original = rules(config)
+        prefix = next(iter(desired['chains']))
+        canonical = '-A ' + prefix + ' -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN\n'
+        reordered = canonical.replace('ESTABLISHED,RELATED', 'RELATED,ESTABLISHED')
+        for replacement in (reordered.replace('--ctstate', '! --ctstate'),
+                            reordered.replace('-m conntrack', '! -m conntrack'),
+                            reordered.replace('-j RETURN', '--ctstatus CONFIRMED -j RETURN'),
+                            reordered.replace('-j RETURN', '-j ACCEPT'),
+                            reordered.replace('-m conntrack', '-s 127.0.0.1/32 -m conntrack'),
+                            reordered + reordered,
+                            '-A ' + prefix + ' -j RETURN\n' + reordered):
+            changed = original.replace(canonical.encode(), replacement.encode(), 1)
+            with self.subTest(replacement=replacement), self.assertRaises(c.Refused):
+                e.require_exact_policy(changed, desired)
+        # A parent-chain shadow remains a refusal even when all owned state
+        # matches use the accepted serialization order.
+        normalized = original.replace(b'ESTABLISHED,RELATED', b'RELATED,ESTABLISHED')
+        for parent in ('INPUT', 'DOCKER-USER'):
+            changed = normalized.replace(('-A ' + parent + ' ').encode(),
+                                         ('-A ' + parent + ' -j ACCEPT\n-A ' + parent + ' ').encode(), 1)
+            with self.subTest(parent=parent), self.assertRaises(c.Refused):
+                e.require_exact_policy(changed, desired)
 
     def test_both_owned_bridges_have_host_denial_and_only_postgres_database_exception(self):
         desired = e.policy(configuration())

@@ -174,10 +174,21 @@ def disjoint_project_hook(parent, row, desired):
     return row[1] in targets and row[7] == targets[row[1]]
 
 
+def canonical_conntrack_rule(row):
+    # iptables-save may serialize the same two-state match in either order.
+    # Accept only this complete RETURN rule; extra/duplicate states, negation,
+    # flags, targets and every other rule remain subject to exact comparison.
+    if row == ['-m', 'conntrack', '--ctstate', 'RELATED,ESTABLISHED', '-j', 'RETURN']:
+        return ['-m', 'conntrack', '--ctstate', 'ESTABLISHED,RELATED', '-j', 'RETURN']
+    return row
+
+
 def require_exact_policy(data, desired):
     _, rules = parsed_rules(data)
     for chain, expected in desired['chains'].items():
-        require(rules.get(chain) == expected, 'owned_policy_missing_or_modified')
+        actual = rules.get(chain, [])
+        require([canonical_conntrack_rule(row) for row in actual] == expected,
+                'owned_policy_missing_or_modified')
     for chain, hooks in desired['hooks'].items():
         relevant = [row for row in rules.get(chain, []) if not disjoint_project_hook(chain, row, desired)]
         require(relevant[:len(hooks)] == hooks
@@ -267,9 +278,19 @@ def main():
         project.__exit__(None, None, None)
 
 
-if __name__ == '__main__':
+def entrypoint():
     try:
         main()
-    except (Refused, OSError, ValueError, KeyError, TypeError):
-        print('Public egress operation refused; check prerequisites and private configuration.', file=sys.stderr)
+    except (Refused, OSError, ValueError, KeyError, TypeError) as error:
+        # Refused diagnostics are fixed codes. Keep all foreign exception text,
+        # including paths or commands containing credentials, out of output.
+        reason = str(error) if isinstance(error, Refused) else 'operation_refused'
+        if not re.fullmatch(r'[a-z][a-z0-9_]{0,79}', reason):
+            reason = 'operation_refused'
+        print('Public egress operation refused (' + reason + '); check prerequisites and private configuration.',
+              file=sys.stderr)
         raise SystemExit(1)
+
+
+if __name__ == '__main__':
+    entrypoint()
