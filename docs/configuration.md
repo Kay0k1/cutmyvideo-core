@@ -45,6 +45,11 @@ real container acceptance.
 | `GOMEMLIMIT` | Go default; `128MiB` in Docker | Soft Go memory target; does not limit FFmpeg/container |
 
 Positive byte limits are required; reservation arithmetic is checked for overflow.
+Native storage admission checks free space on Linux, macOS and Windows, including
+outstanding reservations and `STORAGE_SAFETY_BYTES`. A missing `DATA_DIR` uses its
+nearest existing parent; query errors and invalid paths refuse admission. Windows
+uses the free bytes available to the caller, including per-user quotas. These
+snapshots do not reserve physical disk space or replace a real volume quota.
 A session can retain 20 source records and three active jobs. Source preparation
 admits one per session and four globally. See the [API](api.md) for request limits
 and fixed diagnostics.

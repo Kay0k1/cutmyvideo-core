@@ -19,6 +19,11 @@ unsupported publication or skipped required tests fail the gate. JSON test
 reports and tool versions are retained as CI artifacts. The Linux full suite
 also covers fault injection, HTTP contracts and historical upgrade/restore.
 
+Native storage checks also require real filesystem-space observations, missing
+and invalid data-directory paths, and PostgreSQL admission with physical
+headroom, safety bytes and outstanding reservations. A logically available
+budget cannot bypass insufficient physical space on any of these five targets.
+
 The [archive gate](releases.md#automation) additionally runs the actual extracted
 CLI packages on these same five targets. It checks independently supplied source
 and archive identities, actual embedded version output, local media and errors,

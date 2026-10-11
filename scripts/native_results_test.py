@@ -67,6 +67,24 @@ class NativeResultsChecks(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("TestPreviewMediaPolicyUpgradeDoesNotReuseLegacyCache", result.stderr)
 
+    def test_native_disk_admission_tests_are_mandatory_in_storage_report(self):
+        path = self.reports[3]
+        original = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        names = ("TestStorageAdmissionChecksFilesystemSpaceIndependentlyOfLogicalCap",
+                 "TestStorageAdmissionChecksNearestExistingFilesystem",
+                 "TestStorageAdmissionIncludesOutstandingReservationsAndSafetyHeadroom")
+        for name in names:
+            self.assertIn(name, native_results.REQUIRED[3])
+            for action in ("missing", "skip"):
+                with self.subTest(name=name, action=action):
+                    events = [event for event in original if event.get("Test") != name]
+                    if action == "skip":
+                        events.append({"Action": "skip", "Test": name, "Package": native_results.APP_PACKAGE})
+                    path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+                    result = self.run_gate()
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(name, result.stderr)
+
     def test_passed_parent_cannot_hide_failed_or_skipped_subtest(self):
         path = self.reports[-1]
         original = path.read_text(encoding="utf-8")

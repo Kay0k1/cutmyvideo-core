@@ -19,6 +19,7 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 - Executable HTTP/OpenAPI contract checks, including byte-length limits, preview priority, download range errors and database unavailability.
 
 ### Fixed
+- Check physical storage headroom on macOS and Windows as well as Linux, including outstanding reservations and safety bytes; refuse failed measurements and invalid paths, and measure the nearest existing parent before data-directory creation.
 - Recover retained export submissions by their session/idempotency key before changed admission limits or the new-export allowance can reject a replay; new keys still use current admission checks.
 - Warn that an uncertain source registration may already be saved when reporting database failures or request/source deadlines, preserving existing status codes and private commit causes.
 - Accept either iptables serialization order of the exact `ESTABLISHED,RELATED` conntrack return rule while still refusing changed states, flags, targets and rule priorities. Report fixed egress refusal codes without exposing private exception text.
