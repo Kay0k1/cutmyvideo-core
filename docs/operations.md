@@ -136,10 +136,12 @@ away an uncertain outcome.
 
 A database connection failure during COMMIT can leave its outcome unknown.
 Sources, previews and workers retain possibly committed files and recover from authoritative database
-state instead of deleting those results. API HTTP 503 similarly does not prove
-that a mutation was not applied; reuse an export's `Idempotency-Key` when replaying
-its submission. Do not turn transient diagnostics into automatic retries of
-arbitrary mutations.
+state instead of deleting those results. API HTTP 503, 408 and 504 similarly do
+not prove that a mutation was not applied. Reuse an export's `Idempotency-Key`
+when recovering its retained submission, including after admission limits change.
+For an uncertain source registration, check the same session's source list
+before deciding to import/upload again. Do not turn transient diagnostics into
+automatic retries of arbitrary mutations.
 
 These guarantees depend on the filesystem and storage honoring synchronization;
 they do not replace backups or protect against failed hardware. The new

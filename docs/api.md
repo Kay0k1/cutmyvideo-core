@@ -4,7 +4,7 @@ Base path: `/api/v1`. Media timestamps are integer milliseconds on the original 
 
 Initialize a session with `GET /session`. The HttpOnly cookie is a bearer capability: keep it private and send it with every subsequent request, including media and downloads. Each request checks ownership; foreign resources return the same 404 as absent ones. Source preparation currently blocks until metadata/staging completes, bounded by the source timeout. Export is asynchronous.
 
-`SOURCE_TIMEOUT` bounds platform metadata preparation. `UPLOAD_TIMEOUT` covers large uploads and direct-file downloads, including admission and media inspection. A stalled upload returns `504 source_timeout` and removes its partial file. Increase the upload budget when allowing large files over slow connections. An interrupted upload returns `400 invalid_upload`; exceeding the byte limit returns `413 source_too_large`.
+`SOURCE_TIMEOUT` bounds platform metadata preparation. `UPLOAD_TIMEOUT` covers large uploads and direct-file downloads, including admission and media inspection. A stalled transfer returns `504 source_timeout` and removes its partial file. A timeout during final source registration can instead leave a complete source saved; check the owner source list before deciding to upload/import again. Increase the upload budget when allowing large files over slow connections. An interrupted upload returns `400 invalid_upload`; exceeding the byte limit returns `413 source_too_large`.
 
 JSON request bodies have a separate ten-second read budget (or an earlier request deadline); stalled bodies return `408 request_timeout`. Rejected bodies are not drained indefinitely. GET/HEAD requests with bodies return `400 invalid_request`. Fully consumed requests retain normal connection reuse.
 
@@ -104,11 +104,21 @@ label's `x-trimSpace`; standard `maxLength` counts characters and cannot express
 the byte bound. Schema validity alone does not guarantee admission: source
 duration, configured quotas and cross-field export semantics are also checked.
 
-After `503 database_unavailable`, a mutation may already have committed before
-its acknowledgement was lost. Repeat job submission with the **same**
-`Idempotency-Key` and request to recover its original job; changing the key can
-create duplicate work. The service does not promise that other failed mutations
-were unapplied or grant blanket permission to retry them blindly.
+A failed mutation can already have committed before its acknowledgement was
+lost. This includes `503 database_unavailable` and earlier caller/source
+deadlines reported as `408 request_timeout` or `504 source_timeout`.
+Repeat job submission with the **same** `Idempotency-Key` to recover its retained
+original job; changing the key can create duplicate work. Recovery happens
+before current source/admission limits and the per-owner new-export allowance;
+session, origin, JSON/key bounds and ordinary IP/session request guards still apply. The key
+retains its return-original meaning even if the request body changes, so use a
+fresh key for different work. Once retention cleanup or source deletion removes
+the original job, its key no longer recovers it.
+For an uncertain source registration, check `GET /sources` in the same session
+before deciding whether to repeat the upload/import. That list is bounded to 20
+sources and uploads/imports have no idempotency-key guarantee. Other failed
+mutations are not promised to be unapplied; a timeout or connection loss grants
+no blanket permission to retry them blindly.
 
 Statuses: `queued`, `running`, `waiting_storage`, `succeeded`, `failed`, `cancelled`. Stage and message describe actual work; no invented percentage is returned. Items have their own status and optional artifact. A failed batch can contain downloadable successful items.
 

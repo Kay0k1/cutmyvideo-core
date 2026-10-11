@@ -199,6 +199,12 @@ jobs:
           chmod 755 /tmp/cutmy-yt-dlp
       - name: Full checks (media, PostgreSQL, docs, workflows, race and vulnerabilities)
         run: make check-full
+      - name: Retained job recovery and uncertain source registration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$TEST_DATABASE_URL"
+          go test -json -race -count=1 -timeout=3m ./internal/app -run '^(TestUncertainSourceErrorsKeepStatusAndWarnBeforeRetry|TestHTTPJobReplaySurvivesChangedAdmissionLimits|TestHTTPJobReplayKeepsKeyOnlyContractAndOwnerPrivacy|TestHTTPConcurrentFirstSubmissionsKeepOneJob|TestAPIDatabaseErrorPreservesPublicationUncertaintyAndPrivacy|TestAPIDatabaseCallerCancellationWinsDriverFailure|TestAPIDatabaseSuccessfulOperationSurvivesLateCancellation|TestAPIDatabaseHonorsEarlierCallerCancellation|TestAPIDatabaseAdmissionTimeoutReleasesTransactionLocks|TestUploadDefinitePublicationFailuresCleanFilesAndReservation|TestUploadLostAcknowledgementRetainsFilesChargeAndRecovers|TestSourceAndPreviewSlowSyncPreserveDatabaseBudget)$' | tee recovery-contract-tests.jsonl
       - name: CLI help and build information
         run: |
           bin/cutmy --help
@@ -218,5 +224,13 @@ jobs:
         with:
           name: recovery-verification-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/recovery-verification.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Retain recovery contract test events
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: recovery-contract-${{ github.run_id }}-${{ github.run_attempt }}
+          path: recovery-contract-tests.jsonl
           if-no-files-found: warn
           retention-days: 14

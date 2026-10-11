@@ -303,7 +303,10 @@ func TestAPIDatabaseErrorPreservesPublicationUncertaintyAndPrivacy(t *testing.T)
 	}
 	response := httptest.NewRecorder()
 	internalError(response, err)
-	assertDatabaseUnavailable(t, response)
+	var body struct{ Error APIError }
+	if json.Unmarshal(response.Body.Bytes(), &body) != nil || response.Code != http.StatusServiceUnavailable || body.Error.Code != "database_unavailable" || body.Error.Message != "The source may already be saved; check your sources before retrying" {
+		t.Fatal("uncertain source outcome lost its status or recovery guidance", response.Code, response.Body.String())
+	}
 	if strings.Contains(response.Body.String(), private.Error()) {
 		t.Fatal("database diagnostic disclosed its private cause")
 	}

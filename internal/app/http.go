@@ -721,6 +721,26 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request, owner string)
 	if err := decodeJSON(w, r, &request); err != nil {
 		return
 	}
+	key := r.Header.Get("Idempotency-Key")
+	if len(key) > 128 {
+		writeError(w, 400, "invalid_export", "Idempotency key is too long")
+		return
+	}
+	if key != "" {
+		// Recover accepted work before mutable source/admission checks. The
+		// retained owner/key pair keeps its established return-original meaning.
+		j, err := apiDatabase(r.Context(), func(ctx context.Context) (Job, error) {
+			return s.Store.JobByIdempotencyKey(ctx, owner, key)
+		})
+		if err == nil {
+			writeJSON(w, 202, j)
+			return
+		}
+		if !errors.Is(err, ErrNotFound) {
+			lookupError(w, err)
+			return
+		}
+	}
 	v, err := s.databaseSource(r.Context(), request.SourceID, owner)
 	if err != nil {
 		lookupError(w, err)
@@ -728,11 +748,6 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request, owner string)
 	}
 	if err = request.Validate(s.Config, v); err != nil {
 		writeError(w, 400, "invalid_export", err.Error())
-		return
-	}
-	key := r.Header.Get("Idempotency-Key")
-	if len(key) > 128 {
-		writeError(w, 400, "invalid_export", "Idempotency key is too long")
 		return
 	}
 	if !s.allow("export:"+owner, 10) {
@@ -884,14 +899,14 @@ func lookupError(w http.ResponseWriter, err error) {
 }
 func internalError(w http.ResponseWriter, err error) {
 	if errors.Is(err, errDatabaseUnavailable) {
-		writeError(w, http.StatusServiceUnavailable, "database_unavailable", "Database is temporarily unavailable; try again")
+		writeError(w, http.StatusServiceUnavailable, "database_unavailable", sourcePersistenceMessage(err, "Database is temporarily unavailable; try again"))
 		return
 	}
 	if errors.Is(err, context.Canceled) {
 		return
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		writeError(w, http.StatusRequestTimeout, "request_timeout", "The request timed out; try again")
+		writeError(w, http.StatusRequestTimeout, "request_timeout", sourcePersistenceMessage(err, "The request timed out; try again"))
 		return
 	}
 	if errors.Is(err, ErrStorageInitializing) {
@@ -900,7 +915,7 @@ func internalError(w http.ResponseWriter, err error) {
 		return
 	}
 	slog.Error("request failed", "error", fmt.Sprintf("%T", err))
-	writeError(w, 500, "internal", "The operation could not be completed; try again")
+	writeError(w, 500, "internal", sourcePersistenceMessage(err, "The operation could not be completed; try again"))
 }
 
 func (s *Server) deleteSource(w http.ResponseWriter, r *http.Request, owner string) {

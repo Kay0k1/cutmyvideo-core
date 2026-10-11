@@ -19,6 +19,8 @@ Notable changes follow semantic versioning. The project is pre-1.0; the API is v
 - Executable HTTP/OpenAPI contract checks, including byte-length limits, preview priority, download range errors and database unavailability.
 
 ### Fixed
+- Recover retained export submissions by their session/idempotency key before changed admission limits or the new-export allowance can reject a replay; new keys still use current admission checks.
+- Warn that an uncertain source registration may already be saved when reporting database failures or request/source deadlines, preserving existing status codes and private commit causes.
 - Accept either iptables serialization order of the exact `ESTABLISHED,RELATED` conntrack return rule while still refusing changed states, flags, targets and rule priorities. Report fixed egress refusal codes without exposing private exception text.
 - Wait for PostgreSQL's final TCP listener rather than its temporary initialization socket. Bound lifecycle subprocess groups and rediscover only verified owned helper containers after a failed or interrupted client.
 - Select the first playable video excluding attached cover art, and default audio otherwise first audio, across local export/preview and HLS staging. Normalize sample aspect ratio and display orientation for accurate video, retain variable export cadence, and convert known PQ/HLG HDR to BT.709 SDR with a fixed `hdr_conversion_unavailable` capability diagnostic; compatible copy preserves selected-stream metadata.

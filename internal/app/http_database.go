@@ -75,8 +75,15 @@ func writeSourcePersistenceError(w http.ResponseWriter, ctx context.Context, err
 	if errors.Is(err, errDatabaseUnavailable) {
 		internalError(w, err)
 	} else if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		writeError(w, http.StatusGatewayTimeout, "source_timeout", "Source preparation timed out; try again")
+		writeError(w, http.StatusGatewayTimeout, "source_timeout", sourcePersistenceMessage(err, "Source preparation timed out; try again"))
 	} else {
 		internalError(w, err)
 	}
+}
+
+func sourcePersistenceMessage(err error, fallback string) string {
+	if errors.Is(err, ErrSourceCommitUncertain) {
+		return "The source may already be saved; check your sources before retrying"
+	}
+	return fallback
 }

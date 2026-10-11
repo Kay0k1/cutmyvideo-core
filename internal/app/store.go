@@ -194,6 +194,23 @@ func (s *Store) Job(ctx context.Context, id, owner string) (Job, error) {
 	return readJob(ctx, s.DB, id, owner)
 }
 
+// JobByIdempotencyKey recovers retained work without reapplying current admission
+// limits. The caller must bound the database operation and validate the key.
+func (s *Store) JobByIdempotencyKey(ctx context.Context, owner, key string) (Job, error) {
+	if key == "" {
+		return Job{}, ErrNotFound
+	}
+	var id string
+	err := s.DB.QueryRow(ctx, `SELECT id FROM jobs WHERE owner=$1 AND idempotency_key=$2`, owner, key).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Job{}, ErrNotFound
+	}
+	if err != nil {
+		return Job{}, err
+	}
+	return readJob(ctx, s.DB, id, owner)
+}
+
 func readJob(ctx context.Context, db dbExecutor, id, owner string) (Job, error) {
 	var j Job
 	var req, items []byte

@@ -67,7 +67,7 @@ paths:
                     items: {$ref: '#/components/schemas/Source'}
         default: {$ref: '#/components/responses/Error'}
     post:
-      description: JSON body reads are limited to ten seconds or an earlier request deadline; stalled requests return 408 request_timeout.
+      description: JSON body reads are limited to ten seconds or an earlier request deadline; stalled requests return 408 request_timeout. Final source registration can already have committed when a timeout or connection failure is reported; check the same session's source list before deciding to repeat the import. Source imports have no idempotency-key guarantee.
       requestBody:
         required: true
         content:
@@ -89,7 +89,7 @@ paths:
         default: {$ref: '#/components/responses/Error'}
   /api/v1/uploads:
     post:
-      description: Uploads one file within the configured UPLOAD_TIMEOUT, including quota admission, multipart body transfer and media inspection. Timeout returns 504 source_timeout; interrupted uploads return 400 invalid_upload; oversize uploads return 413 source_too_large.
+      description: Uploads one file within the configured UPLOAD_TIMEOUT, including quota admission, multipart body transfer and media inspection. Timeout returns 504 source_timeout; final source registration can already have committed despite this response, so check the same session's source list before deciding to repeat the upload. Uploads have no idempotency-key guarantee. Interrupted uploads return 400 invalid_upload; oversize uploads return 413 source_too_large.
       requestBody:
         required: true
         content:
@@ -203,7 +203,7 @@ paths:
         - in: header
           name: Idempotency-Key
           schema: {type: string, x-maxBytes: 128}
-          description: Maximum 128 UTF-8 bytes. Reusing the key for this session returns the original job. After database_unavailable the mutation outcome can be unknown; retry this submission with the same key rather than a new key.
+          description: Maximum 128 UTF-8 bytes. Reusing the key for this session returns the retained original job before current source/admission limits or the per-owner new-export allowance, even if the body changes; use a fresh key for different work. Session, origin, JSON/key bounds and ordinary IP/session request guards still apply. Once retention cleanup or source deletion removes the original job, its key no longer recovers it. A failed mutation can already have committed, including database_unavailable or an earlier request timeout; recover this submission with the same key rather than a new key.
       requestBody:
         required: true
         content:
@@ -274,7 +274,7 @@ components:
         text/plain:
           schema: {type: string}
     DatabaseUnavailable:
-      description: A bounded database operation failed or exceeded its budget. Mutations may already have committed; retry job submission with the same Idempotency-Key. No blanket retry guarantee is given for other mutations.
+      description: A bounded database operation failed or exceeded its budget. Mutations may already have committed; the same uncertainty can accompany an earlier 408 request_timeout or 504 source_timeout. Recover retained job submissions with the same Idempotency-Key. Check the same session's source list before deciding to repeat an uncertain upload/import; these operations have no idempotency-key guarantee. No blanket retry guarantee is given for other mutations.
       content:
         application/json:
           schema:
