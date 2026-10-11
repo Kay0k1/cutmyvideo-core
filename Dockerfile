@@ -8,7 +8,7 @@ ARG VCS_REF=unknown
 ARG BUILD_TIME=unknown
 RUN CGO_ENABLED=0 GOTOOLCHAIN=local go build -p=2 -mod=readonly -trimpath -buildvcs=false -ldflags="-s -w -buildid= -X main.version=${VERSION} -X main.commit=${VCS_REF} -X main.buildTime=${BUILD_TIME}" -o /cutmy ./cmd/cutmy
 
-FROM node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c
+FROM node:25-bookworm-slim@sha256:81db02c4b671288a03915da9534dbd54f96d0e7c24d80ccc54f5b36b2e684370
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates ffmpeg python3 curl \
     && rm -rf /var/lib/apt/lists/* \
     && curl --fail --show-error --location --proto '=https' --tlsv1.2 https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp -o /usr/local/bin/yt-dlp \
