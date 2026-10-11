@@ -106,7 +106,7 @@ def validate_metadata(metadata, artifact_id, run_id, name, expected_digest):
     release.require(type(size) is int and 0 < size <= MAX_DOWNLOAD, 'Invalid GitHub artifact size.')
 
 
-def fetch(repo, artifact_id, run_id, name, expected_digest, source, directory, evidence):
+def fetch(repo, artifact_id, run_id, name, expected_digest, source, directory, evidence, *, extractor=extract_bundle):
     release.require(re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repo), 'Invalid GitHub repository.')
     release.require(type(artifact_id) is int and artifact_id > 0 and type(run_id) is int and run_id > 0,
                     'Artifact and workflow run IDs must be positive integers.')
@@ -146,7 +146,10 @@ def fetch(repo, artifact_id, run_id, name, expected_digest, source, directory, e
                'artifact_name': name, 'artifact_sha256': expected_digest, 'artifact_bytes': len(raw),
                'source_commit': source['commit'], 'source_sha256': release.digest(release.canonical(source))}
     (evidence / 'download.json').write_bytes(release.canonical(receipt))
-    extract_bundle(archive, directory, source)
+    # The CLI always uses the strict eight-file bundle extractor. Separately
+    # sealed trust sidecars reuse only transport verification with their own
+    # fixed-file extractor; they never weaken the archive bundle contract.
+    extractor(archive, directory, source)
     return receipt
 
 

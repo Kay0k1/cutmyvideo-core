@@ -1,5 +1,7 @@
 # cutmyvideo-core
 
+The next release prepares [archive provenance and dependency composition verification](docs/releases.md#consumer-verification-of-a-new-signed-release), binding tested hashes to the reviewed source commit and release workflow. Its actual signing path still requires an approved new tag; this guarantee does not apply to published v0.2.1.
+
 **English** · [Русский](README.md)
 
 An open tool for manually trimming video and audio: choose a source and intervals, get separate MP4 or MP3 files. Use the local CLI, Go library, or HTTP API with a durable job queue. [cutmy.video](https://cutmy.video) uses this engine; the product UI is maintained in a private repository. The core runs and can be hosted independently.
