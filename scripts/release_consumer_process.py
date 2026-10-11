@@ -1,4 +1,5 @@
 """Bound consumer CLI output/time and own child processes on Unix and Windows."""
+from contextlib import contextmanager
 import ctypes
 import os
 import signal
@@ -32,6 +33,11 @@ class ExtendedLimits(ctypes.Structure):
                 ('job_memory', ctypes.c_size_t), ('peak_process', ctypes.c_size_t), ('peak_job', ctypes.c_size_t)]
 
 
+class BasicAccounting(ctypes.Structure):
+    _fields_ = [(name, ctypes.c_int64) for name in ('user_time', 'kernel_time', 'period_user', 'period_kernel')] + [
+        (name, ctypes.c_uint32) for name in ('page_faults', 'total', 'active', 'terminated')]
+
+
 class ThreadEntry(ctypes.Structure):
     _fields_ = [('size', ctypes.c_uint32), ('usage', ctypes.c_uint32), ('thread_id', ctypes.c_uint32),
                 ('owner', ctypes.c_uint32), ('priority', ctypes.c_int32), ('delta', ctypes.c_int32), ('flags', ctypes.c_uint32)]
@@ -52,6 +58,9 @@ class WindowsJob:
                 ('Thread32Next', ctypes.c_int, [ctypes.c_void_p, ctypes.POINTER(ThreadEntry)]),
                 ('OpenThread', ctypes.c_void_p, [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]),
                 ('ResumeThread', ctypes.c_uint32, [ctypes.c_void_p]),
+                ('TerminateJobObject', ctypes.c_int, [ctypes.c_void_p, ctypes.c_uint32]),
+                ('QueryInformationJobObject', ctypes.c_int, [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p,
+                                                            ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32)]),
                 ('CloseHandle', ctypes.c_int, [ctypes.c_void_p])):
             function = getattr(api, name)
             function.restype, function.argtypes = result, arguments
@@ -98,10 +107,64 @@ class WindowsJob:
         finally:
             require(api.CloseHandle(thread))
 
-    def close(self):
+    def close(self, process=None):
         if self.handle:
             handle, self.handle = self.handle, None
-            require(self.kernel.CloseHandle(handle))
+            stop = time.monotonic() + 5
+            try:
+                try:
+                    terminated = self.kernel.TerminateJobObject(handle, 1)
+                except OSError:
+                    terminated = False
+                if process:
+                    # An assignment/resume failure can leave the suspended parent
+                    # outside the job. It is still our own child and must be reaped.
+                    try:
+                        if process.poll() is None:
+                            process.kill()
+                        remaining = stop - time.monotonic()
+                        require(remaining > 0)
+                        process.wait(timeout=remaining)
+                        # CPython owns this handle. Job accounting can retain a
+                        # terminated process until its last reference is released.
+                        process._handle.Close()
+                    except (OSError, subprocess.TimeoutExpired):
+                        raise CommandRefused('Verification command or process containment failed.') from None
+                require(terminated)
+                while True:
+                    remaining = stop - time.monotonic()
+                    require(remaining > 0)
+                    accounting, length = BasicAccounting(), ctypes.c_uint32()
+                    require(self.kernel.QueryInformationJobObject(handle, 1, ctypes.byref(accounting),
+                                                                 ctypes.sizeof(accounting), ctypes.byref(length)))
+                    require(length.value == ctypes.sizeof(accounting))
+                    if accounting.active == 0:
+                        break
+                    time.sleep(min(0.02, remaining))
+            except OSError:
+                raise CommandRefused('Verification command or process containment failed.') from None
+            finally:
+                # Kill-on-close remains the fallback when termination or the
+                # bounded completion observation fails. Failure never yields output.
+                try:
+                    require(self.kernel.CloseHandle(handle))
+                except OSError:
+                    raise CommandRefused('Verification command or process containment failed.') from None
+
+
+@contextmanager
+def private_output():
+    directory = tempfile.TemporaryDirectory(prefix='cutmy-consumer-command-')
+    try:
+        with tempfile.TemporaryFile() as stream:
+            yield directory.name, stream
+    finally:
+        try:
+            directory.cleanup()
+        except OSError:
+            # Refuse cleanup failure without exposing a private path or replacing
+            # it with success. Body FileNotFoundError keeps its existing contract.
+            raise CommandRefused('Verification command or process containment failed.') from None
 
 
 def output(argv, limit, deadline=None):
@@ -115,7 +178,7 @@ def output(argv, limit, deadline=None):
     process, job = None, None
     # Even git ls-remote consults a caller checkout's local URL rewrites. An
     # empty private cwd and discovery ceiling exclude all caller repositories.
-    with tempfile.TemporaryDirectory(prefix='cutmy-consumer-command-') as temporary, tempfile.TemporaryFile() as stream:
+    with private_output() as (temporary, stream):
         env['GIT_CEILING_DIRECTORIES'] = os.pathsep.join((temporary, os.path.dirname(temporary)))
         try:
             options = {'creationflags': 0x4} if os.name == 'nt' else {'start_new_session': True}
@@ -135,18 +198,18 @@ def output(argv, limit, deadline=None):
             # Close the job/process group before reading: descendants cannot
             # retain streams or modify verification output after parent exit.
         finally:
-            try:
-                if job:
-                    job.close()
-                elif process:
+            if job:
+                job.close(process)
+            elif process:
+                try:
                     try:
                         os.killpg(process.pid, signal.SIGKILL)
                     except ProcessLookupError:
                         pass
-            finally:
-                if process and process.poll() is None:
-                    process.kill()
-                    process.wait(timeout=5)
+                finally:
+                    if process.poll() is None:
+                        process.kill()
+                        process.wait(timeout=5)
         require(os.fstat(stream.fileno()).st_size <= limit)
         stream.seek(0)
         raw = stream.read(limit + 1)

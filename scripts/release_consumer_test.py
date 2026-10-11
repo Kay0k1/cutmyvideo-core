@@ -1,4 +1,5 @@
 """Tiny real archive controls and mocked crypto; no real signature claim."""
+from contextlib import contextmanager
 from copy import deepcopy
 import ctypes
 import gzip
@@ -481,6 +482,33 @@ class ConsumerControls(unittest.TestCase):
 
 
 class CommandControls(unittest.TestCase):
+    @staticmethod
+    def windows_api(active=(0,), events=None):
+        events = [] if events is None else events
+        api = Mock()
+        api.CreateJobObjectW.return_value = 123
+        api.SetInformationJobObject.return_value = 1
+        api.AssignProcessToJobObject.return_value = 1
+        api.OpenThread.return_value = 456
+        api.ResumeThread.return_value = 1
+        states = iter(active)
+        def terminate(handle, code):
+            events.append(('terminate', handle, code))
+            return 1
+        def query(handle, kind, data, size, length):
+            count = next(states)
+            ctypes.cast(data, ctypes.POINTER(processes.BasicAccounting)).contents.active = count
+            ctypes.cast(length, ctypes.POINTER(ctypes.c_uint32)).contents.value = size
+            events.append(('active', count))
+            return 1
+        def close(handle):
+            events.append(('job_close', handle))
+            return 1
+        api.TerminateJobObject.side_effect = terminate
+        api.QueryInformationJobObject.side_effect = query
+        api.CloseHandle.side_effect = close
+        return api
+
     def test_watchdog_timeout_flood_nonzero_and_output_bound_with_portable_mocks(self):
         for mode in ('timeout', 'flood', 'nonzero', 'success'):
             child = Mock(pid=123456)
@@ -504,15 +532,11 @@ class CommandControls(unittest.TestCase):
 
     def test_windows_api_pointer_layout_suspend_attach_resume_and_close(self):
         self.assertEqual(ctypes.sizeof(processes.ThreadEntry), 28)
+        self.assertEqual(ctypes.sizeof(processes.BasicAccounting), 48)
+        self.assertEqual(processes.BasicAccounting.active.offset, 40)
         if ctypes.sizeof(ctypes.c_void_p) == 8:
             self.assertEqual(ctypes.sizeof(processes.ExtendedLimits), 144)
-        api = Mock()
-        api.CreateJobObjectW.return_value = 123
-        api.SetInformationJobObject.return_value = 1
-        api.AssignProcessToJobObject.return_value = 1
-        api.OpenThread.return_value = 456
-        api.ResumeThread.return_value = 1
-        api.CloseHandle.return_value = 1
+        api = self.windows_api()
         job = processes.WindowsJob(api)
         with patch.object(job, 'initial_thread', return_value=789):
             job.attach_and_resume(SimpleNamespace(pid=99, _handle=101))
@@ -524,13 +548,7 @@ class CommandControls(unittest.TestCase):
 
     def test_windows_attach_resume_and_configuration_failure_refuse(self):
         for failure in ('SetInformationJobObject', 'AssignProcessToJobObject', 'ResumeThread'):
-            api = Mock()
-            api.CreateJobObjectW.return_value = 123
-            api.SetInformationJobObject.return_value = 1
-            api.AssignProcessToJobObject.return_value = 1
-            api.OpenThread.return_value = 456
-            api.ResumeThread.return_value = 1
-            api.CloseHandle.return_value = 1
+            api = self.windows_api()
             getattr(api, failure).return_value = 0
             with self.assertRaises(ValueError):
                 job = processes.WindowsJob(api)
@@ -539,6 +557,152 @@ class CommandControls(unittest.TestCase):
                         job.attach_and_resume(SimpleNamespace(pid=99, _handle=101))
                 finally:
                     job.close()
+
+    def test_windows_async_completion_releases_parent_before_owned_job_zero(self):
+        events, clock = [], [0.0]
+        api = self.windows_api((2, 1, 0), events)
+        child = Mock()
+        child.poll.side_effect = lambda: events.append(('parent_poll',)) or None
+        child.kill.side_effect = lambda: events.append(('parent_kill',))
+        child.wait.side_effect = lambda **kwargs: events.append(('parent_wait', kwargs['timeout'])) or 1
+        child._handle.Close.side_effect = lambda: events.append(('parent_handle_close',))
+        def sleep(delay):
+            events.append(('sleep', delay))
+            clock[0] += delay
+        job = processes.WindowsJob(api)
+        with patch.object(processes.time, 'monotonic', side_effect=lambda: clock[0]), \
+                patch.object(processes.time, 'sleep', side_effect=sleep):
+            job.close(child)
+            job.close(child)  # Closing again must not touch any foreign/reused handle.
+        self.assertEqual(events, [('terminate', 123, 1), ('parent_poll',), ('parent_kill',),
+                                  ('parent_wait', 5.0), ('parent_handle_close',), ('active', 2), ('sleep', 0.02),
+                                  ('active', 1), ('sleep', 0.02), ('active', 0), ('job_close', 123)])
+        self.assertIsNone(job.handle)
+        api.QueryInformationJobObject.assert_has_calls([
+            unittest.mock.call(123, 1, unittest.mock.ANY, 48, unittest.mock.ANY)] * 3)
+
+    def test_windows_failed_termination_accounting_and_close_never_accept_output(self):
+        for mode in ('terminate', 'terminate_oserror', 'query', 'query_oserror', 'short_accounting', 'close', 'close_oserror'):
+            events = []
+            api = self.windows_api(events=events)
+            if mode == 'terminate':
+                api.TerminateJobObject.side_effect = None
+                api.TerminateJobObject.return_value = 0
+            elif mode == 'terminate_oserror':
+                api.TerminateJobObject.side_effect = OSError('SECRET kernel path')
+            elif mode == 'query':
+                api.QueryInformationJobObject.side_effect = None
+                api.QueryInformationJobObject.return_value = 0
+            elif mode == 'query_oserror':
+                api.QueryInformationJobObject.side_effect = OSError('SECRET kernel path')
+            elif mode == 'short_accounting':
+                api.QueryInformationJobObject.side_effect = lambda *args: 1  # Zero-filled data is not a valid receipt.
+            elif mode == 'close':
+                api.CloseHandle.side_effect = None
+                api.CloseHandle.return_value = 0
+            else:
+                api.CloseHandle.side_effect = OSError('SECRET kernel path')
+            child = Mock()
+            child.poll.return_value = 0
+            job = processes.WindowsJob(api)
+            with patch.object(processes.time, 'monotonic', return_value=0):
+                with self.assertRaises(processes.CommandRefused) as caught:
+                    job.close(child)
+            self.assertEqual(str(caught.exception), 'Verification command or process containment failed.')
+            child.wait.assert_called_once_with(timeout=5)
+            child._handle.Close.assert_called_once_with()
+            api.CloseHandle.assert_called_once_with(123)
+            self.assertIsNone(job.handle)
+
+    def test_windows_completion_budget_and_parent_wait_failure_remain_refusals(self):
+        for mode in ('active_timeout', 'parent_timeout', 'parent_oserror'):
+            events, clock = [], [0.0]
+            api = self.windows_api((1,), events)
+            child = Mock()
+            child.poll.return_value = None
+            if mode == 'parent_timeout':
+                child.wait.side_effect = subprocess.TimeoutExpired(['SECRET argument'], 5)
+            elif mode == 'parent_oserror':
+                child.wait.side_effect = OSError('SECRET private path')
+            def sleep(delay):
+                clock[0] = 5.0
+            job = processes.WindowsJob(api)
+            with patch.object(processes.time, 'monotonic', side_effect=lambda: clock[0]), \
+                    patch.object(processes.time, 'sleep', side_effect=sleep) as sleeping:
+                with self.assertRaises(processes.CommandRefused) as caught:
+                    job.close(child)
+            self.assertNotIn('SECRET', str(caught.exception))
+            child.kill.assert_called_once_with()
+            child.wait.assert_called_once_with(timeout=5)
+            if mode == 'active_timeout':
+                child._handle.Close.assert_called_once_with()
+                sleeping.assert_called_once_with(0.02)
+            else:
+                child._handle.Close.assert_not_called()
+                api.QueryInformationJobObject.assert_not_called()
+            api.CloseHandle.assert_called_once_with(123)
+
+    def test_windows_output_and_private_cleanup_order_and_fixed_failure(self):
+        for mode in ('success', 'timeout', 'attach_failure'):
+            events, clock = [], [0.0]
+            api = self.windows_api((1, 0), events)
+            job = processes.WindowsJob(api)
+            child = Mock(pid=99)
+            child.poll.return_value = 0 if mode == 'success' else None
+            child.kill.side_effect = lambda: events.append(('parent_kill',))
+            child.wait.side_effect = lambda **kwargs: events.append(('parent_wait',)) or 0
+            child._handle.Close.side_effect = lambda: events.append(('parent_handle_close',))
+            stream = Mock()
+            stream.fileno.return_value = 7
+            stream.read.side_effect = lambda count: events.append(('read',)) or b'aa'
+            @contextmanager
+            def private():
+                try:
+                    yield '/private/empty', stream
+                finally:
+                    events.append(('private_cleanup',))
+            def sleep(delay):
+                clock[0] += 2 if mode == 'timeout' and clock[0] == 0 else delay
+            with patch.object(processes, 'private_output', side_effect=private), \
+                    patch.object(processes, 'WindowsJob', return_value=job), \
+                    patch.object(job, 'attach_and_resume', side_effect=processes.CommandRefused('fixed')
+                                 if mode == 'attach_failure' else None) as attached, patch.object(processes.os, 'name', 'nt'), \
+                    patch.object(processes.subprocess, 'Popen', return_value=child) as start, \
+                    patch.object(processes.os, 'fstat', return_value=SimpleNamespace(st_size=2)), \
+                    patch.object(processes.time, 'monotonic', side_effect=lambda: clock[0]), \
+                    patch.object(processes.time, 'sleep', side_effect=sleep):
+                if mode != 'success':
+                    with self.assertRaises(processes.CommandRefused):
+                        processes.output(['fixed', 'argument'], 10, deadline=1)
+                else:
+                    self.assertEqual(processes.output(['fixed', 'argument'], 10, deadline=1), b'aa')
+            self.assertEqual(start.call_args.kwargs['creationflags'], 4)
+            self.assertNotIn('start_new_session', start.call_args.kwargs)
+            self.assertEqual(start.call_args.kwargs['cwd'], '/private/empty')
+            attached.assert_called_once_with(child)
+            self.assertLess(events.index(('parent_handle_close',)), events.index(('active', 0)))
+            self.assertLess(events.index(('active', 0)), events.index(('job_close', 123)))
+            if mode != 'success':
+                stream.read.assert_not_called()
+                child.kill.assert_called_once_with()
+            else:
+                self.assertLess(events.index(('job_close', 123)), events.index(('read',)))
+            self.assertEqual(events[-1], ('private_cleanup',))
+        directory = Mock(name='/SECRET/private')
+        directory.name = '/SECRET/private'
+        directory.cleanup.side_effect = PermissionError('SECRET locked path')
+        with patch.object(processes.tempfile, 'TemporaryDirectory', return_value=directory), \
+                patch.object(processes.tempfile, 'TemporaryFile'):
+            with self.assertRaises(processes.CommandRefused) as caught:
+                with processes.private_output():
+                    pass
+        self.assertNotIn('SECRET', str(caught.exception))
+        directory.cleanup.side_effect = None
+        with patch.object(processes.tempfile, 'TemporaryDirectory', return_value=directory), \
+                patch.object(processes.tempfile, 'TemporaryFile'):
+            with self.assertRaises(FileNotFoundError):
+                with processes.private_output():
+                    raise FileNotFoundError('SECRET tool path')
 
 
 if __name__ == '__main__':
