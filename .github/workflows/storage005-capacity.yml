@@ -1,0 +1,115 @@
+name: Reviewed populated storage 005 capacity
+
+on:
+  workflow_dispatch:
+    inputs:
+      reviewed_tooling_commit:
+        description: Exact tooling commit accepted by ROOT and peer before this once dispatch
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cutmy-populated005-once
+  cancel-in-progress: false
+
+jobs:
+  controls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CUTMY_REVIEWED_TOOLING_COMMIT: ${{ inputs.reviewed_tooling_commit }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Admit exact reviewed head and first attempt
+        run: |
+          python3 -I -B - <<'PY'
+          import os, pathlib, re, subprocess
+          expected = os.environ['CUTMY_REVIEWED_TOOLING_COMMIT']
+          assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
+          assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          assert re.fullmatch('[0-9a-f]{40}', expected)
+          assert os.environ['GITHUB_SHA'] == expected
+          assert subprocess.check_output(['git', '--no-optional-locks', 'rev-parse', 'HEAD'], text=True).strip() == expected
+          (pathlib.Path(os.environ['RUNNER_TEMP']) / 'populated100k-controls').mkdir(mode=0o700)
+          PY
+      - name: Original 20 pure controls
+        run: |
+          python3 -I -B -m unittest discover -s benchmarks/populated004to005 -p protocol_test.py -v > "$RUNNER_TEMP/populated100k-controls/pure.stdout" 2> "$RUNNER_TEMP/populated100k-controls/pure.stderr"
+      - name: Focused interruption controls with one inert process-tree case
+        run: |
+          python3 -I -B benchmarks/populated004to005/hosted_control_test.py > "$RUNNER_TEMP/populated100k-controls/focused.stdout" 2> "$RUNNER_TEMP/populated100k-controls/focused.stderr"
+      - name: Preserve first control streams
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: populated100k-controls-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/populated100k-controls
+          if-no-files-found: warn
+          retention-days: 30
+
+  populated100k:
+    needs: controls
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      CUTMY_REVIEWED_TOOLING_COMMIT: ${{ inputs.reviewed_tooling_commit }}
+      CUTMY_REVIEWED_WRAPPER_SHA: 61367e5455327044581442a9d868bcbf6e89bfb4214234bb5eb2244ef28a1e10
+      GOTOOLCHAIN: local
+      GOMAXPROCS: '2'
+      GOMEMLIMIT: 128MiB
+      GOTELEMETRY: 'off'
+      GOCACHE: ${{ runner.temp }}/populated100k-go-cache
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Admit exact reviewed tooling before runtime preparation
+        run: |
+          python3 -I -B - <<'PY'
+          import hashlib, os, pathlib, re, subprocess
+          expected = os.environ['CUTMY_REVIEWED_TOOLING_COMMIT']
+          assert os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
+          assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          assert re.fullmatch('[0-9a-f]{40}', expected)
+          assert os.environ['GITHUB_SHA'] == expected
+          assert subprocess.check_output(['git', '--no-optional-locks', 'rev-parse', 'HEAD'], text=True).strip() == expected
+          assert hashlib.sha256(pathlib.Path('benchmarks/populated004to005/run_hosted.py').read_bytes()).hexdigest() == os.environ['CUTMY_REVIEWED_WRAPPER_SHA']
+          assert not os.path.lexists('.populated-runtime')
+          for name in ('populated100k-hosted', 'populated100k-private', 'populated100k-go-cache'):
+              assert not os.path.lexists(pathlib.Path(os.environ['RUNNER_TEMP']) / name)
+          PY
+      - name: Fresh exact d594 product checkout
+        timeout-minutes: 3
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: d594cc4681dc1cab61664cec8c92bdf9a3e9444c
+          path: .populated-runtime
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        timeout-minutes: 5
+        with:
+          go-version: '1.27.2'
+          cache: false
+      - name: One populated004 to005 startup run with original evidence
+        run: python3 -I -B benchmarks/populated004to005/run_hosted.py
+      - name: Reconcile only journalled owned processes and resources
+        if: always()
+        timeout-minutes: 2
+        run: python3 -I -B benchmarks/populated004to005/run_hosted.py --cleanup
+      - name: Preserve original outputs, refusals and cleanup evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: populated100k-startup-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/populated100k-hosted
+          if-no-files-found: warn
+          retention-days: 30
