@@ -96,8 +96,7 @@ def verify(directory):
         if first is None: first = memory
     require(count > 1, "memory_samples_missing")
     final = summary.get("memory_observer")
-    require(isinstance(final,dict) and final.get("pass") is True and final.get("threads_joined") is True and final.get("failure") is None and final.get("samples") == count and final.get("bytes") == len(sample_raw) and final.get("first") == first and final.get("last") == memory and final.get("oom_counter_increased") is False, "observer_raw_binding")
-    require(first is not None and all(memory["memory.events"][k] == first["memory.events"][k] for k in ("oom","oom_kill")), "oom_counter_delta")
+    require(isinstance(final,dict) and final.get("pass") is True and final.get("threads_joined") is True and final.get("failure") is None and final.get("samples") == count and final.get("bytes") == len(sample_raw) and final.get("first") == first and final.get("last") == memory and final.get("oom_counter_increased") is False and final.get("rejection_preservation_error") is None and not (stage/"first-rejected-sample.json").exists(), "observer_raw_binding")
     stack=[];phases=[];last_elapsed=-1
     for sequence in range(1, final["marker_count"]+1):
         marker=decode((stage/"markers"/("%03d.request.json"%sequence)).read_bytes())
@@ -116,8 +115,17 @@ def verify(directory):
     expected.update({"stage_"+key:1 for key in report["stages"]})
     require(not stack and Counter(phases) == Counter({base+"_"+edge:n for base,n in expected.items() for edge in ("begin","end")}), "all_phase_counts")
     require(phases[-1] == "all_fixture_cleanup_end" and final.get("markers_complete") is True and final.get("marker_count") == len(phases), "cleanup_phase_end")
+    endpoint = final.get("final_boundary")
+    terminal_sample = decode((stage/"final-boundary-sample.json").read_bytes())
+    require(isinstance(endpoint,dict) and set(endpoint) == {"marker_sequence","phase","scope","sample","memory"}
+            and endpoint["marker_sequence"] == len(phases) and endpoint["phase"] == phases[-1] and endpoint["scope"] == []
+            and endpoint["sample"] == terminal_sample == ack.get("terminal_sample")
+            and terminal_sample["raw"] == ack["memory_end_raw"] and terminal_sample["phase"] == phases[-1], "final_boundary_raw_binding")
+    terminal_memory = validate_sample(previous,terminal_sample)
+    require(endpoint["memory"] == terminal_memory and first is not None
+            and all(terminal_memory[name][k] == first[name][k] for name in ("memory.events","memory.events.local") for k in ("oom","oom_kill")), "final_boundary_counter_delta")
     require(summary.get("pass") is True and summary.get("complete") is True, "diagnostic_terminal")
-    return {"format":1,"kind":"storage-normal-memory-readonly-verification","pass":True,"current_runtime":runner.PINS["runtime"]["commit"],"samples":count,"markers":len(phases),"cumulative_peak_bytes":memory["memory.peak"],"performance_or_memory_headroom_claim":False,"summary_sha256":sha((directory/"summary.json").read_bytes())}
+    return {"format":1,"kind":"storage-normal-memory-readonly-verification","pass":True,"current_runtime":runner.PINS["runtime"]["commit"],"samples":count,"markers":len(phases),"cumulative_peak_bytes":terminal_memory["memory.peak"],"performance_or_memory_headroom_claim":False,"summary_sha256":sha((directory/"summary.json").read_bytes())}
 
 
 def main():

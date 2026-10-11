@@ -153,6 +153,9 @@ class Observer:
         self.threads = []
         self.phases = []
         self.last_marker_elapsed = -1
+        self.sample_lock = threading.Lock()
+        self.final_boundary = None
+        self.rejection_preservation_error = None
 
     def raw_memory(self):
         self.check_owned()
@@ -173,24 +176,46 @@ class Observer:
     def check_owned(self):
         require(proc_identity(self.binding["pid"]) == {k:self.binding[k] for k in ("start_ticks", "cgroup_raw")}, "owned_pid_or_cgroup_changed")
 
+    def reject_sample(self, sample, code, origin):
+        # A preservation error must not replace the first measurement failure.
+        if self.failure is None:
+            self.failure = code
+            try:
+                publish(self.stage / "first-rejected-sample.json", {
+                    "origin":origin,"failure":code,"candidate":sample,"previous":self.previous})
+            except (OSError, ValueError, TypeError) as error:
+                self.rejection_preservation_error = type(error).__name__
+        self.refuse(code)
+
     def sample_loop(self):
         try:
             with (self.stage / "memory-samples.jsonl").open("xb") as target:
                 next_tick = time.monotonic()
                 while not self.finished.is_set():
-                    raw = self.raw_memory()
-                    sample = {"sequence": self.samples + 1, "utc": datetime.now(timezone.utc).isoformat(), "monotonic_ns":time.monotonic_ns(), "phase":self.phase, "raw":raw}
-                    memory = validate_sample(self.previous, sample)
-                    encoded = (json.dumps(sample, sort_keys=True) + "\n").encode()
-                    require(self.samples < MAX_SAMPLES and self.bytes + len(encoded) <= MAX_BYTES, "sample_output_cap")
-                    target.write(encoded)
-                    target.flush()
-                    self.samples += 1
-                    self.bytes += len(encoded)
-                    self.previous, self.last_memory = sample, memory
-                    if self.first_memory is None:
-                        self.first_memory = memory
-                    self.ready.set()
+                    with self.sample_lock:
+                        if self.finished.is_set():
+                            break
+                        sample = None
+                        try:
+                            raw = self.raw_memory()
+                            sample = {"sequence": self.samples + 1, "utc": datetime.now(timezone.utc).isoformat(), "monotonic_ns":time.monotonic_ns(), "phase":self.phase, "raw":raw}
+                            encoded = (json.dumps(sample, sort_keys=True) + "\n").encode()
+                            require(self.samples < MAX_SAMPLES and self.bytes + len(encoded) <= MAX_BYTES, "sample_output_cap")
+                            # Keep the candidate's original clock/raw bytes even
+                            # when validation rejects it. Only accepted samples
+                            # advance the sequence and previous-memory state.
+                            target.write(encoded)
+                            target.flush()
+                            self.bytes += len(encoded)
+                            memory = validate_sample(self.previous, sample)
+                            self.samples += 1
+                            self.previous, self.last_memory = sample, memory
+                            if self.first_memory is None:
+                                self.first_memory = memory
+                            self.ready.set()
+                        except (OSError, ValueError, KeyError, TypeError) as error:
+                            self.reject_sample(sample, str(error) if isinstance(error, ValueError) else "sample_read_failed", "periodic")
+                            return
                     next_tick += INTERVAL
                     self.finished.wait(max(0, next_tick - time.monotonic()))
         except (OSError, ValueError, KeyError, TypeError) as error:
@@ -213,12 +238,36 @@ class Observer:
                 start = time.monotonic_ns()
                 before = self.raw_memory()
                 snapshot = self.boundary(marker)
-                after = self.raw_memory()
-                require(not self.failure, "sampler_failed_during_boundary")
-                publish(self.markers / ("%03d.ack.json" % sequence), {"sequence":sequence,"pass":True,"scope":stack,"memory_begin_raw":before,"memory_end_raw":after,"observer_boundary_ns":time.monotonic_ns()-start,"snapshot":snapshot})
-                self.stack, self.marker_count = stack, sequence
-                self.phases.append(marker["phase"])
-                self.last_marker_elapsed = marker["elapsed_ns"]
+                # SQL/disk stays outside this lock; a boundary takes longer
+                # than a sampling interval. Serialize only the memory read
+                # and ACK with any already-started periodic sample.
+                with self.sample_lock:
+                    require(not self.failure and not self.finished.is_set(), "sampler_failed_during_boundary")
+                    after = self.raw_memory()
+                    terminal = marker["phase"] == "all_fixture_cleanup_end" and not stack
+                    ack = {"sequence":sequence,"pass":True,"scope":stack,"memory_begin_raw":before,"memory_end_raw":after,"observer_boundary_ns":time.monotonic_ns()-start,"snapshot":snapshot}
+                    endpoint = None
+                    if terminal:
+                        # The endpoint is this final cgroup snapshot timestamp,
+                        # before atomic ACK publication; caller report parsing
+                        # and process/resource cleanup are outside this scope.
+                        candidate = {"sequence":self.samples+1,"utc":datetime.now(timezone.utc).isoformat(),"monotonic_ns":time.monotonic_ns(),"phase":marker["phase"],"raw":after}
+                        publish(self.stage / "final-boundary-sample.json", candidate)
+                        try:
+                            memory = validate_sample(self.previous, candidate)
+                        except (ValueError, KeyError, TypeError) as error:
+                            self.reject_sample(candidate, str(error) if isinstance(error, ValueError) else "sample_read_failed", "final_boundary")
+                            return
+                        require(self.previous is not None, "final_boundary_without_periodic_sample")
+                        ack["terminal_sample"] = candidate
+                        endpoint = {"marker_sequence":sequence,"phase":marker["phase"],"scope":stack,"sample":candidate,"memory":memory}
+                    publish(self.markers / ("%03d.ack.json" % sequence), ack)
+                    self.stack, self.marker_count = stack, sequence
+                    self.phases.append(marker["phase"])
+                    self.last_marker_elapsed = marker["elapsed_ns"]
+                    if terminal:
+                        self.final_boundary = endpoint
+                        self.finished.set()
                 sequence += 1
         except (OSError, ValueError, KeyError, TypeError, AssertionError) as error:
             self.refuse(str(error) if isinstance(error, ValueError) else "boundary_failed")
@@ -242,12 +291,14 @@ class Observer:
         self.active = False
 
     def result(self):
-        oom = self.first_memory is not None and self.last_memory is not None and any(self.last_memory["memory.events"][k] > self.first_memory["memory.events"][k] for k in ("oom", "oom_kill"))
+        terminal_memory = self.final_boundary["memory"] if self.final_boundary is not None else self.last_memory
+        oom = self.first_memory is not None and terminal_memory is not None and any(terminal_memory[name][k] > self.first_memory[name][k] for name in ("memory.events", "memory.events.local") for k in ("oom", "oom_kill"))
         requests = sorted(self.markers.glob("*.request.json"))
         required = {"stage_" + s + "_begin" for s in ("source_ttl", "foreground_dml", "held_fence", "persisted_audit", "foreground_maintenance", "normal_maintenance", "normal_api_bootstrap")}
-        complete = self.marker_count > 0 and len(requests) == self.marker_count and not self.stack and self.phase == "all_fixture_cleanup_end" and all(self.phases.count(p) == 1 for p in required | {"workload_setup_begin", "report_serialization_begin", "all_fixture_cleanup_begin"})
+        complete = self.final_boundary is not None and self.marker_count > 0 and len(requests) == self.marker_count and not self.stack and self.phase == "all_fixture_cleanup_end" and all(self.phases.count(p) == 1 for p in required | {"workload_setup_begin", "report_serialization_begin", "all_fixture_cleanup_begin"})
         joined = not any(thread.is_alive() for thread in self.threads)
         return {"pass": not self.failure and joined and complete and self.samples > 1 and not oom,
                 "failure":self.failure,"markers_complete":complete,"samples":self.samples,"bytes":self.bytes,
                 "marker_count":self.marker_count,"binding":self.binding,"first":self.first_memory,"last":self.last_memory,"threads_joined":joined,
+                "final_boundary":self.final_boundary,"rejection_preservation_error":self.rejection_preservation_error,
                 "oom_counter_increased":oom,"interval_ms":100,"maximum_gap_ms":200,"overhead_is_not_performance_neutral":True}

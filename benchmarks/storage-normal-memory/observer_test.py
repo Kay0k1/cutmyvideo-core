@@ -329,3 +329,105 @@ class MemoryObserverControls(unittest.TestCase):
                         self.assertEqual((output/(case+".stdout")).read_bytes(),b"before stream failure")
                 finally:
                     run_hosted.REFUSED.clear()
+
+    def test_final_ack_stops_sampling_and_uses_final_memory_counters(self):
+        from observe import Observer
+        required = ["stage_" + s + "_begin" for s in (
+            "source_ttl", "foreground_dml", "held_fence", "persisted_audit",
+            "foreground_maintenance", "normal_maintenance", "normal_api_bootstrap")]
+        for final_oom in (0, 1):
+            with self.subTest(final_oom=final_oom), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary); markers = root / "markers"; markers.mkdir()
+                marker = {"sequence":1,"phase":"all_fixture_cleanup_end",
+                          "utc":"2026-10-11T00:00:00Z","elapsed_ns":1}
+                publish(markers / "001.request.json", marker)
+                before = sample(2, 1_100_000_000)
+                final = sample(3, 1_200_000_000, peak=300)["raw"]
+                final["memory.events.local"] = "max 0\noom %d\noom_kill 0\n" % final_oom
+                observer = Observer({}, root, markers, None)
+                observer.previous = before; observer.samples = 2
+                observer.first_memory = parse_memory(sample()["raw"])
+                observer.last_memory = parse_memory(before["raw"])
+                observer.stack = ["all_fixture_cleanup"]
+                observer.phases = required + ["workload_setup_begin", "report_serialization_begin", "all_fixture_cleanup_begin"]
+                def boundary(_):
+                    self.assertTrue(observer.sample_lock.acquire(blocking=False))
+                    observer.sample_lock.release()  # SQL/disk must not block the sampler.
+                    return {"mock_boundary":True}
+                observer.boundary = boundary
+                with mock.patch.object(observer, "check_owned"), mock.patch.object(observer, "raw_memory", side_effect=[before["raw"], final]), mock.patch("observe.time.monotonic_ns", side_effect=[1_150_000_000, 1_200_000_000, 1_200_000_000]):
+                    observer.marker_loop()
+                self.assertTrue(observer.finished.is_set())
+                ack = decode(read(markers / "001.ack.json"))
+                endpoint = observer.result()["final_boundary"]
+                self.assertEqual(endpoint["sample"], ack["terminal_sample"])
+                self.assertEqual(endpoint["sample"], decode(read(root / "final-boundary-sample.json")))
+                self.assertEqual(endpoint["sample"]["raw"], final)
+                self.assertEqual(endpoint["scope"], [])
+                self.assertEqual(observer.previous, before)
+                self.assertEqual(observer.result()["last"]["memory.peak"], 200)
+                self.assertEqual(endpoint["memory"]["memory.peak"], 300)
+                self.assertEqual(observer.result()["oom_counter_increased"], bool(final_oom))
+                self.assertEqual(observer.result()["pass"], not final_oom)
+                with mock.patch.object(observer, "raw_memory") as extra_read:
+                    observer.sample_loop()
+                extra_read.assert_not_called()
+                self.assertEqual(observer.samples, 2)
+
+    def test_rejected_sample_preserves_candidate_previous_and_first_cause(self):
+        from observe import Observer
+        for preservation_error in (False, True):
+            with self.subTest(preservation_error=preservation_error), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary); previous = sample()
+                observer = Observer({}, root, root, None)
+                observer.previous = previous; observer.samples = 1
+                observer.first_memory = observer.last_memory = parse_memory(previous["raw"])
+                candidate_raw = sample(2, 1_201_000_000, peak=250)["raw"]
+                preservation = mock.patch("observe.publish", side_effect=OSError("mock preservation failure")) if preservation_error else mock.patch("observe.publish", wraps=publish)
+                with mock.patch.object(observer, "raw_memory", return_value=candidate_raw), mock.patch("observe.time.monotonic_ns", return_value=1_201_000_000), preservation:
+                    observer.sample_loop()
+                candidate = decode((root / "memory-samples.jsonl").read_bytes())
+                self.assertEqual(candidate["raw"], candidate_raw)
+                self.assertEqual(candidate["monotonic_ns"], 1_201_000_000)
+                self.assertEqual(observer.failure, "sample_time_gap")
+                self.assertEqual(observer.previous, previous)
+                self.assertEqual(observer.samples, 1)
+                observer.refuse("later_error")
+                self.assertEqual(observer.failure, "sample_time_gap")
+                if preservation_error:
+                    self.assertEqual(observer.rejection_preservation_error, "OSError")
+                else:
+                    retained = decode(read(root / "first-rejected-sample.json"))
+                    self.assertEqual(retained, {"origin":"periodic","failure":"sample_time_gap",
+                                                "candidate":candidate,"previous":previous})
+                self.assertFalse(observer.result()["pass"])
+
+    def test_final_endpoint_cannot_hide_late_or_earlier_sample_gap(self):
+        from observe import Observer
+        for earlier_failure in (False, True):
+            with self.subTest(earlier_failure=earlier_failure), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary); markers = root / "markers"; markers.mkdir()
+                marker = {"sequence":1,"phase":"all_fixture_cleanup_end",
+                          "utc":"2026-10-11T00:00:00Z","elapsed_ns":1}
+                publish(markers / "001.request.json", marker)
+                previous = sample(); observer = Observer({}, root, markers, lambda _: {})
+                observer.previous = previous; observer.samples = 1
+                observer.first_memory = observer.last_memory = parse_memory(previous["raw"])
+                observer.stack = ["all_fixture_cleanup"]
+                if earlier_failure:
+                    observer.refuse("sample_time_gap")
+                final_raw = sample(2, 1_200_000_001, peak=250)["raw"]
+                with mock.patch.object(observer, "check_owned"), mock.patch.object(observer, "raw_memory", return_value=final_raw) as reads, mock.patch("observe.time.monotonic_ns", side_effect=[1_150_000_000, 1_200_000_001, 1_200_000_001]):
+                    observer.marker_loop()
+                self.assertEqual(observer.failure, "sample_time_gap")
+                self.assertIsNone(observer.final_boundary)
+                self.assertFalse((markers / "001.ack.json").exists())
+                if earlier_failure:
+                    reads.assert_not_called()
+                else:
+                    retained = decode(read(root / "first-rejected-sample.json"))
+                    self.assertEqual(retained["origin"], "final_boundary")
+                    self.assertEqual(retained["previous"], previous)
+                    self.assertEqual(retained["candidate"]["raw"], final_raw)
+                    self.assertEqual(retained["candidate"], decode(read(root / "final-boundary-sample.json")))
+                self.assertFalse(observer.result()["pass"])
