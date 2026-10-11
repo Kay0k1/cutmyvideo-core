@@ -102,7 +102,7 @@ class SyntheticReceipt:
     def __init__(self, directory):
         self.directory = Path(directory)
         candidate = {'commit': transition.CANDIDATE, 'tree': transition.CANDIDATE_TREE,
-                     'application_files': 172, 'application_sha256': transition.APPLICATION_SHA256}
+                     'application_files': 173, 'application_sha256': transition.APPLICATION_SHA256}
         self.report = {
             'mode': transition.MODE, 'schema_version': 2,
             'provider': {'GITHUB_REPOSITORY': 'Kay0k1/cutmyvideo-core', 'GITHUB_EVENT_NAME': 'workflow_dispatch',
@@ -122,7 +122,7 @@ class SyntheticReceipt:
             'old_commit': transition.OLD_COMMIT, 'old_tree': transition.OLD_TREE,
             'old_reference': transition.OLD_REFERENCE, 'old_application_sha256': transition.OLD_APPLICATION_SHA256,
             'old_files': 164, 'candidate_commit': transition.CANDIDATE, 'candidate_tree': transition.CANDIDATE_TREE,
-            'candidate_application_sha256': transition.APPLICATION_SHA256, 'candidate_files': 172,
+            'candidate_application_sha256': transition.APPLICATION_SHA256, 'candidate_files': 173,
             'schema_changing_upgrade': True,
         }
         self.report['groups']['identity']['checks']['approved_application_transition']['evidence'] = application
@@ -755,7 +755,7 @@ class TransitionReceiptControls(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         inventory = source_inventory()
-        if len(inventory) != 172 or transition.digest(transition.canonical(inventory)) != transition.APPLICATION_SHA256:
+        if len(inventory) != 173 or transition.digest(transition.canonical(inventory)) != transition.APPLICATION_SHA256:
             raise AssertionError('source-only controls require exact reviewed application inventory')
 
     def setUp(self):
@@ -838,7 +838,7 @@ class TransitionReceiptControls(unittest.TestCase):
                    lambda report: report['transition'].update(from_position=4.0),
                    lambda report: report['transition'].update(to_position=5.0),
                    lambda report: report['transition'].update(startup_timeout_seconds=30.0),
-                   lambda report: report['transition']['candidate'].update(application_files=172.0),
+                   lambda report: report['transition']['candidate'].update(application_files=173.0),
                    lambda report: report['transition']['receipt_counts'].update(checks=53.0),
                    lambda report: report['provider'].update(GITHUB_RUN_ID=987654),
                    lambda report: report['groups']['identity']['checks']['approved_application_transition']['evidence'].update(old_files=164.0),
@@ -852,7 +852,7 @@ class TransitionReceiptControls(unittest.TestCase):
         original = deepcopy(self.fixture.report)
         changes = {'old_commit': transition.CANDIDATE, 'old_tree': transition.CANDIDATE_TREE,
                    'old_reference': transition.CANDIDATE, 'old_application_sha256': transition.APPLICATION_SHA256,
-                   'old_files': 172, 'schema_changing_upgrade': False}
+                   'old_files': 173, 'schema_changing_upgrade': False}
         for field, value in changes.items():
             with self.subTest(field=field):
                 self.refused(lambda report: report['groups']['identity']['checks']['approved_application_transition']['evidence'].update({field: value}))
