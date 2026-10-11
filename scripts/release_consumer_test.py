@@ -490,13 +490,14 @@ class CommandControls(unittest.TestCase):
                 kwargs['stdout'].flush()
                 return child
             with patch.object(processes.subprocess, 'Popen', side_effect=start), patch.object(processes.os, 'killpg', create=True) as kill, \
-                    patch.object(processes.os, 'name', 'posix'), patch.object(processes.time, 'monotonic', side_effect=[0, 0, 2] if mode == 'timeout' else [0, 0, 0]):
+                    patch.object(processes.os, 'name', 'posix'), patch.object(processes.signal, 'SIGKILL', 9, create=True), \
+                    patch.object(processes.time, 'monotonic', side_effect=[0, 0, 2] if mode == 'timeout' else [0, 0, 0]):
                 if mode == 'success':
                     self.assertEqual(processes.output(['mock'], 10, deadline=1), b'aa')
                 else:
                     with self.assertRaises(ValueError):
                         processes.output(['mock'], 10, deadline=1)
-                kill.assert_called_once()
+                kill.assert_called_once_with(child.pid, 9)
                 if mode == 'timeout':
                     child.kill.assert_called_once()
                     child.wait.assert_called_once_with(timeout=5)
