@@ -25,7 +25,7 @@ checks is not proof of every semantic behavior or platform combination.
    history. Database/media changes must pass real historical upgrade and
    coordinated backup restoration, with redacted evidence retained.
 2. Move completed Unreleased notes under a dated heading such as
-   `## 1.0.1 - 2026-10-11`, retaining Unreleased for future changes. Include known
+   `## 1.0.2 - 2026-10-11`, retaining Unreleased for future changes. Include known
    limitations and measured benchmark methods.
 3. Merge the reviewed changes using the repository's allowed method. Require
    Core checks and Public self-hosting acceptance on that actual main commit,
@@ -35,8 +35,8 @@ checks is not proof of every semantic behavior or platform combination.
 From a clean reviewed checkout of that verified main commit:
 
 ```sh
-git tag -a v1.0.1 -m 'cutmyvideo-core v1.0.1'
-make release VERSION=v1.0.1
+git tag -a v1.0.2 -m 'cutmyvideo-core v1.0.2'
+make release VERSION=v1.0.2
 ```
 
 The script refuses dirty/untracked files, malformed versions and tags that do not
@@ -172,8 +172,15 @@ event SHA and original packaging artifact ID/digest. The read-only `trust` job
 runs on candidates and existing-tag manual checks without signing permission.
 The `attest` job runs only for a push of the original publishable release tag,
 after all native/recovery/source gates and deterministic sidecar generation.
-It alone receives `id-token: write` and `attestations: write`; the draft publisher
-alone receives repository contents write permission.
+It alone receives `id-token: write` and `attestations: write`. The draft publisher
+receives repository contents write permission to upload the draft. The five
+native consumer jobs also require `contents: write` so their GitHub token can
+read the unpublished draft and its assets; the original 1.0.1 consumers were
+refused HTTP 403 at the draft metadata read with `contents: read`. Consumer
+commands only read metadata, download assets, verify signatures and run the
+native binary; they never create, update or publish a release. The workflow
+default and aggregate consumer gate retain `contents: read`, and consumer jobs
+receive neither `id-token: write` nor `attestations: write`.
 
 The pinned official [actions/attest](https://github.com/actions/attest/tree/1e69f48acb82d1966a394da916b4c1698aa569d6)
 action produces SLSA provenance for seven explicit subjects: the five archives,
@@ -234,7 +241,7 @@ Place exactly the five platform archives plus `SOURCE.json`, `MANIFEST.json`,
 command, replacing the paths, version and reviewed full 40-character commit:
 
 ```sh
-python3 /path/to/reviewed-verifier/release-consumer.py --directory /path/to/downloaded-release --version v1.0.1 --expected-commit REVIEWED_FULL_40_CHARACTER_COMMIT
+python3 /path/to/reviewed-verifier/release-consumer.py --directory /path/to/downloaded-release --version v1.0.2 --expected-commit REVIEWED_FULL_40_CHARACTER_COMMIT
 ```
 
 On Windows use `python` and the corresponding Windows paths. Exit status zero
