@@ -78,6 +78,56 @@ func TestStorageBootstrapProgressSurvivesRestart(t *testing.T) {
 }
 
 func TestStorageScanCanceledBatchDoesNotAdvance(t *testing.T) {
+	t.Run("scheduling-rollback", func(t *testing.T) {
+		s := testStore(t)
+		c := ledgerConfig(t)
+		ctx := context.Background()
+		tx, err := s.storageTx(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rollbackStorage(tx)
+		if err := ensureScanRoots(ctx, tx, c, bootstrapScanKinds); err != nil {
+			t.Fatal(err)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
+		snapshot := func() string {
+			t.Helper()
+			var value string
+			if err := s.DB.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(p) ORDER BY scan_kind,path)::text FROM storage_scan_progress p WHERE data_dir=$1`, c.DataDir).Scan(&value); err != nil {
+				t.Fatal(err)
+			}
+			return value
+		}
+		before := snapshot()
+		// Block the directory row, after the separate class-clock claim. A
+		// canceled selection must roll back both clocks and leave coverage intact.
+		lock, err := s.DB.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rollbackStorage(lock)
+		if _, err := lock.Exec(ctx, `SELECT 1 FROM storage_scan_progress WHERE data_dir=$1 AND scan_kind='bootstrap_artifacts' AND path=$2 FOR UPDATE`, c.DataDir, scanRoot(c, "bootstrap_artifacts")); err != nil {
+			t.Fatal(err)
+		}
+		bounded, cancel := context.WithTimeout(ctx, 40*time.Millisecond)
+		_, err = s.nextStorageScan(bounded, c, bootstrapScanKinds, false)
+		cancel()
+		rollbackStorage(lock)
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatal("blocked scheduling ignored caller deadline", err)
+		}
+		if after := snapshot(); after != before {
+			t.Fatal("canceled scheduling advanced clocks, cursor or coverage", before, after)
+		}
+		restarted := storageProgressRestart(t, s)
+		p, err := restarted.nextStorageScan(ctx, c, bootstrapScanKinds, false)
+		if err != nil || p.kind != "bootstrap_artifacts" || p.position != 0 || p.digest != "" {
+			t.Fatal("canceled scheduling changed fair retry or invented coverage", p, err)
+		}
+	})
 	s := testStore(t)
 	c := ledgerConfig(t)
 	writeLedgerFile(t, c, "sources", "retained", 13)

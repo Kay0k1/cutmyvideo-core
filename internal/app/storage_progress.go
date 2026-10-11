@@ -37,18 +37,21 @@ func scanRoot(c Config, kind string) string {
 }
 
 func ensureScanRoots(ctx context.Context, tx pgx.Tx, c Config, kinds []string) error {
+	roots := make([]string, 0, len(kinds))
 	for _, kind := range kinds {
 		path := scanRoot(c, kind)
 		if kind == "cleanup_work" {
 			path = filepath.Join(c.DataDir, "work")
 		}
-		// A separate scheduling row keeps class fairness independent from the
-		// directory's last_visited_at/completed_at verification markers.
-		if _, err := tx.Exec(ctx, `INSERT INTO storage_scan_progress(data_dir,scan_kind,path) VALUES($1,$2,$3),($1,'schedule_'||$2,$3) ON CONFLICT DO NOTHING`, c.DataDir, kind, path); err != nil {
-			return err
-		}
+		roots = append(roots, path)
 	}
-	return nil
+	// A separate scheduling row keeps class fairness independent from the
+	// directory's verification markers. Initialize all bounded roots together.
+	_, err := tx.Exec(ctx, `INSERT INTO storage_scan_progress(data_dir,scan_kind,path)
+	 SELECT $1,scan.kind,root.path FROM unnest($2::text[],$3::text[]) AS root(kind,path)
+	 CROSS JOIN LATERAL (VALUES(root.kind),('schedule_'||root.kind)) AS scan(kind)
+	 ON CONFLICT DO NOTHING`, c.DataDir, kinds, roots)
+	return err
 }
 
 // Each attempt first commits its scheduling position. A bad directory cannot
@@ -78,26 +81,37 @@ func (s *Store) nextStorageScan(ctx context.Context, c Config, kinds []string, r
 		}
 		roots = append(roots, path)
 	}
-	var kind, classPath string
 	// Pick among at most three durable class clocks, using an indexed EXISTS
 	// for pending directories. New work descendants start at -infinity within
 	// their class; they must not displace an unfinished source/artifact class.
-	err = tx.QueryRow(ctx, `SELECT root.kind,root.path FROM unnest($2::text[],$3::text[]) AS root(kind,path)
+	// The materialized locked selection and dependent UPDATE ... RETURNING
+	// stages preserve that order in one round trip. Scheduling and directory
+	// rows are distinct; neither update changes a coverage marker or cursor.
+	var p storageScanProgress
+	err = tx.QueryRow(ctx, `WITH class_pick AS MATERIALIZED (
+	 SELECT root.kind,root.path FROM unnest($2::text[],$3::text[]) AS root(kind,path)
 	 JOIN storage_scan_progress AS class ON class.data_dir=$1 AND class.scan_kind='schedule_'||root.kind AND class.path=root.path
 	 WHERE EXISTS(SELECT 1 FROM storage_scan_progress AS pending WHERE pending.data_dir=$1 AND pending.scan_kind=root.kind AND pending.completed_at IS NULL)
-	 ORDER BY class.last_visited_at,root.kind LIMIT 1 FOR UPDATE OF class`, c.DataDir, kinds, roots).Scan(&kind, &classPath)
+	 ORDER BY class.last_visited_at,root.kind LIMIT 1 FOR UPDATE OF class
+	), class_visit AS (
+	 UPDATE storage_scan_progress AS class SET last_visited_at=clock_timestamp()
+	 FROM class_pick AS chosen
+	 WHERE class.data_dir=$1 AND class.scan_kind='schedule_'||chosen.kind AND class.path=chosen.path
+	 RETURNING chosen.kind
+	), directory_pick AS MATERIALIZED (
+	 SELECT pending.scan_kind,pending.path FROM storage_scan_progress AS pending
+	 JOIN class_visit AS chosen ON pending.scan_kind=chosen.kind
+	 WHERE pending.data_dir=$1 AND pending.completed_at IS NULL
+	 ORDER BY pending.last_visited_at,pending.path LIMIT 1 FOR UPDATE OF pending
+	), directory_visit AS (
+	 UPDATE storage_scan_progress AS pending SET last_visited_at=clock_timestamp()
+	 FROM directory_pick AS chosen
+	 WHERE pending.data_dir=$1 AND pending.scan_kind=chosen.scan_kind AND pending.path=chosen.path
+	 RETURNING pending.scan_kind,pending.path,pending.position,pending.prefix_digest,
+	 pending.generation_mtime_ns,pending.generation_size,pending.started_at
+	) SELECT scan_kind,path,position,prefix_digest,generation_mtime_ns,generation_size,started_at
+	 FROM directory_visit`, c.DataDir, kinds, roots).Scan(&p.kind, &p.path, &p.position, &p.digest, &p.mtime, &p.size, &p.started)
 	if err != nil {
-		return storageScanProgress{}, err
-	}
-	if _, err = tx.Exec(ctx, `UPDATE storage_scan_progress SET last_visited_at=clock_timestamp() WHERE data_dir=$1 AND scan_kind='schedule_'||$2 AND path=$3`, c.DataDir, kind, classPath); err != nil {
-		return storageScanProgress{}, err
-	}
-	var p storageScanProgress
-	err = tx.QueryRow(ctx, `SELECT scan_kind,path,position,prefix_digest,generation_mtime_ns,generation_size,started_at FROM storage_scan_progress WHERE data_dir=$1 AND scan_kind=$2 AND completed_at IS NULL ORDER BY last_visited_at,path LIMIT 1 FOR UPDATE`, c.DataDir, kind).Scan(&p.kind, &p.path, &p.position, &p.digest, &p.mtime, &p.size, &p.started)
-	if err != nil {
-		return p, err
-	}
-	if _, err = tx.Exec(ctx, `UPDATE storage_scan_progress SET last_visited_at=clock_timestamp() WHERE data_dir=$1 AND scan_kind=$2 AND path=$3`, c.DataDir, p.kind, p.path); err != nil {
 		return p, err
 	}
 	return p, tx.Commit(ctx)
