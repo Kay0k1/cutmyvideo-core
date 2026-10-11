@@ -12,6 +12,7 @@ import re
 import stat
 import tarfile
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
@@ -54,7 +55,8 @@ def fetch(root, item):
     relative, url, expected_bytes, expected_sha, cap = item
     target = root / relative
     target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    request = urllib.request.Request(url, headers={'User-Agent': 'cutmyvideo-frozen-benchmark-inputs', 'Accept': 'application/octet-stream'})
+    accept = 'application/vnd.github+json' if url == ZIP_URL else 'application/octet-stream'
+    request = urllib.request.Request(url, headers={'User-Agent': 'cutmyvideo-frozen-benchmark-inputs', 'Accept': accept})
     if url == ZIP_URL:
         token = os.environ.get('CUTMY_ARTIFACT_TOKEN')
         if not token: raise RuntimeError('Existing Actions artifact read token required')
@@ -77,6 +79,9 @@ def fetch(root, item):
         if total != expected_bytes or sha.hexdigest() != expected_sha:
             raise RuntimeError('First exact transport size/SHA mismatch; no retry/substitution')
         return {'path': relative, 'bytes': total, 'sha256': sha.hexdigest(), 'elapsed_seconds': time.monotonic() - start}
+    except urllib.error.HTTPError as error:
+        # Status is useful evidence; response URL/body/headers may contain signed data.
+        raise RuntimeError(relative + ': HTTPError status=' + str(error.code) + '; original partial bytes retained, no retry') from None
     except Exception as error:
         # Never emit credentials or temporary signed redirect URL/query in exceptions.
         raise RuntimeError(relative + ': ' + type(error).__name__ + '; original partial bytes retained, no retry') from None
