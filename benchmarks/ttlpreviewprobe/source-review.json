@@ -1,0 +1,54 @@
+{
+  "ROOT_source_review_sha256": "70ba7f5095ca67a5b3d71e6f9becbce006adf2741ebc5793bd5cee1a43d4af9c",
+  "actual_ci_run": null,
+  "actual_go_execution": null,
+  "actual_sql_execution": null,
+  "all_prior_test_bytes_preserved": true,
+  "application_files": 172,
+  "base_commit": "f80cb9bba29f2ba97b37152bbf3388735d4a3173",
+  "base_tree": "79055414abf21788dc696b73e2e8b1d3bf0afb37",
+  "baseline_source_map_sha256": "2b1024f25b418267f5db913c5bedb6d2236292c8983ebf6e31e5b415dd375d33",
+  "branch": "perf/storage-ttl-preview-offset-probe",
+  "candidate_materialization": "Exact accepted immutable f80 Git blobs/patch/full304 map; no new local worktree yet. Future hosted workflow patches detached f80 ttl-candidate checkout.",
+  "changed_file_pins": {
+    "internal/app/source_retention.go": {
+      "bytes": 11032,
+      "git_blob_at_base": "30267df8ed8e305d5ab5331d5c9c9cb77f051d64",
+      "mode": "100644",
+      "sha256": "f47970cde50821a41c8ab1ea7896e732753405a7969c6c2ed09a81755842a9d6"
+    },
+    "internal/app/source_retention_test.go": {
+      "bytes": 29966,
+      "git_blob_at_base": "80582a18749727ab9441106c520c3074643364ec",
+      "mode": "100644",
+      "sha256": "103b86853ede768897ffffb7cd276c1a7432274e1e952db8f7338f2db959d517"
+    }
+  },
+  "changed_files": [
+    "internal/app/source_retention.go",
+    "internal/app/source_retention_test.go"
+  ],
+  "constraints": [
+    "both MATERIALIZED CTEs/source LIMIT200/order unchanged",
+    "only preview OFFSET0 removed; jobs OFFSET0 preserved",
+    "real preview kind/job_id membership, including empty reservation id, remains deletion authority",
+    "quarantine/delete/fence/audit/accounting/unknowncommit unchanged",
+    "possible globalpreview build read/memory is not bounded by200candidates"
+  ],
+  "executed_readonly_checks": [
+    "accepted304Gitblob source pins/protected302/exact1prodline",
+    "prior semantic testfile exact and f80reconstruction minus new43line case",
+    "accepted originalTTL304/publishedharness322 guards unchanged"
+  ],
+  "format": 1,
+  "kind": "ttl-preview-offset-probe-source-only",
+  "patch_sha256": "d08a0cd7a3e24f9029bf91bb4dd8a4107dc7b0a3e81bd02b38c9e3ccb5e7b3ac",
+  "performance_result": null,
+  "production_change_is_exact_replacement": true,
+  "protected_unchanged_files": 302,
+  "schema_and_migration_files_unchanged": true,
+  "source_map_sha256": "5aad135e0cc3dc961f66c364c6cbfa84c2231fb273370551934d43329d066c90",
+  "status": " M internal/app/source_retention.go\n M internal/app/source_retention_test.go\n",
+  "tracked_source_files": 304,
+  "worktree": null
+}

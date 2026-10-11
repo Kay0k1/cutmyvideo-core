@@ -1,0 +1,9 @@
+# Isolated TTL preview identity comparison harness
+
+This branch adds a manual comparison harness to exact f80. All304 baseline files, including172 application files and both product paths, remain unchanged. The v4 packet is copied exactly to benchmarks/ttlpreviewprobe; its workflow uses the already registered path .github/workflows/storage005-capacity.yml. Candidate SQL is applied only in a fresh disposable runtime worktree.
+
+The earlier run38146228174 on1410489 remains FAIL: all15 semantic tests passed, but the measurement test rejected an old candidate hash before saving any plans. Cleanup succeeded. v4 changes only the measurement candidate hash and coupled pins; the guard, function bodies,20pair/40sample protocol, product patch, source maps, resources and workflow bytes remain unchanged. Static checks bind fixture constants directly to original f80 and accepted candidate Go SQL literals and SQL files. No timings or speedup are available for this candidate.
+
+Original run38143536108 also remains FAIL due to ephemeral cache cleanup; its old LATERAL query did not improve. The accepted scoped module-cache helper has one unprivileged pure4 PASS (including old PermissionError before fixing permissions) and removed caches successfully in38146228174. That pure run had a45s child limit and final1MiB cap; the observed outer tool finished within60s, with no extra outer hard watchdog installed.
+
+The workflow is manual only and requires fresh exact branch/head plus runner/plan/map/fixture once authorization before dependency/image preparation. A separately approved run must use own fresh PG, preserve success/failure artifacts and enforce unchanged3GiB host admission. No PR, automatic CI, product tests, timings, dispatch or execution is authorized by this placement. The frozen v4 packet and previous branches/originals remain intact.

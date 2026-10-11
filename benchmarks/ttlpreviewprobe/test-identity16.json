@@ -1,0 +1,26 @@
+{
+  "actual_run": null,
+  "candidate_existing_test_source_hashes": {
+    "retention_test.go": "89e1e12ea67bc1f6ce28cab8e637dbf30ec44fa32e662525a6b1afdc3db113d8",
+    "source_retention_test.go": "103b86853ede768897ffffb7cd276c1a7432274e1e952db8f7338f2db959d517"
+  },
+  "expected_top_tests": 16,
+  "measurement_name": "TestTTLPreviewProbeSavedPlans",
+  "semantic_names": [
+    "TestSourcePinMembershipTransitionsAndRollback",
+    "TestSourcePinBirthBulkAndIDMoveIncludesHistoricalPreview",
+    "TestSourcePinFenceSerializesDirectPreviewWithDeletion",
+    "TestSourceRetentionFalseZerosContinueToHealthyTail",
+    "TestSourceRetentionFalsePreviewZerosPreservePinsAndBatchLimit",
+    "TestSourcePinAuditPartialRestartRevisionAndFairness",
+    "TestSourcePinUnderflowQuarantinesUntilAuthoritativeAudit",
+    "TestSourceRetentionLostCommitAcknowledgementKeepsTombstoneCharge",
+    "TestSourcePinMigrationBackfillHistoryCancellationAndRestart",
+    "TestSourcePinCatalogRejectsBodyPrivilegeColumnAndForeignTargetDrift",
+    "TestSourcePinInvokerTriggersWorkWithoutRuntimeFunctionExecute",
+    "TestSourcePinCatalogManifestsDeclareExactManagedFunctionsAndTriggerColumns",
+    "TestRetentionPreservesExplicitExpiryAndAllPins",
+    "TestRetentionBatchesInterleaveLegacyAndExplicitExpiry",
+    "TestRetentionLimitsJobsAndMetadataOnlySourcesIndependently"
+  ]
+}

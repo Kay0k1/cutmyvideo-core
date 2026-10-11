@@ -1,0 +1,75 @@
+{
+  "actual_ci_run": null,
+  "actual_docker_execution": null,
+  "actual_go_execution": null,
+  "actual_performance_result": null,
+  "actual_sql_execution": null,
+  "file_count": 15,
+  "files": {
+    "README.txt": {
+      "bytes": 4092,
+      "sha256": "feca6116e882571968c1f3514136b69d65f7dbe5fadbffd06e5c3d0613772894"
+    },
+    "ROOT-authorization-template.NOT-AUTHORIZED.json": {
+      "bytes": 847,
+      "sha256": "add9946ca7a1226d4bb5672cd628f7839ee64552a0b5420dc44ea4b16b72af57"
+    },
+    "baseline-f80-source-retention.sql": {
+      "bytes": 1106,
+      "sha256": "8f40530566bd0bd9bf3ae12ca9604ff20baa5a58a932ea244ee9b5c01ebe8fb7"
+    },
+    "baseline-source-map.json": {
+      "bytes": 69842,
+      "sha256": "2b1024f25b418267f5db913c5bedb6d2236292c8983ebf6e31e5b415dd375d33"
+    },
+    "candidate-source-retention.sql": {
+      "bytes": 1097,
+      "sha256": "e85e5fab8f20375a9fad988f69553f94f17570de964d8f55c46030f36d4bc019"
+    },
+    "candidate.patch": {
+      "bytes": 3944,
+      "sha256": "d08a0cd7a3e24f9029bf91bb4dd8a4107dc7b0a3e81bd02b38c9e3ccb5e7b3ac"
+    },
+    "execution-plan.json": {
+      "bytes": 11783,
+      "sha256": "985b5d2d87df7a9db7614aadffe0bbcf556662faf8873c29718c7ad4a6ced2fe"
+    },
+    "measurement_test.go.txt": {
+      "bytes": 12689,
+      "sha256": "0309f2af6bdf1f6e7770dff0e7f4ea3e29a485a5ef114fd7b7bd3566b3785228"
+    },
+    "preparation.json": {
+      "bytes": 3833,
+      "sha256": "89967698d94ddd23d16b0f36b9daf42354ee3666ad5aef3ad9297236834bf569"
+    },
+    "runner-basis37e4-fork.patch": {
+      "bytes": 50975,
+      "sha256": "2d58a62d326a91e18aae340dae078894e3172c60d0b2133c97fdbb17d364fa5f"
+    },
+    "runner.py": {
+      "bytes": 34903,
+      "sha256": "9413784cd0b101feabd3c96be6e60f07fc77e08b5b5ca173336149336eca4358"
+    },
+    "source-map.json": {
+      "bytes": 72274,
+      "sha256": "5aad135e0cc3dc961f66c364c6cbfa84c2231fb273370551934d43329d066c90"
+    },
+    "source-review.json": {
+      "bytes": 2561,
+      "sha256": "cb68ae8f961522d1d791f7a8b1414177e9dbd541e89688e95f6287bc97e0f7b3"
+    },
+    "test-identity16.json": {
+      "bytes": 1350,
+      "sha256": "c122bf0d867ad1ce63fbf6d96a85810a0fd715dbade9fa305eae8da4ea61500f"
+    },
+    "ttl-preview-probe.yml.txt": {
+      "bytes": 5862,
+      "sha256": "5613071af282f448055523e5968d79d212a226f163e8967de8f15247f3a7e994"
+    }
+  },
+  "format": 1,
+  "kind": "ttl-preview-offset-probe-executable-source-v4-freeze",
+  "manifest_excludes_itself": true,
+  "speedup_claim": null,
+  "status": "SEALED_SOURCE_ONLY_NOT_AUTHORIZED_NOT_RUN"
+}

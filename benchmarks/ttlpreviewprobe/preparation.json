@@ -1,0 +1,66 @@
+{
+  "actual_ci_run": null,
+  "actual_docker_execution": null,
+  "actual_go_execution": null,
+  "actual_network_use": null,
+  "actual_performance_result": null,
+  "actual_sql_execution": null,
+  "direct_static_SQL_identity_check": {
+    "accepted_candidate_Go_literal_exact_SQL_file": true,
+    "actual_baseline_SQL_sha256": "8f40530566bd0bd9bf3ae12ca9604ff20baa5a58a932ea244ee9b5c01ebe8fb7",
+    "actual_candidate_SQL_sha256": "e85e5fab8f20375a9fad988f69553f94f17570de964d8f55c46030f36d4bc019",
+    "exactly_one_of_each_fixture_constant_and_Go_literal": true,
+    "fixture_baseline_constant": "8f40530566bd0bd9bf3ae12ca9604ff20baa5a58a932ea244ee9b5c01ebe8fb7",
+    "fixture_candidate_constant": "e85e5fab8f20375a9fad988f69553f94f17570de964d8f55c46030f36d4bc019",
+    "original_f80_Go_literal_exact_SQL_file": true,
+    "pass": true,
+    "performed_by": "pure stdlib source read/hash/raw Go literal extraction, no candidate import/runtime"
+  },
+  "existing_test_bytes_preserved": true,
+  "fixture_delta_only": {
+    "after": "e85e5fab8f20375a9fad988f69553f94f17570de964d8f55c46030f36d4bc019",
+    "all_function_bodies_byte_unchanged": true,
+    "baseline_constant_unchanged": true,
+    "before": "ea2a015de4c40df0e14121c57b4f0faac2d464e06296ced5d423379b8e74bf89",
+    "constant": "ttlProbeCandidateSHA",
+    "fixture_sha256": "0309f2af6bdf1f6e7770dff0e7f4ea3e29a485a5ef114fd7b7bd3566b3785228",
+    "old_fixture_sha256": "3e15eadb4386b561a701357dd61bfecf54122dd8a8213f045797d42c05501e67"
+  },
+  "format": 1,
+  "kind": "ttl-preview-offset-probe-executable-source-v4",
+  "plan_delta_only": [
+    "inputs.measurement_test.go.txt.sha256",
+    "argv_after_ROOT_authorization[3] packet source path"
+  ],
+  "plan_sha256": "985b5d2d87df7a9db7614aadffe0bbcf556662faf8873c29718c7ad4a6ced2fe",
+  "preparation_pure_read_corrections": [
+    "Historical original manifest filename is manifest.json, not packet-manifest.json",
+    "Baseline source map field is git_blob, while candidate map has git_blob_at_base; corrected before any output writes"
+  ],
+  "preserved_manifests": {
+    "/root/video_cut/reports/storage-maintenance-2026-10-11/ttl-preview-offset-hosted-original-38146228174-attempt-1/packet-manifest.json": "37b74d50acb80d3a80732c12751cd815cfb3481c3c6f35aa562ac6ccd4d864dc",
+    "/root/video_cut/reports/storage-maintenance-2026-10-11/ttl-preview-offset-probe-executable-source-v3/packet-manifest.json": "9ba65afcf858e019598b8a4e494f8e830589b00ebbe1c85bfba0b84bc01e574f",
+    "/root/video_cut/reports/storage-maintenance-2026-10-11/ttl-preview-probe-executable-source-preparation-v2/packet-manifest.json": "3b350dcddbe61103ab49a9b512b2c880f2591b0400c50be4ab097faf6ff48bbc",
+    "/root/video_cut/reports/storage-maintenance-2026-10-11/ttl-preview-query-hosted-original-38143536108-attempt-1/manifest.json": "c810a1d14baac03a066f35c3bf666aeca0c44a172e9127e0de92e8c042e447ef"
+  },
+  "previous_actual_run_preserved": {
+    "attempt": 1,
+    "cleanup_errors": [],
+    "head": "1410489d4072102fc631874d3e9d6336985e6421",
+    "id": 38146228174,
+    "measurement": "FAIL_SQL_IDENTITY_GATE",
+    "saved_plans": 0,
+    "semantic15": "PASS",
+    "status": "FAIL"
+  },
+  "previous_v3_manifest_sha256": "9ba65afcf858e019598b8a4e494f8e830589b00ebbe1c85bfba0b84bc01e574f",
+  "product_patch_and_304_source_pins_exact_v3": true,
+  "runner_delta_only": "EXPECTED_PLAN hash literal; reverse replacement exact v3 bytes/AST",
+  "runner_sha256": "9413784cd0b101feabd3c96be6e60f07fc77e08b5b5ca173336149336eca4358",
+  "same16names": true,
+  "same_study_resources_Capture_guards": true,
+  "source_map_sha256": "5aad135e0cc3dc961f66c364c6cbfa84c2231fb273370551934d43329d066c90",
+  "speedup_claim": null,
+  "status": "SOURCE_ONLY_PREPARED_NOT_AUTHORIZED_NOT_RUN",
+  "workflow_exact_v3_sha256": "5613071af282f448055523e5968d79d212a226f163e8967de8f15247f3a7e994"
+}
