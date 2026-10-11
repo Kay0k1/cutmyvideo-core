@@ -75,7 +75,7 @@ jobs:
     with:
       ref: ${{ needs.resolve.outputs.commit }}
   packages:
-    needs: [resolve, checks]
+    needs: resolve
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     outputs:

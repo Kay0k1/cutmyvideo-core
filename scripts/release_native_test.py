@@ -4,6 +4,7 @@ from copy import deepcopy
 import importlib.util
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest.mock import Mock
@@ -266,6 +267,49 @@ class NativeControls(unittest.TestCase):
             self.assertNotIn('PGSERVICE', pg.env)
             self.assertNotIn('PGOPTIONS', pg.env)
             self.assertEqual(pg.env['PGHOST'], '127.0.0.1')
+
+    def test_real_multicall_symlinks_keep_invocation_name_for_version_and_sql(self):
+        # These release controls run in the Linux resolver/build job. Execute a
+        # real tiny multicall fixture; no database or product binary is used.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            evidence = root / 'evidence'
+            evidence.mkdir()
+            dispatch = root / 'multicall.py'
+            dispatch.write_text(f'#!{sys.executable}\n' + '''
+from pathlib import Path
+import sys
+name = Path(sys.argv[0]).name
+if name not in ('ffmpeg', 'ffprobe', 'psql'):
+    raise SystemExit(19)
+if sys.argv[1:] == (['--version'] if name == 'psql' else ['-version']):
+    print(name + ' synthetic multicall version')
+elif name == 'psql' and sys.argv[-2:] == ['--command', "SELECT 'synthetic-control'"]:
+    print('synthetic-control')
+else:
+    raise SystemExit(20)
+''')
+            dispatch.chmod(0o755)
+            selected = {}
+            for name in ('ffmpeg', 'ffprobe', 'psql'):
+                path = root / name
+                path.symlink_to(dispatch)
+                selected[name] = str(path)
+            runner = object.__new__(n.Native)
+            runner.commands = n.Commands(evidence)
+            runner.report = {'tools': {}}
+            with patch.object(n.shutil, 'which', side_effect=lambda name: selected[name]):
+                runner.tools()
+            for name in selected:
+                self.assertEqual(getattr(runner, name), Path(selected[name]))
+                self.assertEqual(runner.report['tools'][name]['path'], selected[name])
+            pg = n.PostgreSQL('postgres://test@127.0.0.1/test?sslmode=disable', runner.commands, runner.psql)
+            self.assertEqual(pg.sql("SELECT 'synthetic-control'"), 'synthetic-control')
+            self.assertEqual(runner.commands.records[-1]['command'][0], selected['psql'])
+            # Resolving the same file really changes dispatch and fails, so
+            # this control detects the original wrapper invocation defect.
+            _, _, status = runner.commands.run([dispatch, '--version'], expected=19)
+            self.assertEqual(status, 19)
 
     def test_shared_http_transcript_retains_both_owner_and_foreign_requests(self):
         with tempfile.TemporaryDirectory() as directory:

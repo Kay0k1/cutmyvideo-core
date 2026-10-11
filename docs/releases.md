@@ -97,7 +97,7 @@ provenance attestations.
 ## Automation
 
 The [release workflow](../.github/workflows/release.yml) resolves source once,
-passes that commit to the existing source CI, packages it twice and uploads one
+passes that commit to the existing source CI, packages it twice in parallel and uploads one
 sealed bundle. Five native jobs download that exact artifact ID, verify its
 workflow run and ZIP digest, safely extract their archive and execute its
 absolute binary path. They require its version/commit/build-time/native target,
@@ -122,7 +122,7 @@ deploys production. Inspect the draft before publishing it.
 
 Current-source CI uses Go 1.27.2 and requires runtime/media/cancellation plus
 the PostgreSQL API/worker path on every shipped Linux, macOS and Windows target.
-These source jobs gate packaging along with upgrade/recovery acceptance. The
+These source jobs gate final archive acceptance along with upgrade/recovery acceptance. The
 historical upgrade/restore source gate remains required. A separate Linux amd64
 job uses the captured executable from this same archive bundle for all nine
 upgrade/restore scenarios and eleven decoded media observations. It builds only

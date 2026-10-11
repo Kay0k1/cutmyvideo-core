@@ -412,11 +412,14 @@ class Native:
         for name in ('ffmpeg', 'ffprobe', 'psql'):
             path = shutil.which(name)
             require(path, f'Mandatory native acceptance tool is unavailable: {name}')
-            setattr(self, name, Path(path).resolve())
+            # Multicall wrappers such as Debian's psql dispatch by argv[0].
+            # Keep the selected invocation name when making it absolute.
+            path = Path(path).absolute()
+            setattr(self, name, path)
             out, err, _ = self.commands.run([path, '--version' if name == 'psql' else '-version'], timeout=10)
             lines = (out or err).decode(errors='replace').splitlines()
             require(lines, f'{name} did not report its version')
-            self.report['tools'][name] = {'path': str(Path(path).resolve()), 'version': lines[0]}
+            self.report['tools'][name] = {'path': str(path), 'version': lines[0]}
 
     def ff(self, *args, **kwargs):
         return self.commands.run([self.ffmpeg, '-v', 'error', '-nostdin', '-y', '-filter_threads', '1',
