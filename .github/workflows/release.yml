@@ -369,19 +369,16 @@ jobs:
           path: ${{ runner.temp }}/archive-verdict/
           if-no-files-found: error
           retention-days: 14
-  draft:
-    name: Draft from verified archives
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+  trust:
+    name: SPDX from verified executable bytes
     needs: [resolve, packages, native-gate]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    permissions:
-      contents: write
-      actions: read
+    outputs:
+      sbom-sha256: ${{ steps.identity.outputs.sbom-sha256 }}
+      trust-sha256: ${{ steps.identity.outputs.trust-sha256 }}
     env:
       GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
-      RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
       SOURCE_SHA256: ${{ needs.resolve.outputs.source-sha256 }}
       MANIFEST_SHA256: ${{ needs.packages.outputs.manifest-sha256 }}
       ARTIFACT_ID: ${{ needs.packages.outputs.artifact-id }}
@@ -406,22 +403,175 @@ jobs:
           artifact-ids: ${{ needs.native-gate.outputs.artifact-id }}
           path: ${{ runner.temp }}/archive-verdict
           merge-multiple: true
+      - name: Derive the SBOM twice without rebuilding and retain original archive identity
+        id: identity
+        shell: bash
+        run: |
+          python3 scripts/release-fetch.py --repo "$GITHUB_REPOSITORY" --artifact-id "$ARTIFACT_ID" --run-id "$GITHUB_RUN_ID" --artifact-name "release-bundle-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --expected-artifact-sha256 "$ARTIFACT_SHA256" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --directory "$RUNNER_TEMP/release-bundle" --evidence-dir "$RUNNER_TEMP/release-fetch"
+          trust_args=(--repo . --directory "$RUNNER_TEMP/release-bundle" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --expected-manifest-sha256 "$MANIFEST_SHA256" --verdict "$RUNNER_TEMP/archive-verdict/verdict.json" --expected-verdict-sha256 "$VERDICT_SHA256" --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --event-sha "$GITHUB_SHA" --artifact-id "$ARTIFACT_ID" --expected-artifact-sha256 "$ARTIFACT_SHA256")
+          python3 scripts/release-trust.py generate "${trust_args[@]}" --output "$RUNNER_TEMP/release-trust"
+          python3 scripts/release-trust.py generate "${trust_args[@]}" --output "$RUNNER_TEMP/release-trust-repeat"
+          cmp "$RUNNER_TEMP/release-trust/SBOM.spdx.json" "$RUNNER_TEMP/release-trust-repeat/SBOM.spdx.json"
+          cmp "$RUNNER_TEMP/release-trust/TRUST.json" "$RUNNER_TEMP/release-trust-repeat/TRUST.json"
+          cmp "$RUNNER_TEMP/release-trust/ATTESTATION-SUBJECTS.sha256" "$RUNNER_TEMP/release-trust-repeat/ATTESTATION-SUBJECTS.sha256"
+          sbom_sha256=$(sha256sum "$RUNNER_TEMP/release-trust/SBOM.spdx.json" | cut -d ' ' -f 1)
+          trust_sha256=$(sha256sum "$RUNNER_TEMP/release-trust/TRUST.json" | cut -d ' ' -f 1)
+          echo "sbom-sha256=$sbom_sha256" >> "$GITHUB_OUTPUT"
+          echo "trust-sha256=$trust_sha256" >> "$GITHUB_OUTPUT"
+      - name: Retain unsigned candidate or release trust inputs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-trust-prepared-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/release-trust/SBOM.spdx.json
+            ${{ runner.temp }}/release-trust/TRUST.json
+            ${{ runner.temp }}/release-trust/ATTESTATION-SUBJECTS.sha256
+          if-no-files-found: error
+          retention-days: 14
+  attest:
+    name: Attest the tested release archives
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: [resolve, packages, native-gate, trust]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
+    outputs:
+      artifact-id: ${{ steps.save.outputs.artifact-id }}
+      artifact-sha256: ${{ steps.save.outputs.artifact-digest }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+      SOURCE_SHA256: ${{ needs.resolve.outputs.source-sha256 }}
+      MANIFEST_SHA256: ${{ needs.packages.outputs.manifest-sha256 }}
+      ARTIFACT_ID: ${{ needs.packages.outputs.artifact-id }}
+      ARTIFACT_SHA256: ${{ needs.packages.outputs.artifact-sha256 }}
+      VERDICT_SHA256: ${{ needs.native-gate.outputs.verdict-sha256 }}
+      SBOM_SHA256: ${{ needs.trust.outputs.sbom-sha256 }}
+      TRUST_SHA256: ${{ needs.trust.outputs.trust-sha256 }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.resolve.outputs.artifact-id }}
+          path: ${{ runner.temp }}/resolved-source
+          merge-multiple: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.native-gate.outputs.artifact-id }}
+          path: ${{ runner.temp }}/archive-verdict
+          merge-multiple: true
+      - name: Re-fetch exact archives and refuse moved tags or changed unsigned trust inputs
+        shell: bash
+        run: |
+          python3 scripts/release-fetch.py --repo "$GITHUB_REPOSITORY" --artifact-id "$ARTIFACT_ID" --run-id "$GITHUB_RUN_ID" --artifact-name "release-bundle-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --expected-artifact-sha256 "$ARTIFACT_SHA256" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --directory "$RUNNER_TEMP/release-bundle" --evidence-dir "$RUNNER_TEMP/release-fetch"
+          git fetch --force --no-tags origin "refs/tags/$RELEASE_VERSION:refs/tags/$RELEASE_VERSION"
+          python3 scripts/release-trust.py prepare-signing --repo . --directory "$RUNNER_TEMP/release-bundle" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --expected-manifest-sha256 "$MANIFEST_SHA256" --verdict "$RUNNER_TEMP/archive-verdict/verdict.json" --expected-verdict-sha256 "$VERDICT_SHA256" --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --event-sha "$GITHUB_SHA" --artifact-id "$ARTIFACT_ID" --expected-artifact-sha256 "$ARTIFACT_SHA256" --event-name "$GITHUB_EVENT_NAME" --ref "$GITHUB_REF" --expected-sbom-sha256 "$SBOM_SHA256" --expected-trust-sha256 "$TRUST_SHA256" --output "$RUNNER_TEMP/release-trust"
+      - name: Sign explicit archive, SBOM and trust hashes with GitHub provenance
+        id: provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-checksums: ${{ runner.temp }}/release-trust/ATTESTATION-SUBJECTS.sha256
+          create-storage-record: false
+      - name: Sign the SPDX composition of the five tested archives
+        id: sbom
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-checksums: ${{ runner.temp }}/release-bundle/SHA256SUMS
+          sbom-path: ${{ runner.temp }}/release-trust/SBOM.spdx.json
+          create-storage-record: false
+      - name: Verify every signature and exact subject before retaining bundles
+        env:
+          PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+          SBOM_BUNDLE: ${{ steps.sbom.outputs.bundle-path }}
+        run: |
+          git fetch --force --no-tags origin "refs/tags/$RELEASE_VERSION:refs/tags/$RELEASE_VERSION"
+          python3 scripts/release-trust.py finalize --repo . --directory "$RUNNER_TEMP/release-bundle" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --expected-manifest-sha256 "$MANIFEST_SHA256" --verdict "$RUNNER_TEMP/archive-verdict/verdict.json" --expected-verdict-sha256 "$VERDICT_SHA256" --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --event-sha "$GITHUB_SHA" --artifact-id "$ARTIFACT_ID" --expected-artifact-sha256 "$ARTIFACT_SHA256" --event-name "$GITHUB_EVENT_NAME" --ref "$GITHUB_REF" --prepared "$RUNNER_TEMP/release-trust" --provenance-bundle "$PROVENANCE_BUNDLE" --sbom-bundle "$SBOM_BUNDLE" --output "$RUNNER_TEMP/release-attested"
+          git fetch --force --no-tags origin "refs/tags/$RELEASE_VERSION:refs/tags/$RELEASE_VERSION"
+          python3 scripts/release_manifest.py verify-source --repo . --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --publishable
+      - name: Retain exact verified sidecars and signature bundles
+        id: save
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-attested-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/release-attested/SBOM.spdx.json
+            ${{ runner.temp }}/release-attested/TRUST.json
+            ${{ runner.temp }}/release-attested/provenance.sigstore.json
+            ${{ runner.temp }}/release-attested/sbom.sigstore.json
+            ${{ runner.temp }}/release-attested/ATTESTATIONS.json
+          if-no-files-found: error
+          retention-days: 14
+  draft:
+    name: Draft from verified archives
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: [resolve, packages, native-gate, trust, attest]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+      SOURCE_SHA256: ${{ needs.resolve.outputs.source-sha256 }}
+      MANIFEST_SHA256: ${{ needs.packages.outputs.manifest-sha256 }}
+      ARTIFACT_ID: ${{ needs.packages.outputs.artifact-id }}
+      ARTIFACT_SHA256: ${{ needs.packages.outputs.artifact-sha256 }}
+      VERDICT_SHA256: ${{ needs.native-gate.outputs.verdict-sha256 }}
+      TRUST_ARTIFACT_ID: ${{ needs.attest.outputs.artifact-id }}
+      TRUST_ARTIFACT_SHA256: ${{ needs.attest.outputs.artifact-sha256 }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.resolve.outputs.artifact-id }}
+          path: ${{ runner.temp }}/resolved-source
+          merge-multiple: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.native-gate.outputs.artifact-id }}
+          path: ${{ runner.temp }}/archive-verdict
+          merge-multiple: true
       - name: Recheck tag, verdict and the exact publishable bytes
         run: |
           python3 scripts/release-fetch.py --repo "$GITHUB_REPOSITORY" --artifact-id "$ARTIFACT_ID" --run-id "$GITHUB_RUN_ID" --artifact-name "release-bundle-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --expected-artifact-sha256 "$ARTIFACT_SHA256" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --directory "$RUNNER_TEMP/release-bundle" --evidence-dir "$RUNNER_TEMP/release-fetch"
           git fetch --force --no-tags origin "refs/tags/$RELEASE_VERSION:refs/tags/$RELEASE_VERSION"
           python3 scripts/release_manifest.py verify --directory "$RUNNER_TEMP/release-bundle" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --expected-manifest-sha256 "$MANIFEST_SHA256" --repo . --publishable
-          python3 - <<'PYTHON'
-          import hashlib,json,os
-          from pathlib import Path
-          raw=(Path(os.environ['RUNNER_TEMP'])/'archive-verdict/verdict.json').read_bytes()
-          if hashlib.sha256(raw).hexdigest()!=os.environ['VERDICT_SHA256']:raise SystemExit('Archive verdict digest mismatch.')
-          value=json.loads(raw)
-          if not (value['ok'] is True and value['mode']=='release' and value['publishable'] is True and value['source_sha256']==os.environ['SOURCE_SHA256'] and value['manifest_sha256']==os.environ['MANIFEST_SHA256'] and value['artifact_id']==int(os.environ['ARTIFACT_ID']) and value['artifact_sha256']==os.environ['ARTIFACT_SHA256'] and value['run_id']==int(os.environ['GITHUB_RUN_ID'])):raise SystemExit('Archive verdict is not publishable or has a different identity.')
-          PYTHON
+          python3 scripts/release-trust.py fetch-attested --repo "$GITHUB_REPOSITORY" --artifact-id "$TRUST_ARTIFACT_ID" --run-id "$GITHUB_RUN_ID" --artifact-name "release-attested-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --expected-artifact-sha256 "$TRUST_ARTIFACT_SHA256" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --directory "$RUNNER_TEMP/release-attested" --evidence-dir "$RUNNER_TEMP/trust-fetch"
+          python3 scripts/release-trust.py verify-attested --repo . --directory "$RUNNER_TEMP/release-bundle" --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --expected-source-sha256 "$SOURCE_SHA256" --expected-manifest-sha256 "$MANIFEST_SHA256" --verdict "$RUNNER_TEMP/archive-verdict/verdict.json" --expected-verdict-sha256 "$VERDICT_SHA256" --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --event-sha "$GITHUB_SHA" --artifact-id "$ARTIFACT_ID" --expected-artifact-sha256 "$ARTIFACT_SHA256" --event-name "$GITHUB_EVENT_NAME" --ref "$GITHUB_REF" --sidecars "$RUNNER_TEMP/release-attested"
+          git fetch --force --no-tags origin "refs/tags/$RELEASE_VERSION:refs/tags/$RELEASE_VERSION"
+          python3 scripts/release_manifest.py verify-source --repo . --source "$RUNNER_TEMP/resolved-source/SOURCE.json" --publishable
           python3 scripts/release-notes.py "$RELEASE_VERSION" > "$RUNNER_TEMP/release-notes.md"
       - name: Create draft from the same verified bundle without rebuilding
         run: |
-          extra_flags=()
-          if [[ "$RELEASE_VERSION" == *-* ]]; then extra_flags+=(--prerelease); fi
-          gh release create "$RELEASE_VERSION" "$RUNNER_TEMP"/release-bundle/* --verify-tag --draft "${extra_flags[@]}" --title "cutmyvideo-core $RELEASE_VERSION" --notes-file "$RUNNER_TEMP/release-notes.md"
+          python3 - <<'PYTHON'
+          import json,os,subprocess
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          manifest=json.loads((root/'release-bundle/MANIFEST.json').read_bytes())
+          bundle=[root/'release-bundle'/name for name in ['SOURCE.json','MANIFEST.json','SHA256SUMS']+[r['name'] for r in manifest['archives']]]
+          sidecars=[root/'release-attested'/name for name in ['SBOM.spdx.json','TRUST.json','provenance.sigstore.json','sbom.sigstore.json','ATTESTATIONS.json']]
+          version=os.environ['RELEASE_VERSION']
+          command=['gh','release','create',version,*map(str,bundle+sidecars),'--verify-tag','--draft','--title','cutmyvideo-core '+version,'--notes-file',str(root/'release-notes.md')]
+          if '-' in version: command.append('--prerelease')
+          subprocess.run(command,check=True)
+          PYTHON

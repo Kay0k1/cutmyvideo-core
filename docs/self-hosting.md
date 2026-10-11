@@ -1,9 +1,15 @@
 # Public self-hosting profile
 
-This **prepared, unvalidated current-source profile** supplies one API and one
-worker on a Linux amd64 host. Hosted container acceptance has not yet completed
-all seven required groups with verified cleanup. The Python controls test
-configuration and refusal paths, not an installation.
+This profile supplies one API and one worker on a Linux amd64 host. On
+2026-10-11, PR head `a7d2a656f42e09ca7a4314d411834162dabe4187` passed
+[hosted public-profile acceptance](https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38106992102):
+all 35 required checks, all seven groups and verified cleanup on a disposable
+Linux amd64 runner.
+
+Every new candidate, including a combined release candidate, requires its own
+complete hosted acceptance and cleanup. Pure Python controls cover configuration
+and refusal paths. The dated run does not cover production, host reboots or
+public ACME certificate issuance.
 Use the [local trial](operations.md) for development. Native CLI archives remain
 supported by their separate five-platform distribution checks.
 

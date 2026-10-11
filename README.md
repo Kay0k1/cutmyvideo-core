@@ -23,6 +23,8 @@
 
 Требуются **FFmpeg и ffprobe** с libx264, AAC и libmp3lame. Готовый архив можно взять в [GitHub Releases](https://github.com/Kay0k1/cutmyvideo-core/releases): выберите свою ОС/архитектуру, проверьте `SHA256SUMS` и распакуйте. FFmpeg в архив не входит. Для сборки из исходников требуется Go 1.26.9+; CI и релизы используют Go 1.27.2.
 
+Для следующего релиза подготовлена [проверка происхождения архивов и состава зависимостей](docs/releases.md#consumer-verification-of-a-new-signed-release): подпись привязывает проверенные архивы к конкретному коммиту и процессу выпуска. Она ещё требует проверки на новом разрешённом теге; к опубликованной v0.2.1 эта гарантия не относится.
+
 ```sh
 git clone https://github.com/Kay0k1/cutmyvideo-core.git
 cd cutmyvideo-core
