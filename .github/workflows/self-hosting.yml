@@ -5,6 +5,13 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      acceptance_mode:
+        description: 'Explicit schema mode; transition requires the reviewed root670 application inventory'
+        type: choice
+        options: [same-schema, source-retention-004-to-005]
+        default: same-schema
+        required: true
 
 permissions:
   contents: read
@@ -23,6 +30,11 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        if: inputs.acceptance_mode == 'source-retention-004-to-005'
+        with:
+          go-version: '1.27.2'
+          cache: false
       - name: Install acceptance tools on this disposable hosted runner
         run: |
           sudo apt-get update
@@ -38,6 +50,7 @@ jobs:
           set -o pipefail
           "$RUNNER_TEMP/cutmy-public-venv/bin/python" -B -m unittest discover -s deploy -p self_host_test.py -v 2>&1 | tee "$RUNNER_TEMP/public-profile-controls.log"
           "$RUNNER_TEMP/cutmy-public-venv/bin/python" -B -m unittest discover -s scripts -p self_hosting_acceptance_test.py -v 2>&1 | tee "$RUNNER_TEMP/public-acceptance-controls.log"
+          "$RUNNER_TEMP/cutmy-public-venv/bin/python" -B -m unittest discover -s scripts -p source_retention_transition_test.py -v 2>&1 | tee "$RUNNER_TEMP/public-transition-controls.log"
       - name: Explicit bridge-filter prerequisites on the disposable runner
         run: |
           test "$GITHUB_ACTIONS" = true
@@ -50,6 +63,7 @@ jobs:
       - name: Actual public profile HTTPS, roles, egress, image upgrade and restore
         env:
           ACCEPTANCE_PR_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          ACCEPTANCE_MODE: ${{ inputs.acceptance_mode || 'same-schema' }}
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           sudo env \
@@ -61,11 +75,14 @@ jobs:
             "$RUNNER_TEMP/cutmy-public-venv/bin/python" -B scripts/self-hosting-acceptance.py \
             --allow-disposable-host --revision "$GITHUB_SHA" --pr-head "$ACCEPTANCE_PR_HEAD" \
             --upgrade-from 0f93cd654a998be7740ba1d6fee4a44a6f7b3464 \
+            --mode "$ACCEPTANCE_MODE" \
             --temp-directory "$RUNNER_TEMP/cutmy-public-private" \
             --output "$RUNNER_TEMP/public-self-hosting-evidence"
-      - name: Require all seven completed groups and independent cleanup
+      - name: Require the exact mode groups, raw transition evidence and independent cleanup
+        env:
+          ACCEPTANCE_MODE: ${{ inputs.acceptance_mode || 'same-schema' }}
         run: |
-          python3 -B scripts/self-hosting-acceptance.py --verify-report "$RUNNER_TEMP/public-self-hosting-evidence/acceptance-report.json"
+          python3 -B scripts/self-hosting-acceptance.py --mode "$ACCEPTANCE_MODE" --verify-report "$RUNNER_TEMP/public-self-hosting-evidence/acceptance-report.json"
       - name: Retain sanitized public profile evidence only
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -75,5 +92,6 @@ jobs:
             ${{ runner.temp }}/public-self-hosting-evidence
             ${{ runner.temp }}/public-profile-controls.log
             ${{ runner.temp }}/public-acceptance-controls.log
+            ${{ runner.temp }}/public-transition-controls.log
           if-no-files-found: warn
           retention-days: 14

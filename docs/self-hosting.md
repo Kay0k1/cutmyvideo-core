@@ -308,6 +308,14 @@ Compose file, and perform these checks:
 
 Static controls are executable without Docker or firewall access:
 
+Schema-changing acceptance uses the separate, explicitly selected
+[`source-retention-004-to-005` mode](self-hosting-source-retention-transition.md).
+Its schema-2 receipt requires 53 checks across ten groups and actual pinned
+PostgreSQL/test observations from the same disposable hosted run. The default
+same-schema mode still requires its original 35 checks across seven groups and
+exact A1/current application byte equality. Selecting the transition workflow
+input authorizes only disposable acceptance, not release or deployment.
+
 ```sh
 python3 -m unittest discover -s deploy -p self_host_test.py -v
 ```

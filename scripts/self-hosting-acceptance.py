@@ -66,6 +66,13 @@ HASH = re.compile(r'[0-9a-f]{64}\Z')
 TCP_HEALTHCHECK = ['CMD', 'pg_isready', '-h', '127.0.0.1', '-p', '5432', '-U', 'cutmy_admin', '-d', 'cutmy']
 
 
+def transition_module():
+    spec = importlib.util.spec_from_file_location('source_retention_transition', REPO / 'scripts/source-retention-transition.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def require(value, message):
     if not value:
         raise RuntimeError(message)
@@ -205,10 +212,14 @@ def validate_packet_snapshots(report, directory):
 
 def validate_report(report, evidence_directory=None):
     """Fail closed even if all visible partial check records say PASS."""
-    require(report.get('schema_version') == 1 and report.get('ok') is True
+    mode = report.get('mode', 'same-schema')
+    require(mode in ('same-schema', 'source-retention-004-to-005'), 'unknown acceptance mode')
+    transition = transition_module() if mode == 'source-retention-004-to-005' else None
+    required_groups = transition.groups(GROUPS) if transition else GROUPS
+    require(report.get('schema_version') == (2 if transition else 1) and report.get('ok') is True
             and report.get('errors') == [], 'acceptance did not finish successfully')
-    require(set(report.get('groups', {})) == set(GROUPS), 'required group missing or unknown')
-    for group, checks in GROUPS.items():
+    require(set(report.get('groups', {})) == set(required_groups), 'required group missing or unknown')
+    for group, checks in required_groups.items():
         value = report['groups'][group]
         require(value.get('status') == 'pass' and set(value.get('checks', {})) == set(checks)
                 and all(item.get('ok') is True for item in value['checks'].values()), 'required check incomplete')
@@ -264,12 +275,15 @@ def validate_report(report, evidence_directory=None):
     validate_forwarded_evidence(report)
     if evidence_directory is not None:
         validate_packet_snapshots(report, evidence_directory)
-    application = report['groups']['identity']['checks']['application_sources_unchanged'].get('evidence', {})
-    require(report.get('runtime_application_sources_unchanged') is True
-            and application.get('reference_commit') == APPLICATION_REFERENCE
-            and application.get('sha256') == APPLICATION_FILES_SHA256
-            and application.get('schema_changing_upgrade') is False,
-            'A1/B application-source reference scope missing')
+    if transition:
+        transition.validate_transition(report, evidence_directory, sys.modules.get(__name__) or globals())
+    else:
+        application = report['groups']['identity']['checks']['application_sources_unchanged'].get('evidence', {})
+        require(report.get('runtime_application_sources_unchanged') is True
+                and application.get('reference_commit') == APPLICATION_REFERENCE
+                and application.get('sha256') == APPLICATION_FILES_SHA256
+                and application.get('schema_changing_upgrade') is False,
+                'A1/B application-source reference scope missing')
     require(report.get('failed_policy_snapshots', []) == [],
             'failed policy operation cannot be a successful receipt')
     for label, baseline in (('baseline', True), ('current', False), ('restored', False)):
@@ -680,7 +694,7 @@ class Acceptance:
         return json.loads(self.run(command, **kwargs))
 
     def check(self, name, evidence=None):
-        require(name in GROUPS[self.active_group], 'unknown required check')
+        require(name in getattr(self, 'required_groups', GROUPS)[self.active_group], 'unknown required check')
         values = self.report['groups'][self.active_group]['checks']
         require(name not in values, 'duplicate required check')
         values[name] = {'ok': True, 'evidence': evidence or {}}
@@ -694,7 +708,7 @@ class Acceptance:
         try:
             callback()
             if complete:
-                require(set(group['checks']) == set(GROUPS[name]), 'required group check incomplete')
+                require(set(group['checks']) == set(getattr(self, 'required_groups', GROUPS)[name]), 'required group check incomplete')
                 group['status'] = 'pass'
         except Exception:
             group['status'] = 'fail'
@@ -916,15 +930,7 @@ class Acceptance:
         require(self.report['images']['old']['image_id'] != self.report['images']['current']['image_id'],
                 'image upgrade reused the old image')
         self.check('immutable_new_image', self.report['images']['current'])
-        app = lambda s: {k: v for k, v in s['files'].items()
-                         if k.startswith(('cmd/', 'internal/', 'pkg/')) or k in ('go.mod', 'go.sum')}
-        require(app(self.old_source) == app(self.current_source)
-                and digest(canonical(app(self.old_source))) == APPLICATION_FILES_SHA256,
-                'A1/B application sources differ from the immutable reference')
-        self.report['runtime_application_sources_unchanged'] = True
-        self.check('application_sources_unchanged', {'files': len(app(self.old_source)),
-                    'sha256': digest(canonical(app(self.old_source))), 'reference_commit': APPLICATION_REFERENCE,
-                    'schema_changing_upgrade': False})
+        self.application_identity()
         saved = self.current['state'] / 'source/README.md'
         original = saved.read_bytes()
         try:
@@ -951,6 +957,17 @@ class Acceptance:
         self.run([sys.executable, '-B', self.current_repo / 'deploy/self-host.py', '--config', self.current['config_file'],
                   '--state', self.current['state'], 'status'], env=remote_env, expected=1)
         self.check('changed_state_and_remote_engine_refused')
+
+    def application_identity(self):
+        app = lambda s: {k: v for k, v in s['files'].items()
+                         if k.startswith(('cmd/', 'internal/', 'pkg/')) or k in ('go.mod', 'go.sum')}
+        require(app(self.old_source) == app(self.current_source)
+                and digest(canonical(app(self.old_source))) == APPLICATION_FILES_SHA256,
+                'A1/B application sources differ from the immutable reference')
+        self.report['runtime_application_sources_unchanged'] = True
+        self.check('application_sources_unchanged', {'files': len(app(self.old_source)),
+                    'sha256': digest(canonical(app(self.old_source))), 'reference_commit': APPLICATION_REFERENCE,
+                    'schema_changing_upgrade': False})
 
     def start_process(self, label, command):
         log = (self.work / (label + '.log')).open('wb')
@@ -980,7 +997,8 @@ class Acceptance:
         ca_key, request = self.work / 'ca.key', self.work / 'server.csr'
         self.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=Disposable cutmy acceptance CA',
                   '-keyout', ca_key, '-out', self.ca])
-        domains = [p['config']['CUTMY_DOMAIN'] for p in (self.old, self.restored)]
+        tls_projects = getattr(self, 'tls_projects', (self.old, self.restored))
+        domains = [p['config']['CUTMY_DOMAIN'] for p in tls_projects]
         self.run(['openssl', 'req', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=' + domains[0], '-keyout', key, '-out', request])
         extension = self.work / 'server.ext'
         extension.write_text('subjectAltName=' + ','.join('DNS:' + n for n in domains) + '\n')
@@ -992,7 +1010,7 @@ class Acceptance:
         # port and local test certificate authority differ from the example.
         example = (self.old_repo / 'deploy/Caddyfile.example').read_text()
         stanzas = []
-        for project in (self.old, self.restored):
+        for project in tls_projects:
             stanza = example.replace('video.example.org', project['config']['CUTMY_DOMAIN']).replace(
                 '127.0.0.1:8080', '127.0.0.1:' + project['config']['CUTMY_HTTP_PORT'])
             stanza = stanza.replace(project['config']['CUTMY_DOMAIN'] + ' {', project['config']['CUTMY_DOMAIN'] + ' {\n'
@@ -2038,6 +2056,8 @@ def parse_args(argv=None):
     parser.add_argument('--revision')
     parser.add_argument('--pr-head', help='Actual PR head SHA (checkout may be its provider merge); otherwise checkout SHA')
     parser.add_argument('--upgrade-from', default=UPGRADE_FROM)
+    parser.add_argument('--mode', choices=('same-schema', 'source-retention-004-to-005'), default='same-schema',
+                        help='Schema changes require the explicitly selected, pinned transition mode')
     parser.add_argument('--output', type=Path)
     parser.add_argument('--temp-directory', type=Path, default=Path(tempfile.gettempdir()))
     args = parser.parse_args(argv)
@@ -2048,10 +2068,14 @@ def parse_args(argv=None):
 def main(argv=None):
     args = parse_args(argv)
     if args.verify_report:
-        validate_report(json.loads(args.verify_report.read_bytes()), args.verify_report.parent)
-        print('Public profile acceptance: all 7 groups and cleanup PASS')
+        report = transition_module().strict_json(args.verify_report.read_bytes())
+        require(report.get('mode', 'same-schema') == args.mode, 'receipt/CLI mode mismatch')
+        validate_report(report, args.verify_report.parent)
+        count = len(report['groups'])
+        print('Public profile acceptance: all ' + str(count) + ' groups and cleanup PASS')
         return 0
-    result = Acceptance(args).execute()
+    acceptance = transition_module().acceptance_class(sys.modules[__name__]) if args.mode == 'source-retention-004-to-005' else Acceptance
+    result = acceptance(args).execute()
     print('Public profile acceptance ' + ('PASS' if result else 'FAIL') + ': ' + str(args.output / 'acceptance-report.json'))
     return 0 if result else 1
 
