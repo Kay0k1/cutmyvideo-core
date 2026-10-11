@@ -200,106 +200,106 @@ See [GitHub's artifact attestation documentation](https://docs.github.com/en/act
 
 ## Consumer verification of a new signed release
 
-These commands apply to a future tag containing the accepted protocol, not to
-historical v0.2.1 or an unsigned candidate. Obtain the expected full source commit
-from the reviewed release/tag independently of the downloaded JSON sidecars.
-The prepared commands use the flags available in GitHub CLI 2.89.0; consult
-[the CLI verification manual](https://cli.github.com/manual/gh_attestation_verify)
-if using another version. Run the example in Bash with Git and GitHub CLI. A
-certificate's tag ref records the signing event; it does not prove that the live
-remote tag still points to the reviewed commit. Check the exact remote tag before
-and after verification. Missing, moved, ambiguous or mismatched tag lookups fail;
-they never select a new expected commit. Both annotated and lightweight tags are
-supported. Example for Linux amd64, after downloading the archive:
+The [consumer verifier](../scripts/release-consumer.py) checks **all 13 already
+downloaded assets** in one command. It applies to a future approved tag containing
+this protocol. Historical v0.2.1 and unsigned candidates are refused. No approved
+tag has exercised the signing path yet; mocked signature controls do not establish
+actual Sigstore verification.
 
-```bash
-set -euo pipefail
-version=v0.3.0
-expected_commit=REVIEWED_FULL_40_CHARACTER_COMMIT
-archive="cutmyvideo-core_${version}_linux_amd64.tar.gz"
+Install Git, GitHub CLI 2.89.0 (the reviewed JSON output/certificate contract), and CPython 3.10 or
+newer on Linux, macOS or Windows. Obtain the full expected source commit and version
+from the reviewed release independently of the downloaded JSON. Use a reviewed copy
+of these five files in one directory, separate from the release assets:
 
-if [[ ! "$expected_commit" =~ ^[0-9a-f]{40}$ ]]; then
-  printf '%s\n' 'Set expected_commit to the independently reviewed full commit.' >&2
-  exit 1
-fi
-git check-ref-format "refs/tags/$version" >/dev/null || exit 1
+- [release-consumer.py](../scripts/release-consumer.py)
+- [release_consumer_process.py](../scripts/release_consumer_process.py)
+- [release_manifest.py](../scripts/release_manifest.py)
+- [release-trust.py](../scripts/release-trust.py)
+- [release-fetch.py](../scripts/release-fetch.py)
 
-read_release_tag() {
-  local remote_refs oid ref extra tag_object='' peeled_commit='' commit
-  if ! remote_refs=$(git ls-remote --exit-code --tags \
-      https://github.com/Kay0k1/cutmyvideo-core.git \
-      "refs/tags/$version" "refs/tags/$version^{}"); then
-    printf '%s\n' 'Release tag lookup failed or the tag is missing.' >&2
-    return 1
-  fi
-  while IFS=$' \t' read -r oid ref extra; do
-    if [[ ! "$oid" =~ ^[0-9a-f]{40}$ || -z "$ref" || -n "$extra" ]]; then
-      printf '%s\n' 'Invalid release tag response.' >&2
-      return 1
-    fi
-    case "$ref" in
-      "refs/tags/$version")
-        if [[ -n "$tag_object" ]]; then
-          printf '%s\n' 'Ambiguous release tag response.' >&2
-          return 1
-        fi
-        tag_object=$oid ;;
-      "refs/tags/$version^{}")
-        if [[ -n "$peeled_commit" ]]; then
-          printf '%s\n' 'Ambiguous release tag response.' >&2
-          return 1
-        fi
-        peeled_commit=$oid ;;
-      *)
-        printf '%s\n' 'Unexpected release tag reference.' >&2
-        return 1 ;;
-    esac
-  done <<< "$remote_refs"
-  commit=${peeled_commit:-$tag_object}
-  if [[ -z "$tag_object" || "$commit" != "$expected_commit" ]]; then
-    printf '%s\n' 'Release tag does not identify the reviewed commit.' >&2
-    return 1
-  fi
-  printf '%s %s\n' "$tag_object" "$commit"
-}
+A repository checkout, Bash, Go SDK, FFmpeg, `verdict.json`, GitHub run artifacts and
+packaging artifact IDs are not required. The verifier never downloads release
+assets, builds, signs, publishes or executes the archived programs. Git reads only
+the exact public tag; GitHub CLI verifies the retained Sigstore bundles with its
+trusted roots. This is not an offline verification recipe. See the
+[CLI manual](https://cli.github.com/manual/gh_attestation_verify) and
+[GitHub's offline trust requirements](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/verify-attestations-offline).
 
-release_tag_before=$(read_release_tag) || exit 1
+Place exactly the five platform archives plus `SOURCE.json`, `MANIFEST.json`,
+`SHA256SUMS`, `SBOM.spdx.json`, `TRUST.json`, `provenance.sigstore.json`,
+`sbom.sigstore.json` and `ATTESTATIONS.json` in the asset directory. Run this single
+command, replacing the paths, version and reviewed full 40-character commit:
 
-gh attestation verify "$archive" \
-  --repo Kay0k1/cutmyvideo-core \
-  --signer-workflow Kay0k1/cutmyvideo-core/.github/workflows/release.yml \
-  --source-digest "$expected_commit" --signer-digest "$expected_commit" \
-  --source-ref "refs/tags/$version" --deny-self-hosted-runners \
-  --predicate-type https://slsa.dev/provenance/v1 --format json
-
-gh attestation verify "$archive" \
-  --repo Kay0k1/cutmyvideo-core \
-  --signer-workflow Kay0k1/cutmyvideo-core/.github/workflows/release.yml \
-  --source-digest "$expected_commit" --signer-digest "$expected_commit" \
-  --source-ref "refs/tags/$version" --deny-self-hosted-runners \
-  --predicate-type https://spdx.dev/Document/v2.3 --format json
-
-release_tag_after=$(read_release_tag) || exit 1
-if [[ "$release_tag_after" != "$release_tag_before" ]]; then
-  printf '%s\n' 'Release tag changed during verification.' >&2
-  exit 1
-fi
+```sh
+python3 /path/to/reviewed-verifier/release-consumer.py --directory /path/to/downloaded-release --version v0.3.0 --expected-commit REVIEWED_FULL_40_CHARACTER_COMMIT
 ```
 
-Apply the same before/after remote-tag boundary when verifying the other
-archives and sidecars. Verify `SBOM.spdx.json` and `TRUST.json` with the same
-provenance policy, then require their hashes and archive/SOURCE/MANIFEST hashes
-to agree with TRUST. The boundary also refuses replacement of an annotated tag
-object during verification even when its peeled commit is unchanged.
-Verify SHA256SUMS, archive manifests and the extracted CLI's version/commit too.
-A checksum downloaded from the same unauthenticated channel does not provide
-independent authentication. Repeat the verification for each downloaded archive;
-the publisher verifies all five. A changed file, a different expected commit or
-the wrong signer workflow must fail verification.
+On Windows use `python` and the corresponding Windows paths. Exit status zero
+prints one JSON success report only after every check completes; any refusal
+returns nonzero. Keep this report outside the asset directory. Missing, extra,
+nonregular or changed files fail. The verifier snapshots the original bytes in
+private temporary storage, bounds JSON and archive parsing, then checks the
+original downloads again before success. It needs temporary disk space for the
+13-file snapshot and one bounded expanded archive.
 
-The retained `provenance.sigstore.json` and `sbom.sigstore.json` can be selected
-using `--bundle FILE`. Keeping a bundle alone does not establish offline trust:
-the verifier also needs a separately trusted Sigstore root and timestamp/log
-verification material. See [GitHub's offline verification instructions](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/verify-attestations-offline)
-before using `--custom-trusted-root`. Do not treat ATTESTATIONS.json or TRUST.json
-as a signature verifier; the signature policy above remains required.
+Refusals expose a fixed stage code, never raw command errors or credentials:
+
+| Code | Check before trying again |
+| --- | --- |
+| `expected_identity` | Supply the reviewed full commit and valid release version. |
+| `tool_unavailable` | Install Git and a GitHub CLI supporting the documented policy flags. |
+| `tag_before`, `tag_after` | Confirm connectivity and the reviewed live tag; investigate movement rather than accepting a new commit automatically. |
+| `assets`, `changed_assets`, `local_io` | Check the exact 13 regular files, stable directory, permissions and temporary disk space. |
+| `metadata`, `archive_content`, `composition` | Obtain the correct complete release set and investigate malformed or inconsistent bytes. |
+| `provenance`, `spdx` | Check GitHub CLI/trusted-root connectivity and investigate a failed signature, certificate policy or statement; never bypass the check. |
+
+The fixed policy requires `Kay0k1/cutmyvideo-core`, its release workflow, the
+reviewed source/signer commit, the exact tag ref, GitHub-hosted runners and the
+expected predicate types. It actually invokes GitHub CLI for each of seven
+provenance subjects and each of five SPDX subjects. Every verified statement must
+contain exactly the expected hashes; the SPDX predicate must equal the downloaded
+SBOM. The provenance workflow/source/run/attempt must agree with signed TRUST.
+Every verified certificate must also carry the matching `runInvocationURI`
+extension, binding that run and attempt to the OIDC certificate. Older or changed
+CLI/certificate formats are refused until reviewed.
+The same TRUST binds SOURCE, MANIFEST, SBOM and all archives. The consumer checks
+archive contents, BUILD metadata, document hashes, checksums and the structured
+SPDX graph. The plain `actual_signature_verification` receipt field cannot
+substitute for any of these signature calls.
+
+Exact remote tag object and peeled commit are read before and after verification.
+Both annotated and lightweight tags are supported. Missing, moved, ambiguous or
+unavailable tags fail; reannotation during verification fails even when the commit
+is unchanged. The expected version and commit never change to follow downloaded
+metadata or a moved tag. This observes two boundaries, not an atomic lock on GitHub:
+a tag can change after success or move away and back between lookups. Verify again
+before use if the reviewed release state has changed.
+
+JSON controls are limited to 16 MiB each, compressed archives to 128 MiB each and
+expanded tar data to 149 MiB, with separate member limits. Each Git/CLI operation
+has a 60-second watchdog and must fit within a shared ten-minute deadline measured
+from verification start. Local copying/archive parsing has byte bounds, rather
+than an interrupting wall-clock watchdog; it can overrun that deadline, in which
+case the required final tag lookup refuses success. Command output
+is watched while written to private temporary files and refused above 32 MiB
+(4 KiB for tag lookup). A writer can exceed the threshold between watchdog polls;
+this is an observed output limit, not an instantaneous disk quota. Linux/macOS
+use a private process group. Windows requires
+CPython's process handle and a supported job object: the process starts suspended,
+is attached before resuming, and descendants are closed with the job. Unavailable
+containment refuses verification. CI includes tiny actual Python-child output,
+flood and timeout/descendant controls on all five native targets, plus a hostile
+caller Git configuration test. Commands run from a fresh empty private directory;
+Git discovery and global/system/environment overrides are excluded so a caller
+checkout's URL rewrite cannot redirect the fixed tag lookup. Cryptographic
+controls use mocks and remain separate.
+
+The public assets do not include `go.sum` bytes or the native/recovery verdict.
+Recorded BuildInfo and the claims that modules matched immutable `go.sum`, native
+checks passed and two builds agreed are authenticated publisher metadata. This
+consumer does not freshly read Go BuildInfo, run native/recovery scenarios or
+independently reproduce the build. SPDX prose comments are signed descriptive
+claims; its structured file/module/license graph is checked against archived bytes
+and recorded metadata. The existing workflow/admin/compiler trust model above
+still applies. OS signing, notarization, an independent hermetic rebuild and a
+SLSA level are not claimed.
