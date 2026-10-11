@@ -16,11 +16,12 @@ import time
 from urllib.parse import quote
 
 MODE = 'source-retention-004-to-005'
-CANDIDATE = '670089aa7cc99fe65e2a0336ff05d7c6b3047bd0'
-CANDIDATE_TREE = 'dc83b8f861b2b6b823b8476e3c9ad273f7aa6bba'
-# SOURCE inventories include git_blob. The original46 packet's 0988f39c...
-# projection omits that field and predates root670's reviewed catalog fix.
-APPLICATION_SHA256 = 'f22a2be71284389a47631e11474dcee272c5278d7a5a0cd85c273dace7e22ccd'
+CANDIDATE = '76e9cdb4072e8c6a2ba293ee69635601785ba62c'
+CANDIDATE_TREE = 'ee1c6647390b8f91354fe0c371d19d81d3bf0549'
+# SOURCE inventories include git_blob. Root670's 168-file map and its review
+# hashes remain historical preparation roots; this pin is the separately
+# reviewed recovery application commit, before the wrapper-only pin update.
+APPLICATION_SHA256 = '1ac2c591d2e20c628ddfe2cf01f9e8a6af7bcde92e154d521794e97094d86534'
 OLD_APPLICATION_SHA256 = 'a1aa7b968c06eaeb075d2cd73f8afbf309a1bc12121d1a3e598ba2561e785f90'
 OLD_COMMIT = '0f93cd654a998be7740ba1d6fee4a44a6f7b3464'
 OLD_TREE = '58a431cf209a36b8acb0052ca77653b480814d48'
@@ -32,6 +33,9 @@ PREPARATION = {
     'root_review_sha256': '703fba88d8acaea6a1befa5ffcd9ea52cf175b10a77bc292255be8fa805c99d3',
     'root670_review_sha256': '56759ddc1dd8289a4a834df466f6e7e85e23f6f68a29be0414a5ce5e744f8260',
     'root670_public_driver_binding_sha256': '5c6cb808cf900532a012d304c0f168e994a2afd0bfb614c5a961529e232e676f',
+    'recovery_application_source_freeze_sha256': 'fc86f8ebd00761c01fb47b577dade04b477ebe04ffe477efd0d20621e80f25e5',
+    'root_recovery_application_source_review_sha256': 'b0ca5a8023b85ba7afbf08e2519d146433f4a9933b9cc4913a108f032ff33de3',
+    'root_recovery_application_committed_review_sha256': '1023ad3bcd365253782d863b6d059541e86b796ac7d4c48e2076d6cf428a8f6c',
 }
 MIGRATIONS = (
     ('20261005-storage-queue-v3', '001_20261005_storage_queue_v3.sql', '8630cebd9bf2bb2c038519d807f75456a60d8dea24cc1114304551270b3e949f'),
@@ -195,7 +199,7 @@ def validate_transition(report, directory, base=None):
             'explicit transition receipt mode required')
     value = report.get('transition', {})
     require(value.get('candidate') == {'commit': CANDIDATE, 'tree': CANDIDATE_TREE,
-                                      'application_files': 168, 'application_sha256': APPLICATION_SHA256}
+                                      'application_files': 169, 'application_sha256': APPLICATION_SHA256}
             and value.get('preparation') == PREPARATION and value.get('policy_sha256') == POLICY_SHA256
             and value.get('from_position') == 4 and value.get('to_position') == 5
             and value.get('startup_timeout_seconds') == 30
@@ -208,7 +212,7 @@ def validate_transition(report, directory, base=None):
     require(application == {'old_commit': OLD_COMMIT, 'old_tree': OLD_TREE, 'old_reference': OLD_REFERENCE,
                             'old_application_sha256': OLD_APPLICATION_SHA256, 'old_files': 164,
                             'candidate_commit': CANDIDATE, 'candidate_tree': CANDIDATE_TREE,
-                            'candidate_application_sha256': APPLICATION_SHA256, 'candidate_files': 168,
+                            'candidate_application_sha256': APPLICATION_SHA256, 'candidate_files': 169,
                             'schema_changing_upgrade': True}
             and report.get('runtime_application_sources_unchanged') is False, 'approved application transition differs')
     require(type(application['old_files']) is int and type(application['candidate_files']) is int
@@ -372,7 +376,7 @@ def acceptance_class(base):
             self.report.update(mode=MODE, schema_version=2, runtime_application_sources_unchanged=False)
             self.report['scope']['schema_changing_upgrade'] = True
             self.report['transition'] = {
-                'candidate': {'commit': CANDIDATE, 'tree': CANDIDATE_TREE, 'application_files': 168,
+                'candidate': {'commit': CANDIDATE, 'tree': CANDIDATE_TREE, 'application_files': 169,
                               'application_sha256': APPLICATION_SHA256},
                 'preparation': PREPARATION, 'policy_sha256': POLICY_SHA256,
                 'from_position': 4, 'to_position': 5, 'startup_timeout_seconds': 30,
@@ -409,7 +413,7 @@ def acceptance_class(base):
                     require(kind == 'blob' and mode in ('100644', '100755'), 'unsupported runtime source')
                     data = self.run(['git', '-C', base.REPO, 'cat-file', 'blob', blob])
                     inventory[path] = {'mode': mode, 'git_blob': blob, 'bytes': len(data), 'sha256': digest(data)}
-            require(len(inventory) == 168 and digest(canonical(inventory)) == APPLICATION_SHA256,
+            require(len(inventory) == 169 and digest(canonical(inventory)) == APPLICATION_SHA256,
                     'runtime differs from reviewed immutable candidate')
             super().initialize_host()
             self.fault_old = self.make_project(self.old_repo, 'fault004', 46)
@@ -441,14 +445,14 @@ def acceptance_class(base):
             app = lambda source: {k: v for k, v in source['files'].items()
                                   if k.startswith(('cmd/', 'internal/', 'pkg/')) or k in ('go.mod', 'go.sum')}
             require(len(app(self.old_source)) == 164 and digest(canonical(app(self.old_source))) == OLD_APPLICATION_SHA256
-                    and len(app(self.current_source)) == 168 and digest(canonical(app(self.current_source))) == APPLICATION_SHA256,
+                    and len(app(self.current_source)) == 169 and digest(canonical(app(self.current_source))) == APPLICATION_SHA256,
                     'old/current immutable application inventory differs')
             self.report['transition']['current_source'] = self.raw('transition-current-source.json', canonical(self.current_source))
             self.check('approved_application_transition', {
                 'old_commit': OLD_COMMIT, 'old_tree': OLD_TREE, 'old_reference': OLD_REFERENCE,
                 'old_application_sha256': OLD_APPLICATION_SHA256, 'old_files': 164,
                 'candidate_commit': CANDIDATE, 'candidate_tree': CANDIDATE_TREE,
-                'candidate_application_sha256': APPLICATION_SHA256, 'candidate_files': 168,
+                'candidate_application_sha256': APPLICATION_SHA256, 'candidate_files': 169,
                 'schema_changing_upgrade': True})
 
         def capture_catalog(self, name, project, position):

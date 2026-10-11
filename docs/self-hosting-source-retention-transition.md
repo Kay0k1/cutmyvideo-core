@@ -15,20 +15,24 @@ schema-005 manifest digest
 `da0357d73e4697ddf656211cda0a6d9c6f0b0bda905673a0041dcd641664d4ae`.
 The declared manifest is prepared source, not observed PostgreSQL catalog
 output. A future real catalog capture must confirm it or require a reviewed
-correction before release. The reviewed source-retention application pin is
-commit `670089aa7cc99fe65e2a0336ff05d7c6b3047bd0`, tree
-`dc83b8f861b2b6b823b8476e3c9ad273f7aa6bba`. The final reviewed harness
-checkout/merge identity must be separately frozen before any future hosted run.
-A branch name, dirty working tree or preparation base cannot stand in for either
-reviewed identity.
+correction before release. The original reviewed source-retention application
+pin was commit `670089aa7cc99fe65e2a0336ff05d7c6b3047bd0`, tree
+`dc83b8f861b2b6b823b8476e3c9ad273f7aa6bba`; those identities and their recorded
+proofs remain historical. The current recovery-contract application pin is
+commit `76e9cdb4072e8c6a2ba293ee69635601785ba62c`, tree
+`ee1c6647390b8f91354fe0c371d19d81d3bf0549`. It was reviewed and committed before
+this wrapper-only update. The final reviewed harness checkout/merge identity
+must be separately frozen before any future hosted run. A branch name, dirty
+working tree or preparation base cannot stand in for either reviewed identity.
 
 The application pin remains provisional while its candidate-specific gates are
 unresolved. The earlier reviewed commit
 `46cf2f2c8205e786f01a7a05947d1d3ae409a479` failed candidate-specific Go and archive
-gates and supplies no successful transition evidence. The corrected pin's source,
-native archive, recovery and public-transition gates remain separate mandatory
-evidence scopes. This source-only packet does not establish actual transition
-acceptance. A source correction requires a new reviewed commit/tree and full
+gates and supplies no successful transition evidence. Historical 670 and
+combined-candidate proof scopes cannot supply the current recovery application's
+source, native archive, recovery or public-transition gates. Each remains
+separate mandatory evidence for the current candidate. This source-only packet
+does not establish actual transition acceptance. A source correction requires a new reviewed commit/tree and full
 application-map pin; never retarget these identities automatically.
 
 The preparation receipt also pins the original plan digest
@@ -38,7 +42,13 @@ the corrected root670 review digest
 `56759ddc1dd8289a4a834df466f6e7e85e23f6f68a29be0414a5ce5e744f8260`, and its
 public-driver binding supplement digest
 `5c6cb808cf900532a012d304c0f168e994a2afd0bfb614c5a961529e232e676f`.
-These are reviewed preparation identities, not results from an actual run.
+These five historical preparation identities remain unchanged. The current
+receipt additionally pins the recovery application source freeze
+`fc86f8ebd00761c01fb47b577dade04b477ebe04ffe477efd0d20621e80f25e5`, root source
+review `b0ca5a8023b85ba7afbf08e2519d146433f4a9933b9cc4913a108f032ff33de3`, and
+root committed-source review
+`1023ad3bcd365253782d863b6d059541e86b796ac7d4c48e2076d6cf428a8f6c`. These are
+reviewed preparation identities, not results from an actual run.
 
 ## Separate modes and receipts
 
@@ -107,15 +117,22 @@ Never patch, regenerate, rebuild from altered source, or add migration005 to the
 old sealed inventory. Build A1 from its own immutable source and build the new
 candidate from the exact independently reviewed inventory.
 
-The corrected application inventory map has digest
-`f22a2be71284389a47631e11474dcee272c5278d7a5a0cd85c273dace7e22ccd`.
-That map includes `git_blob` identities. The superseded 46cf full map had digest
+The current immutable application inventory has exactly 169 files and digest
+`1ac2c591d2e20c628ddfe2cf01f9e8a6af7bcde92e154d521794e97094d86534`. It includes
+`git_blob` identities and was derived from the committed recovery application,
+not a working tree. The historical root670 inventory has 168 files and digest
+`f22a2be71284389a47631e11474dcee272c5278d7a5a0cd85c273dace7e22ccd`. The
+superseded 46cf full map had digest
 `08d7d213fb8f33ae057af7a5f4d7b5b187ed25fca86bee0bdcead15d0de38d31`; its earlier
 preparation packet's projection omitted `git_blob` and had digest
 `0988f39c1fcba6189acf57f2167aa72f79fc426c4af9e16981956b35676817db`.
 These are different serialized inventories, not interchangeable hashes. The
-transition verifies the new full map and retains the original A1 full-map digest
-independently; it never claims old/new application equality.
+transition verifies the current 169-file full map, refuses substitution of the
+historical 168-file map, and retains the original A1 full-map digest independently;
+it never claims old/new application equality. The executing wrapper must descend
+from the exact reviewed recovery application commit and have byte-identical
+application files; later unrelated application changes require another reviewed
+commit/tree/map pin. No environment variable or branch selector changes this pin.
 
 Preserve the reviewed conntrack policy helper at SHA-256
 `ad653eb4eff9fb8f40b1d733bcab7b6394b98f03a769bab18b126234d861aef0`.

@@ -64,7 +64,7 @@ class SyntheticReceipt:
     def __init__(self, directory):
         self.directory = Path(directory)
         candidate = {'commit': transition.CANDIDATE, 'tree': transition.CANDIDATE_TREE,
-                     'application_files': 168, 'application_sha256': transition.APPLICATION_SHA256}
+                     'application_files': 169, 'application_sha256': transition.APPLICATION_SHA256}
         self.report = {
             'mode': transition.MODE, 'schema_version': 2,
             'provider': {'GITHUB_REPOSITORY': 'Kay0k1/cutmyvideo-core', 'GITHUB_EVENT_NAME': 'workflow_dispatch',
@@ -84,7 +84,7 @@ class SyntheticReceipt:
             'old_commit': transition.OLD_COMMIT, 'old_tree': transition.OLD_TREE,
             'old_reference': transition.OLD_REFERENCE, 'old_application_sha256': transition.OLD_APPLICATION_SHA256,
             'old_files': 164, 'candidate_commit': transition.CANDIDATE, 'candidate_tree': transition.CANDIDATE_TREE,
-            'candidate_application_sha256': transition.APPLICATION_SHA256, 'candidate_files': 168,
+            'candidate_application_sha256': transition.APPLICATION_SHA256, 'candidate_files': 169,
             'schema_changing_upgrade': True,
         }
         self.report['groups']['identity']['checks']['approved_application_transition']['evidence'] = application
@@ -260,6 +260,81 @@ class ModeAndDefaultControls(unittest.TestCase):
             report = deepcopy(original); mutation(report)
             with self.subTest(mutation=mutation), self.assertRaisesRegex(RuntimeError, 'required group|check incomplete'):
                 base.validate_report(report)
+
+
+class CandidateSourceControls(unittest.TestCase):
+    """Mock every process and stop at the first base host-setup boundary."""
+    def acceptance(self, files=None):
+        files = files if files is not None else {
+            name: (REPO / name).read_bytes() for name in source_inventory()}
+        inventory = {name: {
+            'mode': '100755' if (REPO / name).exists() and (REPO / name).stat().st_mode & 0o111 else '100644',
+            'git_blob': hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest(),
+            'bytes': len(data), 'sha256': transition.digest(data),
+        } for name, data in files.items()}
+        blobs = {inventory[name]['git_blob']: data for name, data in files.items()}
+        host_setup = Mock(side_effect=RuntimeError('synthetic base initialization boundary'))
+        pure_base = SimpleNamespace(Acceptance=type('PureCandidateBase', (), {'initialize_host': host_setup}),
+                                    GROUPS=base.GROUPS, REPO=REPO)
+        value = object.__new__(transition.acceptance_class(pure_base))
+        value.args = SimpleNamespace(revision='1' * 40)
+
+        def git(repo, *args):
+            if args == ('rev-parse', transition.CANDIDATE + '^{tree}'):
+                return transition.CANDIDATE_TREE
+            if args == ('status', '--porcelain', '--untracked-files=all'):
+                return ''
+            raise AssertionError('unexpected synthetic Git query')
+
+        def run(argv):
+            if 'merge-base' in argv:
+                return b''
+            if 'ls-tree' in argv:
+                return b''.join((item['mode'] + ' blob ' + item['git_blob'] + '\t' + name + '\0').encode()
+                                for name, item in inventory.items())
+            if 'cat-file' in argv:
+                return blobs[argv[-1]]
+            raise AssertionError('unexpected synthetic process command')
+
+        value.git, value.run = Mock(side_effect=git), Mock(side_effect=run)
+        return value, host_setup
+
+    def test_exact_application_descendant_reaches_only_mocked_host_setup(self):
+        value, host_setup = self.acceptance()
+        with self.assertRaisesRegex(RuntimeError, 'synthetic base initialization boundary'):
+            value.initialize_host()
+        host_setup.assert_called_once()
+        self.assertIn((['git', '-c', 'safe.directory=' + str(REPO), '-C', REPO,
+                        'merge-base', '--is-ancestor', transition.CANDIDATE, value.args.revision],),
+                      [call.args for call in value.run.call_args_list])
+
+    def test_wrong_tree_dirty_or_unrelated_checkout_refuses_before_host_setup(self):
+        for fault in ('tree', 'dirty', 'unrelated'):
+            value, host_setup = self.acceptance()
+            if fault == 'tree':
+                value.git.side_effect = lambda repo, *args: '0' * 40
+            elif fault == 'dirty':
+                value.git.side_effect = lambda repo, *args: (transition.CANDIDATE_TREE if args[0] == 'rev-parse'
+                                                           else ' M internal/app/http.go')
+            else:
+                value.run.side_effect = RuntimeError('synthetic ancestry refusal')
+            with self.subTest(fault=fault), self.assertRaises(RuntimeError):
+                value.initialize_host()
+            host_setup.assert_not_called()
+            self.assertFalse(any('ls-tree' in call.args[0] for call in value.run.call_args_list))
+
+    def test_missing_extra_or_changed_application_bytes_refuse_before_host_setup(self):
+        original = {name: (REPO / name).read_bytes() for name in source_inventory()}
+        changes = [lambda files: files.pop('internal/app/http_recovery_test.go'),
+                   lambda files: files.update({'internal/app/unreviewed.go': b'package app\n'}),
+                   lambda files: files.update({'internal/app/http.go': files['internal/app/http.go'] + b'\n'})]
+        for change in changes:
+            files = dict(original)
+            change(files)
+            value, host_setup = self.acceptance(files)
+            with self.subTest(change=change), self.assertRaisesRegex(RuntimeError, 'reviewed immutable candidate'):
+                value.initialize_host()
+            host_setup.assert_not_called()
 
 
 class JSONAndArtifactControls(unittest.TestCase):
@@ -575,7 +650,7 @@ class TransitionReceiptControls(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         inventory = source_inventory()
-        if len(inventory) != 168 or transition.digest(transition.canonical(inventory)) != transition.APPLICATION_SHA256:
+        if len(inventory) != 169 or transition.digest(transition.canonical(inventory)) != transition.APPLICATION_SHA256:
             raise AssertionError('source-only controls require exact reviewed application inventory')
 
     def setUp(self):
@@ -616,13 +691,49 @@ class TransitionReceiptControls(unittest.TestCase):
                 self.refused(lambda report: change(report['transition']))
                 self.fixture.report = deepcopy(original)
 
+    def test_historical670_pin_cannot_supply_current_candidate_or_application_evidence(self):
+        original = deepcopy(self.fixture.report)
+        historical = {'commit': '670089aa7cc99fe65e2a0336ff05d7c6b3047bd0',
+                      'tree': 'dc83b8f861b2b6b823b8476e3c9ad273f7aa6bba',
+                      'application_files': 168,
+                      'application_sha256': 'f22a2be71284389a47631e11474dcee272c5278d7a5a0cd85c273dace7e22ccd'}
+        self.refused(lambda report: report['transition'].update(candidate=historical))
+        self.fixture.report = deepcopy(original)
+        self.refused(lambda report: report['groups']['identity']['checks']['approved_application_transition']['evidence'].update(
+            candidate_commit=historical['commit'], candidate_tree=historical['tree'],
+            candidate_files=historical['application_files'], candidate_application_sha256=historical['application_sha256']))
+
+    def test_recovery_review_roots_are_required_in_addition_to_historical_roots(self):
+        historical = {
+            'plan_sha256': '35021688ee2e420ce7135efa2e45a3042f07fdc4533cff5a7bb120de08f5a2f5',
+            'source_freeze_sha256': '499cbbaf12714ad68201b5549f4e5a3c2ec8304f1bdfb6461790585ebc37038a',
+            'root_review_sha256': '703fba88d8acaea6a1befa5ffcd9ea52cf175b10a77bc292255be8fa805c99d3',
+            'root670_review_sha256': '56759ddc1dd8289a4a834df466f6e7e85e23f6f68a29be0414a5ce5e744f8260',
+            'root670_public_driver_binding_sha256': '5c6cb808cf900532a012d304c0f168e994a2afd0bfb614c5a961529e232e676f',
+        }
+        reviewed = {
+            'recovery_application_source_freeze_sha256': 'fc86f8ebd00761c01fb47b577dade04b477ebe04ffe477efd0d20621e80f25e5',
+            'root_recovery_application_source_review_sha256': 'b0ca5a8023b85ba7afbf08e2519d146433f4a9933b9cc4913a108f032ff33de3',
+            'root_recovery_application_committed_review_sha256': '1023ad3bcd365253782d863b6d059541e86b796ac7d4c48e2076d6cf428a8f6c',
+        }
+        self.assertEqual(transition.PREPARATION, {**historical, **reviewed})
+        original = deepcopy(self.fixture.report)
+        for name in reviewed:
+            with self.subTest(root=name, fault='missing'):
+                self.refused(lambda report: report['transition']['preparation'].pop(name))
+                self.fixture.report = deepcopy(original)
+            with self.subTest(root=name, fault='borrowed'):
+                self.refused(lambda report: report['transition']['preparation'].update({name: historical['root670_review_sha256']}))
+                self.fixture.report = deepcopy(original)
+        self.refused(lambda report: report['transition'].update(preparation=historical))
+
     def test_transition_identity_counts_and_provider_require_exact_scalar_types(self):
         original = deepcopy(self.fixture.report)
         changes = [lambda report: report.update(schema_version=2.0),
                    lambda report: report['transition'].update(from_position=4.0),
                    lambda report: report['transition'].update(to_position=5.0),
                    lambda report: report['transition'].update(startup_timeout_seconds=30.0),
-                   lambda report: report['transition']['candidate'].update(application_files=168.0),
+                   lambda report: report['transition']['candidate'].update(application_files=169.0),
                    lambda report: report['transition']['receipt_counts'].update(checks=53.0),
                    lambda report: report['provider'].update(GITHUB_RUN_ID=987654),
                    lambda report: report['groups']['identity']['checks']['approved_application_transition']['evidence'].update(old_files=164.0),
@@ -636,7 +747,7 @@ class TransitionReceiptControls(unittest.TestCase):
         original = deepcopy(self.fixture.report)
         changes = {'old_commit': transition.CANDIDATE, 'old_tree': transition.CANDIDATE_TREE,
                    'old_reference': transition.CANDIDATE, 'old_application_sha256': transition.APPLICATION_SHA256,
-                   'old_files': 168, 'schema_changing_upgrade': False}
+                   'old_files': 169, 'schema_changing_upgrade': False}
         for field, value in changes.items():
             with self.subTest(field=field):
                 self.refused(lambda report: report['groups']['identity']['checks']['approved_application_transition']['evidence'].update({field: value}))
