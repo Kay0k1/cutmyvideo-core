@@ -879,13 +879,29 @@ class Acceptance:
             else:
                 command = self.compose(project) + ['run', '--rm', '-T', '--no-deps', '--entrypoint', 'python3', role, '-c', code]
             value = self.json(command, timeout=30)
-            require(value['own_pg']['connected'], 'exact own PG5432 was blocked')
+            self.report.setdefault('controlled_probe_attempts', []).append(
+                {'project': cfg['CUTMY_PROJECT'], 'role': role, 'before_policy': before, 'destinations': value})
+            self.save()
+            require(isinstance(value, dict) and set(value) == set(targets),
+                    'controlled probe destination shape invalid role=' + role)
+            for name, observed in value.items():
+                require(isinstance(observed, dict) and isinstance(observed.get('connected'), bool),
+                        'controlled probe result shape invalid role=' + role + ' destination=' + name)
+                keys = {'connected', 'nonce_sha256'} if observed['connected'] and name != 'own_pg' else {'connected'}
+                require(set(observed) == keys and ('nonce_sha256' not in observed
+                        or isinstance(observed['nonce_sha256'], str) and HASH.fullmatch(observed['nonce_sha256'])),
+                        'controlled probe nonce shape invalid role=' + role + ' destination=' + name)
+            require(value['own_pg']['connected'], 'exact own PG5432 was blocked role=' + role
+                    + ' destination=own_pg connected=false')
             for name, nonce in nonces.items():
+                state = (' role=' + role + ' destination=' + name
+                         + ' connected=' + str(value[name]['connected']).lower()
+                         + ' nonce_match=' + str(value[name].get('nonce_sha256') == nonce).lower())
                 if before:
                     require(value[name]['connected'] and value[name].get('nonce_sha256') == nonce,
-                            'required pre-policy controlled socket witness unavailable')
+                            'required pre-policy controlled socket witness unavailable' + state)
                 else:
-                    require(value[name]['connected'] is False, 'policy allowed a forbidden controlled socket')
+                    require(value[name]['connected'] is False, 'policy allowed a forbidden controlled socket' + state)
             results[role] = value
         self.verify_witnesses(project)
         return results
@@ -924,6 +940,7 @@ class Acceptance:
             require(value['State']['Running'] is False, 'pre-policy media service already running')
             self.run(['docker', 'rm', value['Id']])
         self.setup_witnesses(); self.pg_listener(self.old)
+        (self.output / 'filter-pre-policy.txt').write_bytes(self.run(['iptables-save', '-t', 'filter']))
         before = self.probes(self.old, before=True)
         unrelated_before = self.unrelated()
         self.check('controlled_listener_witnesses', {'before': before, 'synthetic_link_local': self.network_address,

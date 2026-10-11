@@ -410,6 +410,131 @@ class CleanupControls(unittest.TestCase):
 
 
 class HostAndEvidenceControls(unittest.TestCase):
+    def test_pre_policy_filter_snapshot_follows_bridge_setup_and_precedes_failing_probe(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            obj = a.Acceptance.__new__(a.Acceptance)
+            obj.output, obj.report, obj.commands, obj.http = Path(tmp), {'groups': {}, 'errors': []}, [], []
+            obj.old = {'state': Path('/owned/old-state')}
+            obj.wrapper, obj.compose = Mock(), Mock(return_value=['compose'])
+            obj.pg_tcp_ready = Mock(return_value={'tcp_sql_verified': True})
+            obj.container = Mock(return_value={'State': {'Running': False}, 'Id': 'a' * 64})
+            events = []
+            obj.setup_witnesses = Mock(side_effect=lambda: events.append('witness_bridges'))
+            obj.pg_listener = Mock(side_effect=lambda project: events.append('pg_listener'))
+            rules = b'*filter\n:INPUT ACCEPT [0:0]\n-A FORWARD -j DOCKER-USER\nCOMMIT\n'
+            def run(command, **kwargs):
+                if command == ['iptables-save', '-t', 'filter']:
+                    events.append('filter_snapshot'); return rules
+                return b''
+            obj.run = Mock(side_effect=run)
+            def probe(project, *, before):
+                self.assertTrue(before)
+                self.assertEqual((Path(tmp) / 'filter-pre-policy.txt').read_bytes(), rules)
+                events.append('failing_probe')
+                raise RuntimeError('required pre-policy witness failed')
+            obj.probes = Mock(side_effect=probe)
+            with self.assertRaisesRegex(RuntimeError, 'witness failed'):
+                obj.group('egress', obj.initial_egress, complete=False)
+            self.assertEqual(events, ['witness_bridges', 'pg_listener', 'filter_snapshot', 'failing_probe'])
+            saved = json.loads((Path(tmp) / 'acceptance-report.json').read_text())
+            self.assertEqual(saved['groups']['egress'], {'status': 'fail', 'checks': {}})
+            self.assertEqual([call.args[0] for call in obj.run.call_args_list if 'iptables' in call.args[0][0]],
+                             [['iptables-save', '-t', 'filter']])
+
+    @staticmethod
+    def probe_acceptance(output, *, before, change=None):
+        obj = a.Acceptance.__new__(a.Acceptance)
+        obj.output, obj.report, obj.commands, obj.http = Path(output), {'groups': {}, 'errors': []}, [], []
+        obj.compose, obj.verify_witnesses = Mock(return_value=['compose']), Mock()
+        obj.host_witness = SimpleNamespace(token=b'host-witness', port=35001)
+        obj.metadata_witness = SimpleNamespace(token=b'metadata-witness', port=35002)
+        obj.network_address, obj.control_ip, obj.control_port, obj.control_token = '169.254.247.20', '10.205.44.2', 35003, 'private-witness'
+        project = {'config': {'CUTMY_PROJECT': 'cutmy_test_old', 'CUTMY_DATABASE_PREFIX': '10.205.40',
+                              'CUTMY_PROCESSING_PREFIX': '10.205.41'},
+                   'pg_witness': {'address': '10.205.40.2', 'port': 35004, 'token': 'pg-witness'}}
+        def returned(command, **kwargs):
+            role = next(value for value in command if value in ('api', 'worker', 'migrate', 'maintenance'))
+            nonces = {'db_gateway': a.digest(obj.host_witness.token), 'pg_wrong_port': a.digest(b'pg-witness')}
+            if role in ('api', 'worker'):
+                nonces.update(processing_gateway=a.digest(obj.host_witness.token),
+                              controlled_metadata=a.digest(obj.metadata_witness.token),
+                              forwarded_private=a.digest(obj.control_token.encode()))
+            value = {name: {'connected': True, 'nonce_sha256': nonce} if before else {'connected': False}
+                     for name, nonce in nonces.items()}
+            value['own_pg'] = {'connected': True}
+            return change(role, value) if change is not None else value
+        obj.json = Mock(side_effect=returned)
+        return obj, project
+
+    def test_each_pre_policy_probe_failure_is_saved_before_group_can_pass(self):
+        for role in ('api', 'worker', 'migrate', 'maintenance'):
+            names = ['own_pg', 'db_gateway', 'pg_wrong_port']
+            if role in ('api', 'worker'):
+                names += ['processing_gateway', 'controlled_metadata', 'forwarded_private']
+            for name in names:
+                for failure in ('disconnected', 'wrong_nonce') if name != 'own_pg' else ('disconnected',):
+                    with self.subTest(role=role, destination=name, failure=failure), tempfile.TemporaryDirectory() as tmp:
+                        def change(current, value):
+                            if current == role:
+                                value[name] = {'connected': False} if failure == 'disconnected' else {
+                                    'connected': True, 'nonce_sha256': '0' * 64}
+                            return value
+                        obj, project = self.probe_acceptance(tmp, before=True, change=change)
+                        with self.assertRaisesRegex(RuntimeError, 'role=' + role + ' destination=' + name) as error:
+                            obj.group('egress', lambda: obj.check('controlled_listener_witnesses',
+                                      {'before': obj.probes(project, before=True)}), complete=False)
+                        saved = json.loads((Path(tmp) / 'acceptance-report.json').read_text())
+                        self.assertEqual(saved['groups']['egress'], {'status': 'fail', 'checks': {}})
+                        attempt = saved['controlled_probe_attempts'][-1]
+                        self.assertEqual((attempt['project'], attempt['role'], attempt['before_policy']),
+                                         ('cutmy_test_old', role, True))
+                        self.assertEqual(attempt['destinations'][name]['connected'], failure != 'disconnected')
+                        self.assertIn('connected=' + str(failure != 'disconnected').lower(), str(error.exception))
+                        if name != 'own_pg': self.assertIn('nonce_match=false', str(error.exception))
+
+    def test_malformed_probe_results_are_saved_and_refused(self):
+        def variants(value):
+            missing = deepcopy(value); del missing['db_gateway']
+            extra = deepcopy(value); extra['unknown'] = {'connected': True}
+            wrong_bool = deepcopy(value); wrong_bool['db_gateway']['connected'] = 'true'
+            wrong_hash = deepcopy(value); wrong_hash['db_gateway']['nonce_sha256'] = 'invalid'
+            extra_fields = deepcopy(value); extra_fields['db_gateway']['unexpected'] = True
+            false_with_nonce = deepcopy(value); false_with_nonce['db_gateway']['connected'] = False
+            return [None, missing, extra, wrong_bool, wrong_hash, extra_fields, false_with_nonce]
+        for index in range(7):
+            with self.subTest(variant=index), tempfile.TemporaryDirectory() as tmp:
+                obj, project = self.probe_acceptance(tmp, before=True, change=lambda role, value: variants(value)[index])
+                with self.assertRaisesRegex(RuntimeError, 'shape invalid role=api'):
+                    obj.group('egress', lambda: obj.check('controlled_listener_witnesses',
+                              {'before': obj.probes(project, before=True)}), complete=False)
+                saved = json.loads((Path(tmp) / 'acceptance-report.json').read_text())
+                self.assertEqual(saved['groups']['egress'], {'status': 'fail', 'checks': {}})
+                self.assertEqual(len(saved['controlled_probe_attempts']), 1)
+
+    def test_valid_probe_allow_and_deny_oracles_remain_strict(self):
+        for before in (True, False):
+            with self.subTest(before=before), tempfile.TemporaryDirectory() as tmp:
+                obj, project = self.probe_acceptance(tmp, before=before)
+                values = obj.probes(project, before=before)
+                self.assertEqual(set(values), {'api', 'worker', 'migrate', 'maintenance'})
+                self.assertEqual(len(json.loads((Path(tmp) / 'acceptance-report.json').read_text())['controlled_probe_attempts']), 4)
+                for role, destinations in values.items():
+                    self.assertTrue(destinations['own_pg']['connected'])
+                    self.assertTrue(all(value['connected'] is before for name, value in destinations.items() if name != 'own_pg'))
+        for role in ('api', 'worker', 'migrate', 'maintenance'):
+            names = ['own_pg', 'db_gateway', 'pg_wrong_port']
+            if role in ('api', 'worker'): names += ['processing_gateway', 'controlled_metadata', 'forwarded_private']
+            for name in names:
+                with self.subTest(role=role, forbidden=name), tempfile.TemporaryDirectory() as tmp:
+                    def change(current, value):
+                        if current == role:
+                            value[name] = {'connected': False} if name == 'own_pg' else {'connected': True, 'nonce_sha256': '0' * 64}
+                        return value
+                    obj, project = self.probe_acceptance(tmp, before=False, change=change)
+                    with self.assertRaisesRegex(RuntimeError, 'role=' + role + ' destination=' + name):
+                        obj.probes(project)
+                    self.assertEqual(json.loads((Path(tmp) / 'acceptance-report.json').read_text())['controlled_probe_attempts'][-1]['role'], role)
+
     def test_host_none_null_ipam_and_bridge_ranges_preserve_collision_detection(self):
         networks = [
             {'Name': 'host', 'Driver': 'host', 'IPAM': {'Driver': 'default', 'Options': None, 'Config': None}},
