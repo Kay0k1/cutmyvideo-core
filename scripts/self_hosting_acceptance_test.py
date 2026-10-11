@@ -410,6 +410,38 @@ class CleanupControls(unittest.TestCase):
 
 
 class HostAndEvidenceControls(unittest.TestCase):
+    def test_host_none_null_ipam_and_bridge_ranges_preserve_collision_detection(self):
+        networks = [
+            {'Name': 'host', 'Driver': 'host', 'IPAM': {'Driver': 'default', 'Options': None, 'Config': None}},
+            {'Name': 'none', 'Driver': 'null', 'IPAM': {'Driver': 'default', 'Options': None, 'Config': None}},
+            {'Name': 'no-declared-config', 'IPAM': {}},
+            {'Name': 'bridge', 'Driver': 'bridge', 'IPAM': {'Config': [
+                {'Subnet': '10.205.0.0/16', 'Gateway': '10.205.0.1'},
+                {'Subnet': '172.17.0.0/16', 'Gateway': '172.17.0.1'},
+                {'Subnet': 'fd00:1234::/64', 'Gateway': 'fd00:1234::1'}]}},
+        ]
+        ranges = a.network_subnets(networks)
+        self.assertEqual([str(value) for value in ranges], ['10.205.0.0/16', '172.17.0.0/16', 'fd00:1234::/64'])
+        self.assertTrue(any(a.ipaddress.ip_network('10.205.40.0/24').overlaps(value)
+                            for value in ranges if value.version == 4), 'occupied project range must still collide')
+        self.assertFalse(any(a.ipaddress.ip_network('10.206.40.0/24').overlaps(value)
+                             for value in ranges if value.version == 4), 'unused project range must remain eligible')
+        self.assertTrue(any(a.ipaddress.ip_network('fd00:1234::/80').overlaps(value)
+                            for value in ranges if value.version == 6), 'declared IPv6 range must not disappear')
+
+    def test_non_null_malformed_ipam_or_declared_subnet_is_refused(self):
+        for config in (False, 0, '', '10.205.0.0/16', {}, [None], [False], [{}],
+                       [{'Subnet': None}], [{'Subnet': 123}], [{'Subnet': ''}],
+                       [{'Subnet': 'not-a-subnet'}], [{'Subnet': '10.205.1.2/16'}]):
+            with self.subTest(config=config), self.assertRaises((RuntimeError, ValueError)):
+                a.network_subnets([{'IPAM': {'Config': config}}])
+        with self.assertRaisesRegex(RuntimeError, 'IPAM is not an object'):
+            a.network_subnets([{'IPAM': None}])
+        with self.assertRaisesRegex(RuntimeError, 'inventory entry is not an object'):
+            a.network_subnets([None])
+        with self.assertRaisesRegex(RuntimeError, 'inventory is not a list'):
+            a.network_subnets({})
+
     def test_socket_ready_baseline_waits_for_actual_tcp_and_current_definition_is_required(self):
         obj = a.Acceptance.__new__(a.Acceptance)
         obj.report = successful_report()

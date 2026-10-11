@@ -73,6 +73,25 @@ def canonical(value):
     return (json.dumps(value, indent=2, sort_keys=True) + '\n').encode()
 
 
+def network_subnets(networks):
+    """Keep declared ranges; Docker host/none IPAM has a null Config."""
+    require(isinstance(networks, list), 'network inventory is not a list')
+    ranges = []
+    for network in networks:
+        require(isinstance(network, dict), 'network inventory entry is not an object')
+        ipam = network.get('IPAM', {})
+        require(isinstance(ipam, dict), 'network IPAM is not an object')
+        config = ipam.get('Config')
+        if config is None:
+            continue
+        require(isinstance(config, list), 'network IPAM Config is not a list')
+        for entry in config:
+            require(isinstance(entry, dict) and isinstance(entry.get('Subnet'), str)
+                    and entry['Subnet'], 'network IPAM subnet entry is invalid')
+            ranges.append(ipaddress.ip_network(entry['Subnet']))
+    return ranges
+
+
 def digest(data):
     return hashlib.sha256(data).hexdigest()
 
@@ -513,7 +532,7 @@ class Acceptance:
         self.initial_resources = {'container': set(self.run(['docker', 'ps', '-aq', '--no-trunc']).decode().split()),
                                   'network': {n['Id'] for n in networks},
                                   'volume': set(self.run(['docker', 'volume', 'ls', '--format', '{{.Name}}']).decode().splitlines())}
-        ranges = [ipaddress.ip_network(x['Subnet']) for n in networks for x in n.get('IPAM', {}).get('Config', []) if 'Subnet' in x]
+        ranges = network_subnets(networks)
         for octet in range(200 + secrets.randbelow(20), 240):
             if not any(ipaddress.ip_network(f'10.{octet}.0.0/16').overlaps(n) for n in ranges if n.version == 4):
                 self.subnet_octet = octet; break
