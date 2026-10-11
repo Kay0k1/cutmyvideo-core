@@ -120,10 +120,13 @@ def validate_forwarded_evidence(report):
     namespace = receiver.get('namespace_identity', {})
     require(namespace.get('uid') == 0 and all(isinstance(namespace.get(k), int) and namespace[k] > 0
             for k in ('device', 'inode')), 'routed receiver namespace identity missing')
+    group = receiver.get('link_group')
+    require(type(group) is int and 0 < group < 2**31, 'routed receiver atomic ownership group missing')
     for side, prefix in (('host', 'cwf_'), ('peer', 'cwp_')):
         link = receiver.get(side + '_link', {})
         require(link.get('name') == prefix + identity[:10]
                 and link.get('alias') == 'cutmy-acceptance:' + identity + ':' + side
+                and link.get('group') == str(group)
                 and isinstance(link.get('ifindex'), int) and link['ifindex'] > 0,
                 'routed receiver link identity missing')
     require(receiver.get('host_route', {}).get('dev') == receiver['host_link']['name']
@@ -422,6 +425,8 @@ class RoutedForwardReceiver:
         self.namespace = 'cutmy-forward-' + self.identity
         self.host_link, self.peer_link = 'cwf_' + self.identity[:10], 'cwp_' + self.identity[:10]
         self.alias = 'cutmy-acceptance:' + self.identity
+        self.link_group = secrets.randbelow(2**31 - 1) + 1
+        self.aliases_complete = False
         self.prefix = f'10.{owner.subnet_octet}.45'
         self.address, self.gateway, self.port = self.prefix + '.2', self.prefix + '.1', 35445
         self.token = secrets.token_hex(20)
@@ -441,7 +446,8 @@ class RoutedForwardReceiver:
 
     def links(self, namespace=None):
         command = ['ip', '-n', namespace] if namespace else ['ip']
-        return self.owner.json(command + ['-j', '-d', 'link', 'show'], timeout=10)
+        # iproute2 renders numeric groups as JSON strings even with -N.
+        return self.owner.json(command + ['-N', '-j', '-d', 'link', 'show'], timeout=10)
 
     def namespace_identity(self):
         info = os.stat('/run/netns/' + self.namespace, follow_symlinks=False)
@@ -451,22 +457,34 @@ class RoutedForwardReceiver:
 
     def guarded_inventory(self):
         names, rows = self.names(), self.links()
+        present = self.namespace in names
+        inventory = {'namespace': self.namespace, 'namespace_present': present, 'link_group': self.link_group,
+                     'aliases_complete': self.aliases_complete,
+                     'host_links': [row for row in rows if row.get('ifname') in (self.host_link, self.peer_link)
+                                    or row.get('group') == str(self.link_group)
+                                    or row.get('ifalias', '').startswith(self.alias + ':')]}
+        self.owner.report.setdefault('routed_witness_inventories', []).append(inventory)
+        self.owner.save()
         require(not any(row.get('ifname') == self.peer_link or
-                        row.get('ifalias', '').startswith(self.alias + ':') and row.get('ifname') != self.host_link
+                        (row.get('group') == str(self.link_group) or row.get('ifalias', '').startswith(self.alias + ':'))
+                        and row.get('ifname') != self.host_link
                         for row in rows), 'routed witness unexpected host link present')
         hosts = [row for row in rows if row.get('ifname') == self.host_link]
         require(len(hosts) <= 1, 'routed witness host identity is ambiguous')
         host = hosts[0] if hosts else None
-        present = self.namespace in names
         require(host is None or present, 'routed witness peer namespace is missing')
         peer, identity = None, None
         if present:
             require(self.namespace_attempted and self.namespace not in self.owner.initial_namespace_names,
                     'preexisting namespace cannot be removed')
             identity = self.namespace_identity()
+            inventory['namespace_identity'] = identity
+            self.owner.save()
             require(self.namespace_record is None or identity == self.namespace_record,
                     'routed witness namespace was replaced')
             peers = self.links(self.namespace)
+            inventory['namespace_links'] = peers
+            self.owner.save()
             require({row.get('ifname') for row in peers} <= {'lo', self.peer_link}, 'foreign namespace interface present')
             selected = [row for row in peers if row.get('ifname') == self.peer_link]
             require(len(selected) <= 1, 'routed witness peer identity is ambiguous')
@@ -475,30 +493,44 @@ class RoutedForwardReceiver:
         if host is not None:
             require(self.link_attempted, 'unattempted routed witness link cannot be removed')
             for row, name, side in ((host, self.host_link, 'host'), (peer, self.peer_link, 'peer')):
+                expected_alias = self.alias + ':' + side
                 require(name not in self.owner.initial_host_link_names
-                        and row.get('ifalias') == self.alias + ':' + side
+                        and row.get('group') == str(self.link_group)
+                        and (row.get('ifalias') == expected_alias if self.aliases_complete
+                             else row.get('ifalias') in (None, '', expected_alias))
                         and row.get('linkinfo', {}).get('info_kind') == 'veth'
                         and not row.get('master') and isinstance(row.get('ifindex'), int) and row['ifindex'] > 0,
                         'routed witness link ownership differs')
             indices = [host['ifindex'], peer['ifindex']]
             require(self.link_indices is None or indices == self.link_indices, 'routed witness veth was replaced')
+            self.link_indices = indices
+        if present and self.namespace_record is None:
+            self.namespace_record = identity
         return present, host, peer, identity
 
     def create(self):
+        rows = self.links()
         require(self.namespace not in self.names()
-                and not {self.host_link, self.peer_link} & {row.get('ifname') for row in self.links()},
+                and not {self.host_link, self.peer_link} & {row.get('ifname') for row in rows}
+                and not any(row.get('group') == str(self.link_group) for row in rows),
                 'routed witness resource collision before creation')
         self.namespace_attempted = True
         self.owner.run(['ip', 'netns', 'add', self.namespace], timeout=10)
         self.namespace_record = self.namespace_identity()
         self.link_attempted = True
-        # Both ownership aliases and peer placement are one netlink creation,
-        # so even a failed CLI cannot leave an unlabelled veth to be guessed.
-        self.owner.run(['ip', 'link', 'add', 'name', self.host_link, 'alias', self.alias + ':host',
-                        'type', 'veth', 'peer', 'name', self.peer_link, 'alias', self.alias + ':peer',
+        # Linux applies IFLA_GROUP on both ends during atomic veth creation;
+        # creation-time IFLA_IFALIAS is not applied on the peer by veth_newlink.
+        self.owner.run(['ip', 'link', 'add', 'name', self.host_link, 'group', str(self.link_group),
+                        'type', 'veth', 'peer', 'name', self.peer_link, 'group', str(self.link_group),
                         'netns', self.namespace], timeout=10)
         _, host, peer, _ = self.guarded_inventory()
-        self.link_indices = [host['ifindex'], peer['ifindex']]
+        require(host is not None and peer is not None, 'created routed witness veth pair is missing')
+        for command in (['ip', 'link', 'set', 'dev', self.host_link, 'alias', self.alias + ':host'],
+                        ['ip', '-n', self.namespace, 'link', 'set', 'dev', self.peer_link, 'alias', self.alias + ':peer']):
+            self.guarded_inventory()
+            self.owner.run(command, timeout=10)
+        self.aliases_complete = True
+        self.guarded_inventory()
         for command in ([ 'ip', 'address', 'add', self.gateway + '/24', 'dev', self.host_link],
                         ['ip', 'link', 'set', 'dev', self.host_link, 'up'],
                         ['ip', '-n', self.namespace, 'address', 'add', self.address + '/24', 'dev', self.peer_link],
@@ -526,8 +558,9 @@ class RoutedForwardReceiver:
         self.owner.echo(self.address, self.port, self.token)
         self.owner.report['forwarded_receiver'] = {'topology': 'owned_routed_veth_outside_docker',
             'namespace': self.namespace, 'identity': self.identity, 'namespace_identity': identity,
-            'host_link': {'name': self.host_link, 'ifindex': host['ifindex'], 'alias': host['ifalias']},
-            'peer_link': {'name': self.peer_link, 'ifindex': peer['ifindex'], 'alias': peer['ifalias']},
+            'link_group': self.link_group,
+            'host_link': {'name': self.host_link, 'ifindex': host['ifindex'], 'alias': host['ifalias'], 'group': host['group']},
+            'peer_link': {'name': self.peer_link, 'ifindex': peer['ifindex'], 'alias': peer['ifalias'], 'group': peer['group']},
             'address': self.address, 'port': self.port, 'nonce_sha256': digest(self.token.encode()),
             'host_route': host_route[0], 'receiver_return_route': peer_route[0],
             'preexisting_collision_checked': True, 'application_networks_unchanged': True,

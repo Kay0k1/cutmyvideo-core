@@ -45,12 +45,13 @@ def successful_report():
                        for name, checks in a.GROUPS.items()},
             'cleanup': {'ok': True, 'errors': [], 'remaining_resources': [], 'live_owned_processes': []},
             'runtime_application_sources_unchanged': True}
-    identity, project = 'a' * 32, 'cutmy_test_old'
+    identity, project, group = 'a' * 32, 'cutmy_test_old', 208574011
     receiver = {'topology': 'owned_routed_veth_outside_docker', 'identity': identity,
                 'namespace': 'cutmy-forward-' + identity, 'namespace_identity': {'uid': 0, 'device': 4, 'inode': 5},
+                'link_group': group,
                 'address': '10.205.45.2', 'port': 35445, 'nonce_sha256': a.digest(b'routed-witness'),
-                'host_link': {'name': 'cwf_' + identity[:10], 'ifindex': 101, 'alias': 'cutmy-acceptance:' + identity + ':host'},
-                'peer_link': {'name': 'cwp_' + identity[:10], 'ifindex': 102, 'alias': 'cutmy-acceptance:' + identity + ':peer'},
+                'host_link': {'name': 'cwf_' + identity[:10], 'ifindex': 101, 'alias': 'cutmy-acceptance:' + identity + ':host', 'group': str(group)},
+                'peer_link': {'name': 'cwp_' + identity[:10], 'ifindex': 102, 'alias': 'cutmy-acceptance:' + identity + ':peer', 'group': str(group)},
                 'host_route': {'dev': 'cwf_' + identity[:10]},
                 'receiver_return_route': {'dev': 'cwp_' + identity[:10], 'gateway': '10.205.45.1'},
                 'preexisting_collision_checked': True, 'application_networks_unchanged': True,
@@ -151,6 +152,9 @@ class ReceiptControls(unittest.TestCase):
     def test_routed_receiver_counters_and_source_identities_are_mandatory(self):
         mutations = [lambda r: r.pop('forwarded_receiver'),
                      lambda r: r['forwarded_receiver'].update(host_nonce_verified=False),
+                     lambda r: r['forwarded_receiver'].update(link_group=0),
+                     lambda r: r['forwarded_receiver']['host_link'].update(group='0'),
+                     lambda r: r['forwarded_receiver']['peer_link'].update(group=r['forwarded_receiver']['link_group']),
                      lambda r: r['forwarded_receiver']['host_link'].update(alias='foreign'),
                      lambda r: r['forwarded_receiver']['receiver_return_route'].update(gateway='10.205.44.1'),
                      lambda r: r['cleanup'].update(owned_forward_namespace_removed=False),
@@ -479,14 +483,19 @@ class RoutedReceiverControls(unittest.TestCase):
     @staticmethod
     def receiver():
         owner = SimpleNamespace(subnet_octet=205, initial_namespace_names=set(), initial_host_link_names={'lo'},
-                                initial_host_routes=[], report={}, calls=[], present=False, pair=False, foreign=False)
+                                initial_host_routes=[], report={}, calls=[], present=False, pair=False, foreign=False,
+                                aliases={'host': None, 'peer': None}, saved_reports=[])
         receiver = a.RoutedForwardReceiver(owner)
         identity = {'device': 4, 'inode': 900, 'uid': 0}
         receiver.namespace_identity = Mock(return_value=identity)
         def link(side):
-            return {'ifname': receiver.host_link if side == 'host' else receiver.peer_link,
-                    'ifalias': receiver.alias + ':' + side, 'ifindex': 101 if side == 'host' else 102,
-                    'linkinfo': {'info_kind': 'veth'}}
+            row = {'ifname': receiver.host_link if side == 'host' else receiver.peer_link,
+                   'group': str(receiver.link_group), 'ifindex': 101 if side == 'host' else 102,
+                   'linkinfo': {'info_kind': 'veth'}}
+            if owner.aliases[side] is not None:
+                row['ifalias'] = owner.aliases[side]
+            row.update(getattr(owner, side + '_changes', {}))
+            return row
         def run(command, **kwargs):
             owner.calls.append(command)
             if command == ['ip', 'netns', 'list']:
@@ -495,10 +504,15 @@ class RoutedReceiverControls(unittest.TestCase):
                 return getattr(owner, 'namespace_processes', b'')
             if command[:3] == ['ip', 'netns', 'add']: owner.present = True
             if command[:3] == ['ip', 'link', 'add']: owner.pair = True
+            if 'alias' in command and 'set' in command:
+                side = 'peer' if '-n' in command else 'host'
+                owner.aliases[side] = command[-1]
             if command[:3] == ['ip', 'link', 'delete']: owner.pair = False
             if command[:3] == ['ip', 'netns', 'delete']: owner.present = False
             if command[:3] == getattr(owner, 'fail_after_creation', None):
                 raise RuntimeError('controlled CLI failure after daemon/kernel creation')
+            if command == getattr(owner, 'fail_after_command', None):
+                raise RuntimeError('controlled CLI timeout after alias mutation')
             return b''
         def queried(command, **kwargs):
             if 'route' in command:
@@ -510,6 +524,7 @@ class RoutedReceiverControls(unittest.TestCase):
                 rows.append(row)
             return rows
         owner.run, owner.json = Mock(side_effect=run), Mock(side_effect=queried)
+        owner.save = Mock(side_effect=lambda: owner.saved_reports.append(deepcopy(owner.report)))
         process = Mock(); process.poll.return_value = None
         owner.start_process = Mock(return_value=process)
         owner.socket_open = Mock(return_value=True); owner.wait = lambda check, timeout: a.require(check(), 'listener unavailable')
@@ -535,14 +550,29 @@ class RoutedReceiverControls(unittest.TestCase):
     def test_pair_is_atomically_owned_and_return_route_stays_inside_namespace(self):
         receiver, owner = self.receiver(); receiver.create()
         creation = next(c for c in owner.calls if c[:3] == ['ip', 'link', 'add'])
-        self.assertEqual(creation, ['ip', 'link', 'add', 'name', receiver.host_link, 'alias', receiver.alias + ':host',
-            'type', 'veth', 'peer', 'name', receiver.peer_link, 'alias', receiver.alias + ':peer', 'netns', receiver.namespace])
+        self.assertEqual(creation, ['ip', 'link', 'add', 'name', receiver.host_link, 'group', str(receiver.link_group),
+            'type', 'veth', 'peer', 'name', receiver.peer_link, 'group', str(receiver.link_group), 'netns', receiver.namespace])
+        self.assertNotIn('alias', creation)
+        self.assertGreater(receiver.link_group, 0); self.assertLess(receiver.link_group, 2**31)
+        aliases = [c for c in owner.calls if 'alias' in c]
+        self.assertEqual(aliases, [['ip', 'link', 'set', 'dev', receiver.host_link, 'alias', receiver.alias + ':host'],
+            ['ip', '-n', receiver.namespace, 'link', 'set', 'dev', receiver.peer_link, 'alias', receiver.alias + ':peer']])
+        inventories = owner.report['routed_witness_inventories']
+        initial_pair = next(row for row in inventories if row['host_links'])
+        self.assertNotIn('ifalias', initial_pair['host_links'][0])
+        self.assertEqual(initial_pair['host_links'][0]['group'], str(receiver.link_group))
+        self.assertEqual(initial_pair['namespace_links'][-1]['group'], str(receiver.link_group))
+        self.assertTrue(receiver.aliases_complete)
+        self.assertTrue(all('-N' in call.args[0] for call in owner.json.call_args_list if 'link' in call.args[0]))
         routes = [c for c in owner.calls if 'route' in c]
         self.assertEqual(routes, [['ip', '-n', receiver.namespace, 'route', 'add', 'default', 'via', receiver.gateway, 'dev', receiver.peer_link]])
         self.assertFalse(any(c[0].startswith(('docker', 'iptables', 'sysctl', 'modprobe')) for c in owner.calls))
         proof = owner.report['forwarded_receiver']
         self.assertTrue(proof['host_nonce_verified']); self.assertTrue(proof['application_networks_unchanged'])
         self.assertEqual(proof['namespace_identity'], receiver.namespace_record)
+        self.assertEqual(proof['link_group'], receiver.link_group)
+        self.assertEqual(proof['host_link']['group'], str(receiver.link_group))
+        self.assertEqual(proof['peer_link']['group'], str(receiver.link_group))
         self.assertEqual(owner.start_process.call_args.args[1][:4], ['ip', 'netns', 'exec', receiver.namespace])
         receiver.process.poll.return_value = 0
         receiver.close(); self.assertTrue(receiver.removed); self.assertEqual(receiver.remaining(), [])
@@ -558,14 +588,112 @@ class RoutedReceiverControls(unittest.TestCase):
                 self.assertEqual(receiver.remaining(), []); self.assertTrue(receiver.removed)
                 self.assertFalse(any(c[0] != 'ip' for c in owner.calls))
 
+    def test_partial_alias_timeout_is_removed_by_atomic_group_and_frozen_indices(self):
+        for side in ('host', 'peer'):
+            with self.subTest(side=side):
+                receiver, owner = self.receiver()
+                owner.fail_after_command = (['ip', 'link', 'set', 'dev', receiver.host_link] if side == 'host'
+                                            else ['ip', '-n', receiver.namespace, 'link', 'set', 'dev', receiver.peer_link]) + [
+                                            'alias', receiver.alias + ':' + side]
+                with self.assertRaisesRegex(RuntimeError, 'timeout after alias'): receiver.create()
+                self.assertFalse(receiver.aliases_complete)
+                self.assertEqual(receiver.link_indices, [101, 102])
+                self.assertEqual(owner.aliases['host'], receiver.alias + ':host')
+                self.assertEqual(owner.aliases['peer'], receiver.alias + ':peer' if side == 'peer' else None)
+                owner.fail_after_command = None
+                receiver.close()
+                self.assertTrue(receiver.removed); self.assertEqual(receiver.remaining(), [])
+
+    def test_partial_pair_group_is_strict_numeric_string_and_raw_inventory_precedes_refusal(self):
+        for side in ('host', 'peer'):
+            for group in (None, '', '0', 'foreign', '01', 123, True):
+                with self.subTest(side=side, group=group):
+                    receiver, owner = self.receiver(); owner.fail_after_creation = ['ip', 'link', 'add']
+                    with self.assertRaisesRegex(RuntimeError, 'CLI failure'): receiver.create()
+                    setattr(owner, side + '_changes', {'group': group})
+                    owner.fail_after_creation = None
+                    before = len(owner.calls)
+                    with self.assertRaisesRegex(RuntimeError, 'ownership differs'): receiver.close()
+                    self.assertFalse(any('delete' in c for c in owner.calls[before:]))
+                    inventory = owner.saved_reports[-1]['routed_witness_inventories'][-1]
+                    rows = inventory['host_links'] if side == 'host' else inventory['namespace_links']
+                    self.assertEqual(rows[-1]['group'], group)
+                    self.assertFalse(receiver.removed)
+
+    def test_foreign_replacement_before_alias_mutation_refuses_all_mutations(self):
+        for field, value in (('group', 'foreign'), ('ifindex', 909), ('ifalias', 'foreign'),
+                             ('master', 'foreign-bridge'), ('linkinfo', {'info_kind': 'dummy'})):
+            with self.subTest(field=field):
+                receiver, owner = self.receiver()
+                original_run = owner.run.side_effect
+                def changed(command, **kwargs):
+                    result = original_run(command, **kwargs)
+                    if command[:3] == ['ip', 'link', 'add']:
+                        # First inventory binds the genuine pair before it is replaced.
+                        receiver.guarded_inventory()
+                        owner.host_changes = {field: value}
+                    return result
+                owner.run.side_effect = changed
+                with self.assertRaises(RuntimeError): receiver.create()
+                self.assertFalse(any('alias' in c for c in owner.calls))
+                before = len(owner.calls)
+                with self.assertRaises(RuntimeError): receiver.close()
+                self.assertFalse(any('delete' in c for c in owner.calls[before:]))
+
+    def test_foreign_peer_after_first_alias_refuses_second_alias_and_cleanup(self):
+        for field, value in (('group', 'foreign'), ('ifindex', 909), ('ifalias', 'foreign'),
+                             ('master', 'foreign-bridge')):
+            with self.subTest(field=field):
+                receiver, owner = self.receiver()
+                original_run = owner.run.side_effect
+                def changed(command, **kwargs):
+                    result = original_run(command, **kwargs)
+                    if command[:4] == ['ip', 'link', 'set', 'dev'] and 'alias' in command:
+                        owner.peer_changes = {field: value}
+                    return result
+                owner.run.side_effect = changed
+                with self.assertRaises(RuntimeError): receiver.create()
+                self.assertEqual(owner.aliases['host'], receiver.alias + ':host')
+                self.assertIsNone(owner.aliases['peer'])
+                self.assertEqual(len([c for c in owner.calls if 'alias' in c]), 1)
+                before = len(owner.calls)
+                with self.assertRaises(RuntimeError): receiver.close()
+                self.assertFalse(any('delete' in c for c in owner.calls[before:]))
+
+    def test_partial_pair_namespace_replacement_is_saved_and_never_removed(self):
+        receiver, owner = self.receiver(); owner.fail_after_creation = ['ip', 'link', 'add']
+        with self.assertRaisesRegex(RuntimeError, 'CLI failure'): receiver.create()
+        owner.fail_after_creation = None
+        receiver.namespace_identity.return_value = {'device': 4, 'inode': 901, 'uid': 0}
+        before = len(owner.calls)
+        with self.assertRaisesRegex(RuntimeError, 'namespace was replaced'): receiver.close()
+        self.assertFalse(any('delete' in c for c in owner.calls[before:]))
+        self.assertEqual(owner.saved_reports[-1]['routed_witness_inventories'][-1]['namespace_identity']['inode'], 901)
+
+    def test_complete_aliases_cannot_disappear_and_group_collisions_refuse_creation(self):
+        for side in ('host', 'peer'):
+            with self.subTest(side=side):
+                receiver, owner = self.receiver(); receiver.create(); receiver.process.poll.return_value = 0
+                owner.aliases[side] = None
+                with self.assertRaisesRegex(RuntimeError, 'ownership differs'): receiver.close()
+                self.assertFalse(any('delete' in c for c in owner.calls))
+        receiver, owner = self.receiver()
+        original = owner.json.side_effect
+        owner.json.side_effect = lambda command, **kwargs: original(command, **kwargs) + [
+            {'ifname': 'foreign', 'group': str(receiver.link_group)}]
+        with self.assertRaisesRegex(RuntimeError, 'collision before creation'): receiver.create()
+        self.assertFalse(any('add' in c for c in owner.calls))
+
     def test_foreign_alias_inode_ifindex_or_interface_refuses_removal(self):
-        for mode in ('alias', 'inode', 'ifindex', 'interface', 'host-peer'):
+        for mode in ('alias', 'inode', 'ifindex', 'interface', 'host-peer', 'group', 'master'):
             with self.subTest(mode=mode):
                 receiver, owner = self.receiver(); receiver.create(); receiver.process.poll.return_value = 0
                 original_json = owner.json.side_effect
                 if mode == 'alias': owner.foreign = True
                 if mode == 'inode': receiver.namespace_identity.return_value = {'device': 4, 'inode': 901, 'uid': 0}
                 if mode == 'ifindex': receiver.link_indices = [991, 992]
+                if mode == 'group': owner.peer_changes = {'group': '0'}
+                if mode == 'master': owner.host_changes = {'master': 'foreign-bridge'}
                 if mode in ('interface', 'host-peer'):
                     def altered(command, **kwargs):
                         rows = original_json(command, **kwargs)
