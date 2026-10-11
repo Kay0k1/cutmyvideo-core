@@ -1,0 +1,44 @@
+{
+  "archive_basename": "cutmyvideo-core_v0.2.1_linux_amd64.tar.gz",
+  "archive_bytes": 4655111,
+  "archive_sha256": "89e7832aaa29e25e6794a9d6e9e14eb9027549bdfc92270eecfd983aac1a8a21",
+  "binary_sha256": "a80cf0504fc4c9c9719c7be8fcd291375dd66637316b7a06b3242187fed8dbf8",
+  "payloads": {
+    "BUILD.json": {
+      "bytes": 383,
+      "sha256": "5f64c0aeb18be6873b6fac80e2aee4a94939fab23d550a232b4bcb8c276b0d9c"
+    },
+    "CHANGELOG.md": {
+      "bytes": 12048,
+      "sha256": "3e4a2009a0de6ac63e2ded4bef754b88e9068c03ad70188be8f2429135344482"
+    },
+    "LICENSE": {
+      "bytes": 1063,
+      "sha256": "dbd22263d7218a09000bf90ab07b53de55b246220392696d52e71b4b0b4b1548"
+    },
+    "README.txt": {
+      "bytes": 1610,
+      "sha256": "625326dba52c61c14f45415b9004941c780742fbd7886b90f2f0e17255498e3a"
+    },
+    "THIRD_PARTY_NOTICES.md": {
+      "bytes": 13767,
+      "sha256": "4a460723afb214f20e44486ddf250c5b1e908c1b2fde20992ca9a44f885dbf51"
+    },
+    "cutmy": {
+      "bytes": 12628092,
+      "sha256": "a80cf0504fc4c9c9719c7be8fcd291375dd66637316b7a06b3242187fed8dbf8"
+    }
+  },
+  "runtime_source_sha256": "71e23398a6a309efb75b68e350100fa0d2ca7aa00a4bb57c27696aa604fbc67a",
+  "standalone_SOURCE_or_MANIFEST_available": false,
+  "tree": "5a3d0ee82d128539468d65ef72e923fdbc40941f",
+  "type": "explicit legacy archive identity, not a fabricated new-format SOURCE/MANIFEST",
+  "version": {
+    "arch": "amd64",
+    "build_time": "2026-10-10T19:33:28Z",
+    "commit": "f2be62c42a6a0d3d7a017b40bd683596bc578b95",
+    "go_version": "go1.27.2",
+    "os": "linux",
+    "version": "v0.2.1"
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "files": {
+    "ATTRIBUTION.md": {
+      "bytes": 2859,
+      "sha256": "74bc122ed124a7332017672f3122a3c54d61ec64ea7ae0668008b61c6205527b"
+    },
+    "CELL-METRICS.json": {
+      "bytes": 110131,
+      "sha256": "a007027794e35f2dd134b7a5cad220bf51355346172f18f071e6c2f609166ea6"
+    },
+    "CONFIG.template.json": {
+      "bytes": 2878,
+      "sha256": "959da816748819060b79434eb9724ae2df1b0f8cdaf63935c5c40a59cfe42808"
+    },
+    "EXPORT-TIMINGS.csv": {
+      "bytes": 104869,
+      "sha256": "60f62849c713b0eab55087a72d8d96175e0fd8e00ef9778a3f568aded36e45a5"
+    },
+    "FIXTURES.template.json": {
+      "bytes": 4517,
+      "sha256": "8ced3a69ee859b5d5ac1b810ecf89761ee9ea0f6244b8faba817ac0d0bb4ec73"
+    },
+    "INPUTS.json": {
+      "bytes": 12012,
+      "sha256": "84ff3f700811282b78078ee0417d7d706737fc370483672b3818a06023584585"
+    },
+    "RAW-MANIFEST.json": {
+      "bytes": 175976,
+      "sha256": "a5290451c1fcc9f88901123f231f7eddfe6e7c7ad4002b6746c407234d69d38b"
+    },
+    "READY-OBSERVATIONS.png": {
+      "bytes": 229182,
+      "sha256": "eeb245342b808e5df9019baf406038b9afea703ed6f5d67a518426ec76595076"
+    },
+    "READY-OBSERVATIONS.svg": {
+      "bytes": 60834,
+      "sha256": "7d6fc9acfad31e5a7df9a76988c1f10228b5901ddf3c12c5013d85f52bf5eff0"
+    },
+    "REPRODUCE.md": {
+      "bytes": 5527,
+      "sha256": "0884b4690dc53ac188b4183913a583beee690b7c4c0ae95d059325c31325b819"
+    },
+    "RESULTS.md": {
+      "bytes": 6337,
+      "sha256": "fec97732c1dff057032d3d299d4a61d274362a05f929949fdeb5ce2afd32aec9"
+    },
+    "WORKFLOW-TIMINGS.csv": {
+      "bytes": 46900,
+      "sha256": "d0eadc4486323690f4db7e78b2d9cdcaf3ee7ac4d28a3e6dfb0b1ea5bbcaa44d"
+    },
+    "after.MANIFEST.json": {
+      "bytes": 18282,
+      "sha256": "337d592649ec7e7b61164b187e53e1ce56cdc77e9e4e8fa88df94a13659a64c7"
+    },
+    "after.SOURCE.json": {
+      "bytes": 66949,
+      "sha256": "41a9af4320344e7f894b8db18a5e7fa6a403d6e7eef1dc189ec45431bacea3f6"
+    },
+    "before.ARCHIVE-IDENTITY.json": {
+      "bytes": 1596,
+      "sha256": "cd41c40e380f32cf7747c8e3443758809b7f4fd50b24bc525fb0c392f992841f"
+    },
+    "before.BUILD.json": {
+      "bytes": 383,
+      "sha256": "5f64c0aeb18be6873b6fac80e2aee4a94939fab23d550a232b4bcb8c276b0d9c"
+    },
+    "harness-frozen/scripts/media-capacity-fixtures.py": {
+      "bytes": 13349,
+      "sha256": "de81e4ea682103e9c3ea9b2f57680048537f727389456e78e5e2c9aa3c72483e"
+    },
+    "harness-frozen/scripts/media-capacity.README.md": {
+      "bytes": 11823,
+      "sha256": "c8e15acee26253eee4378d73b0c9f4f7e281234a9debc7362538d89d9ee925ee"
+    },
+    "harness-frozen/scripts/media-capacity.py": {
+      "bytes": 111243,
+      "sha256": "071beaf2132b2bcb0943ca9d7ea5519720321a783bbf977cfe44726c0565114f"
+    },
+    "harness-frozen/scripts/media_capacity_test.py": {
+      "bytes": 63400,
+      "sha256": "e84ae83c5dd51deadaec7cf1ad60b34cc675253cfbf690fb6944ab42e2896c38"
+    }
+  },
+  "schema_version": 1,
+  "scope": "Exact relative delivered-public-file integrity; excludes this self-referential manifest. No full raw corpus download promise."
+}
