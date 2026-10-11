@@ -467,9 +467,6 @@ func exportInputsCoreProgress(ctx context.Context, c Config, inputs []mediaInput
 	copySeek, copyShift := int64(0), int64(0)
 	copyTrim := false
 	if request.CutMode == "copy" {
-		if err := validateCopyContainer(selection, request.Format); err != nil {
-			return 0, 0, err
-		}
 		if request.Quality != "best" {
 			_, displayHeight, err := videoDisplayGeometry(selection.Video)
 			if err != nil {
@@ -582,6 +579,9 @@ func exportInputsCoreProgress(ctx context.Context, c Config, inputs []mediaInput
 	if err := commandErr; err != nil {
 		if info, statErr := os.Stat(out); statErr == nil && info.Size() >= limit {
 			return 0, 0, errOutputLimit
+		}
+		if request.CutMode == "copy" {
+			err = copyExportDiagnostic(err, request.Format)
 		}
 		return 0, 0, renderedMediaFailure(err, hdr)
 	}

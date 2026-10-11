@@ -25,7 +25,7 @@ func exportProblem(err error) *sourceProblem {
 		case "storage_full":
 			return &sourceProblem{"storage_full", "Server storage is full; try again after older files expire"}
 		case "copy_incompatible":
-			return &sourceProblem{"copy_incompatible", "These source codecs cannot be copied into MP4. Choose accurate mode"}
+			return copyIncompatibleProblem()
 		case "platform_access":
 			return errPlatformAccess
 		case "upstream_denied":
@@ -41,4 +41,36 @@ func exportProblem(err error) *sourceProblem {
 		}
 	}
 	return &sourceProblem{"media_processing_failed", "Could not export this fragment. Try exporting again or upload the video file"}
+}
+
+// Compatibility belongs to the configured muxer, whose supported codecs can
+// grow over time. Never replace a rejected copy with an implicit encode.
+func copyIncompatibleProblem() *sourceProblem {
+	return &sourceProblem{"copy_incompatible", "Selected streams cannot be copied into this container. Choose another compatible container, or accurate MP4 to encode"}
+}
+
+type copyExportFailure struct {
+	problem *sourceProblem
+	cause   error
+}
+
+func (e *copyExportFailure) Error() string   { return e.problem.Error() }
+func (e *copyExportFailure) Unwrap() []error { return []error{e.problem, e.cause} }
+func copyExportDiagnostic(err error, format string) error {
+	var existing *copyExportFailure
+	if errors.As(err, &existing) {
+		return err
+	}
+	var process *mediaProcessFailure
+	if errors.As(err, &process) && process.category == "copy_incompatible" {
+		problem := copyIncompatibleProblem()
+		if format == "mp4" {
+			problem.message = "Selected streams cannot be copied into MP4. Choose MKV to preserve them, or accurate MP4 to encode"
+		}
+		if format == "mkv" {
+			problem.message = "Selected streams cannot be copied into MKV. Choose accurate MP4 to encode"
+		}
+		return &copyExportFailure{problem: problem, cause: err}
+	}
+	return err
 }

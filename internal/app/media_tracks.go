@@ -266,24 +266,6 @@ func audioMetadataArgs(audio *probeStream) []string {
 	return args
 }
 
-func validateCopyContainer(selection mediaSelection, format string) error {
-	if format != "mp4" {
-		return nil
-	}
-	compatible := func(codec string, list []string) bool {
-		for _, v := range list {
-			if v == codec {
-				return true
-			}
-		}
-		return false
-	}
-	if selection.Video != nil && !compatible(selection.Video.CodecName, []string{"h264", "hevc", "av1", "mpeg4", "vp9", "mpeg2video", "mjpeg"}) || selection.Audio != nil && !compatible(selection.Audio.CodecName, []string{"aac", "mp3", "ac3", "eac3", "alac"}) {
-		return &sourceProblem{"copy_incompatible", "Selected streams cannot be copied to MP4. Choose MKV to preserve them, or accurate MP4 to encode"}
-	}
-	return nil
-}
-
 // SelectExportTracks computes the same deterministic selection from inspected
 // tracks without running another tool. All tracks remain visible in the result.
 func SelectExportTracks(tracks []Track, request ExportRequest) ([]TrackSelection, error) {

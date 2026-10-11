@@ -47,11 +47,6 @@ func exportJoinedSegmentInputsProgress(ctx context.Context, c Config, inputs [][
 		if e != nil {
 			return nil, e
 		}
-		if request.CutMode == "copy" {
-			if err := validateCopyContainer(selections[i], request.Format); err != nil {
-				return nil, err
-			}
-		}
 		if request.Format != "mp3" && selections[i].Video == nil {
 			return nil, errUnsupportedStream
 		}
@@ -181,7 +176,7 @@ func joinCopy(ctx context.Context, c Config, inputs [][]mediaInput, ranges []Ran
 	}
 	args = append(args, out)
 	if _, e := runCommand(ctx, c.FFmpeg, args...); e != nil {
-		return nil, e
+		return nil, copyExportDiagnostic(e, request.Format)
 	}
 	if e := verifyJoined(ctx, c, out, request, elapsed, limit); e != nil {
 		return nil, e
@@ -361,7 +356,7 @@ func joinCopyAudio(ctx context.Context, c Config, inputs []mediaInput, selection
 	args = append(args, mediaInputBounds(c)...)
 	args = append(args, "-seek_timestamp", "1", "-ss", seconds(start-audioInput.OffsetMS), "-i", audioInput.Path, "-ss", "0", "-t", seconds(end-start), "-map", fmt.Sprintf("0:%d", selection.Audio.Index), "-c:a", "copy", "-avoid_negative_ts", "disabled", "-map_metadata", "-1", "-map_chapters", "-1", "-fs", strconv.FormatInt(limit, 10), audioPath)
 	if _, err := runCommand(ctx, c.FFmpeg, args...); err != nil {
-		return err
+		return copyExportDiagnostic(err, request.Format)
 	}
 	audioStat, err := os.Stat(audioPath)
 	if err != nil {
@@ -383,7 +378,7 @@ func joinCopyAudio(ctx context.Context, c Config, inputs []mediaInput, selection
 	}
 	args = append(args, out)
 	if _, err := runCommand(ctx, c.FFmpeg, args...); err != nil {
-		return err
+		return copyExportDiagnostic(err, request.Format)
 	}
 	stat, err := os.Stat(out)
 	if err != nil {

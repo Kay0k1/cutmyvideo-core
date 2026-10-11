@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"math"
 	"os"
 	"path/filepath"
@@ -186,8 +187,27 @@ func TestCopyContainerAndUnsupportedTrackDiagnostics(t *testing.T) {
 	}
 	selected := 2
 	request.AudioTrack = &selected
-	if _, _, e = ExportLocal(ctx, c, pcm, filepath.Join(c.DataDir, "incompatible.mp4"), Range{EndMS: 1000}, request); LocalErrorCode(e) != "copy_incompatible" {
-		t.Fatalf("PCM silently changed in MP4: %v", e)
+	pcmMP4 := filepath.Join(c.DataDir, "pcm-copy.mp4")
+	if _, _, e = ExportLocal(ctx, c, pcm, pcmMP4, Range{EndMS: 1000}, request); e == nil {
+		info, _, probeErr := probe(ctx, c, pcmMP4, false)
+		if probeErr != nil || info.selectedAudio() == nil || info.selectedAudio().CodecName != "pcm_s16le" {
+			t.Fatalf("MP4 silently changed PCM: %+v %v", info, probeErr)
+		}
+	} else if LocalErrorCode(e) != "copy_incompatible" {
+		t.Fatalf("configured muxer's PCM rejection lost diagnostic: %v", e)
+	}
+	incompatible := filepath.Join(c.DataDir, "vp8.mkv")
+	if _, e = runCommand(ctx, c.FFmpeg, "-v", "error", "-i", input, "-map", "0:v:0", "-c:v", "libvpx", "-threads", "1", incompatible); e != nil {
+		t.Fatal(e)
+	}
+	incompatibleRequest := ExportRequest{Format: "mp4", Quality: "best", CutMode: "copy"}
+	_, _, e = ExportLocal(ctx, c, incompatible, filepath.Join(c.DataDir, "incompatible.mp4"), Range{EndMS: 1000}, incompatibleRequest)
+	if LocalErrorCode(e) != "copy_incompatible" || !strings.Contains(e.Error(), "MKV") {
+		t.Fatalf("muxer rejection lost corrective diagnostic: %v", e)
+	}
+	var process *mediaProcessFailure
+	if !errors.As(e, &process) || process.category != "copy_incompatible" {
+		t.Fatalf("copy rejection lost its process cause: %v", e)
 	}
 	request.Format = "mkv"
 	request.SubtitleMode = "preserve"
