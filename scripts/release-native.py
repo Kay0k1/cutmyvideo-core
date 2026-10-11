@@ -112,6 +112,39 @@ def checked_binary(path, expected_sha):
     return path
 
 
+def process_case_input(source, work, label):
+    """Scope helper markers through ffprobe's explicit input, never its env."""
+    source, work = Path(source), Path(work)
+    require(source.is_absolute() and source.is_file() and not source.is_symlink()
+            and work.is_absolute() and work.is_dir() and label in ('timeout', 'sigint', 'sigterm'),
+            'Invalid owned process fixture input')
+    destination = work / (label + '-process-input.mp4')
+    with source.open('rb') as original, destination.open('xb') as copy:
+        shutil.copyfileobj(original, copy)
+    require(file_hash(destination) == file_hash(source), 'Process fixture copy changed')
+    return destination, Path(str(destination) + '.tree.json')
+
+
+def preserve_process_markers(marker, evidence, label):
+    destination = Path(evidence) / 'process-markers'
+    destination.mkdir(exist_ok=True)
+    records = []
+    for suffix in ('', '.1', '.2', '.pid.0', '.pid.1', '.pid.2'):
+        path = Path(str(marker) + suffix)
+        if not path.exists() and not path.is_symlink():
+            continue
+        require(path.is_file() and not path.is_symlink(), 'Process marker is not an owned regular file')
+        with path.open('rb') as file:
+            data = file.read((16 << 10) + 1)
+        require(len(data) <= 16 << 10, 'Process marker exceeded its bounded evidence limit')
+        retained = destination / (label + '-tree.json' + suffix)
+        with retained.open('xb') as file:
+            file.write(data)
+        records.append({'path': str(retained.relative_to(evidence)), 'bytes': len(data),
+                        'sha256': hashlib.sha256(data).hexdigest()})
+    return records
+
+
 def required_checks(target_os):
     result = dict(REQUIRED_CHECKS)
     if target_os != 'windows':
@@ -550,8 +583,8 @@ class Native:
         if self.target[0] != 'windows':
             cases += [('sigint', signal.SIGINT, 130, 'cancelled'), ('sigterm', signal.SIGTERM, 130, 'cancelled')]
         for label, requested_signal, wanted_exit, wanted_code in cases:
-            marker = self.work / (label + '-tree.json')
-            env = self.app_env(FFPROBE_PATH=str(helper), CUTMY_DIST_PROCESS_MARKER=str(marker))
+            case_input, marker = process_case_input(self.input, self.work, label)
+            env = self.app_env(FFPROBE_PATH=str(helper))
             checked_binary(self.binary, self.expected_binary_sha)
             stdout = self.evidence / (label + '-process.stdout')
             stderr = self.evidence / (label + '-process.stderr')
@@ -560,7 +593,7 @@ class Native:
             observed_failure = False
             try:
                 with stdout.open('xb') as out, stderr.open('xb') as err:
-                    process = subprocess.Popen([str(self.binary), '--json-errors', 'inspect', '--input', str(self.input),
+                    process = subprocess.Popen([str(self.binary), '--json-errors', 'inspect', '--input', str(case_input),
                                                 '--timeout', '6s'], env=env, stdout=out, stderr=err)
                     until = time.monotonic() + 4
                     while time.monotonic() < until and not marker.exists() and process.poll() is None:
@@ -583,12 +616,23 @@ class Native:
                 require(not any(self.listener(a) for a in tree['addresses']), 'A descendant survived archived CLI cancellation')
                 results[label] = {'exit': process.returncode, 'observed_descendants': 3, 'all_listeners_closed': True,
                                   'driver_cleanup_before_assertion': False, 'marker': tree,
-                                  'command': [str(self.binary), '--json-errors', 'inspect', '--input', str(self.input), '--timeout', '6s'],
+                                  'input': {'path': str(case_input), 'sha256': file_hash(case_input)},
+                                  'command': [str(self.binary), '--json-errors', 'inspect', '--input', str(case_input), '--timeout', '6s'],
                                   'stdout': stdout.name, 'stderr': stderr.name}
             except Exception:
                 observed_failure = True
                 raise
             finally:
+                # Retain complete and partial identities before any rescue or
+                # private-directory cleanup, including failed tree startup.
+                capture_failure = None
+                try:
+                    retained = preserve_process_markers(marker, self.evidence, label)
+                    (self.evidence / (label + '-process-markers.json')).write_bytes(m.canonical(retained))
+                except Exception as error:
+                    capture_failure = error
+                    self.report.setdefault('errors', []).append('process marker evidence: ' + str(error))
+                    observed_failure = True
                 if process and process.poll() is None:
                     process.kill()
                     process.wait(timeout=5)
@@ -615,6 +659,8 @@ class Native:
                                 os.kill(pid, signal.SIGKILL)
                         except (OSError, subprocess.TimeoutExpired):
                             pass
+                if capture_failure is not None:
+                    raise capture_failure
         return list(PROCESS_CHECKS) + ([] if self.target[0] == 'windows' else ['sigint', 'sigterm']), results
 
     def start_service(self, command, env):

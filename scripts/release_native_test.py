@@ -139,6 +139,52 @@ class NativeControls(unittest.TestCase):
                 runner.app('version')
             runner.commands.run.assert_not_called()
 
+    def test_process_inputs_are_explicit_separate_exact_copies(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            source = root / 'synthetic.mp4'
+            source.write_bytes(b'owned input bytes; structural fixture only')
+            paths = []
+            for label in ('timeout', 'sigint', 'sigterm'):
+                copied, marker = n.process_case_input(source, root, label)
+                self.assertEqual(copied.read_bytes(), source.read_bytes())
+                self.assertEqual(marker, Path(str(copied) + '.tree.json'))
+                self.assertTrue(copied.is_absolute())
+                paths.append(copied)
+            self.assertEqual(len(set(paths)), 3)
+            with self.assertRaises(FileExistsError):
+                n.process_case_input(source, root, 'timeout')
+
+    def test_process_input_rejects_unowned_path_or_unknown_case(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            source = root / 'synthetic.mp4'
+            source.write_bytes(b'owned fixture')
+            for original, work, label in ((Path('relative.mp4'), root, 'timeout'),
+                                          (root / 'missing.mp4', root, 'timeout'),
+                                          (source, Path('relative'), 'timeout'),
+                                          (source, root, '../elsewhere')):
+                with self.subTest(source=str(original), work=str(work), label=label), self.assertRaises(RuntimeError):
+                    n.process_case_input(original, work, label)
+
+    def test_partial_process_markers_survive_before_private_directory_cleanup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            work, evidence = root / 'work', root / 'evidence'
+            work.mkdir()
+            evidence.mkdir()
+            marker = work / 'input.mp4.tree.json'
+            partial = Path(str(marker) + '.pid.0')
+            data = b'{"pids":[123],"addresses":["127.0.0.1:1234"]}'
+            partial.write_bytes(data)
+            records = n.preserve_process_markers(marker, evidence, 'timeout')
+            self.assertEqual(len(records), 1)
+            self.assertEqual((evidence / records[0]['path']).read_bytes(), data)
+            self.assertEqual(records[0]['sha256'], n.file_hash(partial))
+            partial.unlink()
+            work.rmdir()
+            self.assertEqual((evidence / records[0]['path']).read_bytes(), data)
+
     def test_artifact_receipt_immutable_source_and_fields(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'download.json'

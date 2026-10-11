@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"time"
 )
@@ -27,16 +28,30 @@ func fail(err error) {
 
 func main() {
 	level := 0
-	if len(os.Args) == 3 && os.Args[1] == "--distribution-child" {
+	var marker string
+	if len(os.Args) > 1 && os.Args[1] == "--distribution-child" {
+		if len(os.Args) != 4 || !filepath.IsAbs(os.Args[3]) {
+			fail(fmt.Errorf("invalid child marker argument"))
+		}
 		var err error
 		level, err = strconv.Atoi(os.Args[2])
 		if err != nil || level < 1 || level > 2 {
 			fail(fmt.Errorf("invalid helper level"))
 		}
-	}
-	marker := os.Getenv("CUTMY_DIST_PROCESS_MARKER")
-	if marker == "" {
-		fail(fmt.Errorf("helper marker is required"))
+		marker = os.Args[3]
+	} else {
+		// The archived application intentionally strips custom environment
+		// variables from media tools. ffprobe receives the input as its last
+		// argument, so each driver's private input also scopes its marker.
+		if len(os.Args) < 2 || !filepath.IsAbs(os.Args[len(os.Args)-1]) {
+			fail(fmt.Errorf("an absolute helper input is required"))
+		}
+		input := os.Args[len(os.Args)-1]
+		info, err := os.Lstat(input)
+		if err != nil || !info.Mode().IsRegular() {
+			fail(fmt.Errorf("a regular helper input is required"))
+		}
+		marker = input + ".tree.json"
 	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -69,7 +84,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		child = exec.Command(executable, "--distribution-child", strconv.Itoa(level+1))
+		child = exec.Command(executable, "--distribution-child", strconv.Itoa(level+1), marker)
 		child.Stdout, child.Stderr = os.Stdout, os.Stderr
 		if err := child.Start(); err != nil {
 			fail(err)
