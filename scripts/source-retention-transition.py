@@ -16,12 +16,12 @@ import time
 from urllib.parse import quote
 
 MODE = 'source-retention-004-to-005'
-CANDIDATE = 'fa0b5d6db76ec20f1698e223b01392cade6dfcc5'
-CANDIDATE_TREE = '2d13ab86a287c6d788dcb1517691c8e577b2302c'
+CANDIDATE = '48397dc32b2da438c4d6d55e3d68df522677ecc4'
+CANDIDATE_TREE = '92318c03870306541541cde786a62ff9bb1e1d7d'
 # SOURCE inventories include git_blob. Root670's 168-file map and its review
 # hashes remain historical preparation roots; this pin is the separately
 # reviewed recovery and native disk application commit, before the wrapper-only pin update.
-APPLICATION_SHA256 = 'f9dd964be1b48fdeb8fa72f99bb09025ccd2e810582ca19169764b251f0121ca'
+APPLICATION_SHA256 = '57f97d213b17785c76079e5a0adaaffcc8a7f2350a911af947a2ddd536a04cea'
 OLD_APPLICATION_SHA256 = 'a1aa7b968c06eaeb075d2cd73f8afbf309a1bc12121d1a3e598ba2561e785f90'
 OLD_COMMIT = '0f93cd654a998be7740ba1d6fee4a44a6f7b3464'
 OLD_TREE = '58a431cf209a36b8acb0052ca77653b480814d48'
