@@ -1,0 +1,389 @@
+package app
+
+// This identical test-only file is added to each fixed, clean source checkout.
+// Canonical tracked files, including the original capacity gates, stay intact.
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+type comparisonAuditor interface {
+	auditSourcePinUnit(context.Context) (bool, bool, error)
+}
+
+func comparisonSHA(raw []byte) string {
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
+func comparisonSQL(t *testing.T, schema int) string {
+	t.Helper()
+	if schema == 4 {
+		return capacityRuntimeSQL(t, "storage_lifecycle.go", "cleanupStorageBatch", "DELETE FROM sources")
+	}
+	set := token.NewFileSet()
+	file, err := parser.ParseFile(set, "source_retention.go", nil, 0)
+	if err != nil {
+		t.Fatal("candidate selector source is missing")
+	}
+	var found []string
+	for _, declaration := range file.Decls {
+		group, ok := declaration.(*ast.GenDecl)
+		if !ok || group.Tok != token.CONST {
+			continue
+		}
+		for _, specification := range group.Specs {
+			value, ok := specification.(*ast.ValueSpec)
+			if !ok || len(value.Names) != 1 || value.Names[0].Name != "sourceRetentionSQL" || len(value.Values) != 1 {
+				continue
+			}
+			literal, ok := value.Values[0].(*ast.BasicLit)
+			if !ok || literal.Kind != token.STRING {
+				t.Fatal("selector is not an actual source literal")
+			}
+			text, err := strconv.Unquote(literal.Value)
+			if err != nil {
+				t.Fatal("invalid selector literal")
+			}
+			found = append(found, text)
+		}
+	}
+	if len(found) != 1 {
+		t.Fatal("selector declaration is missing or ambiguous")
+	}
+	return found[0]
+}
+
+func comparisonRuntime(t *testing.T, f capacityFixture) map[string]any {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	role := newID("comparison_role")
+	name := pgx.Identifier{role}.Sanitize()
+	namespace := pgx.Identifier{f.schema}.Sanitize()
+	capacityExec(t, f.admin, "CREATE ROLE "+name+" NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION")
+	t.Cleanup(func() {
+		f.api.DB.Close()
+		f.maintenance.DB.Close()
+		capacityExec(t, f.admin, "DROP OWNED BY "+name+"; DROP ROLE "+name)
+	})
+	capacityExec(t, f.admin, "REVOKE ALL ON ALL TABLES IN SCHEMA "+namespace+" FROM PUBLIC; REVOKE ALL ON ALL FUNCTIONS IN SCHEMA "+namespace+" FROM PUBLIC; GRANT USAGE ON SCHEMA "+namespace+" TO "+name)
+	rows, err := f.admin.Query(ctx, "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND c.relkind='r' ORDER BY c.relname", f.schema)
+	if err != nil {
+		t.Fatal("runtime table inventory failed")
+	}
+	tables, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatal("runtime table inventory failed")
+	}
+	for _, table := range tables {
+		privileges := "SELECT,INSERT,UPDATE,DELETE"
+		if table == "app_schema_versions" || table == "app_schema_migrations" {
+			privileges = "SELECT,MAINTAIN"
+		}
+		capacityExec(t, f.admin, "GRANT "+privileges+" ON "+pgx.Identifier{f.schema, table}.Sanitize()+" TO "+name)
+	}
+	for _, store := range []*Store{f.api, f.maintenance} {
+		config := store.DB.Config().Copy()
+		config.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+			_, err := conn.Exec(ctx, "SET ROLE "+name)
+			return err
+		}
+		store.DB.Close()
+		store.DB, err = pgxpool.NewWithConfig(ctx, config)
+		if err != nil {
+			t.Fatal("runtime pool setup failed")
+		}
+		var current string
+		var super, create, ledgerWrite, sourceWrite bool
+		if err = store.DB.QueryRow(ctx, "SELECT current_user,rolsuper,has_schema_privilege(current_user,$1,'CREATE'),has_table_privilege(current_user,'app_schema_migrations','INSERT,UPDATE,DELETE'),has_table_privilege(current_user,'sources','INSERT') AND has_table_privilege(current_user,'sources','UPDATE') AND has_table_privilege(current_user,'sources','DELETE') AND has_table_privilege(current_user,'sources','SELECT') FROM pg_roles WHERE rolname=current_user", f.schema).Scan(&current, &super, &create, &ledgerWrite, &sourceWrite); err != nil || current != role || super || create || ledgerWrite || !sourceWrite {
+			t.Fatal("effective runtime role differs")
+		}
+	}
+	return map[string]any{"pass": true, "effective_role": role, "session_login_is_fixture_admin": true, "superuser": false, "schema_create": false, "migration_ledger_insert": false, "ordinary_table_dml": true, "function_execute_granted": false}
+}
+
+func comparisonSnapshot(t *testing.T, f capacityFixture) json.RawMessage {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var raw json.RawMessage
+	err := f.api.DB.QueryRow(ctx, `SELECT jsonb_build_object(
+'sources',(SELECT jsonb_build_object('rows',count(*),'digest',md5(COALESCE(string_agg(to_jsonb(s)::text,',' ORDER BY id),''))) FROM sources s),
+'jobs',(SELECT jsonb_build_object('rows',count(*),'digest',md5(COALESCE(string_agg(to_jsonb(j)::text,',' ORDER BY id),''))) FROM jobs j),
+'reservations',(SELECT jsonb_build_object('rows',count(*),'digest',md5(COALESCE(string_agg(to_jsonb(r)::text,',' ORDER BY id),''))) FROM storage_reservations r),
+'files',(SELECT jsonb_build_object('rows',count(*),'digest',md5(COALESCE(string_agg(to_jsonb(f)::text,',' ORDER BY path),''))) FROM storage_files f),
+'totals',(SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM storage_counters s))`).Scan(&raw)
+	if err != nil {
+		t.Fatal("rollback snapshot failed", err)
+	}
+	return raw
+}
+
+func comparisonPlans(t *testing.T, f capacityFixture, sql string) map[string]any {
+	t.Helper()
+	query := capacityQuery{Name: "source_retention", SQL: sql}
+	before := comparisonSnapshot(t, f)
+	client, execution, fence := []float64{}, []float64{}, []float64{}
+	var sampleRows []map[string]int64
+	for range 20 {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		start := time.Now()
+		tx, err := f.api.storageTx(ctx)
+		fence = append(fence, float64(time.Since(start).Microseconds())/1000)
+		if err != nil {
+			cancel()
+			t.Fatal("selector fence failed")
+		}
+		start = time.Now()
+		var raw []byte
+		err = tx.QueryRow(ctx, "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "+sql, float64(3600), storageBatch).Scan(&raw)
+		client = append(client, float64(time.Since(start).Microseconds())/1000)
+		var retained, expired int64
+		if err == nil {
+			err = tx.QueryRow(ctx, "SELECT count(*) FILTER(WHERE id LIKE 'retained-source-%'),count(*) FILTER(WHERE id LIKE 'expired-source-%') FROM sources").Scan(&retained, &expired)
+		}
+		rollbackStorage(tx)
+		cancel()
+		if err != nil {
+			t.Fatal("selector plan failed")
+		}
+		if retained != int64(f.retained) || expired != 0 {
+			t.Fatal("selector lost a pinned source or did not delete its200 eligible rows", retained, expired)
+		}
+		sampleRows = append(sampleRows, map[string]int64{"retained_pinned_remaining": retained, "expired_remaining": expired, "eligible_deleted": storageBatch})
+		var plan []struct {
+			Execution float64 `json:"Execution Time"`
+		}
+		if err = json.Unmarshal(raw, &plan); err != nil || len(plan) != 1 {
+			t.Fatal("selector plan malformed")
+		}
+		execution = append(execution, plan[0].Execution)
+		query.Plans = append(query.Plans, json.RawMessage(raw))
+	}
+	after := comparisonSnapshot(t, f)
+	if string(before) != string(after) {
+		t.Fatal("selector rollback changed persisted rows or accounting")
+	}
+	query.Client, query.Execution = summarizeCapacityLatency(client), summarizeCapacityLatency(execution)
+	return map[string]any{"pass": true, "samples": 20, "query": query, "fence": summarizeCapacityLatency(fence), "rollback_after_each_sample": true, "before": before, "after": after, "sample_rows": sampleRows, "distribution": "retained pinned prefix then200 expired eligible sources"}
+}
+
+func comparisonAudit(t *testing.T, f capacityFixture, schema int) map[string]any {
+	t.Helper()
+	auditor, ok := any(f.maintenance).(comparisonAuditor)
+	if schema == 4 {
+		if ok {
+			t.Fatal("004 unexpectedly implements005 audit")
+		}
+		return map[string]any{"applicable": false, "reason": "schema004 has no source-pin audit", "pass": true}
+	}
+	if !ok {
+		t.Fatal("005 real audit is missing")
+	}
+	capacityExec(t, f.api.DB, `INSERT INTO sources(id,owner,title,duration_ms,kind,created_at) VALUES('comparison-a-hot','comparison','hot',1,'platform','1900-01-01'),('comparison-b-free','comparison','free',1,'platform','1900-01-02');
+INSERT INTO jobs(id,owner,source_id,request,items) SELECT 'comparison-job-'||lpad(i::text,4,'0'),'comparison','comparison-a-hot','{}','[]' FROM generate_series(1,129) i;
+INSERT INTO storage_reservations(id,owner,kind,size_bytes,expires_at,job_id) SELECT 'comparison-preview-'||lpad(i::text,4,'0'),'comparison','preview',1,'2100-01-01','comparison-a-hot' FROM generate_series(1,129) i;
+UPDATE sources SET retention_job_pins=999,retention_preview_pins=999 WHERE id IN ('comparison-a-hot','comparison-b-free')`)
+	var calls []map[string]any
+	for index := 1; index <= 10; index++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		start := time.Now()
+		done, eligible, err := auditor.auditSourcePinUnit(ctx)
+		elapsed := float64(time.Since(start).Microseconds()) / 1000
+		cancel()
+		call := map[string]any{"unit": index, "elapsed_ms": elapsed, "done": done, "repaired_eligible": eligible}
+		if err != nil {
+			call["error"] = err.Error()
+			calls = append(calls, call)
+			return map[string]any{"applicable": true, "pass": false, "calls": calls, "stage_error": true}
+		}
+		calls = append(calls, call)
+	}
+	var partial json.RawMessage
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := f.api.DB.QueryRow(ctx, `SELECT jsonb_build_object('cursor',(SELECT jsonb_agg(to_jsonb(a)) FROM source_retention_audit a),'partial',(SELECT COALESCE(jsonb_agg(to_jsonb(p) ORDER BY source_id),'[]') FROM source_pin_audit_progress p))`).Scan(&partial); err != nil {
+		t.Fatal("audit progress read failed")
+	}
+	var jobs, previews, free int64
+	if err := f.api.DB.QueryRow(ctx, "SELECT job_count,preview_count FROM source_pin_audit_progress WHERE source_id='comparison-a-hot'").Scan(&jobs, &previews); err != nil || jobs != 128 || previews != 128 {
+		t.Fatal("audit partial bound or durable progress differs")
+	}
+	if err := f.api.DB.QueryRow(ctx, "SELECT retention_job_pins+retention_preview_pins FROM sources WHERE id='comparison-b-free'").Scan(&free); err != nil || free != 0 {
+		t.Fatal("hot source starved healthy audit successor")
+	}
+	// Keep the following common foreground workload equivalent. Audit receipts
+	// retain the partial state; cleanup here does not claim child completion.
+	capacityExec(t, f.api.DB, `DELETE FROM jobs WHERE id LIKE 'comparison-job-%'; DELETE FROM storage_reservations WHERE id LIKE 'comparison-preview-%'; DELETE FROM sources WHERE id IN ('comparison-a-hot','comparison-b-free'); DELETE FROM source_pin_audit_progress; DELETE FROM source_retention_audit`)
+	return map[string]any{"applicable": true, "pass": true, "calls": calls, "progress": partial, "hot_job_count": jobs, "hot_preview_count": previews, "healthy_successor_repaired": true, "complete_child_audit_claimed": false, "audit_only_fixture_removed": true}
+}
+
+func comparisonDML(t *testing.T, f capacityFixture) map[string]any {
+	t.Helper()
+	before := comparisonSnapshot(t, f)
+	queries := []struct{ name, sql string }{
+		{"job_status_only", `UPDATE jobs SET status='failed',updated_at='2001-01-01' WHERE id='retained-job-1'`},
+		{"job_membership_insert", `INSERT INTO jobs(id,owner,source_id,request,items) VALUES('comparison-dml-job','comparison','retained-source-1','{}','[]')`},
+		{"preview_membership_insert", `INSERT INTO storage_reservations(id,owner,kind,size_bytes,expires_at,job_id) VALUES('comparison-dml-preview','comparison','preview',1,'2100-01-01','retained-source-1')`},
+	}
+	var measured []capacityQuery
+	for _, q := range queries {
+		measured = append(measured, capacityMeasureQuery(t, f, q.name, q.sql, nil, 20))
+	}
+	after := comparisonSnapshot(t, f)
+	if string(before) != string(after) {
+		t.Fatal("foreground rollback changed persisted membership or accounting")
+	}
+	return map[string]any{"pass": true, "samples_per_operation": 20, "queries": measured, "before": before, "after": after, "scope": "status-only update and one job/preview insert; each actual EXPLAIN executes triggers then rolls back"}
+}
+
+func comparisonFence(t *testing.T, f capacityFixture) map[string]any {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	blocker, err := f.admin.Begin(ctx)
+	if err != nil {
+		t.Fatal("fence blocker setup failed")
+	}
+	defer rollbackStorage(blocker)
+	if _, err = blocker.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", storageLock); err != nil {
+		t.Fatal("fence blocker acquisition failed")
+	}
+	var attempts []map[string]any
+	pass := true
+	for _, budget := range []time.Duration{5 * time.Millisecond, 50 * time.Millisecond} {
+		wait, stop := context.WithTimeout(context.Background(), budget)
+		start := time.Now()
+		tx, waitErr := f.api.storageTx(wait)
+		if tx != nil {
+			rollbackStorage(tx)
+		}
+		wall := float64(time.Since(start).Microseconds()) / 1000
+		stop()
+		deadline := errors.Is(waitErr, context.DeadlineExceeded)
+		pass = pass && deadline
+		attempts = append(attempts, map[string]any{"budget_ms": float64(budget.Microseconds())/1000, "wall_ms": wall, "deadline": deadline, "error_type": fmt.Sprintf("%T", waitErr), "unexpected_acquisition": waitErr == nil})
+	}
+	rollbackStorage(blocker)
+	recovery, stop := context.WithTimeout(context.Background(), time.Second)
+	defer stop()
+	tx, err := f.api.storageTx(recovery)
+	if tx != nil {
+		rollbackStorage(tx)
+	}
+	return map[string]any{"pass": pass && err == nil, "attempts": attempts, "acquired_after_release": err == nil, "wall_limit_claimed": false}
+}
+
+func TestStorage005ComparisonPilot(t *testing.T) {
+	if os.Getenv("CUTMY_STORAGE005_PILOT") != "1" {
+		t.Skip("manual fixed-source hosted pilot only")
+	}
+	size, err := strconv.Atoi(os.Getenv("CUTMY_STORAGE005_SIZE"))
+	if err != nil || (size != 1000 && size != 10000) {
+		t.Fatal("pilot permits only1000 or10000;100k needs a new reviewed gate")
+	}
+	schema, err := strconv.Atoi(os.Getenv("CUTMY_STORAGE005_SCHEMA"))
+	if err != nil || (schema != 4 && schema != 5) {
+		t.Fatal("unknown exact schema")
+	}
+	output := os.Getenv("CUTMY_STORAGE_REPORT_DIR")
+	if !filepath.IsAbs(output) {
+		t.Fatal("report directory must be absolute")
+	}
+	if err = os.MkdirAll(output, 0700); err != nil {
+		t.Fatal("report directory unavailable")
+	}
+	report := map[string]any{"format": 1, "kind": "storage005-comparison-pilot", "size": size, "schema": schema, "complete": false, "pass": false, "current_stage": "fixture_setup", "stages": map[string]any{}, "failures": []string{}}
+	failures := []string{}
+	defer func() {
+		report["failures"] = failures
+		payload, err := json.MarshalIndent(report, "", "  ")
+		if err == nil {
+			file, e := os.OpenFile(filepath.Join(output, "pilot.json"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+			if e == nil {
+				_, e = file.Write(append(payload, '\n'))
+				_ = file.Close()
+			}
+			err = e
+		}
+		if err != nil {
+			t.Error("report finalization failed")
+		}
+	}()
+	start := time.Now()
+	f := newCapacityFixture(t, size)
+	report["setup_ms"] = float64(time.Since(start).Microseconds()) / 1000
+	var observed int
+	startupRead, cancelStartup := context.WithTimeout(context.Background(), 10*time.Second)
+	err = f.api.DB.QueryRow(startupRead, "SELECT max(position) FROM app_schema_migrations").Scan(&observed)
+	cancelStartup()
+	if err != nil || observed != schema {
+		t.Fatal("actual schema boundary differs")
+	}
+	// Freeze equivalent chronology without changing membership or admission.
+	capacityExec(t, f.api.DB, `UPDATE sources SET created_at='2000-01-01'::timestamptz+(CASE WHEN id LIKE 'retained-source-%' THEN substring(id from '[0-9]+$')::integer ELSE 100000+substring(id from '[0-9]+$')::integer END)*interval '1 microsecond'; UPDATE jobs SET created_at='2000-01-01'; UPDATE artifacts SET created_at='2000-01-01',expires_at=CASE WHEN expires_at<now() THEN '2000-01-01'::timestamptz ELSE '2100-01-01'::timestamptz END`)
+	report["runtime_role"] = comparisonRuntime(t, f)
+	ctx, stop := context.WithTimeout(context.Background(), 10*time.Second)
+	var settings json.RawMessage
+	if err = f.api.DB.QueryRow(ctx, `SELECT jsonb_build_object('server_version',current_setting('server_version'),'server_version_num',current_setting('server_version_num'),'shared_buffers',current_setting('shared_buffers'),'work_mem',current_setting('work_mem'),'max_connections',current_setting('max_connections'),'jit',current_setting('jit'),'fsync',current_setting('fsync'),'synchronous_commit',current_setting('synchronous_commit'))`).Scan(&settings); err != nil {
+		stop()
+		t.Fatal("PostgreSQL configuration evidence missing")
+	}
+	stop()
+	report["postgresql_settings"] = settings
+	report["initial_rows"] = comparisonSnapshot(t, f)
+	sql := comparisonSQL(t, schema)
+	if comparisonSHA([]byte(sql)) != os.Getenv("CUTMY_STORAGE005_SQL_SHA256") {
+		t.Fatal("actual selector SQL differs from the fixed source binding")
+	}
+	report["sql_sha256"] = comparisonSHA([]byte(sql))
+	stages := report["stages"].(map[string]any)
+	report["current_stage"] = "source_ttl"
+	stages["source_ttl"] = comparisonPlans(t, f, sql)
+	report["current_stage"] = "foreground_dml"
+	stages["foreground_dml"] = comparisonDML(t, f)
+	report["current_stage"] = "held_fence"
+	stages["held_fence"] = comparisonFence(t, f)
+	report["current_stage"] = "persisted_audit"
+	stages["persisted_audit"] = comparisonAudit(t, f, schema)
+	if stages["persisted_audit"].(map[string]any)["pass"] != true {
+		failures = append(failures, "persisted_audit")
+		t.Error("audit stage did not complete; raw failure retained")
+		return
+	}
+	// Use the exact unchanged legacy workload and its original1s/5s contexts.
+	report["current_stage"] = "foreground_maintenance"
+	stages["foreground_maintenance"] = capacityConcurrent(t, f)
+	if stages["foreground_maintenance"].(map[string]any)["pass"] != true {
+		failures = append(failures, "foreground_maintenance")
+	}
+	report["current_stage"] = "short_reconciliation"
+	stages["short_reconciliation"] = capacityShortReconciliation(t, f)
+	report["current_stage"] = "progressive_bootstrap"
+	stages["progressive_bootstrap"] = capacityBootstrap(t, f)
+	for _, stage := range []string{"held_fence", "short_reconciliation", "progressive_bootstrap"} {
+		if stages[stage].(map[string]any)["pass"] != true {
+			failures = append(failures, stage)
+		}
+	}
+	report["complete"], report["pass"], report["current_stage"] = true, len(failures) == 0, "completed"
+	if len(failures) > 0 {
+		t.Errorf("pilot failed stages: %v; other measured stages do not relabel thisPASS", failures)
+	}
+}
