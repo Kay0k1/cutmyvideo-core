@@ -92,6 +92,84 @@ def network_subnets(networks):
     return ranges
 
 
+def private_drop_packets(data, project):
+    chain = 'CMF_' + digest(project.encode())[:10]
+    found = []
+    for line in data.decode().splitlines():
+        match = re.fullmatch(r'\[([0-9]+):([0-9]+)\] (-A .*)', line)
+        if match and shlex.split(match[3]) == ['-A', chain, '-d', '10.0.0.0/8', '-j', 'DROP']:
+            found.append(int(match[1]))
+    require(len(found) == 1, 'exact project private DROP counter missing or changed')
+    return found[0]
+
+
+def validate_forwarded_evidence(report):
+    receiver = report.get('forwarded_receiver', {})
+    identity = receiver.get('identity', '')
+    require(re.fullmatch(r'[0-9a-f]{32}', identity)
+            and receiver.get('topology') == 'owned_routed_veth_outside_docker'
+            and receiver.get('namespace') == 'cutmy-forward-' + identity
+            and receiver.get('preexisting_collision_checked') is True
+            and receiver.get('application_networks_unchanged') is True
+            and receiver.get('host_nonce_verified') is True and receiver.get('listener_alive') is True
+            and HASH.fullmatch(receiver.get('nonce_sha256', ''))
+            and receiver.get('port') == 35445, 'owned routed receiver proof missing')
+    address = ipaddress.ip_address(receiver.get('address', ''))
+    require(address.version == 4 and str(address).endswith('.45.2')
+            and str(address).startswith('10.'), 'routed receiver address differs')
+    namespace = receiver.get('namespace_identity', {})
+    require(namespace.get('uid') == 0 and all(isinstance(namespace.get(k), int) and namespace[k] > 0
+            for k in ('device', 'inode')), 'routed receiver namespace identity missing')
+    for side, prefix in (('host', 'cwf_'), ('peer', 'cwp_')):
+        link = receiver.get(side + '_link', {})
+        require(link.get('name') == prefix + identity[:10]
+                and link.get('alias') == 'cutmy-acceptance:' + identity + ':' + side
+                and isinstance(link.get('ifindex'), int) and link['ifindex'] > 0,
+                'routed receiver link identity missing')
+    require(receiver.get('host_route', {}).get('dev') == receiver['host_link']['name']
+            and receiver.get('receiver_return_route', {}).get('dev') == receiver['peer_link']['name']
+            and receiver['receiver_return_route'].get('gateway') == str(address).rsplit('.', 1)[0] + '.1',
+            'routed receiver route proof missing')
+    attempts = report.get('controlled_probe_attempts', [])
+    require(isinstance(attempts, list) and attempts, 'controlled role attempts missing')
+    witnessed = set()
+    post_policy = set()
+    seen_paths = set()
+    for index, attempt in enumerate(attempts):
+        project, role = attempt.get('project', ''), attempt.get('role', '')
+        require(re.fullmatch(r'[a-z][a-z0-9_]{1,62}', project) and role in ('api', 'worker', 'migrate', 'maintenance')
+                and isinstance(attempt.get('before_policy'), bool), 'controlled role identity missing')
+        identity_record = attempt.get('source_identity', {})
+        require(any(identity_record == {key: image[key] for key in ('source_commit', 'source_sha256', 'image_id')}
+                    for image in report.get('images', {}).values()), 'controlled probe SOURCE/image identity differs')
+        snapshots = attempt.get('packet_rule_snapshots', {})
+        require(set(snapshots) == {'before', 'after'}, 'controlled packet snapshots missing')
+        for phase, snapshot in snapshots.items():
+            path = 'filter-probe-' + str(index) + '-' + role + '-' + phase + '.txt'
+            require(snapshot.get('path') == path and path not in seen_paths
+                    and HASH.fullmatch(snapshot.get('sha256', '')), 'controlled packet snapshot identity differs')
+            seen_paths.add(path)
+        if role not in ('api', 'worker'):
+            continue
+        value = attempt.get('destinations', {}).get('forwarded_private', {})
+        if attempt['before_policy']:
+            require(value == {'connected': True, 'nonce_sha256': receiver['nonce_sha256']},
+                    'routed FORWARD positive control missing')
+            witnessed.add(role)
+        else:
+            counter = attempt.get('private_forward_drop_counter', {})
+            require(value == {'connected': False} and counter.get('chain') == 'CMF_' + digest(project.encode())[:10]
+                    and counter.get('destination_cidr') == '10.0.0.0/8'
+                    and all(type(counter.get(k)) is int and counter[k] >= 0 for k in ('before_packets', 'after_packets'))
+                    and counter['after_packets'] > counter['before_packets'] and counter.get('increase') is True
+                    and attempt.get('receiver_live_after_probe') is True,
+                    'routed FORWARD denial/counter/live receiver proof missing')
+            post_policy.add(role)
+    require(witnessed == post_policy == {'api', 'worker'}, 'both routed FORWARD role proofs required')
+    require(report.get('cleanup', {}).get('owned_forward_namespace_removed') is True,
+            'owned routed receiver cleanup unconfirmed')
+
+
 def digest(data):
     return hashlib.sha256(data).hexdigest()
 
@@ -104,7 +182,23 @@ def file_hash(path):
     return result.hexdigest()
 
 
-def validate_report(report):
+def validate_packet_snapshots(report, directory):
+    for attempt in report['controlled_probe_attempts']:
+        samples = {}
+        for phase, receipt in attempt['packet_rule_snapshots'].items():
+            path = directory / receipt['path']
+            require(path.is_file() and not path.is_symlink() and path.stat().st_size <= 16 * 1024 * 1024,
+                    'controlled packet snapshot file missing or invalid')
+            data = path.read_bytes()
+            require(digest(data) == receipt['sha256'], 'controlled packet snapshot bytes changed')
+            if attempt['role'] in ('api', 'worker') and not attempt['before_policy']:
+                samples[phase] = private_drop_packets(data, attempt['project'])
+        if samples:
+            require(all(samples[phase] == attempt['private_forward_drop_counter'][phase + '_packets']
+                        for phase in ('before', 'after')), 'recorded packet counter differs from actual rule snapshot')
+
+
+def validate_report(report, evidence_directory=None):
     """Fail closed even if all visible partial check records say PASS."""
     require(report.get('schema_version') == 1 and report.get('ok') is True
             and report.get('errors') == [], 'acceptance did not finish successfully')
@@ -162,6 +256,9 @@ def validate_report(report):
                 and all(isinstance(x, str) and x for x in image['tools'].values()), 'image/source/version/tool identity incomplete')
     require(images['restored']['runtime_version'] == images['current']['runtime_version']
             and images['restored']['tree'] == images['current']['tree'], 'restored runtime/tree identity changed')
+    validate_forwarded_evidence(report)
+    if evidence_directory is not None:
+        validate_packet_snapshots(report, evidence_directory)
     require(report.get('runtime_application_sources_unchanged') is True,
             'A/B application-source scope missing')
     for label, baseline in (('baseline', True), ('current', False), ('restored', False)):
@@ -317,6 +414,152 @@ class Witness:
         require(not self.thread.is_alive(), 'owned listener survived cleanup')
 
 
+class RoutedForwardReceiver:
+    """Owned routed peer outside Docker bridges, without changing filter rules."""
+    def __init__(self, owner):
+        self.owner = owner
+        self.identity = secrets.token_hex(16)
+        self.namespace = 'cutmy-forward-' + self.identity
+        self.host_link, self.peer_link = 'cwf_' + self.identity[:10], 'cwp_' + self.identity[:10]
+        self.alias = 'cutmy-acceptance:' + self.identity
+        self.prefix = f'10.{owner.subnet_octet}.45'
+        self.address, self.gateway, self.port = self.prefix + '.2', self.prefix + '.1', 35445
+        self.token = secrets.token_hex(20)
+        self.namespace_attempted, self.link_attempted, self.removed = False, False, False
+        self.namespace_record, self.link_indices, self.process = None, None, None
+        require(self.namespace not in owner.initial_namespace_names
+                and not {self.host_link, self.peer_link} & owner.initial_host_link_names,
+                'preexisting routed witness identity collision')
+        subnet = ipaddress.ip_network(self.prefix + '.0/24')
+        for route in owner.initial_host_routes:
+            declared = route.get('dst', 'default')
+            if declared not in ('default', '0.0.0.0/0'):
+                require(not subnet.overlaps(ipaddress.ip_network(declared)), 'preexisting routed witness subnet collision')
+
+    def names(self):
+        return {line.split()[0] for line in self.owner.run(['ip', 'netns', 'list'], timeout=10).decode().splitlines() if line.strip()}
+
+    def links(self, namespace=None):
+        command = ['ip', '-n', namespace] if namespace else ['ip']
+        return self.owner.json(command + ['-j', '-d', 'link', 'show'], timeout=10)
+
+    def namespace_identity(self):
+        info = os.stat('/run/netns/' + self.namespace, follow_symlinks=False)
+        require(stat.S_ISREG(info.st_mode) and info.st_uid == 0, 'routed witness namespace ownership differs')
+        require(info.st_ino != os.stat('/proc/self/ns/net').st_ino, 'routed witness is the host network namespace')
+        return {'device': info.st_dev, 'inode': info.st_ino, 'uid': info.st_uid}
+
+    def guarded_inventory(self):
+        names, rows = self.names(), self.links()
+        require(not any(row.get('ifname') == self.peer_link or
+                        row.get('ifalias', '').startswith(self.alias + ':') and row.get('ifname') != self.host_link
+                        for row in rows), 'routed witness unexpected host link present')
+        hosts = [row for row in rows if row.get('ifname') == self.host_link]
+        require(len(hosts) <= 1, 'routed witness host identity is ambiguous')
+        host = hosts[0] if hosts else None
+        present = self.namespace in names
+        require(host is None or present, 'routed witness peer namespace is missing')
+        peer, identity = None, None
+        if present:
+            require(self.namespace_attempted and self.namespace not in self.owner.initial_namespace_names,
+                    'preexisting namespace cannot be removed')
+            identity = self.namespace_identity()
+            require(self.namespace_record is None or identity == self.namespace_record,
+                    'routed witness namespace was replaced')
+            peers = self.links(self.namespace)
+            require({row.get('ifname') for row in peers} <= {'lo', self.peer_link}, 'foreign namespace interface present')
+            selected = [row for row in peers if row.get('ifname') == self.peer_link]
+            require(len(selected) <= 1, 'routed witness peer identity is ambiguous')
+            peer = selected[0] if selected else None
+        require((host is None) == (peer is None), 'routed witness veth pair is incomplete')
+        if host is not None:
+            require(self.link_attempted, 'unattempted routed witness link cannot be removed')
+            for row, name, side in ((host, self.host_link, 'host'), (peer, self.peer_link, 'peer')):
+                require(name not in self.owner.initial_host_link_names
+                        and row.get('ifalias') == self.alias + ':' + side
+                        and row.get('linkinfo', {}).get('info_kind') == 'veth'
+                        and not row.get('master') and isinstance(row.get('ifindex'), int) and row['ifindex'] > 0,
+                        'routed witness link ownership differs')
+            indices = [host['ifindex'], peer['ifindex']]
+            require(self.link_indices is None or indices == self.link_indices, 'routed witness veth was replaced')
+        return present, host, peer, identity
+
+    def create(self):
+        require(self.namespace not in self.names()
+                and not {self.host_link, self.peer_link} & {row.get('ifname') for row in self.links()},
+                'routed witness resource collision before creation')
+        self.namespace_attempted = True
+        self.owner.run(['ip', 'netns', 'add', self.namespace], timeout=10)
+        self.namespace_record = self.namespace_identity()
+        self.link_attempted = True
+        # Both ownership aliases and peer placement are one netlink creation,
+        # so even a failed CLI cannot leave an unlabelled veth to be guessed.
+        self.owner.run(['ip', 'link', 'add', 'name', self.host_link, 'alias', self.alias + ':host',
+                        'type', 'veth', 'peer', 'name', self.peer_link, 'alias', self.alias + ':peer',
+                        'netns', self.namespace], timeout=10)
+        _, host, peer, _ = self.guarded_inventory()
+        self.link_indices = [host['ifindex'], peer['ifindex']]
+        for command in ([ 'ip', 'address', 'add', self.gateway + '/24', 'dev', self.host_link],
+                        ['ip', 'link', 'set', 'dev', self.host_link, 'up'],
+                        ['ip', '-n', self.namespace, 'address', 'add', self.address + '/24', 'dev', self.peer_link],
+                        ['ip', '-n', self.namespace, 'link', 'set', 'dev', self.peer_link, 'up'],
+                        ['ip', '-n', self.namespace, 'link', 'set', 'dev', 'lo', 'up'],
+                        ['ip', '-n', self.namespace, 'route', 'add', 'default', 'via', self.gateway, 'dev', self.peer_link]):
+            self.owner.run(command, timeout=10)
+        code = ('import socket; s=socket.socket(); s.bind((' + repr(self.address) + ',' + str(self.port) + ')); s.listen(16); '
+                '\nwhile True:\n c,_=s.accept(); c.sendall(' + repr(self.token.encode()) + '); c.close()\n')
+        self.process = self.owner.start_process('routed-private-witness',
+                       ['ip', 'netns', 'exec', self.namespace, sys.executable, '-u', '-c', code])
+        self.owner.wait(lambda: self.owner.socket_open(self.address, self.port), 10)
+        self.verify()
+
+    def verify(self, processing_prefix=None):
+        present, host, peer, identity = self.guarded_inventory()
+        require(present and host is not None and self.process is not None and self.process.poll() is None,
+                'owned routed receiver is unavailable')
+        host_route = self.owner.json(['ip', '-4', '-j', 'route', 'get', self.address], timeout=10)
+        peer_route = self.owner.json(['ip', '-n', self.namespace, '-4', '-j', 'route', 'get',
+                                    (processing_prefix or f'10.{self.owner.subnet_octet}.41') + '.10'], timeout=10)
+        require(len(host_route) == len(peer_route) == 1 and host_route[0].get('dev') == self.host_link
+                and peer_route[0].get('dev') == self.peer_link and peer_route[0].get('gateway') == self.gateway,
+                'routed receiver route identity differs')
+        self.owner.echo(self.address, self.port, self.token)
+        self.owner.report['forwarded_receiver'] = {'topology': 'owned_routed_veth_outside_docker',
+            'namespace': self.namespace, 'identity': self.identity, 'namespace_identity': identity,
+            'host_link': {'name': self.host_link, 'ifindex': host['ifindex'], 'alias': host['ifalias']},
+            'peer_link': {'name': self.peer_link, 'ifindex': peer['ifindex'], 'alias': peer['ifalias']},
+            'address': self.address, 'port': self.port, 'nonce_sha256': digest(self.token.encode()),
+            'host_route': host_route[0], 'receiver_return_route': peer_route[0],
+            'preexisting_collision_checked': True, 'application_networks_unchanged': True,
+            'host_nonce_verified': True, 'listener_alive': True}
+
+    def remaining(self):
+        if not self.namespace_attempted:
+            return []
+        return ([('network_namespace', self.namespace)] if self.namespace in self.names() else []) + [
+                ('host_veth', row.get('ifname')) for row in self.links()
+                if row.get('ifname') in (self.host_link, self.peer_link) or row.get('ifalias', '').startswith(self.alias + ':')]
+
+    def close(self):
+        if not self.namespace_attempted:
+            self.removed = True
+            return
+        require(self.process is None or self.process.poll() is not None, 'routed listener still alive before namespace cleanup')
+        present, host, _, _ = self.guarded_inventory()
+        if present:
+            require(not self.owner.run(['ip', 'netns', 'pids', self.namespace], timeout=10).strip(),
+                    'routed witness namespace still has processes')
+        if host is not None:
+            self.owner.run(['ip', 'link', 'delete', 'dev', self.host_link], timeout=10, expected=None)
+            present, host, peer, _ = self.guarded_inventory()
+            require(host is None and peer is None, 'routed veth deletion not confirmed')
+        if present:
+            self.owner.run(['ip', 'netns', 'delete', self.namespace], timeout=10, expected=None)
+        for _ in range(3):
+            require(self.remaining() == [], 'routed namespace/link deletion not confirmed')
+        self.removed = True
+
+
 class Acceptance:
     def __init__(self, args):
         require(args.allow_disposable_host and os.environ.get('GITHUB_ACTIONS') == 'true'
@@ -333,6 +576,7 @@ class Acceptance:
         self.secrets, self.commands, self.http, self.projects = [], [], [], []
         self.processes, self.witnesses, self.extra_resources = [], [], []
         self.network_address = None
+        self.forward_receiver = None
         self.initial_resources = {'container': set(), 'network': set(), 'volume': set()}
         self.initial_filter = None
         self.unknown_new_containers, self.recovered_helpers = [], {}
@@ -528,6 +772,12 @@ class Acceptance:
                                'caddy': self.run(['caddy', 'version']).decode().strip(),
                                'ffmpeg': self.run(['ffmpeg', '-version']).decode().splitlines()[0],
                                'ffprobe': self.run(['ffprobe', '-version']).decode().splitlines()[0]}
+        self.initial_namespace_names = {line.split()[0] for line in self.run(['ip', 'netns', 'list']).decode().splitlines() if line.strip()}
+        self.initial_host_link_names = {row['ifname'] for row in self.json(['ip', '-j', '-d', 'link', 'show'])}
+        self.initial_host_routes = self.json(['ip', '-4', '-j', 'route', 'show', 'table', 'all'])
+        preexisting = {'namespaces': sorted(self.initial_namespace_names),
+                       'host_links': sorted(self.initial_host_link_names), 'host_ipv4_routes': self.initial_host_routes}
+        (self.output / 'network-witness-preexisting.json').write_bytes(canonical(preexisting))
         networks = self.json(['docker', 'network', 'inspect', *self.run(['docker', 'network', 'ls', '-q']).decode().split()])
         self.initial_resources = {'container': set(self.run(['docker', 'ps', '-aq', '--no-trunc']).decode().split()),
                                   'network': {n['Id'] for n in networks},
@@ -845,10 +1095,13 @@ class Acceptance:
         self.control_cid = cid
         self.run(['docker', 'start', cid]); self.wait(lambda: self.socket_open(self.control_ip, self.control_port), 10)
         self.echo(self.control_ip, self.control_port, self.control_token)
+        self.forward_receiver = RoutedForwardReceiver(self)
+        self.forward_receiver.create()
 
     def verify_witnesses(self, project):
         self.host_witness.verify('127.0.0.1'); self.metadata_witness.verify(self.network_address)
         self.echo(self.control_ip, self.control_port, self.control_token)
+        self.forward_receiver.verify(project['config']['CUTMY_PROCESSING_PREFIX'])
         value = project['pg_witness']
         require(value['process'].poll() is None, 'controlled PG wrong-port listener exited')
         self.echo(value['address'], value['port'], value['token'])
@@ -856,6 +1109,7 @@ class Acceptance:
     def probes(self, project, *, before=False):
         self.verify_witnesses(project)
         cfg = project['config']; pg = project['pg_witness']
+        source_identity = self.probe_source_identity(project)
         expected = {'db_gateway': digest(self.host_witness.token), 'pg_wrong_port': digest(pg['token'].encode())}
         destinations = {'db_gateway': [cfg['CUTMY_DATABASE_PREFIX'] + '.1', self.host_witness.port],
                         'pg_wrong_port': [pg['address'], pg['port']], 'own_pg': [pg['address'], 5432]}
@@ -865,9 +1119,9 @@ class Acceptance:
             if role in ('api', 'worker'):
                 targets.update(processing_gateway=[cfg['CUTMY_PROCESSING_PREFIX'] + '.1', self.host_witness.port],
                                controlled_metadata=[self.network_address, self.metadata_witness.port],
-                               forwarded_private=[self.control_ip, self.control_port])
+                               forwarded_private=[self.forward_receiver.address, self.forward_receiver.port])
                 nonces.update(processing_gateway=digest(self.host_witness.token), controlled_metadata=digest(self.metadata_witness.token),
-                              forwarded_private=digest(self.control_token.encode()))
+                              forwarded_private=digest(self.forward_receiver.token.encode()))
             code = ('import socket,json,hashlib; targets=' + repr(targets) + '; result={};\n'
                     'for name,address in targets.items():\n'
                     ' try:\n  s=socket.create_connection(tuple(address),timeout=1); result[name]={"connected":True}; '
@@ -878,10 +1132,23 @@ class Acceptance:
                 command = self.compose(project) + ['exec', '-T', role, 'python3', '-c', code]
             else:
                 command = self.compose(project) + ['run', '--rm', '-T', '--no-deps', '--entrypoint', 'python3', role, '-c', code]
+            counter_before = self.run(['iptables-save', '-c', '-t', 'filter'])
             value = self.json(command, timeout=30)
+            counter_after = self.run(['iptables-save', '-c', '-t', 'filter'])
+            attempt_index = len(self.report.get('controlled_probe_attempts', []))
+            paths = ['filter-probe-' + str(attempt_index) + '-' + role + '-' + phase + '.txt' for phase in ('before', 'after')]
+            for path, data in zip(paths, (counter_before, counter_after)):
+                (self.output / path).write_bytes(data)
             self.report.setdefault('controlled_probe_attempts', []).append(
-                {'project': cfg['CUTMY_PROJECT'], 'role': role, 'before_policy': before, 'destinations': value})
+                {'project': cfg['CUTMY_PROJECT'], 'role': role, 'before_policy': before, 'destinations': value,
+                 'source_identity': source_identity,
+                 'packet_rule_snapshots': {phase: {'path': path, 'sha256': digest(data)}
+                     for phase, path, data in zip(('before', 'after'), paths, (counter_before, counter_after))}})
             self.save()
+            if role in ('api', 'worker'):
+                self.forward_receiver.verify(cfg['CUTMY_PROCESSING_PREFIX'])
+                self.report['controlled_probe_attempts'][-1]['receiver_live_after_probe'] = True
+                self.save()
             require(isinstance(value, dict) and set(value) == set(targets),
                     'controlled probe destination shape invalid role=' + role)
             for name, observed in value.items():
@@ -902,9 +1169,27 @@ class Acceptance:
                             'required pre-policy controlled socket witness unavailable' + state)
                 else:
                     require(value[name]['connected'] is False, 'policy allowed a forbidden controlled socket' + state)
+            if role in ('api', 'worker') and not before:
+                old_packets = private_drop_packets(counter_before, cfg['CUTMY_PROJECT'])
+                new_packets = private_drop_packets(counter_after, cfg['CUTMY_PROJECT'])
+                proof = {'chain': 'CMF_' + digest(cfg['CUTMY_PROJECT'].encode())[:10],
+                         'destination_cidr': '10.0.0.0/8', 'before_packets': old_packets, 'after_packets': new_packets,
+                         'increase': new_packets > old_packets}
+                self.report['controlled_probe_attempts'][-1]['private_forward_drop_counter'] = proof
+                self.save()
+                require(new_packets > old_packets, 'private FORWARD DROP packet counter did not increase role=' + role)
             results[role] = value
         self.verify_witnesses(project)
         return results
+
+    def probe_source_identity(self, project):
+        source_bytes = (project['state'] / 'SOURCE.json').read_bytes()
+        source = json.loads(source_bytes)
+        image = json.loads((project['state'] / 'image.json').read_bytes())
+        identity = {'source_commit': source['commit'], 'source_sha256': digest(source_bytes), 'image_id': image['image_id']}
+        require(any(identity == {key: value[key] for key in identity} for value in self.report['images'].values()),
+                'controlled probe state SOURCE/image identity differs')
+        return identity
 
     def public_https(self, project):
         # Real public HTTPS and real certificate validation, never a private
@@ -1601,6 +1886,7 @@ class Acceptance:
         errors = cleanup_all([
             ('services', self.stop_services), ('long processes', self.cleanup_processes),
             *[('listener ' + str(i), w.close) for i, w in enumerate(self.witnesses)],
+            *([('routed receiver', self.forward_receiver.close)] if getattr(self, 'forward_receiver', None) else []),
             ('policy', self.cleanup_policy), ('resources', self.cleanup_resources),
             ('synthetic address', self.cleanup_address), ('unrelated filter', self.final_filter)])
         remaining, live = [], [label for label, p, _ in self.processes if p.poll() is None]
@@ -1609,6 +1895,12 @@ class Acceptance:
             remaining.extend(('unknown_container', identifier) for identifier in self.unknown_new_containers)
         except Exception as error:
             errors.append('final discovery: ' + str(error)); remaining = ['discovery_unavailable']
+        if getattr(self, 'forward_receiver', None):
+            try:
+                remaining.extend(self.forward_receiver.remaining())
+            except Exception as error:
+                errors.append('routed receiver discovery: ' + str(error))
+                remaining.append('routed_discovery_unavailable')
         # Keep private bind sources when cleanup/ownership/discovery is
         # uncertain. They are never copied into the public evidence directory.
         if not errors and not remaining and not live:
@@ -1622,6 +1914,8 @@ class Acceptance:
                                   'private_state_backup_config_keys_removed': not self.work.exists(),
                                   'private_workspace_retained': self.work.exists(),
                                   'recovered_daemon_helpers': list(self.recovered_helpers.values()),
+                                  'owned_forward_namespace_removed': getattr(self, 'forward_receiver', None) is None
+                                      or self.forward_receiver.removed,
                                   'build_cache_and_preexisting_images_not_removed': True}
         self.report['errors'].extend(redact(e, self.secrets) for e in errors)
 
@@ -1642,7 +1936,7 @@ class Acceptance:
             self.close()
             self.report['ok'] = not self.report['errors'] and self.report['cleanup']['ok']
             try:
-                validate_report(self.report)
+                validate_report(self.report, self.output)
             except Exception as error:
                 self.report['ok'] = False
                 self.report['errors'].append('final receipt: ' + str(error))
@@ -1672,7 +1966,7 @@ def parse_args(argv=None):
 def main(argv=None):
     args = parse_args(argv)
     if args.verify_report:
-        validate_report(json.loads(args.verify_report.read_bytes()))
+        validate_report(json.loads(args.verify_report.read_bytes()), args.verify_report.parent)
         print('Public profile acceptance: all 7 groups and cleanup PASS')
         return 0
     result = Acceptance(args).execute()

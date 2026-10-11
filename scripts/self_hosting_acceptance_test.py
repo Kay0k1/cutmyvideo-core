@@ -45,6 +45,33 @@ def successful_report():
                        for name, checks in a.GROUPS.items()},
             'cleanup': {'ok': True, 'errors': [], 'remaining_resources': [], 'live_owned_processes': []},
             'runtime_application_sources_unchanged': True}
+    identity, project = 'a' * 32, 'cutmy_test_old'
+    receiver = {'topology': 'owned_routed_veth_outside_docker', 'identity': identity,
+                'namespace': 'cutmy-forward-' + identity, 'namespace_identity': {'uid': 0, 'device': 4, 'inode': 5},
+                'address': '10.205.45.2', 'port': 35445, 'nonce_sha256': a.digest(b'routed-witness'),
+                'host_link': {'name': 'cwf_' + identity[:10], 'ifindex': 101, 'alias': 'cutmy-acceptance:' + identity + ':host'},
+                'peer_link': {'name': 'cwp_' + identity[:10], 'ifindex': 102, 'alias': 'cutmy-acceptance:' + identity + ':peer'},
+                'host_route': {'dev': 'cwf_' + identity[:10]},
+                'receiver_return_route': {'dev': 'cwp_' + identity[:10], 'gateway': '10.205.45.1'},
+                'preexisting_collision_checked': True, 'application_networks_unchanged': True,
+                'host_nonce_verified': True, 'listener_alive': True}
+    report['forwarded_receiver'] = receiver
+    report['cleanup']['owned_forward_namespace_removed'] = True
+    report['controlled_probe_attempts'] = []
+    for before in (True, False):
+        for role in ('api', 'worker'):
+            index = len(report['controlled_probe_attempts'])
+            attempt = {'project': project, 'role': role, 'before_policy': before,
+                       'source_identity': {k: report['images']['old'][k] for k in ('source_commit', 'source_sha256', 'image_id')},
+                       'destinations': {'forwarded_private': {'connected': True, 'nonce_sha256': receiver['nonce_sha256']}
+                                          if before else {'connected': False}},
+                       'receiver_live_after_probe': True,
+                       'packet_rule_snapshots': {phase: {'path': 'filter-probe-' + str(index) + '-' + role + '-' + phase + '.txt',
+                                                         'sha256': 'f' * 64} for phase in ('before', 'after')}}
+            if not before:
+                attempt['private_forward_drop_counter'] = {'chain': 'CMF_' + a.digest(project.encode())[:10],
+                    'destination_cidr': '10.0.0.0/8', 'before_packets': 8, 'after_packets': 9, 'increase': True}
+            report['controlled_probe_attempts'].append(attempt)
     for label, baseline, container in (('baseline', True, 'a'), ('current', False, 'b'), ('restored', False, 'c')):
         report[label + '_tcp_readiness'] = {'container_id': container * 64,
             'source_commit': a.UPGRADE_FROM if baseline else current, 'tcp_sql_verified': True,
@@ -120,6 +147,45 @@ class ReceiptControls(unittest.TestCase):
                          lambda r: r['groups']['container_constraints']['checks'].pop('owned_helper_partial_create_cleanup')):
             report = successful_report(); mutation(report)
             with self.assertRaises(RuntimeError): a.validate_report(report)
+
+    def test_routed_receiver_counters_and_source_identities_are_mandatory(self):
+        mutations = [lambda r: r.pop('forwarded_receiver'),
+                     lambda r: r['forwarded_receiver'].update(host_nonce_verified=False),
+                     lambda r: r['forwarded_receiver']['host_link'].update(alias='foreign'),
+                     lambda r: r['forwarded_receiver']['receiver_return_route'].update(gateway='10.205.44.1'),
+                     lambda r: r['cleanup'].update(owned_forward_namespace_removed=False),
+                     lambda r: r['controlled_probe_attempts'][0]['destinations']['forwarded_private'].update(nonce_sha256='0' * 64),
+                     lambda r: r['controlled_probe_attempts'][2]['source_identity'].update(source_commit='0' * 40),
+                     lambda r: r['controlled_probe_attempts'][2].pop('private_forward_drop_counter'),
+                     lambda r: r['controlled_probe_attempts'][2]['private_forward_drop_counter'].update(chain='CMF_foreign'),
+                     lambda r: r['controlled_probe_attempts'][2]['private_forward_drop_counter'].update(after_packets=8),
+                     lambda r: r['controlled_probe_attempts'][2].update(receiver_live_after_probe=False),
+                     lambda r: r['controlled_probe_attempts'][2]['packet_rule_snapshots']['before'].update(path='../foreign')]
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                report = successful_report(); mutation(report)
+                with self.assertRaises((RuntimeError, ValueError)): a.validate_report(report)
+
+    def test_packet_snapshot_bytes_and_actual_rule_counters_bind_the_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); report = successful_report()
+            for attempt in report['controlled_probe_attempts']:
+                chain = 'CMF_' + a.digest(attempt['project'].encode())[:10]
+                for phase, receipt in attempt['packet_rule_snapshots'].items():
+                    packets = 8 if phase == 'before' else 9
+                    data = ('[' + str(packets) + ':60] -A ' + chain + ' -d 10.0.0.0/8 -j DROP\n').encode()
+                    (root / receipt['path']).write_bytes(data); receipt['sha256'] = a.digest(data)
+            a.validate_report(report, root)
+            receipt = report['controlled_probe_attempts'][2]['packet_rule_snapshots']['after']
+            path = root / receipt['path']; original = path.read_bytes()
+            path.write_bytes(original + b'# changed\n')
+            with self.assertRaisesRegex(RuntimeError, 'bytes changed'): a.validate_report(report, root)
+            changed = original.replace(b'[9:', b'[8:')
+            path.write_bytes(changed); receipt['sha256'] = a.digest(changed)
+            with self.assertRaisesRegex(RuntimeError, 'actual rule snapshot'): a.validate_report(report, root)
+            changed = original.replace(b' -j DROP', b' -j RETURN')
+            path.write_bytes(changed); receipt['sha256'] = a.digest(changed)
+            with self.assertRaisesRegex(RuntimeError, 'counter missing or changed'): a.validate_report(report, root)
 
 
 class HTTPAndRetentionControls(unittest.TestCase):
@@ -409,6 +475,157 @@ class CleanupControls(unittest.TestCase):
                 self.assertTrue(obj.report['cleanup']['private_workspace_retained'])
 
 
+class RoutedReceiverControls(unittest.TestCase):
+    @staticmethod
+    def receiver():
+        owner = SimpleNamespace(subnet_octet=205, initial_namespace_names=set(), initial_host_link_names={'lo'},
+                                initial_host_routes=[], report={}, calls=[], present=False, pair=False, foreign=False)
+        receiver = a.RoutedForwardReceiver(owner)
+        identity = {'device': 4, 'inode': 900, 'uid': 0}
+        receiver.namespace_identity = Mock(return_value=identity)
+        def link(side):
+            return {'ifname': receiver.host_link if side == 'host' else receiver.peer_link,
+                    'ifalias': receiver.alias + ':' + side, 'ifindex': 101 if side == 'host' else 102,
+                    'linkinfo': {'info_kind': 'veth'}}
+        def run(command, **kwargs):
+            owner.calls.append(command)
+            if command == ['ip', 'netns', 'list']:
+                return ((receiver.namespace + '\n').encode() if owner.present else b'')
+            if command[:3] == ['ip', 'netns', 'pids']:
+                return getattr(owner, 'namespace_processes', b'')
+            if command[:3] == ['ip', 'netns', 'add']: owner.present = True
+            if command[:3] == ['ip', 'link', 'add']: owner.pair = True
+            if command[:3] == ['ip', 'link', 'delete']: owner.pair = False
+            if command[:3] == ['ip', 'netns', 'delete']: owner.present = False
+            if command[:3] == getattr(owner, 'fail_after_creation', None):
+                raise RuntimeError('controlled CLI failure after daemon/kernel creation')
+            return b''
+        def queried(command, **kwargs):
+            if 'route' in command:
+                return [{'dev': receiver.peer_link, 'gateway': receiver.gateway}] if '-n' in command else [{'dev': receiver.host_link}]
+            rows = [{'ifname': 'lo'}]
+            if owner.pair:
+                row = link('peer' if '-n' in command else 'host')
+                if owner.foreign: row['ifalias'] = 'foreign'
+                rows.append(row)
+            return rows
+        owner.run, owner.json = Mock(side_effect=run), Mock(side_effect=queried)
+        process = Mock(); process.poll.return_value = None
+        owner.start_process = Mock(return_value=process)
+        owner.socket_open = Mock(return_value=True); owner.wait = lambda check, timeout: a.require(check(), 'listener unavailable')
+        owner.echo = Mock()
+        return receiver, owner
+
+    def test_collisions_refuse_before_any_creation(self):
+        fixed = 'a' * 32
+        for mode in ('namespace', 'link', 'route'):
+            with self.subTest(mode=mode):
+                owner = SimpleNamespace(subnet_octet=205, initial_namespace_names=set(), initial_host_link_names=set(),
+                                        initial_host_routes=[], run=Mock(), json=Mock())
+                if mode == 'namespace': owner.initial_namespace_names.add('cutmy-forward-' + fixed)
+                if mode == 'link': owner.initial_host_link_names.add('cwf_' + fixed[:10])
+                if mode == 'route': owner.initial_host_routes.append({'dst': '10.205.45.0/24'})
+                with patch.object(a.secrets, 'token_hex', side_effect=[fixed, 'b' * 40]):
+                    with self.assertRaisesRegex(RuntimeError, 'collision'): a.RoutedForwardReceiver(owner)
+                owner.run.assert_not_called(); owner.json.assert_not_called()
+        receiver, owner = self.receiver(); owner.present = True
+        with self.assertRaisesRegex(RuntimeError, 'collision before creation'): receiver.create()
+        self.assertFalse(any(c[:3] == ['ip', 'netns', 'add'] for c in owner.calls))
+
+    def test_pair_is_atomically_owned_and_return_route_stays_inside_namespace(self):
+        receiver, owner = self.receiver(); receiver.create()
+        creation = next(c for c in owner.calls if c[:3] == ['ip', 'link', 'add'])
+        self.assertEqual(creation, ['ip', 'link', 'add', 'name', receiver.host_link, 'alias', receiver.alias + ':host',
+            'type', 'veth', 'peer', 'name', receiver.peer_link, 'alias', receiver.alias + ':peer', 'netns', receiver.namespace])
+        routes = [c for c in owner.calls if 'route' in c]
+        self.assertEqual(routes, [['ip', '-n', receiver.namespace, 'route', 'add', 'default', 'via', receiver.gateway, 'dev', receiver.peer_link]])
+        self.assertFalse(any(c[0].startswith(('docker', 'iptables', 'sysctl', 'modprobe')) for c in owner.calls))
+        proof = owner.report['forwarded_receiver']
+        self.assertTrue(proof['host_nonce_verified']); self.assertTrue(proof['application_networks_unchanged'])
+        self.assertEqual(proof['namespace_identity'], receiver.namespace_record)
+        self.assertEqual(owner.start_process.call_args.args[1][:4], ['ip', 'netns', 'exec', receiver.namespace])
+        receiver.process.poll.return_value = 0
+        receiver.close(); self.assertTrue(receiver.removed); self.assertEqual(receiver.remaining(), [])
+
+    def test_partial_kernel_creation_after_cli_failure_is_discovered_and_removed(self):
+        for stage in (['ip', 'netns', 'add'], ['ip', 'link', 'add']):
+            with self.subTest(stage=stage):
+                receiver, owner = self.receiver(); owner.fail_after_creation = stage
+                with self.assertRaisesRegex(RuntimeError, 'CLI failure'): receiver.create()
+                self.assertTrue(receiver.remaining())
+                owner.fail_after_creation = None
+                receiver.close()
+                self.assertEqual(receiver.remaining(), []); self.assertTrue(receiver.removed)
+                self.assertFalse(any(c[0] != 'ip' for c in owner.calls))
+
+    def test_foreign_alias_inode_ifindex_or_interface_refuses_removal(self):
+        for mode in ('alias', 'inode', 'ifindex', 'interface', 'host-peer'):
+            with self.subTest(mode=mode):
+                receiver, owner = self.receiver(); receiver.create(); receiver.process.poll.return_value = 0
+                original_json = owner.json.side_effect
+                if mode == 'alias': owner.foreign = True
+                if mode == 'inode': receiver.namespace_identity.return_value = {'device': 4, 'inode': 901, 'uid': 0}
+                if mode == 'ifindex': receiver.link_indices = [991, 992]
+                if mode in ('interface', 'host-peer'):
+                    def altered(command, **kwargs):
+                        rows = original_json(command, **kwargs)
+                        if mode == 'interface' and '-n' in command and 'link' in command: rows.append({'ifname': 'foreign'})
+                        if mode == 'host-peer' and '-n' not in command and 'link' in command: rows.append({'ifname': receiver.peer_link})
+                        return rows
+                    owner.json.side_effect = altered
+                before = len(owner.calls)
+                with self.assertRaises(RuntimeError): receiver.close()
+                self.assertFalse(receiver.removed)
+                self.assertFalse(any(c[:3] in (['ip', 'link', 'delete'], ['ip', 'netns', 'delete']) for c in owner.calls[before:]))
+                self.assertTrue(receiver.remaining())
+
+    def test_listener_liveness_discovery_failure_and_unconfirmed_delete_fail_closed(self):
+        receiver, owner = self.receiver(); receiver.create()
+        with self.assertRaisesRegex(RuntimeError, 'listener still alive'): receiver.close()
+        self.assertFalse(any('delete' in c for c in owner.calls))
+        receiver.process.poll.return_value = 0
+        owner.namespace_processes = b'91234\n'
+        with self.assertRaisesRegex(RuntimeError, 'namespace still has processes'): receiver.close()
+        self.assertFalse(any('delete' in c for c in owner.calls))
+        owner.namespace_processes = b''
+        owner.run.side_effect = RuntimeError('inventory unavailable')
+        with self.assertRaisesRegex(RuntimeError, 'inventory unavailable'): receiver.close()
+        self.assertFalse(receiver.removed)
+        receiver, owner = self.receiver(); receiver.create(); receiver.process.poll.return_value = 0
+        original_run = owner.run.side_effect
+        owner.run.side_effect = lambda c, **kw: b'' if 'delete' in c else original_run(c, **kw)
+        with self.assertRaisesRegex(RuntimeError, 'deletion not confirmed'): receiver.close()
+        self.assertTrue(receiver.remaining()); self.assertFalse(receiver.removed)
+
+    def test_acceptance_stops_receiver_before_removal_and_retains_work_on_uncertainty(self):
+        for mode in ('success', 'live-listener', 'foreign-alias', 'discovery-unavailable', 'delete-unconfirmed'):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                receiver, owner = self.receiver(); receiver.create()
+                obj = a.Acceptance.__new__(a.Acceptance)
+                obj.work = Path(directory) / 'cutmy-self-hosting-owned'; obj.work.mkdir()
+                (obj.work / 'private-bind-source').write_text('controlled private bytes')
+                obj.report, obj.secrets, obj.processes, obj.witnesses = {'errors': []}, [], [], []
+                obj.recovered_helpers, obj.unknown_new_containers, obj.forward_receiver = {}, [], receiver
+                for method in ('stop_services', 'cleanup_policy', 'cleanup_resources', 'cleanup_address', 'final_filter'):
+                    setattr(obj, method, Mock())
+                obj.discovered_resources = Mock(return_value=[])
+                def stopped():
+                    if mode != 'live-listener': receiver.process.poll.return_value = 0
+                obj.cleanup_processes = Mock(side_effect=stopped)
+                if mode == 'foreign-alias': owner.foreign = True
+                if mode == 'discovery-unavailable': owner.run.side_effect = RuntimeError('owned netns discovery unavailable')
+                if mode == 'delete-unconfirmed':
+                    original_run = owner.run.side_effect
+                    owner.run.side_effect = lambda c, **kw: b'' if 'delete' in c else original_run(c, **kw)
+                obj.close()
+                self.assertEqual(obj.report['cleanup']['ok'], mode == 'success')
+                self.assertEqual(obj.work.exists(), mode != 'success')
+                self.assertEqual(obj.report['cleanup']['owned_forward_namespace_removed'], mode == 'success')
+                if mode != 'success':
+                    self.assertTrue(obj.report['cleanup']['remaining_resources'])
+                    self.assertTrue((obj.work / 'private-bind-source').exists())
+
+
 class HostAndEvidenceControls(unittest.TestCase):
     def test_pre_policy_filter_snapshot_follows_bridge_setup_and_precedes_failing_probe(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -448,17 +665,23 @@ class HostAndEvidenceControls(unittest.TestCase):
         obj.compose, obj.verify_witnesses = Mock(return_value=['compose']), Mock()
         obj.host_witness = SimpleNamespace(token=b'host-witness', port=35001)
         obj.metadata_witness = SimpleNamespace(token=b'metadata-witness', port=35002)
+        obj.forward_receiver = SimpleNamespace(address='10.205.45.2', port=35445, token='routed-witness', verify=Mock())
         obj.network_address, obj.control_ip, obj.control_port, obj.control_token = '169.254.247.20', '10.205.44.2', 35003, 'private-witness'
         project = {'config': {'CUTMY_PROJECT': 'cutmy_test_old', 'CUTMY_DATABASE_PREFIX': '10.205.40',
                               'CUTMY_PROCESSING_PREFIX': '10.205.41'},
                    'pg_witness': {'address': '10.205.40.2', 'port': 35004, 'token': 'pg-witness'}}
+        obj.probe_source_identity = Mock(return_value={k: successful_report()['images']['old'][k]
+                                                      for k in ('source_commit', 'source_sha256', 'image_id')})
+        chain = 'CMF_' + a.digest(project['config']['CUTMY_PROJECT'].encode())[:10]
+        obj.run = Mock(side_effect=[('[' + str(8 + index // 2 + index % 2) + ':60] -A ' + chain
+                                    + ' -d 10.0.0.0/8 -j DROP\n').encode() for index in range(8)])
         def returned(command, **kwargs):
             role = next(value for value in command if value in ('api', 'worker', 'migrate', 'maintenance'))
             nonces = {'db_gateway': a.digest(obj.host_witness.token), 'pg_wrong_port': a.digest(b'pg-witness')}
             if role in ('api', 'worker'):
                 nonces.update(processing_gateway=a.digest(obj.host_witness.token),
                               controlled_metadata=a.digest(obj.metadata_witness.token),
-                              forwarded_private=a.digest(obj.control_token.encode()))
+                              forwarded_private=a.digest(obj.forward_receiver.token.encode()))
             value = {name: {'connected': True, 'nonce_sha256': nonce} if before else {'connected': False}
                      for name, nonce in nonces.items()}
             value['own_pg'] = {'connected': True}
@@ -534,6 +757,42 @@ class HostAndEvidenceControls(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, 'role=' + role + ' destination=' + name):
                         obj.probes(project)
                     self.assertEqual(json.loads((Path(tmp) / 'acceptance-report.json').read_text())['controlled_probe_attempts'][-1]['role'], role)
+
+    def test_missing_changed_or_nonincreasing_private_drop_rule_stays_failed_and_saved(self):
+        for mode in ('missing', 'changed', 'duplicate', 'no-increase'):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp:
+                obj, project = self.probe_acceptance(tmp, before=False)
+                chain = 'CMF_' + a.digest(project['config']['CUTMY_PROJECT'].encode())[:10]
+                before = ('[8:60] -A ' + chain + ' -d 10.0.0.0/8 -j DROP\n').encode()
+                after = before.replace(b'[8:', b'[9:')
+                if mode == 'missing': after = b'*filter\nCOMMIT\n'
+                if mode == 'changed': after = after.replace(b' -j DROP', b' -j RETURN')
+                if mode == 'duplicate': after += after
+                if mode == 'no-increase': after = before
+                obj.run.side_effect = [before, after]
+                with self.assertRaisesRegex(RuntimeError, 'counter'):
+                    obj.group('egress', lambda: obj.check('both_bridges_and_operator_denials', obj.probes(project)), complete=False)
+                saved = json.loads((Path(tmp) / 'acceptance-report.json').read_bytes())
+                self.assertEqual(saved['groups']['egress'], {'status': 'fail', 'checks': {}})
+                attempt = saved['controlled_probe_attempts'][0]
+                self.assertTrue(attempt['receiver_live_after_probe'])
+                self.assertFalse(attempt['destinations']['forwarded_private']['connected'])
+                for phase, data in (('before', before), ('after', after)):
+                    receipt = attempt['packet_rule_snapshots'][phase]
+                    self.assertEqual((Path(tmp) / receipt['path']).read_bytes(), data)
+                    self.assertEqual(receipt['sha256'], a.digest(data))
+
+    def test_probe_identity_reads_exact_sealed_source_and_image(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory); source = a.canonical({'commit': a.UPGRADE_FROM})
+            (state / 'SOURCE.json').write_bytes(source)
+            (state / 'image.json').write_bytes(a.canonical({'image_id': 'sha256:' + 'a' * 64}))
+            obj = a.Acceptance.__new__(a.Acceptance)
+            identity = {'source_commit': a.UPGRADE_FROM, 'source_sha256': a.digest(source), 'image_id': 'sha256:' + 'a' * 64}
+            obj.report = {'images': {'old': identity}}
+            self.assertEqual(obj.probe_source_identity({'state': state}), identity)
+            (state / 'SOURCE.json').write_bytes(a.canonical({'commit': '0' * 40}))
+            with self.assertRaisesRegex(RuntimeError, 'SOURCE/image identity'): obj.probe_source_identity({'state': state})
 
     def test_host_none_null_ipam_and_bridge_ranges_preserve_collision_detection(self):
         networks = [
