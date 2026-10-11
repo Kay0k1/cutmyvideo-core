@@ -1,0 +1,66 @@
+{
+  "binaries": {
+    "after": {
+      "archive": "/root/video_cut/reports/storage-maintenance-2026-10-11/pr30-storage-operational-ttl-ci-proof/hosted-trust-archives-38149747378-attempt-1/artifacts/release-bundle-38149747378-1/cutmyvideo-core_v0.0.0-candidate.g3f0102d915b292401d7880bed3c34a8ac671d060_linux_amd64.tar.gz",
+      "archive_sha256": "90cfa595b2dd650db10ceea27fd4339a6162935081881de058792462081d0ae2",
+      "binary_sha256": "d46c10ca50bb4a48ff4e9e1a55abddbd169482a76c93a3ec90f848c58126f8ce",
+      "runtime_source_sha256": "dba27502278f051977a00b02619402c07d569c30aa15feba657b237f62b4a6f0",
+      "tree": "513b45dd28c309891713e01a6bd11c0e4dcd4858",
+      "version": {
+        "arch": "amd64",
+        "build_time": "2026-10-11T15:04:14Z",
+        "commit": "3f0102d915b292401d7880bed3c34a8ac671d060",
+        "go_version": "go1.27.2",
+        "os": "linux",
+        "version": "v0.0.0-candidate.g3f0102d915b292401d7880bed3c34a8ac671d060"
+      }
+    },
+    "before": {
+      "archive": "/root/video_cut/reports/mixed-media-capacity-2026-10-11/baseline-archive/cutmyvideo-core_v0.2.1_linux_amd64.tar.gz",
+      "archive_sha256": "89e7832aaa29e25e6794a9d6e9e14eb9027549bdfc92270eecfd983aac1a8a21",
+      "binary_sha256": "a80cf0504fc4c9c9719c7be8fcd291375dd66637316b7a06b3242187fed8dbf8",
+      "runtime_source_sha256": "71e23398a6a309efb75b68e350100fa0d2ca7aa00a4bb57c27696aa604fbc67a",
+      "tree": "5a3d0ee82d128539468d65ef72e923fdbc40941f",
+      "version": {
+        "arch": "amd64",
+        "build_time": "2026-10-10T19:33:28Z",
+        "commit": "f2be62c42a6a0d3d7a017b40bd683596bc578b95",
+        "go_version": "go1.27.2",
+        "os": "linux",
+        "version": "v0.2.1"
+      }
+    }
+  },
+  "extensions": [],
+  "fixture_manifest": {
+    "path": "/root/video_cut/reports/mixed-media-capacity-2026-10-11/FIXTURES-complete-audio.json",
+    "sha256": "3b1e14da1a6abe9409d85eb7ec0d6ada33652b838a139dc14af53500fcf60c05"
+  },
+  "postgres_image": "sha256:589f742565e4f6d22149176b032974f55f8201a8a37b71ed587ec5c6902e689f",
+  "resources": {
+    "api_cpus": 0.5,
+    "api_memory_bytes": 536870912,
+    "ffmpeg_threads": 2,
+    "gomaxprocs": 2,
+    "gomemlimit": "128MiB",
+    "postgres_cpus": 0.5,
+    "postgres_memory_bytes": 805306368,
+    "worker_cpus": 2,
+    "worker_memory_bytes": 1610612736
+  },
+  "runtime_image": "PENDING_PREMEASUREMENT_IMAGE_CONFIG_ID",
+  "schema_version": 1,
+  "seed": 1729,
+  "tools": {
+    "ffmpeg": {
+      "path": "/usr/local/bin/ffmpeg",
+      "sha256": "bd3eda8dfc184ef91f13dc32d5f67dd365b29021013d7cc3f4d48390d2481804",
+      "version_line": "ffmpeg version N-127367-gb5902e69c7-20261011 Copyright (c) 2000-2026 the FFmpeg developers"
+    },
+    "ffprobe": {
+      "path": "/usr/local/bin/ffprobe",
+      "sha256": "ce9bfa4ff51ebac283a2909ee880bd828873349764ebef5bb1237479955f69a5",
+      "version_line": "ffprobe version N-127367-gb5902e69c7-20261011 Copyright (c) 2007-2026 the FFmpeg developers"
+    }
+  }
+}
