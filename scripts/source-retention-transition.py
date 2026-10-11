@@ -164,6 +164,12 @@ def normalize_shape(shape):
     for table in shape['Tables'].values():
         table['Constraints'].sort()
         for trigger in table['Triggers'].values():
+            # Historical manifests omit these typed zero fields. Go's
+            # schemaTrigger decoder supplies nil/empty values; the catalog
+            # query writes explicit null/empty keys. Retain every nonempty
+            # value and its type so selected-column/predicate drift refuses.
+            trigger.setdefault('Columns', None)
+            trigger.setdefault('When', '')
             target = trigger['Function']
             if target.startswith('public.') and target[len('public.'):] in shape['Functions']:
                 trigger['Function'] = target[len('public.'):]
@@ -458,10 +464,14 @@ def acceptance_class(base):
                 "(SELECT jsonb_agg(version ORDER BY version) FROM app_schema_versions),"
                 "'migrations',(SELECT jsonb_agg(jsonb_build_object('position',position,'version',version,'checksum',checksum)"
                 " ORDER BY position) FROM app_schema_migrations))"))
-            value = {'position': position, 'shape': normalize_shape(shape), **history,
+            value = {'position': position, 'shape': shape, **history,
                      'phase': name, 'context': self.raw_context(), 'postgres_container_id': self.container(project, 'postgres')['Id']}
+            # Retain the captured bytes even when strict comparison refuses.
+            # Diagnostic observations never substitute for validated catalogs.
+            receipt = self.raw('catalog-' + name + '.json', canonical(value))
+            self.report['transition'].setdefault('catalog_observations', {})[name] = receipt
             validate_catalog(value, position, expected)
-            self.report['transition']['catalogs'][name] = self.raw('catalog-' + name + '.json', canonical(value))
+            self.report['transition']['catalogs'][name] = receipt
             return value
 
         def original_snapshot(self, project):

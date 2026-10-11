@@ -373,6 +373,130 @@ class GoEventControls(unittest.TestCase):
                 transition.validate_go_events(event_bytes(events))
 
 
+class CatalogRepresentationControls(unittest.TestCase):
+    """Model catalog JSON in pure controls; no SQL or hosted acceptance runs."""
+    def manifest(self, position):
+        return transition.strict_json((REPO / f'internal/app/migrations/{position:03d}_schema.json').read_bytes())
+
+    def query_shape(self, position):
+        shape = self.manifest(position)
+        # jsonb_build_object in schemaShapeSQL always emits these keys. This
+        # synthetic fixture models its representation, not observed DB output.
+        for table in shape['Tables'].values():
+            for trigger in table['Triggers'].values():
+                trigger.setdefault('Columns', None)
+                trigger.setdefault('When', '')
+                trigger['Function'] = 'public.' + trigger['Function']
+        return shape
+
+    def catalog(self, position, shape):
+        return {'position': position, 'shape': shape,
+                'versions': sorted(item[0] for item in transition.MIGRATIONS[:position]),
+                'migrations': [{'position': i + 1, 'version': version, 'checksum': checksum}
+                               for i, (version, _, checksum) in enumerate(transition.MIGRATIONS[:position])],
+                'context': {'synthetic_control_context': True},
+                'phase': 'old004' if position == 4 else 'current005', 'postgres_container_id': 'c' * 64}
+
+    def capture(self, position, shape):
+        import tempfile
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        value = object.__new__(transition.acceptance_class(base))
+        value.current_repo, value.output = REPO, Path(temp.name)
+        value.report = {'transition': {'catalogs': {}}}
+        catalog = self.catalog(position, shape)
+        value.sql = Mock(side_effect=[transition.canonical(shape),
+                                     transition.canonical({key: catalog[key] for key in ('versions', 'migrations')})])
+        value.container = Mock(return_value={'Id': catalog['postgres_container_id']})
+        value.raw_context = Mock(return_value=catalog['context'])
+        value.run = Mock(side_effect=AssertionError('pure catalog controls cannot launch a subprocess'))
+        return value, catalog
+
+    def test_legacy004_and005_explicit_null_empty_fields_match_without_mutating_inputs(self):
+        for position in (4, 5):
+            expected, actual = self.manifest(position), self.query_shape(position)
+            originals = deepcopy((expected, actual))
+            with self.subTest(position=position):
+                self.assertEqual(transition.normalize_shape(actual), transition.normalize_shape(expected))
+                transition.validate_catalog(self.catalog(position, actual), position, expected)
+                self.assertEqual((expected, actual), originals)
+                for trigger in expected['Tables']['storage_files']['Triggers'].values():
+                    self.assertNotIn('Columns', trigger)
+                    self.assertNotIn('When', trigger)
+
+    def test_legacy_trigger_nonempty_wrong_type_and_unknown_fields_still_refuse(self):
+        changes = [lambda trigger: trigger.update(Columns=['kind']),
+                   lambda trigger: trigger.update(Columns=[]),
+                   lambda trigger: trigger.update(Columns='kind'),
+                   lambda trigger: trigger.update(Columns=False),
+                   lambda trigger: trigger.update(When='WHEN (old.kind <> new.kind)'),
+                   lambda trigger: trigger.update(When=None),
+                   lambda trigger: trigger.update(When=False),
+                   lambda trigger: trigger.update(Unexpected='catalog drift')]
+        for position in (4, 5):
+            for change in changes:
+                actual = self.query_shape(position)
+                trigger = actual['Tables']['storage_files']['Triggers']['storage_file_update']
+                change(trigger)
+                with self.subTest(position=position, change=change), self.assertRaisesRegex(RuntimeError, 'catalog differs'):
+                    transition.validate_catalog(self.catalog(position, actual), position, self.manifest(position))
+
+    def test_exact005_membership_selected_columns_and_predicates_remain_authoritative(self):
+        expected, actual = self.manifest(5), self.query_shape(5)
+        selected = {'jobs': {'job_pin_fence_update': ['id', 'source_id']},
+                    'sources': {'source_pin_fence_update': ['id'], 'source_pin_seed_update': ['id']},
+                    'storage_reservations': {'preview_pin_fence_update': ['id', 'kind', 'job_id']}}
+        for table, triggers in selected.items():
+            for name, columns in triggers.items():
+                normalized = transition.normalize_shape(actual)['Tables'][table]['Triggers'][name]
+                self.assertEqual(normalized['Columns'], columns)
+                self.assertEqual(normalized['When'], '')
+                for field, value in (('Columns', None), ('Columns', []), ('Columns', columns + ['owner']),
+                                     ('Columns', 'id'), ('When', 'WHEN (true)'), ('When', None)):
+                    changed = deepcopy(actual)
+                    changed['Tables'][table]['Triggers'][name][field] = value
+                    with self.subTest(table=table, trigger=name, field=field, value=value), self.assertRaisesRegex(RuntimeError, 'catalog differs'):
+                        transition.validate_catalog(self.catalog(5, changed), 5, expected)
+
+    def test_captured_catalog_keeps_unmodified_query_json_and_validated_receipt(self):
+        for position in (4, 5):
+            value, captured = self.capture(position, self.query_shape(position))
+            phase = captured['phase']
+            with self.subTest(position=position):
+                result = value.capture_catalog(phase, object(), position)
+                receipt = value.report['transition']['catalogs'][phase]
+                self.assertEqual(result, captured)
+                self.assertEqual(value.report['transition']['catalog_observations'][phase], receipt)
+                self.assertEqual(transition.strict_json(transition.artifact(value.output, receipt)), captured)
+                self.assertTrue(captured['shape']['Tables']['storage_files']['Triggers']['storage_file_update']['Function'].startswith('public.'))
+                self.assertEqual(value.sql.call_count, 2)
+                value.run.assert_not_called()
+
+    def test_mismatched_catalog_is_frozen_before_refusal_and_never_becomes_validated(self):
+        shape = self.query_shape(4)
+        shape['Tables']['storage_files']['Triggers']['storage_file_update']['When'] = 'WHEN (true)'
+        value, captured = self.capture(4, shape)
+        validate = transition.validate_catalog
+
+        def validate_after_raw(actual, position, expected):
+            self.assertEqual(value.report['transition']['catalogs'], {})
+            receipt = value.report['transition']['catalog_observations']['old004']
+            self.assertEqual(transition.strict_json(transition.artifact(value.output, receipt)), captured)
+            validate(actual, position, expected)
+
+        with patch.object(transition, 'validate_catalog', side_effect=validate_after_raw), self.assertRaisesRegex(RuntimeError, 'catalog differs'):
+            value.capture_catalog('old004', object(), 4)
+        receipt = value.report['transition']['catalog_observations']['old004']
+        data = transition.artifact(value.output, receipt)
+        self.assertEqual(transition.strict_json(data)['context'], captured['context'])
+        self.assertEqual(transition.strict_json(data)['phase'], 'old004')
+        self.assertEqual(value.report['transition']['catalogs'], {})
+        with self.assertRaisesRegex(RuntimeError, 'cannot be overwritten'):
+            value.raw(receipt['path'], b'{"replacement":true}')
+        self.assertEqual(transition.artifact(value.output, receipt), data)
+        value.run.assert_not_called()
+
+
 class PublicRuntimeOutputControls(unittest.TestCase):
     """Exercise output parsing with mocks; never execute the generated SQL."""
     def acceptance(self, output):

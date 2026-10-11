@@ -92,6 +92,8 @@ jobs:
           ffprobe -version | tee ffprobe-version.txt
           python_command=python3
           if [ "$RUNNER_OS" = Windows ]; then python_command=python; fi
+          "$python_command" -m unittest discover -s scripts -p release_consumer_test.py
+          "$python_command" -m unittest discover -s scripts -p consumer_process_native_test.py
           "$python_command" scripts/check-media-capabilities.py
           go test -json -race -count=1 -timeout=8m ./pkg/engine ./internal/fsdurable ./cmd/cutmy | tee native-media-tests.jsonl
           go test -json -race -count=1 -timeout=3m ./internal/app -run '^(TestProcess.*|TestDiagnosticCopyCannotBypassMemoryBound)$' | tee native-process-tests.jsonl
