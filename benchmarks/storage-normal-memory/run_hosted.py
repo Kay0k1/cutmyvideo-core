@@ -279,7 +279,7 @@ BOUNDARY_SQL = """SELECT jsonb_build_object(
 'database_stats',(SELECT to_jsonb(d) FROM pg_stat_database d WHERE datname=current_database()),
 'owned_tables',(SELECT COALESCE(jsonb_agg(jsonb_build_object('schema',s.schemaname,'table',s.relname,'relation_bytes',pg_total_relation_size(s.relid),'stats',to_jsonb(s)) ORDER BY s.schemaname,s.relname),'[]') FROM pg_stat_user_tables s WHERE s.schemaname LIKE 'capacity_%'),
 'backend_counts',(SELECT jsonb_agg(to_jsonb(a)) FROM (SELECT state,backend_type,count(*) FROM pg_stat_activity GROUP BY state,backend_type) a))"""
-BOUNDARY_DISK = 'test "$PGDATA" = /var/lib/postgresql/data; du -sb "$PGDATA" "$PGDATA/pg_wal"; find "$PGDATA" -type f -path "*/pgsql_tmp/*" -printf "%s\\n" | awk \'{total += $1; count++} END {print "temporary_files", count+0, "temporary_bytes", total+0}\''
+BOUNDARY_DISK = 'test "$PGDATA" = /var/lib/postgresql/data; du -sb "$PGDATA"; du -sb "$PGDATA/pg_wal"; find "$PGDATA" -type f -path "*/pgsql_tmp/*" -printf "%s\\n" | awk \'{total += $1; count++} END {print "temporary_files", count+0, "temporary_bytes", total+0}\''
 
 def validate_boundary(sql, disk):
     parsed = loads(sql)
