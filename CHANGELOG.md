@@ -4,7 +4,7 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
-## 1.0.0 - 2026-10-11
+## 1.0.1 - 2026-10-11
 
 ### Added
 - Migration 5 adds transactional source job/exact-preview pin counts, indexed bounded source TTL selection and persisted bounded drift audits. Release checks require fresh PostgreSQL/native/004→005 upgrade and coordinated restore acceptance.
@@ -21,6 +21,7 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 - Executable HTTP/OpenAPI contract checks, including byte-length limits, preview priority, download range errors and database unavailability.
 
 ### Fixed
+- Accept a squash-merged installation revision only when its complete 173-file application inventory exactly matches the reviewed candidate. Record its actual ancestry and retain refusal of changed source, invalid references and dirty checkouts.
 - Batch storage scheduling and cursor/known-path reads while retaining the storage fence, binary timestamp decoding, rollback and acknowledged directory progress; use smaller local reads when little deadline remains. Require the new cancellation, permission, non-ISO timestamp and false-preview-pin checks on every native target.
 - Allow PostgreSQL to simplify the exact-preview pin existence check without changing the 200-source candidate limit or authoritative pin protection. The matched warm 1,000-row query experiment improves; global preview membership cost and memory at larger sizes remain unmeasured.
 - Move the unchanged 32-by-five-millisecond progress test to the explicit `storagecapacity` benchmark tag. Its recorded failures and original gates remain visible; ordinary CI requires deterministic storage correctness, and a separate 1,000-row observation checks the five-second API and ten-second one-shot maintenance budgets.
@@ -39,6 +40,14 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 - Bound API database stages, including connection-pool acquisition and SQL lock waits, without shortening media uploads, exports or downloads. Report unavailable database operations with a stable HTTP 503 diagnostic.
 - Synchronize completed output data and required directory entries before acknowledging local exports or registering server artifacts. Preserve exclusive output publication and uncertain database commit recovery.
 - Check required filesystem publication capabilities before local encoding rather than discovering unsupported hard links after processing.
+
+## 1.0.0 - 2026-10-11
+
+This tag was not published as a release. The required main self-hosting check
+refused the repository's squash merge because the reviewed candidate was no
+longer an ancestor, although all application files matched. Its pipeline was
+cancelled before publication. The original tag remains immutable; 1.0.1 corrects
+the installation admission check and contains the first published 1.x release.
 
 ## 0.2.1 - 2026-10-10
 
