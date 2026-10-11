@@ -6,6 +6,7 @@ belong to this invocation; an explicitly supplied test PostgreSQL is required.
 """
 
 import argparse
+from collections import Counter
 import ctypes
 import hashlib
 import http.client
@@ -40,9 +41,14 @@ def require(condition, message):
 
 
 def verify_upgrade_snapshot(before, after):
-    """Preserve every historical value while checking migration 003 defaults."""
+    """Preserve historical values and validate exactly the 003/005 additions."""
     failure = "Upgrade changed existing sources/jobs/items/leases/storage records"
-    require(set(before) == set(after) and "storage_files" in before, failure)
+    require(set(before) == set(after) and {"sources", "jobs", "storage_files", "storage_reservations"} <= set(before), failure)
+    pin_fields = {"retention_job_pins", "retention_preview_pins", "retention_pins_valid", "retention_pin_revision"}
+    require(all(not pin_fields.intersection(row) for row in before["sources"]),
+            "Historical upgrade fixture already contains migration 005 columns")
+    job_pins = Counter(row["source_id"] for row in before["jobs"])
+    preview_pins = Counter(row["job_id"] for row in before["storage_reservations"] if row["kind"] == "preview")
     historical_after = {}
     for table, rows in after.items():
         historical_after[table] = []
@@ -58,6 +64,18 @@ def verify_upgrade_snapshot(before, after):
                 # participate in the complete comparison below.
                 row = {key: value for key, value in row.items()
                        if key not in ("delete_retry_at", "delete_failures")}
+            elif table == "sources":
+                require(type(row.get("retention_job_pins")) is int
+                        and row["retention_job_pins"] == job_pins[row.get("id")]
+                        and type(row.get("retention_preview_pins")) is int
+                        and row["retention_preview_pins"] == preview_pins[row.get("id")]
+                        and row.get("retention_pins_valid") is True
+                        and type(row.get("retention_pin_revision")) is int
+                        and row["retention_pin_revision"] == 0,
+                        "Upgrade added invalid source retention counts or defaults")
+                # Validate all four known additions first, then compare every
+                # historical field. Unknown additions are still rejected.
+                row = {key: value for key, value in row.items() if key not in pin_fields}
             historical_after[table].append(row)
 
     def records(snapshot):
@@ -552,6 +570,7 @@ class Acceptance:
         api = self.server(self.current, original, port, "upgraded-api")
         self.report["upgrade_storage_defaults_checked"] = verify_upgrade_snapshot(
             before_upgrade, self.pg.snapshot(original))
+        self.report["upgrade_source_pins_checked"] = len(before_upgrade["sources"])
         require(a.job(source_a, "same-key-separate-owner", ranges)["id"] == batch["id"], "Upgrade lost idempotency")
         self.ownership(a, b, source_a, batch)
         worker = self.start(self.current, "worker", original, port, "upgraded-worker")

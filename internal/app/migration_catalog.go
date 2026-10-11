@@ -37,7 +37,10 @@ SELECT jsonb_build_object(
    'Function',pn.nspname || '.' || p.proname,'Type',t.tgtype,
    'Enabled',t.tgenabled::text,'OldTable',COALESCE(t.tgoldtable,''),'NewTable',COALESCE(t.tgnewtable,''),
    'Columns',(SELECT jsonb_agg(a.attname ORDER BY selected.position) FROM unnest(t.tgattr::smallint[]) WITH ORDINALITY selected(number,position) JOIN pg_attribute a ON a.attrelid=t.tgrelid AND a.attnum=selected.number),
-   'When',COALESCE(pg_get_expr(t.tgqual,t.tgrelid,true),'')))
+   -- OLD and NEW are separate relations: pg_get_expr cannot decompile both.
+   -- No managed trigger permits a predicate; retain a nonempty trigger-aware
+   -- definition for any predicate so catalog drift produces schema_incompatible.
+   'When',CASE WHEN t.tgqual IS NULL THEN '' ELSE pg_get_triggerdef(t.oid,true) END))
    FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid JOIN pg_namespace pn ON pn.oid=p.pronamespace
    WHERE t.tgrelid=c.oid AND NOT t.tgisinternal),'{}'::jsonb)
  )) FROM managed c),'{}'::jsonb),

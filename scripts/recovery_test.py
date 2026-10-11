@@ -22,7 +22,7 @@ class UpgradeSnapshotChecks(unittest.TestCase):
     def setUp(self):
         self.before = {
             "sources": [{"id": "src_old", "owner": "owner_a", "path": "/fixture/source", "duration_ms": 8000}],
-            "jobs": [{"id": "job_old", "owner": "owner_a", "status": "running", "attempts": 1,
+            "jobs": [{"id": "job_old", "source_id": "src_old", "owner": "owner_a", "status": "running", "attempts": 1,
                       "lease_token": "lease_old", "lease_until": "2026-10-10T22:15:00+00:00",
                       "items": [{"id": "item_old", "status": "succeeded", "artifact_id": "art_old"}]}],
             "artifacts": [{"id": "art_old", "job_id": "job_old", "path": "/fixture/artifact", "size_bytes": 32, "expires_at": None}],
@@ -30,13 +30,15 @@ class UpgradeSnapshotChecks(unittest.TestCase):
                 {"path": "/fixture/source", "owner": "owner_a", "kind": "source", "resource_id": "src_old", "size_bytes": 100, "delete_pending": False},
                 {"path": "/fixture/pending", "owner": "owner_a", "kind": "tombstone", "resource_id": "", "size_bytes": 8, "delete_pending": True},
             ],
-            "storage_reservations": [{"id": "reservation_old", "owner": "owner_a", "size_bytes": 99, "token": "lease_old"}],
+            "storage_reservations": [{"id": "reservation_old", "job_id": "src_old", "kind": "preview", "owner": "owner_a", "size_bytes": 99, "token": "lease_old"}],
             "storage_counters": [{"id": 1, "stored_bytes": 108, "reserved_bytes": 99}],
             "queue_owners": [{"owner": "owner_a", "pending": 1}],
         }
         self.after = copy.deepcopy(self.before)
         for row in self.after["storage_files"]:
             row.update(delete_retry_at="-infinity", delete_failures=0)
+        for row in self.after["sources"]:
+            row.update(retention_job_pins=1, retention_preview_pins=1, retention_pins_valid=True, retention_pin_revision=0)
 
     def rejects(self, mutate):
         changed = copy.deepcopy(self.after)
@@ -76,7 +78,7 @@ class UpgradeSnapshotChecks(unittest.TestCase):
         self.rejects(lambda s: s["storage_files"][0].pop("resource_id"))
 
     def test_unknown_additive_column_is_rejected(self):
-        for table in ("storage_files", "jobs"):
+        for table in ("storage_files", "jobs", "sources"):
             with self.subTest(table=table):
                 self.rejects(lambda s: s[table][0].update(unknown_column=0))
 
@@ -110,6 +112,46 @@ class UpgradeSnapshotChecks(unittest.TestCase):
     def test_table_set_changes_are_rejected(self):
         self.rejects(lambda s: s.pop("queue_owners"))
         self.rejects(lambda s: s.update(unexpected_table=[]))
+
+    def test_source_pins_are_required_typed_and_exact_on_every_source(self):
+        self.before["sources"].append({"id": "src_empty", "owner": "owner_b", "path": "/fixture/empty", "duration_ms": 9000})
+        self.after["sources"].append({**self.before["sources"][-1], "retention_job_pins": 0, "retention_preview_pins": 0,
+                                       "retention_pins_valid": True, "retention_pin_revision": 0})
+        self.assertEqual(recovery.verify_upgrade_snapshot(self.before, self.after), 2)
+        for index in (0, 1):
+            for field in ("retention_job_pins", "retention_preview_pins", "retention_pins_valid", "retention_pin_revision"):
+                with self.subTest(index=index, field=field, operation="missing"):
+                    self.rejects(lambda s: s["sources"][index].pop(field))
+                for value in (None, False, 1.0, "1", -1, 2):
+                    with self.subTest(index=index, field=field, value=value):
+                        self.rejects(lambda s: s["sources"][index].update({field: value}))
+
+    def test_pins_count_all_jobs_and_only_exact_preview_membership(self):
+        self.before["jobs"].append({**self.before["jobs"][0], "id": "job_done", "status": "succeeded", "owner": "owner_b"})
+        self.before["storage_reservations"].extend([
+            {**self.before["storage_reservations"][0], "id": "expired_foreign", "owner": "owner_b", "expires_at": "2000-01-01T00:00:00Z"},
+            {**self.before["storage_reservations"][0], "id": "cached", "kind": "cached_preview"},
+            {**self.before["storage_reservations"][0], "id": "artifact", "kind": "artifact"},
+            {**self.before["storage_reservations"][0], "id": "other", "job_id": "src_elsewhere"},
+        ])
+        self.after["jobs"] = copy.deepcopy(self.before["jobs"])
+        self.after["storage_reservations"] = copy.deepcopy(self.before["storage_reservations"])
+        self.after["sources"][0].update(retention_job_pins=2, retention_preview_pins=2)
+        self.assertEqual(recovery.verify_upgrade_snapshot(self.before, self.after), 2)
+        self.rejects(lambda s: s["sources"][0].update(retention_job_pins=1))
+        self.rejects(lambda s: s["sources"][0].update(retention_preview_pins=4))
+
+    def test_historical_source_fields_still_match_after_valid_backfill(self):
+        self.rejects(lambda s: s["sources"][0].update(id="src_elsewhere"))
+        self.rejects(lambda s: s["sources"][0].pop("path"))
+        self.rejects(lambda s: s["sources"].append(copy.deepcopy(s["sources"][0])))
+
+    def test_fixture_must_represent_pre_005_schema(self):
+        for field in ("retention_job_pins", "retention_preview_pins", "retention_pins_valid", "retention_pin_revision"):
+            before = copy.deepcopy(self.before)
+            before["sources"][0][field] = 0
+            with self.subTest(field=field), self.assertRaises(RuntimeError):
+                recovery.verify_upgrade_snapshot(before, self.after)
 
 
 class ExternalCurrentChecks(unittest.TestCase):
