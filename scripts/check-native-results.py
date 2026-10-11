@@ -59,7 +59,7 @@ REQUIRED = [
      "TestHLSMediaContractRotationAndSAR", "TestHLSMediaContractDefaultAudio", "TestHLSMediaContractHDRTags",
      "TestHLSMediaContractContinuityMetadata", "TestHLSMediaContractFingerprintUsesSelectedTracks",
      "TestHDRCapabilityFailureKeepsProcessCause", "TestHDRFailurePreservesCancellationAndLimits",
-     "TestBatchAudioSelectionSubtitlesAndJoinedTimeline"},
+     "TestBatchAudioSelectionSubtitlesAndJoinedTimeline", "TestJoinedRemoteEntryKeepsMediaFormatAndProtocolRestrictions"},
 ]
 
 REQUIRED_PACKAGES = [
@@ -81,7 +81,7 @@ BOOKWORM_REQUIRED = {
     "TestHLSMediaContractRotationAndSAR", "TestHLSMediaContractDefaultAudio", "TestHLSMediaContractHDRTags",
     "TestHLSMediaContractContinuityMetadata", "TestHLSMediaContractFingerprintUsesSelectedTracks",
     "TestHDRCapabilityFailureKeepsProcessCause", "TestHDRFailurePreservesCancellationAndLimits",
-    "TestBatchAudioSelectionSubtitlesAndJoinedTimeline",
+    "TestBatchAudioSelectionSubtitlesAndJoinedTimeline", "TestJoinedRemoteEntryKeepsMediaFormatAndProtocolRestrictions",
 }
 
 

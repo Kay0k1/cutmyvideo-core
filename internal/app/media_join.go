@@ -227,6 +227,15 @@ func joinAccurate(ctx context.Context, c Config, inputs [][]mediaInput, ranges [
 				return nil, &sourceProblem{"join_incompatible", "Joined source paths cannot contain line breaks; rename the file or use separate outputs"}
 			}
 			plan.WriteString(ffconcatFile(path))
+			// The trusted concat demuxer needs file access to read this plan,
+			// but each untrusted media entry retains the original media and
+			// transport allowlists. It must never inherit concat/file access
+			// merely because the parent plan requires them.
+			childProtocols := "file"
+			if input.Remote {
+				childProtocols = "http,tcp"
+			}
+			fmt.Fprintf(&plan, "option protocol_whitelist %s\noption format_whitelist %s\n", childProtocols, mediaFormats)
 			fmt.Fprintf(&plan, "inpoint %s\noutpoint %s\nduration %s\n", seconds(r.StartMS-input.OffsetMS), seconds(r.EndMS-input.OffsetMS), seconds(r.EndMS-r.StartMS))
 		}
 		path := filepath.Join(dir, fmt.Sprintf("input-%d.ffconcat", column))

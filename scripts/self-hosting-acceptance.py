@@ -210,13 +210,24 @@ def validate_packet_snapshots(report, directory):
                         for phase in ('before', 'after')), 'recorded packet counter differs from actual rule snapshot')
 
 
+def current_installation_module():
+    name = 'current_installation_acceptance'
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, REPO / 'scripts/current-installation-acceptance.py')
+        value = importlib.util.module_from_spec(spec)
+        sys.modules[name] = value
+        spec.loader.exec_module(value)
+    return sys.modules[name]
+
+
 def validate_report(report, evidence_directory=None):
     """Fail closed even if all visible partial check records say PASS."""
     mode = report.get('mode', 'same-schema')
-    require(mode in ('same-schema', 'source-retention-004-to-005'), 'unknown acceptance mode')
+    require(mode in ('same-schema', 'source-retention-004-to-005', 'current-installation'), 'unknown acceptance mode')
+    current = current_installation_module() if mode == 'current-installation' else None
     transition = transition_module() if mode == 'source-retention-004-to-005' else None
-    required_groups = transition.groups(GROUPS) if transition else GROUPS
-    require(report.get('schema_version') == (2 if transition else 1) and report.get('ok') is True
+    required_groups = transition.groups(GROUPS) if transition else current.groups(GROUPS) if current else GROUPS
+    require(report.get('schema_version') == (2 if transition else 3 if current else 1) and report.get('ok') is True
             and report.get('errors') == [], 'acceptance did not finish successfully')
     require(set(report.get('groups', {})) == set(required_groups), 'required group missing or unknown')
     for group, checks in required_groups.items():
@@ -252,11 +263,13 @@ def validate_report(report, evidence_directory=None):
     else:
         require(binding['head_commit'] == binding['commit'] and binding['head_tree'] == binding['tree'],
                 'non-PR checkout identity mismatch')
-    require(set(images) == {'old', 'current', 'restored'} and images['old']['source_commit'] == UPGRADE_FROM
+    baseline_commit = current.BASELINE if current else UPGRADE_FROM
+    baseline_tree = current.BASELINE_TREE if current else UPGRADE_TREE
+    require(set(images) == {'old', 'current', 'restored'} and images['old']['source_commit'] == baseline_commit
             and SHA.fullmatch(images['current']['source_commit'])
             and images['current']['source_commit'] == report.get('expected_checkout') == provider.get('GITHUB_SHA')
-            and images['current']['source_commit'] != UPGRADE_FROM
-            and images['old']['tree'] == UPGRADE_TREE
+            and images['current']['source_commit'] != baseline_commit
+            and images['old']['tree'] == baseline_tree
             and images['current']['tree'] == binding['tree']
             and images['old']['image_id'] != images['current']['image_id']
             and images['restored']['image_id'] == images['current']['image_id']
@@ -280,6 +293,8 @@ def validate_report(report, evidence_directory=None):
         validate_packet_snapshots(report, evidence_directory)
     if transition:
         transition.validate_transition(report, evidence_directory, sys.modules.get(__name__) or globals())
+    elif current:
+        current.validate_current(report, evidence_directory)
     else:
         application = report['groups']['identity']['checks']['application_sources_unchanged'].get('evidence', {})
         require(report.get('runtime_application_sources_unchanged') is True
@@ -618,13 +633,15 @@ class RoutedForwardReceiver:
 
 
 class Acceptance:
+    upgrade_from = UPGRADE_FROM
+
     def __init__(self, args):
         require(args.allow_disposable_host and os.environ.get('GITHUB_ACTIONS') == 'true'
                 and os.environ.get('RUNNER_ENVIRONMENT') == 'github-hosted',
                 'only an explicitly disposable GitHub-hosted runner is permitted')
         require(os.geteuid() == 0 and os.uname().sysname == 'Linux' and os.uname().machine == 'x86_64',
                 'root Linux amd64 runner required')
-        require(args.upgrade_from == UPGRADE_FROM and SHA.fullmatch(args.revision), 'approved A/current SHA required')
+        require(args.upgrade_from == self.upgrade_from and SHA.fullmatch(args.revision), 'approved A/current SHA required')
         self.args = args
         self.output = args.output.absolute()
         require(not self.output.exists() and not self.output.is_relative_to(REPO), 'new outside-Git output required')
@@ -852,8 +869,8 @@ class Acceptance:
         return source
 
     def checkout_ancestry(self, head):
-        self.run(['git', '-c', 'safe.directory=' + str(REPO), '-C', REPO, 'merge-base', '--is-ancestor', UPGRADE_FROM, self.args.revision])
-        self.run(['git', '-c', 'safe.directory=' + str(REPO), '-C', REPO, 'merge-base', '--is-ancestor', UPGRADE_FROM, head])
+        self.run(['git', '-c', 'safe.directory=' + str(REPO), '-C', REPO, 'merge-base', '--is-ancestor', self.upgrade_from, self.args.revision])
+        self.run(['git', '-c', 'safe.directory=' + str(REPO), '-C', REPO, 'merge-base', '--is-ancestor', self.upgrade_from, head])
         return {'approved_A_is_ancestor': True}
 
     def initialize_host(self):
@@ -897,7 +914,7 @@ class Acceptance:
         self.initial_images = set(self.run(['docker', 'image', 'ls', '--no-trunc', '-q']).decode().split())
         self.initial_filter = self.run(['iptables-save', '-t', 'filter'])
         (self.output / 'filter-before.txt').write_bytes(self.initial_filter)
-        self.old_repo, self.current_repo = self.clone('old-source', UPGRADE_FROM), self.clone('current-source', self.args.revision)
+        self.old_repo, self.current_repo = self.clone('old-source', self.upgrade_from), self.clone('current-source', self.args.revision)
         self.old = self.make_project(self.old_repo, 'old', 40)
         self.current = self.make_project(self.current_repo, 'new', 40, same=self.old)
         self.restored = self.make_project(self.current_repo, 'restored', 42)
@@ -914,14 +931,14 @@ class Acceptance:
         require(self.control_name not in names and self.control_name not in existing_networks, 'witness resource collision')
 
     def old_identity(self):
-        self.wrapper(self.old, 'build', '--revision', UPGRADE_FROM)
+        self.wrapper(self.old, 'build', '--revision', self.upgrade_from)
         self.old_source = self.image_record(self.old, 'old')
         self.check('immutable_old_image', self.report['images']['old'])
         dirty = self.old_repo / 'acceptance-dirty.txt'
         dirty.write_text('owned dirty-checkout witness\n')
         attempted = {**self.old, 'state': self.work / 'dirty-state'}
         try:
-            self.wrapper(attempted, 'build', '--revision', UPGRADE_FROM, expected=1)
+            self.wrapper(attempted, 'build', '--revision', self.upgrade_from, expected=1)
             require(not attempted['state'].exists(), 'dirty source created build state')
         finally:
             dirty.unlink()
@@ -1447,7 +1464,8 @@ class Acceptance:
         require(all(self.container(self.old, role)['State']['Running'] is False for role in ('api', 'worker')),
                 'old backup did not stop writers')
         # Build B only after actual A media + backup. This new image has the
-        # hosted merge SOURCE identity; the app source is intentionally equal.
+        # hosted merge SOURCE identity. Each mode independently admits its
+        # application inventory before this actual image upgrade.
         self.group('identity', self.current_identity)
         self.active_group = 'backup_restore'
         pg_before = self.container(self.old, 'postgres')
@@ -1462,7 +1480,7 @@ class Acceptance:
         require(all(self.container(self.current, role)['Image'] == self.report['images']['current']['image_id']
                     for role in ('api', 'worker')), 'same-project upgrade did not execute the new image')
         self.check('actual_same_project_image_upgrade', {'old': self.report['images']['old'], 'current': self.report['images']['current'],
-                                                        'application_code_unchanged': True,
+                                                        'application_code_unchanged': self.report['runtime_application_sources_unchanged'],
                                                         'postgres_transition': {'before_id': pg_before['Id'], 'after_id': pg_after['Id'],
                                                                                'before_pid': pg_before['State']['Pid'], 'after_pid': pg_after['State']['Pid'],
                                                                                'persistent_volume': persistent,
@@ -1733,7 +1751,7 @@ class Acceptance:
                     'competing immutable state started under shared lock')
         finally:
             os.close(fd)
-        self.check('old_new_state_shared_lock', {'old_state_source': UPGRADE_FROM, 'new_state_source': self.args.revision})
+        self.check('old_new_state_shared_lock', {'old_state_source': self.upgrade_from, 'new_state_source': self.args.revision})
         self.policy(self.current, 'remove'); self.wrapper(self.current, 'up', expected=1)
         require(all(not self.container(self.current, r)['State']['Running'] for r in ('api', 'worker')), 'restart bypassed policy')
         self.check('stopped_restart_requires_policy')
@@ -2062,12 +2080,14 @@ def parse_args(argv=None):
     parser.add_argument('--allow-disposable-host', action='store_true')
     parser.add_argument('--revision')
     parser.add_argument('--pr-head', help='Actual PR head SHA (checkout may be its provider merge); otherwise checkout SHA')
-    parser.add_argument('--upgrade-from', default=UPGRADE_FROM)
-    parser.add_argument('--mode', choices=('same-schema', 'source-retention-004-to-005'), default='same-schema',
+    parser.add_argument('--upgrade-from')
+    parser.add_argument('--mode', choices=('same-schema', 'source-retention-004-to-005', 'current-installation'), default='same-schema',
                         help='Schema changes require the explicitly selected, pinned transition mode')
     parser.add_argument('--output', type=Path)
     parser.add_argument('--temp-directory', type=Path, default=Path(tempfile.gettempdir()))
     args = parser.parse_args(argv)
+    if args.upgrade_from is None:
+        args.upgrade_from = current_installation_module().BASELINE if args.mode == 'current-installation' else UPGRADE_FROM
     require(args.verify_report is not None or (args.revision and args.output), 'explicit revision/output required')
     return args
 
@@ -2081,7 +2101,9 @@ def main(argv=None):
         count = len(report['groups'])
         print('Public profile acceptance: all ' + str(count) + ' groups and cleanup PASS')
         return 0
-    acceptance = transition_module().acceptance_class(sys.modules[__name__]) if args.mode == 'source-retention-004-to-005' else Acceptance
+    acceptance = (transition_module().acceptance_class(sys.modules[__name__]) if args.mode == 'source-retention-004-to-005'
+                  else current_installation_module().acceptance_class(sys.modules[__name__]) if args.mode == 'current-installation'
+                  else Acceptance)
     result = acceptance(args).execute()
     print('Public profile acceptance ' + ('PASS' if result else 'FAIL') + ': ' + str(args.output / 'acceptance-report.json'))
     return 0 if result else 1

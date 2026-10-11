@@ -2,10 +2,11 @@
 
 This page retains the original preparation plan and its historical candidate
 identities. Its references to pending gates and future observations describe
-that preparation stage. The current mandatory, automated transition and
-coordinated restoration checks are documented in [self-hosting.md](self-hosting.md).
-The current release must pass those checks for its own exact source and archives;
-the historical identities below do not replace that acceptance.
+that preparation stage. The current installation and coordinated restoration
+checks are documented in [self-hosting.md](self-hosting.md). The default workflow
+now validates an unchanged-schema 005 installation against its own exact checkout;
+this historical 004→005 contract remains an explicit mode with unchanged pins.
+The historical identities below do not replace current acceptance.
 
 This is a source-only acceptance extension. It defines the evidence required for
 the explicit `source-retention-004-to-005` mode; it does not record a successful
@@ -25,10 +26,10 @@ output. A future real catalog capture must confirm it or require a reviewed
 correction before release. The original reviewed source-retention application
 pin was commit `670089aa7cc99fe65e2a0336ff05d7c6b3047bd0`, tree
 `dc83b8f861b2b6b823b8476e3c9ad273f7aa6bba`; those identities and their recorded
-proofs remain historical. The current recovery-contract application pin is
+proofs remain historical. A later recovery-contract application pin was
 commit `76e9cdb4072e8c6a2ba293ee69635601785ba62c`, tree
 `ee1c6647390b8f91354fe0c371d19d81d3bf0549`. It was reviewed and committed before
-this wrapper-only update. The final reviewed harness checkout/merge identity
+its wrapper-only update. The final reviewed harness checkout/merge identity
 must be separately frozen before any future hosted run. A branch name, dirty
 working tree or preparation base cannot stand in for either reviewed identity.
 
@@ -88,11 +89,12 @@ the reviewed fifth entry. Non-004 old state, non-005 current state, an unreviewe
 commit/tree, changed source identity or missing transition evidence is refused.
 No mode infers permission to execute an upgrade from a candidate's version.
 
-The public workflow explicitly selects `source-retention-004-to-005` for
-automatic pull-request and push runs. Its required `workflow_dispatch` input
-`acceptance_mode` defaults to the same transition; `same-schema` remains an
-explicit historical opt-in and retains the original equality requirement. Every
-transition run installs the pinned Go toolchain for its PostgreSQL test oracles.
+The public workflow exposes `source-retention-004-to-005` as an explicit
+historical `workflow_dispatch` choice. Automatic runs and the manual default use
+the current installation contract documented in [self-hosting.md](self-hosting.md);
+`same-schema` also remains an explicit historical choice with its original
+equality requirement. Every explicit transition run installs the pinned Go
+toolchain for its PostgreSQL test oracles.
 The flow and report-verification steps use the same event/input selector; neither
 derives a mode from the candidate's source identity. Missing or unknown dispatch
 values are refused by the CLI. The driver requires
@@ -128,7 +130,8 @@ Never patch, regenerate, rebuild from altered source, or add migration005 to the
 old sealed inventory. Build A1 from its own immutable source and build the new
 candidate from the exact independently reviewed inventory.
 
-The current immutable application inventory has exactly 169 files and digest
+The recovery-contract inventory at `76e9cdb4072e8c6a2ba293ee69635601785ba62c`
+had exactly 169 files and digest
 `1ac2c591d2e20c628ddfe2cf01f9e8a6af7bcde92e154d521794e97094d86534`. It includes
 `git_blob` identities and was derived from the committed recovery application,
 not a working tree. The historical root670 inventory has 168 files and digest
@@ -138,12 +141,17 @@ superseded 46cf full map had digest
 preparation packet's projection omitted `git_blob` and had digest
 `0988f39c1fcba6189acf57f2167aa72f79fc426c4af9e16981956b35676817db`.
 These are different serialized inventories, not interchangeable hashes. The
-transition verifies the current 169-file full map, refuses substitution of the
-historical 168-file map, and retains the original A1 full-map digest independently;
-it never claims old/new application equality. The executing wrapper must descend
-from the exact reviewed recovery application commit and have byte-identical
-application files; later unrelated application changes require another reviewed
-commit/tree/map pin. No environment variable or branch selector changes this pin.
+current historical transition verifier pins the separately reviewed recovery and
+native-disk commit `732340c43a71b332da31b3580c3c5048e936a000`, tree
+`23c85879642f33a896d25eb795dfab91f3af0d9c`, and exactly 173 application files with
+digest `d1ae273e0d56212ef549f029970cd4ea1f33276faa7e4e11c88127e3aeeacef6`.
+It refuses substitution of the earlier maps and retains the original A1 full-map
+digest independently; it never claims old/new application equality. Its source
+admission records actual ancestry independently and always requires the exact
+reviewed application map, including for a squash-merged checkout. No environment
+variable or branch selector changes this pin. Later unchanged-schema application
+work uses `current-installation` and produces its own evidence rather than
+retargeting this historical transition.
 
 Preserve the reviewed conntrack policy helper at SHA-256
 `ad653eb4eff9fb8f40b1d733bcab7b6394b98f03a769bab18b126234d861aef0`.

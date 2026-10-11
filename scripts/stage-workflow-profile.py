@@ -52,7 +52,10 @@ def binary_metadata(path):
             'version': json.loads(command_metadata([path, 'version']))}
 
 
-def run_sample(url, blob, sample, media_path):
+def run_sample(url, blob, sample, media_path, event_hook=None):
+    def mark(name):
+        if event_hook is not None:
+            event_hook(name, time.monotonic())
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
 
     def request(path, body=None, headers=None):
@@ -69,18 +72,24 @@ def run_sample(url, blob, sample, media_path):
     upload = (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="fixture.mp4"\r\n'
               'Content-Type: video/mp4\r\n\r\n').encode() + blob + f'\r\n--{boundary}--\r\n'.encode()
     begun = time.monotonic()
+    mark('upload_started')
     raw, _ = request('/api/v1/uploads', upload, {'Content-Type': f'multipart/form-data; boundary={boundary}'})
     source = json.loads(raw)
     uploaded = time.monotonic()
+    mark('upload_received')
+    mark('preview_started')
     preview, preview_headers = request('/api/v1/sources/' + source['id'] + '/preview?start_ms=0')
     preview_done = time.monotonic()
+    mark('preview_received')
     preview_cache = preview_headers.get('X-Preview-Cache')
     if preview_cache != 'miss':
         raise RuntimeError('First preview unexpectedly reused a cache entry: ' + str(preview_cache))
+    mark('job_requested')
     job = json_request('/api/v1/jobs', {
         'source_id': source['id'], 'ranges': [{'start_ms': 3000, 'end_ms': 11000, 'label': 'First'}],
         'format': 'mp4', 'quality': 'best', 'cut_mode': 'accurate'})
     accepted = time.monotonic()
+    mark('job_accepted')
     polls = 0
     while job['status'] not in ('succeeded', 'failed', 'cancelled'):
         time.sleep(.05)
@@ -89,9 +98,11 @@ def run_sample(url, blob, sample, media_path):
     if job['status'] != 'succeeded':
         raise RuntimeError(job)
     ready = time.monotonic()
+    mark('job_ready')
     artifact = job['items'][0]['artifact']
     output, _ = request(artifact['download_url'])
     received = time.monotonic()
+    mark('artifact_received')
     record = {
         'sample': sample, 'upload_inspect_ms': (uploaded - begun) * 1000,
         'first_preview_request_to_received_ms': (preview_done - uploaded) * 1000,

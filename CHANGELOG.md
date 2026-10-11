@@ -4,6 +4,8 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
+## 1.1.0 - 2026-10-12
+
 ### Added
 - Versioned JSON cutting plans and local batch CLI/Go APIs with named intervals and corrective range diagnostics.
 - Separate files or one joined result in submitted order, with actual source/output segment manifests; accurate encoding and compatible packet copy remain explicit choices.
@@ -12,6 +14,10 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ### Changed
 - Idle workers listen for committed queue notifications, retaining periodic claims and reconnect fallback. End-to-end preview/export observations include receipt of the complete output.
+
+### Fixed
+- Restrict every media entry in an ordered join independently from its trusted concat plan; changed remote content cannot open nested playlists or bypass file/network restrictions.
+- Separate current installation/upgrade/restore acceptance from the immutable historical schema-transition experiment, retaining its original identity and negative controls.
 
 ## 1.0.2 - 2026-10-11
 
