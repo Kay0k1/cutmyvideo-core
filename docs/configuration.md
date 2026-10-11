@@ -7,7 +7,10 @@ database and `DATA_DIR` for all three. `clip` and `inspect` only read
 Byte values are decimal integers, not `1GiB` strings. Durations use Go syntax
 (`30s`, `2m`, `12h`), must be positive and may not exceed 30 days. These are
 **code defaults**; the [Compose example](../deploy/compose.example.yml) uses
-smaller upload/output/storage/range budgets for a local trial.
+smaller upload/output/storage/range budgets for a local trial. The separately
+prepared [public profile](self-hosting.md) also constrains container resources,
+private temporary storage, database roles and checked network policy; it awaits
+real container acceptance.
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -77,6 +80,7 @@ operations return HTTP 503 `database_unavailable`; this response does not prove
 that a submitted mutation was never committed. See the [API error contract](api.md)
 before retrying a mutation.
 
-For custom `LISTEN_ADDR`, probe its `/readyz` directly: `cutmy healthcheck` currently
-uses `http://127.0.0.1:8080/readyz`. Worker health validates successful queue/lease
-access within 30 seconds rather than the existence of a process.
+`cutmy healthcheck` uses `LISTEN_ADDR`, including custom ports. Wildcard listen
+addresses are probed through local loopback; it requests `/readyz`. Worker health
+validates successful queue/lease access within 30 seconds rather than the
+existence of a process.

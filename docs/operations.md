@@ -2,6 +2,11 @@
 
 ## Install
 
+The new [public profile](self-hosting.md) is prepared separately and awaits its
+container acceptance run. Its wrapper retains HTTPS settings, role separation
+and policy checks throughout the lifecycle. The commands below describe the
+existing local trial; they do not install that public profile.
+
 Use the [README quick start](../README.en.md#self-hosting) and
 [Compose example](../deploy/compose.example.yml) for a local trial. Docker includes
 the binary, FFmpeg/ffprobe, checksum-pinned yt-dlp and Node runtime. Native CLI
@@ -22,6 +27,13 @@ egress, and keep unrelated host files/secrets out of media containers. See the
 [security model](security-model.md). The product UI is maintained privately; all
 instructions below work with this repository alone.
 
+For the local trial, use a Bash command array so later lifecycle commands keep
+the same configuration. Run from the repository root:
+
+```sh
+compose=(docker compose --env-file .env -f deploy/compose.example.yml)
+```
+
 ## HTTPS with Caddy
 
 This example exposes the API on your domain with Caddy running **directly on the
@@ -37,8 +49,9 @@ Keep the existing private `.env` and add the domain (replace the example):
 
 ```sh
 printf '\nCUTMY_DOMAIN=video.example.org\n' >> .env
-docker compose --env-file .env \
-  -f deploy/compose.example.yml -f deploy/compose.https.example.yml up --build -d
+compose=(docker compose --env-file .env \
+  -f deploy/compose.example.yml -f deploy/compose.https.example.yml)
+"${compose[@]}" up --build -d
 ```
 
 The [HTTPS overlay](../deploy/compose.https.example.yml) sets
@@ -85,10 +98,10 @@ from Caddy's inbound HTTPS rules and test it after Docker/host restarts.
 ## Health and capacity
 
 ```sh
-docker compose --env-file .env -f deploy/compose.example.yml ps
+"${compose[@]}" ps
 curl --fail http://localhost:8080/healthz
 curl --fail http://localhost:8080/readyz
-docker compose --env-file .env -f deploy/compose.example.yml exec -T worker cutmy worker-healthcheck
+"${compose[@]}" exec -T worker cutmy worker-healthcheck
 ```
 
 Readiness checks PostgreSQL; worker health independently requires successful
@@ -157,11 +170,11 @@ sets these values automatically from its clean tagged checkout.
 From the example, after checking out the intended release:
 
 ```sh
-docker compose --env-file .env -f deploy/compose.example.yml stop api worker
-docker compose --env-file .env -f deploy/compose.example.yml build api
-docker compose --env-file .env -f deploy/compose.example.yml up -d api worker
+"${compose[@]}" stop api worker
+"${compose[@]}" build api
+"${compose[@]}" up -d api worker
 curl --fail http://localhost:8080/readyz
-docker compose --env-file .env -f deploy/compose.example.yml exec -T worker cutmy worker-healthcheck
+"${compose[@]}" exec -T worker cutmy worker-healthcheck
 ```
 
 API shutdown drains in-flight requests for up to ten seconds, then forcibly closes remaining connections before database cleanup. Preserve PostgreSQL/media volumes. Interrupted jobs recover through leases within
@@ -176,19 +189,20 @@ retained installation: it deletes its database and media volumes.
 PostgreSQL stores ownership, queue and file accounting; media volumes store actual
 files. Back up both while API/worker writes are stopped for a simple consistent
 snapshot. Record release/image versions and store configuration privately.
-Restrict/encrypt backups containing user media. Run from the repository root:
+Restrict/encrypt backups containing user media. Use the same `compose` array from installation (including the HTTPS overlay
+when configured):
 
 ```sh
 set -euo pipefail
 umask 077
 backup_dir="backups/$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$backup_dir"
-docker compose --env-file .env -f deploy/compose.example.yml stop api worker
-docker compose --env-file .env -f deploy/compose.example.yml exec -T postgres \
+"${compose[@]}" stop api worker
+"${compose[@]}" exec -T postgres \
   pg_dump -U cutmy -d cutmy -Fc > "$backup_dir/database.dump"
-docker compose --env-file .env -f deploy/compose.example.yml run --rm -T --no-deps \
+"${compose[@]}" run --rm -T --no-deps \
   --entrypoint tar api -C /data -czf - . > "$backup_dir/media.tar.gz"
-docker compose --env-file .env -f deploy/compose.example.yml up -d api worker
+"${compose[@]}" up -d api worker
 ```
 
 Verify both commands succeed before resuming or treating the snapshot as complete.
@@ -201,12 +215,12 @@ the backed-up release, with the old service stopped or a separate port:
 ```sh
 set -euo pipefail
 export COMPOSE_PROJECT_NAME=cutmy-restore
-docker compose --env-file .env -f deploy/compose.example.yml up -d --wait postgres
-docker compose --env-file .env -f deploy/compose.example.yml exec -T postgres \
+"${compose[@]}" up -d --wait postgres
+"${compose[@]}" exec -T postgres \
   pg_restore --exit-on-error --no-owner --no-privileges -U cutmy -d cutmy < "$backup_dir/database.dump"
-docker compose --env-file .env -f deploy/compose.example.yml run --rm -T --no-deps \
+"${compose[@]}" run --rm -T --no-deps \
   --entrypoint tar api -C /data -xzf - < "$backup_dir/media.tar.gz"
-docker compose --env-file .env -f deploy/compose.example.yml up -d api worker
+"${compose[@]}" up -d api worker
 ```
 
 Verify API/worker health, source listing and a synthetic export/download before
@@ -219,7 +233,7 @@ Worker maintenance deletes expired unpinned media and reconciles abandoned files
 Run a bounded cycle independently while the worker is stopped:
 
 ```sh
-docker compose --env-file .env -f deploy/compose.example.yml run --rm -T --no-deps api maintenance
+"${compose[@]}" run --rm -T --no-deps api maintenance
 ```
 
 Each cycle has a ten-second budget; backlogs may need multiple cycles. Active jobs

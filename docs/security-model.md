@@ -16,6 +16,12 @@ The engine handles untrusted URLs and media. The engine includes application pro
 - FFmpeg/ffprobe input protocol and demuxer allowlists refuse untrusted playlists/network manifests and arbitrary format protocols. Local inputs permit the file protocol; remote media inputs permit HTTP/TCP to the relay and an explicit media-container allowlist. MOV external data references are not enabled.
 
 The proxy settings are a contract with yt-dlp. Public deployments should add an independent container/host egress policy: allow the service's own PostgreSQL, public DNS and public HTTPS, and refuse private/metadata destinations and other outbound ports. The standalone Compose example does not install that firewall; configure and verify it separately, including after Docker/host restarts. See the independent [operator guide](operations.md), and keep dependencies updated.
+The separate [prepared public profile](self-hosting.md) provides project-scoped
+IPv4 egress hooks for both Docker bridges, including host-local denial and exact
+PostgreSQL access. It refuses unsupported topology and requires policy verification
+before API/worker/migration/maintenance starts. Its container acceptance has not
+run; static controls do not establish host isolation. App restart is manual after
+a host/Docker restart so that policy restoration precedes startup.
 
 ## Ownership and browser requests
 
@@ -42,7 +48,7 @@ The proxy settings are a contract with yt-dlp. Public deployments should add an 
 - Export item error codes and messages use fixed public diagnostics. Subprocess stderr remains private; unknown failures do not invent retry causes or authorize automatic media retries. Stream selection ranks only complete supported input pairs; unsupported separate HLS clocks remain refused.
 - Artifacts and sources expire through worker cleanup or the independent maintenance command. Active jobs pin resources. Terminal jobs without retained artifacts are removed, allowing source cleanup. Owner-scoped deletion refuses active sources; its database tombstones survive failures and restarts until physical deletion succeeds.
 - PostgreSQL reservations, byte counters and queue leases coordinate independent API/worker processes. The IP rate limiter is process-local, so the current deployment uses one API; adding API replicas requires a shared IP limiter. One worker process runs a configurable pool of 1–8 jobs. Unknown or larger-than-8,388,608-pixel video inputs acquire the entire local processing pool; this scheduling bound supplements the container memory quota.
-- Application limits are admission limits, not a filesystem quota: apply a real volume/disk quota and memory/CPU/PID limits too. The supplied Compose example drops API/worker capabilities and sets memory, CPU and PID limits. For production, also configure a read-only root filesystem and bounded writable temporary filesystem alongside the media volume. Leave room for PostgreSQL, logs, and operating-system updates.
+- Application limits are admission limits, not a filesystem quota: apply a real volume/disk quota and memory/CPU/PID limits too. The supplied Compose example drops API/worker capabilities and sets memory, CPU and PID limits. The separately prepared public profile adds a read-only root filesystem and bounded private temporary filesystem alongside the media volume; actual acceptance remains required. Leave room for PostgreSQL, logs, and operating-system updates.
 - Old unregistered artifact/source files left by a crash between disk publication and database registration are adopted into the durable ledger and reconciled in bounded batches. A timeout/retention floor prevents cleanup from racing active writes. Failed physical deletion keeps bytes charged; reclaimed worker leases retain separate reservations until their old workspaces can safely be removed.
 
 Do not log session cookies, signed CDN links, passwords, or raw subprocess output in public responses. Sensitive data should not be committed to this repository. See [SECURITY.md](../SECURITY.md) for reporting.
