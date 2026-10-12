@@ -151,6 +151,29 @@ func TestWaveformSelectsActualAudioTrack(t *testing.T) {
 	}
 }
 
+func TestWaveformPreservesAntiphaseStereoActivity(t *testing.T) {
+	c := mediaConfig(t)
+	path := filepath.Join(c.DataDir, "antiphase.wav")
+	// Original stereo is loud in each channel; averaging the opposite phases
+	// would produce zero at every sample and incorrectly draw a silent track.
+	if _, err := runCommand(context.Background(), c.FFmpeg, "-v", "error", "-f", "lavfi", "-i", "aevalsrc=0.7*sin(2*PI*440*t)|-0.7*sin(2*PI*440*t):s=4000:d=2", "-c:a", "pcm_s16le", path); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(c.DataDir, "waveform.json")
+	if err := renderWaveformOptions(context.Background(), c, []mediaInput{{Path: path}}, Range{EndMS: 2000}, out, ExportRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	wave := readWaveform(t, out)
+	if !wave.HasAudio || len(wave.Peaks) != 20 {
+		t.Fatalf("invalid stereo waveform %+v", wave)
+	}
+	for i, peak := range wave.Peaks {
+		if math.Abs(peak-.7) > .002 {
+			t.Fatalf("stereo bin %d shows %f, want independently audible channel peak .7", i, peak)
+		}
+	}
+}
+
 func TestWaveformPrivateCacheAccountingAndDeletion(t *testing.T) {
 	store := testStore(t)
 	c := mediaConfig(t)

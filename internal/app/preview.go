@@ -143,7 +143,7 @@ func (s *Server) sourceAnalysisWithAdmission(w http.ResponseWriter, r *http.Requ
 		key = "storyboard:" + previewCacheKeyOptions(v, start, request)
 		filename, outputLimit, renderWindow = "storyboard.jpg", storyboardOutputBytes, renderStoryboardOptions
 	} else if waveform {
-		key = "waveform:" + previewCacheKeyOptions(v, start, request)
+		key = "waveform:channels-v2:" + previewCacheKeyOptions(v, start, request)
 		filename, outputLimit, renderWindow = "waveform.json", waveformOutputBytes, renderWaveformOptions
 	}
 	id := newID("preview")
