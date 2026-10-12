@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,11 +15,23 @@ import (
 
 func countMediaCommands(t *testing.T, c *Config) func() []string {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("command witness uses the POSIX shell; media behavior has native checks")
-	}
 	dir := t.TempDir()
 	log := filepath.Join(dir, "commands")
+	var windowsHelper []byte
+	if runtime.GOOS == "windows" {
+		// A native executable preserves the same command-count witness on Windows,
+		// where exec.Command cannot execute the POSIX wrapper below.
+		helper := filepath.Join(dir, "witness.exe")
+		build := exec.Command("go", "build", "-trimpath", "-o", helper, "../../scripts/testdata/media-command-witness.go")
+		if output, err := build.CombinedOutput(); err != nil {
+			t.Fatalf("build native media witness: %v\n%s", err, output)
+		}
+		var err error
+		windowsHelper, err = os.ReadFile(helper)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	quote := func(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'" }
 	for _, tool := range []*string{&c.FFprobe, &c.FFmpeg} {
 		path, err := exec.LookPath(*tool)
@@ -27,6 +40,20 @@ func countMediaCommands(t *testing.T, c *Config) func() []string {
 		}
 		name := filepath.Base(path)
 		wrapper := filepath.Join(dir, name)
+		if runtime.GOOS == "windows" {
+			if err := os.WriteFile(wrapper, windowsHelper, 0700); err != nil {
+				t.Fatal(err)
+			}
+			data, err := json.Marshal(struct{ Tool, Log, Label string }{path, log, strings.TrimSuffix(name, filepath.Ext(name))})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(wrapper+".json", data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			*tool = wrapper
+			continue
+		}
 		script := fmt.Sprintf("#!/bin/sh\nprintf '%%s %%s\\n' %s \"$*\" >> %s\nexec %s \"$@\"\n", quote(name), quote(log), quote(path))
 		if err := os.WriteFile(wrapper, []byte(script), 0700); err != nil {
 			t.Fatal(err)

@@ -32,6 +32,23 @@ NEW_SERVICE_REQUIRED = {
     "TestSourceMediaCleanupPreservesEarlierOverlappingFailure",
 }
 
+EFFICIENT_CUTTING_SERVICE_REQUIRED = {
+    "TestArchivePreservesOrderAcrossPartialRetriesAndOwnerAfterMediaRemoval",
+    "TestArchiveOpensAllFilesBeforeStreamingAndKeepsReadDescriptors",
+    "TestQuickPreviewUsesIndependentAlignedCacheAndWaitsForTrackInspection",
+    "TestWorkerSubtitleCacheRemainsChargedUntilFinalUnfinishedPublication",
+}
+EFFICIENT_CUTTING_MEDIA_REQUIRED = {
+    "TestLocalExportSessionReusesOriginalAndVerifiesEveryJoinedResult",
+    "TestLocalExportSessionExtractsSubtitlesOnceAndClipsEveryResult",
+    "TestLocalExportSessionRejectsChangedSourceAndDoesNotCacheStages",
+}
+EFFICIENT_CUTTING_STORAGE_REQUIRED = {
+    "TestAccurateJoinReservationOnlyIncludesActualProducers",
+    "TestAccurateJoinCanBeClaimedWithRoomForItsRealOutput",
+    "TestSeparateSubtitleReservationChargesSharedSourceTextOnce",
+}
+
 REQUIRED = [
     {"TestEngineInspectAndExportActualMedia", "TestConcurrentPublicationHasExactlyOneCompleteWinner", "TestCLIInspectAndClipActualMedia", "TestCLIBatchSavedPlanRelativeInputAndJoinedAudio", "TestPlanRoundTripActualOutputsAndPartialPublication"},
     {"TestProcessCancellationTerminatesDescendants", "TestProcessOutputStopsUnboundedProducer"},
@@ -88,6 +105,9 @@ REQUIRED = [
 REQUIRED[0].add("TestParseCrop")
 REQUIRED[2].update(NEW_SERVICE_REQUIRED)
 REQUIRED[4].update(NEW_MEDIA_REQUIRED | {"TestAdvancedCropPlanPublishesActualCroppedOutput"})
+REQUIRED[2].update(EFFICIENT_CUTTING_SERVICE_REQUIRED)
+REQUIRED[3].update(EFFICIENT_CUTTING_STORAGE_REQUIRED)
+REQUIRED[4].update(EFFICIENT_CUTTING_MEDIA_REQUIRED)
 
 REQUIRED_PACKAGES = [
     {ENGINE_PACKAGE, FS_PACKAGE, CLI_PACKAGE},
@@ -112,6 +132,7 @@ BOOKWORM_REQUIRED = {
 }
 
 BOOKWORM_REQUIRED.update(NEW_MEDIA_REQUIRED)
+BOOKWORM_REQUIRED.update(EFFICIENT_CUTTING_MEDIA_REQUIRED)
 
 
 def verify_report(filename, names, packages):
