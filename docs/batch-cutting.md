@@ -97,6 +97,13 @@ and disk admission continue to use the existing job lifecycle. Joined copy
 reserves both temporary segments and final output, and releases staging charges
 only after temporary files are removed.
 
+Accurate MP4 also supports `options.crop` in plans and `crop` in HTTP requests,
+using normalized upright display coordinates. For example,
+`{"x":0.25,"y":0,"width":0.5,"height":1}` keeps the middle half of the image.
+Use `engine.AdvancedOptions.Crop` or CLI `--crop 0.25,0,0.5,1` for the same result.
+The same area is applied to all separate or joined intervals. Copy/MKV/MP3
+explicitly refuse crop. See [crop geometry](media.md#crop).
+
 See [OpenAPI](../api/openapi.yaml), [API usage](api.md) and
 [performance measurements](performance.md) for exact contracts and evidence.
 The [short/one-hour export acceptance](../verification/2026-10-12-cutting-export/README.md)

@@ -175,9 +175,13 @@ type ExportRequest struct {
 	AudioTrack   *int    `json:"audio_track,omitempty"`
 	NoAudio      bool    `json:"no_audio,omitempty"`
 	SubtitleMode string  `json:"subtitle_mode,omitempty"`
+	Crop         *Crop   `json:"crop,omitempty"`
 }
 
 func (r *ExportRequest) Validate(c Config, s Source) error {
+	if err := validateCropMode(*r); err != nil {
+		return err
+	}
 	if len(r.Ranges) == 0 {
 		return errors.New("choose at least one range; mark a start and an end before exporting")
 	}

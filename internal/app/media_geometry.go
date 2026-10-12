@@ -46,9 +46,19 @@ func videoDisplayGeometry(stream *probeStream) (int, int, error) {
 }
 
 func videoOutputGeometry(stream *probeStream, quality string, preview bool) (int, int, error) {
+	return videoOutputGeometryWithCrop(stream, quality, preview, nil)
+}
+
+func videoOutputGeometryWithCrop(stream *probeStream, quality string, preview bool, crop *Crop) (int, int, error) {
 	width, height, err := videoDisplayGeometry(stream)
 	if err != nil || stream == nil {
 		return 0, 0, errUnsupportedStream
+	}
+	if crop != nil {
+		_, _, width, height, err = cropPixelGeometry(width, height, crop)
+		if err != nil {
+			return 0, 0, &sourceProblem{"crop_invalid", err.Error()}
+		}
 	}
 	factor := 1.0
 	if preview {
@@ -135,8 +145,12 @@ func renderedMediaFailure(err error, hdr bool) error {
 }
 
 func validateRenderedVideo(info probeInfo, source *probeStream, quality string, preview, hdr bool) error {
+	return validateRenderedVideoWithCrop(info, source, quality, preview, hdr, nil)
+}
+
+func validateRenderedVideoWithCrop(info probeInfo, source *probeStream, quality string, preview, hdr bool, crop *Crop) error {
 	video := info.selectedVideo()
-	width, height, err := videoOutputGeometry(source, quality, preview)
+	width, height, err := videoOutputGeometryWithCrop(source, quality, preview, crop)
 	if err != nil {
 		return err
 	}

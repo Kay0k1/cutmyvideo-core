@@ -467,6 +467,9 @@ func exportInputs(ctx context.Context, c Config, inputs []mediaInput, r Range, r
 }
 
 func exportInputsCoreProgress(ctx context.Context, c Config, inputs []mediaInput, r Range, request ExportRequest, out string, report func(int64)) (int64, int64, error) {
+	if err := validateCropMode(request); err != nil {
+		return 0, 0, &sourceProblem{"crop_invalid", err.Error()}
+	}
 	selection, err := probeInputSelectionOptions(ctx, c, inputs, request)
 	if err != nil {
 		return 0, 0, err
@@ -483,7 +486,7 @@ func exportInputsCoreProgress(ctx context.Context, c Config, inputs []mediaInput
 	filter, hdr := "", false
 	encoderTimeBase := ""
 	if request.Format != "mp3" && request.CutMode != "copy" {
-		filter, hdr, err = videoRenderFilter(selection.Video, request.Quality, false)
+		filter, hdr, err = videoCropRenderFilter(selection.Video, request.Quality, request.Crop)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -631,7 +634,7 @@ func exportInputsCoreProgress(ctx context.Context, c Config, inputs []mediaInput
 			return 0, 0, errors.New("result has no video stream")
 		}
 		if request.CutMode != "copy" {
-			if err := validateRenderedVideo(p, selection.Video, request.Quality, false, hdr); err != nil {
+			if err := validateRenderedVideoWithCrop(p, selection.Video, request.Quality, false, hdr, request.Crop); err != nil {
 				return 0, 0, err
 			}
 		}

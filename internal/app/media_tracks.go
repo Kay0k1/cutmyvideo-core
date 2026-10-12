@@ -245,9 +245,17 @@ func trackManifest(p probeInfo, selection mediaSelection, request ExportRequest)
 
 // InspectExportLocal reports source tracks and their fate for selected options.
 func InspectExportLocal(ctx context.Context, c Config, path string, request ExportRequest) ([]TrackSelection, error) {
+	if err := validateCropMode(request); err != nil {
+		return nil, &sourceProblem{"crop_invalid", err.Error()}
+	}
 	p, err := probeStreams(ctx, c, path, false)
 	if err != nil {
 		return nil, err
+	}
+	if request.Crop != nil {
+		if _, _, err := videoOutputGeometryWithCrop(p.selectedVideo(), request.Quality, false, request.Crop); err != nil {
+			return nil, err
+		}
 	}
 	return SelectExportTracks(p.tracks(), request)
 }

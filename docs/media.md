@@ -44,6 +44,10 @@ files; platform sources use provider format metadata. Source metadata reads do
 not launch a fresh media inspection. They do not expose the SDK/CLI display
 fields, which are not database columns.
 
+Owner-protected `GET /api/v1/sources/{id}/tracks` freshly inspects a local source
+and also returns optional `display_width` and `display_height`. Use these fields,
+rather than persisted coded dimensions, to select a displayed crop.
+
 Before a worker processes a local source or prepares a new local window
 preview, bounded inspection refreshes persisted selected coded dimensions.
 This corrects historical snapshots that described a cover image and prevents
@@ -64,6 +68,29 @@ bounded valid display dimensions. Accurate MP4, previews and resolution-capped
 copy refuse unsupported geometry instead of silently stretching or changing
 orientation. Inspection, MP3 and uncapped compatible copy can still use the
 source; inspection does not invent display dimensions.
+
+## Crop
+
+Accurate MP4 exports optionally accept `crop: {x, y, width, height}`. All values
+are normalized to the upright square-pixel displayed image, with both opposite
+edges inside 0..1. An omitted crop keeps the full image. Copy, MKV and MP3 reject
+crop explicitly; they never silently change mode. One crop applies to all ranges
+in separate or joined exports.
+
+The renderer first applies display rotation and normalizes sample aspect ratio,
+then crops and applies the chosen resolution cap. Pixel origins and dimensions
+round down to even values for H.264 4:2:0 (at most one displayed pixel per edge).
+Areas resolving to less than two displayed pixels in either dimension fail.
+There is no aspect stretching or padding. The browser selection overlay describes
+the same normalized region over the uncropped preview. HDR conversion and VFR
+timing retain the existing accurate-export policy.
+
+Go callers use `AdvancedOptions.Crop` with `engine.Crop`; the legacy three-field
+`Options` remains compatible. JSON plans use `options.crop`. CLI example:
+
+```sh
+cutmy clip --input input.mp4 --output portrait.mp4 --end 30 --crop 0.25,0,0.5,1
+```
 
 ## Timing
 

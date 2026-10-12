@@ -764,8 +764,10 @@ func (s *Server) sourceTracks(w http.ResponseWriter, r *http.Request, owner stri
 	}
 	w.Header().Set("Cache-Control", "private, no-store")
 	writeJSON(w, http.StatusOK, struct {
-		Tracks []Track `json:"tracks"`
-	}{inspected.Tracks})
+		Tracks        []Track `json:"tracks"`
+		DisplayWidth  int     `json:"display_width,omitempty"`
+		DisplayHeight int     `json:"display_height,omitempty"`
+	}{inspected.Tracks, inspected.DisplayWidth, inspected.DisplayHeight})
 }
 
 func (s *Server) createJob(w http.ResponseWriter, r *http.Request, owner string) {
@@ -802,7 +804,7 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request, owner string)
 		writeError(w, 400, "invalid_export", err.Error())
 		return
 	}
-	if v.Path != "" && (request.AudioTrack != nil || request.SubtitleMode == "preserve") {
+	if v.Path != "" && (request.AudioTrack != nil || request.SubtitleMode == "preserve" || request.Crop != nil) {
 		timeout := s.Config.SourceTimeout
 		if timeout <= 0 {
 			timeout = 2 * time.Minute

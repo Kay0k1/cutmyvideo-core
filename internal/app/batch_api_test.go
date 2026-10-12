@@ -119,13 +119,18 @@ func TestHTTPTracksAreFreshOwnerProtectedAndRemoteExplicit(t *testing.T) {
 	}
 	w := request(source.ID, cookie)
 	var payload struct {
-		Tracks []Track `json:"tracks"`
+		Tracks        []Track `json:"tracks"`
+		DisplayWidth  int     `json:"display_width"`
+		DisplayHeight int     `json:"display_height"`
 	}
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &payload) != nil || len(payload.Tracks) != 3 || payload.Tracks[2].Index != 2 || payload.Tracks[2].Language != "rus" || payload.Tracks[2].Title != "Russian" {
 		t.Fatal("track inspection metadata mismatch", w.Code, w.Body.String())
 	}
+	if payload.DisplayWidth != 160 || payload.DisplayHeight != 90 {
+		t.Fatal("tracks omitted fresh square-pixel display geometry", w.Body.String())
+	}
 	selectedAudio := 2
-	export := ExportRequest{SourceID: source.ID, Format: "mp4", Quality: "best", CutMode: "accurate", OutputMode: "joined", AudioTrack: &selectedAudio, Ranges: []Range{{StartMS: 500, EndMS: 900, Label: "Later"}, {EndMS: 400, Label: "Earlier"}}}
+	export := ExportRequest{SourceID: source.ID, Format: "mp4", Quality: "best", CutMode: "accurate", OutputMode: "joined", AudioTrack: &selectedAudio, Crop: &Crop{X: .25, Width: .5, Height: 1}, Ranges: []Range{{StartMS: 500, EndMS: 900, Label: "Later"}, {EndMS: 400, Label: "Earlier"}}}
 	accepted := recoveryJobResponse(t, server, cookie, export, "joined-audio")
 	var joined Job
 	if accepted.Code != 202 || json.Unmarshal(accepted.Body.Bytes(), &joined) != nil || len(joined.Items) != 1 {
@@ -134,6 +139,9 @@ func TestHTTPTracksAreFreshOwnerProtectedAndRemoteExplicit(t *testing.T) {
 	persisted, err := s.Job(context.Background(), joined.ID, owner)
 	if err != nil || persisted.Request.AudioTrack == nil || *persisted.Request.AudioTrack != 2 || persisted.Request.OutputMode != "joined" || persisted.Request.Ranges[0].Label != "Later" {
 		t.Fatal("immutable advanced request not stored", persisted, err)
+	}
+	if persisted.Request.Crop == nil || *persisted.Request.Crop != *export.Crop {
+		t.Fatal("immutable crop not stored", persisted.Request.Crop)
 	}
 	selectedAudio = 0
 	invalid := recoveryJobResponse(t, server, cookie, export, "invalid-audio")

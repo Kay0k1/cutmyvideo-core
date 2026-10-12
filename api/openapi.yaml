@@ -130,6 +130,8 @@ paths:
                 type: object
                 required: [tracks]
                 properties:
+                  display_width: {type: integer, minimum: 2, description: Upright square-pixel display width from fresh inspection; omitted for unsupported geometry or audio-only sources.}
+                  display_height: {type: integer, minimum: 2, description: Upright square-pixel display height from fresh inspection; omitted for unsupported geometry or audio-only sources.}
                   tracks:
                     type: array
                     items: {$ref: '#/components/schemas/Track'}
@@ -467,6 +469,16 @@ components:
         start_ms: {type: integer, minimum: 0}
         end_ms: {type: integer, minimum: 1}
         label: {type: string, x-maxBytes: 200, x-trimSpace: true, description: Optional label; maximum 200 UTF-8 bytes after trimming Unicode whitespace}
+    Crop:
+      type: object
+      additionalProperties: false
+      required: [x, y, width, height]
+      description: Normalized rectangle in the upright square-pixel displayed image. Requires accurate MP4. Both opposite edges must remain inside the image; dimensions must resolve to at least two displayed pixels. Chroma-aligned pixel boundaries round down by at most one pixel before the normal resolution cap.
+      properties:
+        x: {type: number, minimum: 0, maximum: 1}
+        y: {type: number, minimum: 0, maximum: 1}
+        width: {type: number, exclusiveMinimum: 0, maximum: 1}
+        height: {type: number, exclusiveMinimum: 0, maximum: 1}
     ExportRequest:
       type: object
       additionalProperties: false
@@ -484,6 +496,7 @@ components:
         audio_track: {type: integer, minimum: 0, description: Absolute inspected audio stream index for staged local media. Omission uses first default audio, otherwise first audio.}
         no_audio: {type: boolean, default: false, description: Export video without audio; cannot be combined with audio_track or MP3.}
         subtitle_mode: {type: string, enum: [omit, preserve], default: omit, description: Preserve compatible plain text subtitles from local copy sources, clipped and rebased to actual boundaries. Unsupported subtitle codecs fail explicitly. MP4 writes mov_text; MKV writes subrip.}
+        crop: {$ref: '#/components/schemas/Crop'}
     Artifact:
       type: object
       required: [id, filename, size_bytes, download_url, actual_start_ms, actual_end_ms, expires_at]
