@@ -106,6 +106,8 @@ func (e *Engine) ExecutePlan(ctx context.Context, plan Plan, output string) (res
 	if err != nil {
 		return result, err
 	}
+	ctx, session := app.BeginLocalExport(ctx, input)
+	defer session.Close()
 	source, err := e.InspectWithTracks(ctx, input)
 	if err != nil {
 		return result, err
@@ -169,6 +171,7 @@ func (e *Engine) ExecutePlan(ctx context.Context, plan Plan, output string) (res
 		return result, fmt.Errorf("%w: create output workspace: %w", fsdurable.ErrPublicationFailed, err)
 	}
 	defer os.RemoveAll(dir)
+	session.SetWorkspace(dir)
 	if err = e.preflight(dir, parent); err != nil {
 		return result, err
 	}

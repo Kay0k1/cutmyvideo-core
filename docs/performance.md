@@ -406,3 +406,50 @@ failed database acknowledgement, duplicate paths and changing orphan sizes.
 Reproduce with `BenchmarkSourceList20`, `BenchmarkStorageDeleteBatch200`,
 `BenchmarkStorageReconcileUnchanged128` and `BenchmarkStorageRetentionSources200`
 using an isolated `TEST_DATABASE_URL`; never benchmark in the live schema.
+
+## Local batch inspection and subtitle work
+
+One worker attempt or `Engine.ExecutePlan` shares the original local source's
+bounded stream inspection across its ranges. A standalone local joined export
+uses the same operation scope. The cache registers that one path explicitly and
+checks file identity, size and modification time before reuse. A replacement or
+changed input fails with `source_changed` instead of silently keeping old track
+or geometry metadata. This is an operation cache, not a persistent file cache.
+
+Remote inputs, independently staged HLS files and output files remain uncached.
+HLS offsets are still applied per interval, and copy mode still probes each
+requested keyframe boundary. Accurate joined output performs one fresh final
+probe and uses that result for duration, geometry and audio validation; it no
+longer runs the identical final probe twice.
+
+Preserved subtitle tracks are extracted once per local batch into its reserved
+workspace. Each source text track and each rebased output track is capped at
+8 MiB, with at most 32 inspected media streams. Only one source text track is
+parsed in memory at a time; the retained source copies live on disk. Every
+result is clipped and rebased from its actual source bounds, including cues
+crossing a cut, repeated intervals and caller-specified order. The reservation
+includes the shared source text once per batch and rebased text for every
+unfinished result. Before publishing the final
+unfinished worker result, retained text is removed so it cannot outlive its
+storage reservation. Removal failure follows the existing fenced storage/error
+handling; work cleanup remains a prerequisite for releasing the job charge.
+
+Accurate joins encode directly from their concat input plan into one output.
+Their reservations therefore omit fictional encoded segment files. Copy joins
+still reserve retained segment files, their largest transient audio/video remux
+and the final result. Remote HLS stages and both subtitle media/text
+representations keep their headroom. Admission and claim use the same producer
+budgets; the storage tests cover a 32 MiB installation where an accurate
+two-clip join fits while the former segment-based estimate did not.
+
+`TestLocalExportSessionReusesOriginalAndVerifiesEveryJoinedResult` records real
+tool calls and distinguishes the reused input from each required output probe.
+`TestLocalExportSessionExtractsSubtitlesOnceAndClipsEveryResult` checks spanning
+cues and extraction count in accurate/copy media operations.
+`TestLocalExportSessionRejectsChangedSourceAndDoesNotCacheStages` covers input
+replacement and staging isolation.
+`TestWorkerSubtitleCacheRemainsChargedUntilFinalUnfinishedPublication` verifies
+the cache and storage-charge lifetime in fresh and reclaimed real worker jobs,
+including a later interval that was already published before recovery.
+The existing joined HLS, copy packet/audio,
+crop and independent decode tests continue to validate stream correctness.

@@ -42,8 +42,9 @@ class NativeResultsChecks(unittest.TestCase):
     def test_new_release_features_are_required_and_selected_on_all_native_targets(self):
         workflow = SCRIPT.parent.parent / ".github" / "workflows" / "ci.yml"
         lines = workflow.read_text(encoding="utf-8").splitlines()
-        for index, names, report in ((2, native_results.NEW_SERVICE_REQUIRED, "native-service-tests.jsonl"),
-                                     (4, native_results.NEW_MEDIA_REQUIRED | {"TestAdvancedCropPlanPublishesActualCroppedOutput"}, "native-media-contract-tests.jsonl")):
+        for index, names, report in ((2, native_results.NEW_SERVICE_REQUIRED | native_results.EFFICIENT_CUTTING_SERVICE_REQUIRED, "native-service-tests.jsonl"),
+                                     (3, native_results.EFFICIENT_CUTTING_STORAGE_REQUIRED, "native-storage-tests.jsonl"),
+                                     (4, native_results.NEW_MEDIA_REQUIRED | native_results.EFFICIENT_CUTTING_MEDIA_REQUIRED | {"TestAdvancedCropPlanPublishesActualCroppedOutput"}, "native-media-contract-tests.jsonl")):
             command = next(line for line in lines if "tee " + report in line)
             selector = re.search(r"-run '([^']+)'", command).group(1)
             original = self.reports[index].read_text(encoding="utf-8")
@@ -62,7 +63,7 @@ class NativeResultsChecks(unittest.TestCase):
             self.reports[index].write_text(original,encoding="utf-8")
         bookworm = next(line for line in lines if "tee bookworm-media-tests.jsonl" in line)
         selector = re.search(r"-run '([^']+)'", bookworm).group(1)
-        for name in native_results.NEW_MEDIA_REQUIRED:
+        for name in native_results.NEW_MEDIA_REQUIRED | native_results.EFFICIENT_CUTTING_MEDIA_REQUIRED:
             self.assertIn(name,native_results.BOOKWORM_REQUIRED)
             self.assertIsNotNone(re.fullmatch(selector,name))
         self.assertIsNone(re.fullmatch(selector,"TestWaveformPrivateCacheAccountingAndDeletion"))
@@ -154,8 +155,8 @@ class NativeResultsChecks(unittest.TestCase):
                  "TestStorageScanSchedulingBatchFailuresPreserveClocks",
                  "TestStorageScanSessionReadBatchPreservesNonISODateStyle",
                  "TestStorageScanSessionReadBatchLookupFailureRollsBackAndRecovers")
-        self.assertEqual(len(native_results.REQUIRED[3]), 45)
-        self.assertEqual(sum(map(len, native_results.REQUIRED)), 109)
+        self.assertEqual(len(native_results.REQUIRED[3]), 48)
+        self.assertEqual(sum(map(len, native_results.REQUIRED)), 119)
         workflow = SCRIPT.parent.parent / ".github" / "workflows" / "ci.yml"
         commands = [line for line in workflow.read_text(encoding="utf-8").splitlines()
                     if "tee native-storage-tests.jsonl" in line]

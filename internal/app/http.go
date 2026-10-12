@@ -87,6 +87,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/jobs", s.withSession(s.createJob))
 	mux.HandleFunc("GET /api/v1/jobs", s.withSession(s.listJobs))
 	mux.HandleFunc("GET /api/v1/jobs/{id}", s.withSession(s.job))
+	mux.HandleFunc("GET /api/v1/jobs/{id}/download.zip", s.withSession(s.downloadArchive))
 	mux.HandleFunc("POST /api/v1/jobs/{id}/cancel", s.withSession(s.cancelJob))
 	mux.HandleFunc("GET /api/v1/artifacts/{id}/download", s.withSession(s.download))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

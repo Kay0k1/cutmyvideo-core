@@ -151,12 +151,16 @@ paths:
   /api/v1/sources/{id}/preview:
     parameters: [{$ref: '#/components/parameters/ID'}]
     get:
-      description: Owner-protected H.264/AAC MP4 interval, up to 30 seconds and 16 MiB. Works for accessible platform recordings and staged files with browser-incompatible codecs. Original source time and fresh upright square-pixel source display dimensions are supplied in response headers, including cache hits and conditional/range responses. Display dimensions describe the original before preview scaling, suitable for normalized crop presets. Aligned windows are retained in a private owner-protected cache for up to 30 idle minutes (512 MiB globally, 128 MiB per owner). Responses remain no-store. Rendering pins the source and uses a bounded reservation; completed cache entries do not pin sources. Duplicate interval requests coalesce.
+      description: Owner-protected H.264/AAC MP4 interval, up to 30 seconds and 16 MiB. Optional 6000 ms windows reduce cold foreground latency; their alignment and cache identity are separate from ordinary 30000 ms windows. Short foreground requests briefly wait for occupied inspection capacity under the same admission limits. Works for accessible platform recordings and staged files with browser-incompatible codecs. Original source time and fresh upright square-pixel source display dimensions are supplied in response headers, including cache hits and conditional/range responses. Display dimensions describe the original before preview scaling, suitable for normalized crop presets. Aligned windows are retained in a private owner-protected cache for up to 30 idle minutes (512 MiB globally, 128 MiB per owner). Responses remain no-store. Rendering pins the source and uses a bounded reservation; completed cache entries do not pin sources. Duplicate interval requests coalesce.
       parameters:
         - in: query
           name: start_ms
           required: true
           schema: {type: integer, minimum: 0}
+        - in: query
+          name: window_ms
+          schema: {type: integer, enum: [6000, 30000], default: 30000}
+          description: Video window length and alignment; omission preserves the ordinary 30-second contract.
         - in: query
           name: priority
           schema: {type: string, default: foreground, examples: [foreground, background]}
@@ -322,6 +326,29 @@ paths:
       responses:
         '503': {$ref: '#/components/responses/DatabaseUnavailable'}
         '200': {$ref: '#/components/responses/Job'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/jobs/{id}/download.zip:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    get:
+      description: Streams ready artifacts as an owner-protected ZIP without recompression or a retained archive. Defaults to this job's ready files in item order. Optional artifact_id values include earlier partial-retry successes from the same owner and source, in requested order. All files are checked and opened before streaming; expired or foreign files return an error. Ordered numeric filename prefixes handle duplicate names. An interrupted ZIP must be downloaded again; byte ranges are not supported.
+      parameters:
+        - in: query
+          name: artifact_id
+          style: form
+          explode: true
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 128
+            uniqueItems: true
+            items: {type: string, minLength: 1, maxLength: 160}
+      responses:
+        '200':
+          description: ZIP of ready files
+          content:
+            application/zip:
+              schema: {type: string, format: binary}
+        '503': {$ref: '#/components/responses/DatabaseUnavailable'}
         default: {$ref: '#/components/responses/Error'}
   /api/v1/jobs/{id}/cancel:
     parameters: [{$ref: '#/components/parameters/ID'}]

@@ -334,6 +334,7 @@ func TestHTTPPublicContract(t *testing.T) {
 	}{{"", 200}, {"bytes=0-3", 206}, {"bytes=999999-", 416}, {"bytes=broken", 416}} {
 		request("download-"+pair.value, "GET", "/api/v1/artifacts/{id}/download", "/api/v1/artifacts/"+artifact.ID+"/download", nil, map[string]string{"Range": pair.value}, pair.status)
 	}
+	request("download-archive", "GET", "/api/v1/jobs/{id}/download.zip", "/api/v1/jobs/"+job.ID+"/download.zip", nil, nil, 200)
 	request("download-precondition", "GET", "/api/v1/artifacts/{id}/download", "/api/v1/artifacts/"+artifact.ID+"/download", nil, map[string]string{"If-Match": `"does-not-match"`}, 412)
 	request("download-conditional", "GET", "/api/v1/artifacts/{id}/download", "/api/v1/artifacts/"+artifact.ID+"/download", nil, map[string]string{"If-Modified-Since": time.Now().Add(time.Hour).UTC().Format(http.TimeFormat)}, 304)
 	request("not-found", "GET", "/api/v1/sources/{id}", "/api/v1/sources/src_absent", nil, nil, 404)

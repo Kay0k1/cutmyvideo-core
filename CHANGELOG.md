@@ -4,6 +4,15 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
+### Added
+- Owner-protected streaming ZIP downloads of ready files, including prior successful outputs from partial retries of the same source; selected order and fragment names are preserved without recompression or retained archives.
+- Optional six-second foreground preview windows with independent cache identity and a bounded wait for overlapping source inspection; the ordinary thirty-second API remains compatible.
+
+### Changed
+- Local batches reuse fresh input inspection and bounded per-track subtitle staging within one operation. Source replacement is rejected, while keyframe, staged-input and output verification remain fresh.
+- Accurate joins reserve only actual media producers; shared source-subtitle staging is reserved once per batch and cleaned before releasing its last reservation.
+
+
 ## 1.2.0 - 2026-10-12
 
 ### Added

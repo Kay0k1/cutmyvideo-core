@@ -140,6 +140,57 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 	return start, end, e
 }
 
+func extractTextSubtitles(ctx context.Context, c Config, source string, stream probeStream) ([]byte, error) {
+	if session := localExportSession(ctx, source, false); session != nil {
+		session.mu.Lock()
+		defer session.mu.Unlock()
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if _, err := session.unchanged(); err != nil {
+			return nil, err
+		}
+		if path := session.cues[stream.Index]; path != "" {
+			return os.ReadFile(path)
+		}
+		data, err := extractTextSubtitlesUncached(ctx, c, source, stream)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := session.unchanged(); err != nil {
+			return nil, err
+		}
+		// Cache on disk inside the reserved workspace. Only one bounded track
+		// is decoded into Go memory at a time, even for a many-track source.
+		if session.workspace != "" {
+			if session.cueDir == "" {
+				session.cueDir, err = os.MkdirTemp(session.workspace, ".source-subtitles-")
+				if err != nil {
+					return nil, err
+				}
+			}
+			path := filepath.Join(session.cueDir, fmt.Sprintf("track-%d.srt", stream.Index))
+			if err := os.WriteFile(path, data, 0600); err != nil {
+				return nil, err
+			}
+			session.cues[stream.Index] = path
+		}
+		return data, nil
+	}
+	return extractTextSubtitlesUncached(ctx, c, source, stream)
+}
+
+func extractTextSubtitlesUncached(ctx context.Context, c Config, source string, stream probeStream) ([]byte, error) {
+	extract := []string{"-v", "error", "-nostdin", "-max_alloc", "268435456", "-protocol_whitelist", "file", "-format_whitelist", mediaFormats}
+	extract = append(extract, mediaInputBounds(c)...)
+	extract = append(extract, "-copyts", "-i", source, "-map", "0:"+strconv.Itoa(stream.Index), "-c:s", "srt", "-f", "srt", "-")
+	data, err := runCommand(ctx, c.FFmpeg, extract...)
+	if errors.Is(err, errProcessResponseTooLarge) {
+		return nil, &sourceProblem{"subtitle_unsupported", "Source text subtitles exceed the 8 MiB per-track limit; choose omit"}
+	}
+	return data, err
+}
+
 func muxTextSubtitles(ctx context.Context, c Config, source string, p probeInfo, media, out string, segments []ArtifactSegment, request ExportRequest, limit int64) error {
 	dir, e := os.MkdirTemp(filepath.Dir(out), ".cues-")
 	if e != nil {
@@ -157,13 +208,7 @@ func muxTextSubtitles(ctx context.Context, c Config, source string, p probeInfo,
 		if !subtitleTextSupported(stream.CodecName) {
 			return &sourceProblem{"subtitle_unsupported", "This subtitle format is not supported; choose omit"}
 		}
-		extract := []string{"-v", "error", "-nostdin", "-max_alloc", "268435456", "-protocol_whitelist", "file", "-format_whitelist", mediaFormats}
-		extract = append(extract, mediaInputBounds(c)...)
-		extract = append(extract, "-copyts", "-i", source, "-map", "0:"+strconv.Itoa(stream.Index), "-c:s", "srt", "-f", "srt", "-")
-		data, e := runCommand(ctx, c.FFmpeg, extract...)
-		if errors.Is(e, errProcessResponseTooLarge) {
-			return &sourceProblem{"subtitle_unsupported", "Source text subtitles exceed the 8 MiB per-track limit; choose omit"}
-		}
+		data, e := extractTextSubtitles(ctx, c, source, stream)
 		if e != nil {
 			return e
 		}

@@ -1,6 +1,9 @@
 package app
 
-import "context"
+import (
+	"context"
+	"path/filepath"
+)
 
 // InspectLocal and ExportLocal are the shared media operations used by the
 // embeddable engine. They do not need a database or a server.
@@ -22,5 +25,11 @@ func InspectLocal(ctx context.Context, c Config, path string) (Source, error) {
 }
 
 func ExportLocal(ctx context.Context, c Config, path, out string, r Range, options ExportRequest) (int64, int64, error) {
+	if localExportSession(ctx, path, false) == nil {
+		var session *LocalExportSession
+		ctx, session = BeginLocalExport(ctx, path)
+		session.SetWorkspace(filepath.Dir(out))
+		defer session.Close()
+	}
 	return exportMedia(ctx, c, []string{path}, false, r, options, out)
 }
