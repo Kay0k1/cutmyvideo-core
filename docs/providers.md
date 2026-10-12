@@ -52,6 +52,15 @@ Uploaded/direct sources use `preview_kind:native` and an owner-protected origina
 
 `thumbnail_url` is a same-origin owner-protected endpoint. The server stages at most 2 MiB of a public JPEG/PNG and checks its dimensions; unsupported/unavailable images become null. Signed CDN image/media URLs are never returned as visible preview links. Media and thumbnails require the session cookie and expire under the source retention policy.
 
+For timeline search, `/sources/{id}/storyboard?start_ms=…` returns a private
+960×90 JPEG strip for the visible aligned 30-second interval: six 160×90 cells at
+five-second steps. Interval headers map cells to original source time; the used
+cell count excludes blank cells near the end. Strips preserve display aspect and
+HDR-to-SDR conversion, need no audio, and use background admission in the existing
+preview pool. They share preview cache byte/count/expiry limits and source cleanup.
+Clients should request only the visible interval after seeking settles; whole
+recording preparation is unnecessary even for long recordings.
+
 ## Reproducible evidence
 
 On 2026-10-03, a guarded metadata/media diagnostic in the development environment verified:

@@ -192,6 +192,41 @@ paths:
             text/plain:
               schema: {type: string}
         default: {$ref: '#/components/responses/Error'}
+  /api/v1/sources/{id}/storyboard:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    get:
+      description: Owner-protected JPEG search strip for the aligned 30-second source interval. Six fixed 160x90 cells sample source time at start_ms plus 0, 5, 10, 15, 20 and 25 seconds. X-Storyboard-Frames identifies used cells; unused cells near source end are black. Video aspect ratio is preserved within each cell. No audio is prepared. The operation always uses background admission in the shared preview pool and returns server_busy when another renderer is active. It shares private preview cache size/count/expiry limits and source deletion. Preparation is canceled when the request ends; completed bytes remain no-store.
+      parameters:
+        - in: query
+          name: start_ms
+          required: true
+          schema: {type: integer, minimum: 0}
+        - in: query
+          name: priority
+          schema: {type: string, examples: [background]}
+          description: Accepted for consistency with preview clients; storyboards always use background admission.
+      responses:
+        '503': {$ref: '#/components/responses/StorageUnavailable'}
+        '200':
+          description: 960x90 JPEG sprite, at most 256 KiB
+          headers:
+            X-Preview-Cache: {$ref: '#/components/headers/PreviewCache'}
+            X-Preview-Start-MS: {$ref: '#/components/headers/PreviewStart'}
+            X-Preview-End-MS: {$ref: '#/components/headers/PreviewEnd'}
+            X-Storyboard-Step-MS:
+              x-required: true
+              schema: {type: integer, const: 5000}
+            X-Storyboard-Frames:
+              x-required: true
+              schema: {type: integer, minimum: 1, maximum: 6}
+          content:
+            image/jpeg:
+              schema: {type: string, format: binary}
+        '206': {description: Requested storyboard byte range}
+        '304': {description: Authorized storyboard is unchanged; empty response body}
+        '412': {description: A request precondition failed; empty response body}
+        '416': {$ref: '#/components/responses/RangeError'}
+        default: {$ref: '#/components/responses/Error'}
   /api/v1/sources/{id}/thumbnail:
     parameters: [{$ref: '#/components/parameters/ID'}]
     get:

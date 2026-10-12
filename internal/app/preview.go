@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
@@ -29,6 +30,11 @@ const previewOwnerCacheBytes int64 = 128 << 20
 const previewCacheEntries = 64
 const previewOwnerCacheEntries = 16
 
+// Inspection may discover that persisted dimensions describe a small cover
+// instead of the playable stream. Persist its conservative weight in the
+// existing lease token so admission across API processes keeps the full pool.
+const previewWeightSQL = `CASE WHEN r.token LIKE 'inspection-full:%' THEN 2 WHEN s.width>0 AND s.height>0 AND s.width<=8388608/GREATEST(1,s.height) THEN 1 ELSE 2 END`
+
 var errPreviewPending = errors.New("this preview is being prepared")
 var errPreviewNeedsInspection = errors.New("preview admission needs selected local dimensions")
 var ErrPreviewCommitUncertain = errors.New("preview publication commit outcome unknown")
@@ -40,6 +46,10 @@ func (s *Server) sourcePreview(w http.ResponseWriter, r *http.Request, owner str
 }
 
 func (s *Server) sourcePreviewWithPublisher(w http.ResponseWriter, r *http.Request, owner string, publish func(context.Context, Config, Source, string, *os.File) error) {
+	s.sourceWindowWithPublisher(w, r, owner, false, publish)
+}
+
+func (s *Server) sourceWindowWithPublisher(w http.ResponseWriter, r *http.Request, owner string, storyboard bool, publish func(context.Context, Config, Source, string, *os.File) error) {
 	ctx, cancel := context.WithTimeout(r.Context(), previewTimeout)
 	defer cancel()
 	v, err := s.databaseSource(ctx, r.PathValue("id"), owner)
@@ -88,25 +98,46 @@ func (s *Server) sourcePreviewWithPublisher(w http.ResponseWriter, r *http.Reque
 	// Canonical intervals make nearby seeks reuse the same result.
 	start = start / previewWindowMS * previewWindowMS
 	key := previewCacheKeyOptions(v, start, request)
+	filename := "preview.mp4"
+	outputLimit := previewOutputBytes
+	renderWindow := renderPreviewOptions
+	if storyboard {
+		// Images depend on the video only. Avoid downloading/probing separate
+		// platform audio and avoid duplicate images for each audio selection.
+		request = ExportRequest{NoAudio: true}
+		key = "storyboard:" + previewCacheKeyOptions(v, start, request)
+		filename, outputLimit, renderWindow = "storyboard.jpg", storyboardOutputBytes, renderStoryboardOptions
+	}
 	id := newID("preview")
 	var cached *os.File
 	inspected := v.Path == ""
 	for {
 		cached, err = apiDatabase(ctx, func(dbCtx context.Context) (*os.File, error) {
-			return s.Store.acquirePreviewAfterCacheLookup(dbCtx, s.Config, v, id, key, r.URL.Query().Get("priority") == "background", !inspected)
+			return s.Store.acquirePreviewAfterCacheLookup(dbCtx, s.Config, v, id, key, storyboard || r.URL.Query().Get("priority") == "background", !inspected)
 		})
 		if errors.Is(err, errPreviewNeedsInspection) {
 			// Cache hits need neither tool. A miss releases the storage fence
 			// before inspecting, then repeats cache lookup and admission with
 			// fresh persisted dimensions for every active preview's weight.
-			v, err = s.Store.refreshLocalMediaDimensions(ctx, s.Config, v)
+			// Probing opens a decoder too. Keep inspection in the same global
+			// pool and pin its source; historical rows can describe a cover
+			// image, so conservatively use the full pool until fresh dimensions
+			// are known. Release the short inspection lease before admission.
+			inspectionSource := v
+			inspectionSource.Width, inspectionSource.Height = 0, 0
+			release, inspectionErr := s.pinSourceInspection(ctx, inspectionSource, previewTimeout)
+			err = inspectionErr
+			if err == nil {
+				v, err = s.Store.refreshLocalMediaDimensions(ctx, s.Config, v)
+				release()
+			}
 			if err != nil {
 				if r.Context().Err() != nil {
 					return
 				}
 				if errors.Is(err, ErrNotFound) {
 					lookupError(w, err)
-				} else if errors.Is(err, errDatabaseUnavailable) || sourceTimedOut(ctx, err) {
+				} else if errors.Is(err, errDatabaseUnavailable) || errors.Is(err, errSourceServerBusy) || sourceTimedOut(ctx, err) {
 					writeSourceAdmissionError(w, ctx, err)
 				} else {
 					problem := exportProblem(err)
@@ -140,7 +171,7 @@ func (s *Server) sourcePreviewWithPublisher(w http.ResponseWriter, r *http.Reque
 	rangeMS := Range{StartMS: start, EndMS: min(start+previewWindowMS, v.DurationMS)}
 	if cached != nil {
 		defer cached.Close()
-		servePreview(w, r, cached, rangeMS, "hit")
+		serveWindow(w, r, cached, rangeMS, "hit", storyboard)
 		return
 	}
 	dir := filepath.Join(s.Config.DataDir, "previews", id)
@@ -165,8 +196,8 @@ func (s *Server) sourcePreviewWithPublisher(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	c := s.Config
-	c.MaxSourceBytes, c.MaxFetchBytes, c.MaxOutputBytes = previewInputBytes, previewInputBytes, previewOutputBytes
-	out := filepath.Join(dir, "preview.part.mp4")
+	c.MaxSourceBytes, c.MaxFetchBytes, c.MaxOutputBytes = previewInputBytes, previewInputBytes, outputLimit
+	out := filepath.Join(dir, "staging."+filename)
 	inputs := []mediaInput{{Path: v.Path}}
 	if v.Path == "" {
 		guard, e := newNetworkGuard(previewInputBytes)
@@ -196,14 +227,14 @@ func (s *Server) sourcePreviewWithPublisher(w http.ResponseWriter, r *http.Reque
 				}
 				resolved[i] = mediaInput{Path: path, OffsetMS: offset}
 			}
-			return renderPreviewOptions(ctx, c, resolved, rangeMS, out, request)
+			return renderWindow(ctx, c, resolved, rangeMS, out, request)
 		}
 		err = render(false)
 		if cachedAddressDenied(err) && ctx.Err() == nil {
 			err = render(true)
 		}
 	} else {
-		err = renderPreviewOptions(ctx, c, inputs, rangeMS, out, request)
+		err = renderWindow(ctx, c, inputs, rangeMS, out, request)
 	}
 	if err != nil {
 		if r.Context().Err() != nil {
@@ -213,7 +244,7 @@ func (s *Server) sourcePreviewWithPublisher(w http.ResponseWriter, r *http.Reque
 		writeError(w, 422, problem.code, problem.message)
 		return
 	}
-	final := filepath.Join(dir, "preview.mp4")
+	final := filepath.Join(dir, filename)
 	if _, err = fsdurable.Publish(ctx, out, final); err != nil {
 		internalError(w, err)
 		return
@@ -227,7 +258,7 @@ func (s *Server) sourcePreviewWithPublisher(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	defer file.Close()
-	if err = trimPreviewWorkspace(ctx, dir); err != nil {
+	if err = trimWindowWorkspace(ctx, dir, filename); err != nil {
 		internalError(w, err)
 		return
 	}
@@ -239,7 +270,7 @@ func (s *Server) sourcePreviewWithPublisher(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	retain = true
-	servePreview(w, r, file, rangeMS, "miss")
+	serveWindow(w, r, file, rangeMS, "miss", storyboard)
 }
 
 func previewCacheKey(source Source, start int64) string {
@@ -256,11 +287,15 @@ func previewCacheKeyOptions(source Source, start int64, request ExportRequest) s
 	}
 	// A prior rendition may have selected different tracks or display/color
 	// handling. Leave its charged cache entry to expire, without reusing it.
-	sum := sha256.Sum256([]byte("media-contract-v2:" + source.ID + ":" + strconv.FormatInt(start, 10) + ":" + audio))
+	sum := sha256.Sum256([]byte("media-contract-v3:" + source.ID + ":" + strconv.FormatInt(start, 10) + ":" + audio))
 	return hex.EncodeToString(sum[:])
 }
 
 func servePreview(w http.ResponseWriter, r *http.Request, file *os.File, interval Range, cache string) {
+	serveWindow(w, r, file, interval, cache, false)
+}
+
+func serveWindow(w http.ResponseWriter, r *http.Request, file *os.File, interval Range, cache string, storyboard bool) {
 	info, err := file.Stat()
 	if err != nil {
 		internalError(w, err)
@@ -270,6 +305,11 @@ func servePreview(w http.ResponseWriter, r *http.Request, file *os.File, interva
 	// must never bypass source ownership checks or retain private URLs.
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "video/mp4")
+	if storyboard {
+		w.Header().Set("Content-Type", "image/jpeg")
+		w.Header().Set("X-Storyboard-Step-MS", strconv.FormatInt(storyboardStepMS, 10))
+		w.Header().Set("X-Storyboard-Frames", strconv.FormatInt((interval.EndMS-interval.StartMS+storyboardStepMS-1)/storyboardStepMS, 10))
+	}
 	w.Header().Set("X-Preview-Cache", cache)
 	w.Header().Set("X-Preview-Start-MS", strconv.FormatInt(interval.StartMS, 10))
 	w.Header().Set("X-Preview-End-MS", strconv.FormatInt(interval.EndMS, 10))
@@ -278,12 +318,16 @@ func servePreview(w http.ResponseWriter, r *http.Request, file *os.File, interva
 }
 
 func trimPreviewWorkspace(ctx context.Context, dir string) error {
+	return trimWindowWorkspace(ctx, dir, "preview.mp4")
+}
+
+func trimWindowWorkspace(ctx context.Context, dir, filename string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return err
 	}
 	for _, entry := range entries {
-		if entry.Name() != "preview.mp4" {
+		if entry.Name() != filename {
 			if err := removeStorageTree(ctx, filepath.Join(dir, entry.Name())); err != nil {
 				return err
 			}
@@ -390,10 +434,15 @@ func (s *Store) acquirePreviewAfterCacheLookup(ctx context.Context, c Config, so
 		if pathErr != nil {
 			return nil, pathErr
 		}
-		file, openErr := os.Open(filepath.Join(path, "preview.mp4"))
+		filename := "preview.mp4"
+		limit := previewOutputBytes
+		if strings.HasPrefix(key, "storyboard:") {
+			filename, limit = "storyboard.jpg", storyboardOutputBytes
+		}
+		file, openErr := os.Open(filepath.Join(path, filename))
 		if openErr == nil {
 			info, statErr := file.Stat()
-			if statErr != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() >= previewOutputBytes {
+			if statErr != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() >= limit {
 				file.Close()
 				openErr = errors.New("invalid preview cache file")
 			} else {
@@ -419,11 +468,16 @@ func (s *Store) acquirePreviewAfterCacheLookup(ctx context.Context, c Config, so
 	}
 	var pending bool
 	var active, weight int
-	if err = tx.QueryRow(ctx, `SELECT count(*),COALESCE(sum(CASE WHEN s.width>0 AND s.height>0 AND s.width<=8388608/GREATEST(1,s.height) THEN 1 ELSE 2 END),0),COALESCE(bool_or(r.job_id=$1 AND r.token=$2),false) FROM storage_reservations r LEFT JOIN sources s ON s.id=r.job_id WHERE r.kind='preview'`, source.ID, key).Scan(&active, &weight, &pending); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT count(*),COALESCE(sum(`+previewWeightSQL+`),0),COALESCE(bool_or(r.job_id=$1 AND r.token=$2),false) FROM storage_reservations r LEFT JOIN sources s ON s.id=r.job_id WHERE r.kind='preview'`, source.ID, key).Scan(&active, &weight, &pending); err != nil {
 		return nil, err
 	}
 	if pending {
 		return nil, errPreviewPending
+	}
+	// Background images/prefetch must yield before even opening a decoder
+	// for inspection, rather than consuming work before a later rejection.
+	if background && active >= 1 {
+		return nil, errSourceServerBusy
 	}
 	if needsLocalInspection && source.Path != "" {
 		return nil, errPreviewNeedsInspection
@@ -480,7 +534,11 @@ func (s *Store) publishPreviewWithSync(ctx context.Context, c Config, source Sou
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(dir, "preview.mp4")
+	filename := filepath.Base(file.Name())
+	if filename != "preview.mp4" && filename != "storyboard.jpg" {
+		return errors.New("preview descriptor does not name a supported window asset")
+	}
+	path := filepath.Join(dir, filename)
 	if filepath.Clean(file.Name()) != filepath.Clean(path) {
 		return errors.New("preview descriptor does not name its reserved output")
 	}
@@ -492,7 +550,11 @@ func (s *Store) publishPreviewWithSync(ctx context.Context, c Config, source Sou
 	if err != nil {
 		return err
 	}
-	if !os.SameFile(info, descriptor) || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() >= previewOutputBytes {
+	limit := previewOutputBytes
+	if filename == "storyboard.jpg" {
+		limit = storyboardOutputBytes
+	}
+	if !os.SameFile(info, descriptor) || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() >= limit {
 		return errors.New("invalid completed preview file")
 	}
 	if err = ctx.Err(); err != nil {

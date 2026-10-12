@@ -30,6 +30,7 @@ for ordinary database failures. Readiness retains `503 not_ready`.
 | DELETE | `/sources/{id}` | HTTP 204; source, terminal jobs and outputs removed; active exports return 409 `source_in_use` |
 | GET | `/sources/{id}/media` | Authorized source bytes; Range supported |
 | GET | `/sources/{id}/preview?start_ms=…` | Aligned 30-second H.264/AAC MP4 window, no-store; source time in X-Preview-Start-MS / X-Preview-End-MS; X-Preview-Cache is hit/miss; optional priority=background yields rendering capacity to foreground seeks |
+| GET | `/sources/{id}/storyboard?start_ms=…` | Private 960×90 JPEG search strip for the aligned 30-second window; six 160×90 cells sampled every 5 seconds; X-Storyboard-Frames gives used cells and X-Storyboard-Step-MS is 5000; same interval/cache headers, source cleanup and shared cache bounds as previews; always background admission |
 | GET | `/sources/{id}/thumbnail` | Authorized, inspected PNG/JPEG; Range supported |
 | POST | `/jobs` | Job, HTTP 202 |
 | GET | `/jobs` | `{jobs:[JobSummary...]}`; up to 30 owned exports, active jobs first |

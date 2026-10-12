@@ -1,0 +1,36 @@
+{
+  "decoder_threads": 2,
+  "encoder_threads": 2,
+  "filter_threads": 1,
+  "method": "HTTP handler to complete playable MP4 (includes durable publication and cache lookup)",
+  "observations": [
+    {
+      "cold_ms": 6617.846,
+      "warm_ms": 25.82,
+      "bytes": 5763690
+    },
+    {
+      "cold_ms": 5094.144,
+      "warm_ms": 13.708,
+      "bytes": 5763690
+    },
+    {
+      "cold_ms": 4795.714,
+      "warm_ms": 9.194,
+      "bytes": 5763690
+    },
+    {
+      "cold_ms": 5105.371,
+      "warm_ms": 10.002,
+      "bytes": 5763690
+    },
+    {
+      "cold_ms": 4657.323,
+      "warm_ms": 13.646,
+      "bytes": 5763690
+    }
+  ],
+  "source": "/root/video_cut/preview-evidence-20261012/source-1080p60.mp4",
+  "video": "1920x1080 60fps H.264",
+  "window_ms": 30000
+}
