@@ -126,6 +126,28 @@ func (s *Store) prepareSourceMediaCleanup(ctx context.Context, c Config, id stri
 	return paths, nil
 }
 
+// Expired crashed readers are independent of a source's retention lifetime.
+// One indexed batch leaves active readers and rows locked by renewal untouched.
+func (s *Store) cleanupSourceMediaReaders(ctx context.Context) error {
+	tx, err := s.storageTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer rollbackStorage(tx)
+	if _, err = tx.Exec(ctx, "SET LOCAL lock_timeout='750ms'"); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `WITH expired AS MATERIALIZED (
+ SELECT id FROM source_media_readers WHERE expires_at<=now()
+ ORDER BY expires_at,id LIMIT $1 FOR UPDATE SKIP LOCKED
+ ) DELETE FROM source_media_readers reader USING expired
+ WHERE reader.id=expired.id AND reader.expires_at<=now()`, storageBatch)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 const sourceReaderTTL = time.Minute
 
 // Native HTTP reads are independent of expensive preview decoder admissions.
@@ -141,7 +163,7 @@ func (s *Store) acquireSourceMediaReader(ctx context.Context, source Source, id 
 		return time.Time{}, err
 	}
 	var count int
-	if err = tx.QueryRow(ctx, `SELECT count(*) FROM source_media_readers WHERE expires_at>clock_timestamp()`).Scan(&count); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT count(*) FROM (SELECT id FROM source_media_readers WHERE expires_at>now() ORDER BY expires_at,id LIMIT 128) bounded`).Scan(&count); err != nil {
 		return time.Time{}, err
 	}
 	if count >= 128 {
@@ -235,6 +257,14 @@ func (r contextReadSeeker) Seek(offset int64, whence int) (int64, error) {
 func sourceMediaError(w http.ResponseWriter, err error) {
 	if errors.Is(err, ErrSourceMediaRemoved) {
 		writeError(w, http.StatusGone, "source_removed", "The original recording was removed after export. Your project and finished clips remain available; reopen the recording to continue editing.")
+		return
+	}
+	if problem := problemFromError(err); problem != nil {
+		status := http.StatusTooManyRequests
+		if errors.Is(err, errSourceServerBusy) {
+			status = http.StatusServiceUnavailable
+		}
+		writeError(w, status, problem.code, problem.message)
 		return
 	}
 	lookupError(w, err)

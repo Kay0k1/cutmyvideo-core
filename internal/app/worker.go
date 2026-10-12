@@ -596,6 +596,9 @@ func cleanupFiles(ctx context.Context, c Config, s *Store) error {
 	var problems []error
 	retentionCtx, retentionCancel := maintenanceStageContext(ctx, 2)
 	defer retentionCancel()
+	if err := s.cleanupSourceMediaReaders(retentionCtx); err != nil {
+		problems = append(problems, err)
+	}
 	if err := s.ProcessSourceMediaCleanup(retentionCtx, c); err != nil {
 		problems = append(problems, err)
 	}

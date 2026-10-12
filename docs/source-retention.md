@@ -120,3 +120,10 @@ the independent artifact expiry policy. The owner’s explicit source DELETE kee
 its documented destructive cascade; automatic media cleanup never calls it.
 Projects are client-side data and are not deleted by media cleanup. Local CLI/SDK
 input files never participate in this server lifecycle.
+
+Native/window asset reads have a global cap of128 renewable leases. Saturation
+returns retryable `503 server_busy`. Admission counts at most128 active rows
+through the expiry index, independently of retained expired history. Each
+maintenance cycle removes at most200 expired reader rows in expiry/ID order,
+skipping locked renewals and preserving active leases. Crashed reads therefore
+receive separate bounded cleanup without waiting for their source's TTL.
