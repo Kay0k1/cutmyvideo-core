@@ -37,6 +37,7 @@ const previewWeightSQL = `CASE WHEN r.token LIKE 'inspection-full:%' THEN 2 WHEN
 
 var errPreviewPending = errors.New("this preview is being prepared")
 var errPreviewNeedsInspection = errors.New("preview admission needs selected local dimensions")
+var errPreviewAdmissionUncertain = errors.New("preview admission commit outcome unknown")
 var ErrPreviewCommitUncertain = errors.New("preview publication commit outcome unknown")
 
 // Small, reusable intervals keep seeking independent of recording length.
@@ -50,6 +51,10 @@ func (s *Server) sourcePreviewWithPublisher(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) sourceWindowWithPublisher(w http.ResponseWriter, r *http.Request, owner string, storyboard bool, publish func(context.Context, Config, Source, string, *os.File) error) {
+	s.sourceWindowWithAdmission(w, r, owner, storyboard, publish, s.Store.acquirePreviewAfterCacheLookup)
+}
+
+func (s *Server) sourceWindowWithAdmission(w http.ResponseWriter, r *http.Request, owner string, storyboard bool, publish func(context.Context, Config, Source, string, *os.File) error, acquire func(context.Context, Config, Source, string, string, bool, bool) (*os.File, error)) {
 	ctx, cancel := context.WithTimeout(r.Context(), previewTimeout)
 	defer cancel()
 	v, err := s.databaseSource(ctx, r.PathValue("id"), owner)
@@ -113,7 +118,7 @@ func (s *Server) sourceWindowWithPublisher(w http.ResponseWriter, r *http.Reques
 	inspected := v.Path == ""
 	for {
 		cached, err = apiDatabase(ctx, func(dbCtx context.Context) (*os.File, error) {
-			return s.Store.acquirePreviewAfterCacheLookup(dbCtx, s.Config, v, id, key, storyboard || r.URL.Query().Get("priority") == "background", !inspected)
+			return acquire(dbCtx, s.Config, v, id, key, storyboard || r.URL.Query().Get("priority") == "background", !inspected)
 		})
 		if errors.Is(err, errPreviewNeedsInspection) {
 			// Cache hits need neither tool. A miss releases the storage fence
@@ -161,6 +166,9 @@ func (s *Server) sourceWindowWithPublisher(w http.ResponseWriter, r *http.Reques
 		}
 	}
 	if err != nil {
+		if errors.Is(err, errPreviewAdmissionUncertain) {
+			s.releasePreviewAdmission(v, id, true)
+		}
 		if errors.Is(err, ErrNotFound) {
 			lookupError(w, err)
 			return
@@ -183,9 +191,7 @@ func (s *Server) sourceWindowWithPublisher(w http.ResponseWriter, r *http.Reques
 		cleanupCtx, stop := context.WithTimeout(context.Background(), workerDatabaseTimeout)
 		defer stop()
 		// Keep the reservation if removal failed; maintenance retries it.
-		if removeStorageTree(cleanupCtx, dir) == nil && fsdurable.SyncDirectories(filepath.Dir(dir)) == nil {
-			_, _ = s.Store.DB.Exec(cleanupCtx, "DELETE FROM storage_reservations WHERE id=$1 AND kind='preview'", id)
-		}
+		_ = s.Store.releasePreviewAdmission(cleanupCtx, s.Config, v, id, true)
 	}()
 	if err = fsdurable.EnsureDirectory(dir, 0700); err != nil {
 		internalError(w, err)
@@ -519,7 +525,55 @@ func (s *Store) acquirePreviewAfterCacheLookup(ctx context.Context, c Config, so
 	if err != nil {
 		return nil, err
 	}
-	return nil, tx.Commit(ctx)
+	return nil, commitPreviewAdmission(ctx, tx)
+}
+
+func commitPreviewAdmission(ctx context.Context, tx pgx.Tx) error {
+	err := tx.Commit(ctx)
+	if err != nil && !publicationCommitRejected(err) {
+		return errors.Join(errPreviewAdmissionUncertain, err)
+	}
+	return err
+}
+
+func (s *Server) releasePreviewAdmission(source Source, id string, workspace bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), workerDatabaseTimeout)
+	defer cancel()
+	_ = s.Store.releasePreviewAdmission(ctx, s.Config, source, id, workspace)
+}
+
+// The admission transaction may still be finishing after losing its COMMIT
+// acknowledgement. Take its storage fence before reading/deleting the own
+// lease. Completed cache entries and other owners are never removed here.
+func (s *Store) releasePreviewAdmission(ctx context.Context, c Config, source Source, id string, workspace bool) error {
+	tx, err := s.storageTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer rollbackStorage(tx)
+	var exists bool
+	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM storage_reservations WHERE id=$1 AND owner=$2 AND job_id=$3 AND kind='preview')", id, source.Owner, source.ID).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return tx.Commit(ctx)
+	}
+	if workspace {
+		dir, err := previewDirectory(c, id)
+		if err != nil {
+			return err
+		}
+		if err = removeStorageTree(ctx, dir); err != nil {
+			return err
+		}
+		if err = fsdurable.SyncDirectories(filepath.Dir(dir)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	if _, err = tx.Exec(ctx, "DELETE FROM storage_reservations WHERE id=$1 AND owner=$2 AND job_id=$3 AND kind='preview'", id, source.Owner, source.ID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *Store) publishPreview(ctx context.Context, c Config, source Source, id string, file *os.File) error {
