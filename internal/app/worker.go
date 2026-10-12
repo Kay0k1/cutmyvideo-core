@@ -110,7 +110,7 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 	stopHeartbeat := make(chan struct{})
 	heartbeatDone := make(chan struct{})
 	var leaseUncertain atomic.Bool
-	go func() {
+	go func(heartbeatCtx context.Context) {
 		defer close(heartbeatDone)
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
@@ -118,12 +118,12 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 			select {
 			case <-stopHeartbeat:
 				return
-			case <-ctx.Done():
+			case <-heartbeatCtx.Done():
 				return
 			case <-ticker.C:
-				cancelled, err := heartbeatWorkerJob(ctx, s, j.ID, token)
+				cancelled, err := heartbeatWorkerJob(heartbeatCtx, s, j.ID, token)
 				if cancelled || err != nil {
-					if err != nil && ctx.Err() == nil {
+					if err != nil && heartbeatCtx.Err() == nil {
 						leaseUncertain.Store(true)
 					}
 					cancel()
@@ -132,7 +132,7 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 				touchWorkerHealth(c.WorkerHealthPath)
 			}
 		}
-	}()
+	}(ctx)
 	defer func() { close(stopHeartbeat); <-heartbeatDone }()
 	persist := func() bool {
 		saveCtx, saveCancel := context.WithTimeout(context.WithoutCancel(parent), 5*time.Second)
@@ -175,19 +175,22 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 	// An acknowledged/lost-ack publication may leave only the terminal
 	// snapshot unsaved. Existing completed results need no new media resolution.
 	completed := len(j.Items) > 0
-	for _, item := range j.Items {
+	lastUnfinished := -1
+	for i, item := range j.Items {
 		if item.Status != "succeeded" || item.Artifact == nil {
 			completed = false
-			break
+			lastUnfinished = i
+			continue
 		}
 		path, _, e := s.ArtifactPath(ctx, item.Artifact.ID, j.Owner)
 		if e != nil {
 			completed = false
-			break
+			lastUnfinished = i
+			continue
 		}
 		if _, e = os.Stat(path); e != nil {
 			completed = false
-			break
+			lastUnfinished = i
 		}
 	}
 	if completed {
@@ -246,7 +249,11 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 		}
 		slog.Info("source_streams_resolved", "job_id", j.ID, "cache_hit", cachedMetadata, "elapsed_ms", time.Since(resolvedAt).Milliseconds())
 	}
+	var localSession *LocalExportSession
 	if source.Path != "" {
+		ctx, localSession = BeginLocalExport(ctx, source.Path)
+		localSession.SetWorkspace(work)
+		defer localSession.Close()
 		source, err = s.refreshLocalMediaDimensions(ctx, c, source)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
@@ -474,6 +481,14 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 			slog.Info("cached_source_refreshed", "job_id", j.ID)
 		}
 		slog.Info("fragment_processed", "job_id", j.ID, "item_id", item.ID, "elapsed_ms", time.Since(encodeStarted).Milliseconds(), "media_ms", item.ProgressMS, "success", e == nil)
+		// No further interval needs source text after the last unfinished item.
+		// Remove it before publication and propagate cleanup failures; work
+		// headroom remains fenced until the whole workspace has been removed.
+		if localSession != nil && i >= lastUnfinished {
+			if cleanupErr := localSession.Close(); cleanupErr != nil {
+				e = errors.Join(e, cleanupErr)
+			}
+		}
 		if e != nil {
 			if ctx.Err() != nil {
 				finishFailure("job_timeout", "Processing stopped or exceeded the time limit")

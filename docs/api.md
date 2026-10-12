@@ -259,3 +259,11 @@ retry schedule. Deletion and job admission take the
 same advisory lock before resource row locks, so concurrent submissions cannot
 create dangling or accidentally deleted sources. Results copied to a user's
 computer are outside server retention.
+
+## Download a ready selection as ZIP
+
+`GET /api/v1/jobs/{id}/download.zip` returns the job's currently ready files in item order. Optional repeated `artifact_id` query values choose up to 128 distinct ready artifacts in the supplied order, including earlier partial-retry successes belonging to the same owner and source. Every artifact is authorized and opened before response bytes are emitted. Missing, expired, foreign or different-source artifacts return an error.
+
+ZIP entries use the fragment label, the original media extension and numeric order prefixes to make duplicate labels safe. Media bytes are streamed without recompression, a persistent archive or a browser-sized aggregate buffer. The original can already be removed. Individual downloads retain range resumption; an interrupted ZIP download restarts from the beginning.
+
+Video preview accepts optional `window_ms=6000` or `window_ms=30000` (default). Position alignment follows the selected length, and short windows have a separate cache identity. The response's source-time headers remain authoritative. Storyboard and waveform windows retain their existing thirty-second contract.

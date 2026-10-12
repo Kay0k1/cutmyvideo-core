@@ -6,7 +6,11 @@ import "math"
 // enforced by the producer. A ten-second clip must not reserve a 16 GiB file.
 // Allow container headers, decoder context and the final muxer's metadata.
 const exportContainerAllowance int64 = 16 << 20
-const subtitleStageAllowance int64 = maxMediaStreams * (8 << 20)
+
+const subtitleTrackAllowance int64 = maxMediaStreams * (8 << 20)
+
+// One extracted source copy and one rebased output copy can coexist per track.
+const subtitleStageAllowance int64 = 2 * subtitleTrackAllowance
 
 func boundedMediaBytes(durationMS, bitsPerSecond, allowance, limit int64) int64 {
 	if limit <= 0 || durationMS <= 0 || bitsPerSecond <= 0 {
@@ -83,20 +87,24 @@ func joinedOutputBudget(c Config, request ExportRequest) int64 {
 }
 
 func subtitleWorkBudget(c Config, request ExportRequest, output int64) (int64, error) {
+	return subtitleStageBudget(request, output, subtitleStageAllowance)
+}
+
+func subtitleStageBudget(request ExportRequest, output, textAllowance int64) (int64, error) {
 	if request.SubtitleMode != "preserve" {
 		return 0, nil
 	}
 	// The preserved text and subtitle-free media coexist until the final
 	// mux passes verification. Text extraction has a bounded stream ceiling.
-	if output > math.MaxInt64-subtitleStageAllowance {
+	if output > math.MaxInt64-textAllowance {
 		return 0, errStorageUnavailable
 	}
-	return output + subtitleStageAllowance, nil
+	return output + textAllowance, nil
 }
 
-// Joined exports retain their intermediate segments until the final mux is
-// verified. Remote HLS stages are retained as well, since each has its own
-// source offset. Reserve both producers, including both staging representations.
+// Accurate joins decode from a concat plan into one output and do not produce
+// encoded segment files. Copy joins retain their actual intermediate segments.
+// Remote HLS stages coexist because each range has its own source offset.
 func joinedWorkBudget(c Config, request ExportRequest, platform bool) (int64, error) {
 	size := joinedOutputBudget(c, request)
 	if size <= 0 {
@@ -109,14 +117,14 @@ func joinedWorkBudget(c Config, request ExportRequest, platform bool) (int64, er
 	size += subtitles
 	var copyTransient int64
 	for _, selected := range request.Ranges {
-		budget := outputBudget(c, selected, request)
 		if request.CutMode == "copy" {
+			budget := outputBudget(c, selected, request)
 			copyTransient = max(copyTransient, budget)
+			if budget <= 0 || budget > math.MaxInt64-size {
+				return 0, errStorageUnavailable
+			}
+			size += budget
 		}
-		if budget <= 0 || budget > math.MaxInt64-size {
-			return 0, errStorageUnavailable
-		}
-		size += budget
 		if platform {
 			staging := inputBudget(c, selected, request)
 			if staging < 0 || staging > (math.MaxInt64-size)/2 {

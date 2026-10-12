@@ -124,3 +124,86 @@ func TestDurationBasedBudgetIsUsedForAdmissionClaimAndPublication(t *testing.T) 
 		t.Fatalf("publication lost storage accounting: source=%d files=%d remaining=%d", sourceBytes, files, after)
 	}
 }
+
+func TestAccurateJoinReservationOnlyIncludesActualProducers(t *testing.T) {
+	c := Config{MaxOutputBytes: 16 << 30, MaxSourceBytes: 32 << 30, MaxFetchBytes: 32 << 30}
+	r := ExportRequest{Format: "mp4", Quality: "1080p", CutMode: "accurate", OutputMode: "joined", Ranges: []Range{{StartMS: 3600_000, EndMS: 3602_000}, {StartMS: 1200_000, EndMS: 1203_000}}}
+	for _, platform := range []bool{false, true} {
+		for _, subtitles := range []bool{false, true} {
+			request := r
+			if subtitles {
+				request.SubtitleMode = "preserve"
+			}
+			expected := joinedOutputBudget(c, request)
+			subtitleBytes, err := subtitleWorkBudget(c, request, expected)
+			if err != nil {
+				t.Fatal(err)
+			}
+			expected += subtitleBytes
+			if platform {
+				for _, selected := range request.Ranges {
+					expected += 2 * inputBudget(c, selected, request)
+				}
+			}
+			reserve, err := joinedWorkBudget(c, request, platform)
+			if err != nil || reserve != expected {
+				t.Fatalf("accurate join reserved fictional segments or lost real producers: %d != %d, %v", reserve, expected, err)
+			}
+		}
+	}
+}
+
+func TestAccurateJoinCanBeClaimedWithRoomForItsRealOutput(t *testing.T) {
+	s := testStore(t)
+	c := ledgerConfig(t)
+	c.MaxOutputBytes = 16 << 30
+	c.MaxStorageBytes = 32 << 20
+	c.MaxOwnerBytes = 256 << 20
+	s.ConfigureStorage(c)
+	source := storedSource(t, s, "accurate-join-budget")
+	request := requestFor(source)
+	request.OutputMode = "joined"
+	request.Ranges = []Range{{StartMS: 5000, EndMS: 6000}, {StartMS: 1000, EndMS: 2000}}
+	oldReserve := joinedOutputBudget(c, request)
+	for _, selected := range request.Ranges {
+		oldReserve += outputBudget(c, selected, request)
+	}
+	if oldReserve <= c.MaxStorageBytes {
+		t.Fatal("fixture does not reproduce the former excessive reservation")
+	}
+	if _, err := s.CreateJobLimited(context.Background(), source.Owner, request, "", 3, 32); err != nil {
+		t.Fatalf("real output fits but admission rejected accurate join: %v", err)
+	}
+	job, _, err := s.Claim(context.Background())
+	if err != nil || job.Request.OutputMode != "joined" {
+		t.Fatalf("real output fits but accurate join could not claim: %+v, %v", job, err)
+	}
+	_, reserve := ledgerBytes(t, s)
+	if reserve != joinedOutputBudget(c, request) {
+		t.Fatalf("claim retained fictional intermediate files: %d", reserve)
+	}
+}
+
+func TestSeparateSubtitleReservationChargesSharedSourceTextOnce(t *testing.T) {
+	c := Config{MaxOutputBytes: 16 << 30}
+	request := ExportRequest{Format: "mkv", Quality: "best", CutMode: "copy", SubtitleMode: "preserve", Ranges: []Range{{EndMS: 1000}, {StartMS: 1000, EndMS: 2000}, {StartMS: 2000, EndMS: 3000}}}
+	job := Job{Request: request, Items: jobItems(request)}
+	for done := range len(job.Items) + 1 {
+		var expected int64
+		for i, r := range request.Ranges {
+			if i < done {
+				job.Items[i].Status = "succeeded"
+				job.Items[i].Artifact = &Artifact{ID: "retained"}
+				continue
+			}
+			expected += 2*outputBudget(c, r, request) + subtitleTrackAllowance
+		}
+		if done < len(job.Items) {
+			expected += subtitleTrackAllowance
+		}
+		got, err := remainingJobReserve(c, job, false)
+		if err != nil || got != expected {
+			t.Fatalf("%d completed: repeated source copies or missing unfinished producers: %d != %d, %v", done, got, expected, err)
+		}
+	}
+}

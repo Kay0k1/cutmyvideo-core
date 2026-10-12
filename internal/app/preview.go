@@ -19,6 +19,7 @@ import (
 )
 
 const previewWindowMS int64 = 30000
+const previewQuickWindowMS int64 = 6000
 const previewOutputBytes int64 = 16 << 20
 const previewInputBytes int64 = 64 << 20
 const previewReservationBytes = 2*previewInputBytes + previewOutputBytes
@@ -99,6 +100,14 @@ func (s *Server) sourceAnalysisWithAdmission(w http.ResponseWriter, r *http.Requ
 	}
 	request := ExportRequest{}
 	query := r.URL.Query()
+	windowMS := previewWindowMS
+	if values, ok := query["window_ms"]; ok {
+		if kind != windowVideo || len(values) != 1 || (values[0] != "6000" && values[0] != "30000") {
+			writeError(w, 400, "invalid_preview", "Choose a 6000 or 30000 millisecond video window")
+			return
+		}
+		windowMS, _ = strconv.ParseInt(values[0], 10, 64)
+	}
 	if value, ok := query["audio_track"]; ok {
 		if len(value) != 1 {
 			writeError(w, 400, "invalid_preview", "Choose one audio stream index")
@@ -131,8 +140,11 @@ func (s *Server) sourceAnalysisWithAdmission(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	// Canonical intervals make nearby seeks reuse the same result.
-	start = start / previewWindowMS * previewWindowMS
+	start = start / windowMS * windowMS
 	key := "display-v1:" + previewCacheKeyOptions(v, start, request)
+	if windowMS != previewWindowMS {
+		key = "quick-v1:" + previewCacheKeyOptions(v, start, request)
+	}
 	filename := "preview.mp4"
 	outputLimit := previewOutputBytes
 	renderWindow := renderPreviewOptions
@@ -149,6 +161,22 @@ func (s *Server) sourceAnalysisWithAdmission(w http.ResponseWriter, r *http.Requ
 	id := newID("preview")
 	var cached *os.File
 	inspected := v.Path == ""
+	admissionStarted := time.Now()
+	waitForForeground := func(err error) bool {
+		// A short foreground request may arrive with its source-track probe.
+		// Wait briefly in the bounded admission pool instead of making the
+		// browser restart the entire request. Background and legacy callers
+		// retain immediate refusal; requests still share the same media caps.
+		if windowMS != previewQuickWindowMS || query.Get("priority") == "background" || !errors.Is(err, errSourceServerBusy) || time.Since(admissionStarted) >= time.Second {
+			return false
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(50 * time.Millisecond):
+			return true
+		}
+	}
 	for {
 		cached, err = apiDatabase(ctx, func(dbCtx context.Context) (*os.File, error) {
 			return acquire(dbCtx, s.Config, v, id, key, kind != windowVideo || r.URL.Query().Get("priority") == "background", !inspected)
@@ -170,6 +198,9 @@ func (s *Server) sourceAnalysisWithAdmission(w http.ResponseWriter, r *http.Requ
 				release()
 			}
 			if err != nil {
+				if waitForForeground(err) {
+					continue
+				}
 				if r.Context().Err() != nil {
 					return
 				}
@@ -184,6 +215,9 @@ func (s *Server) sourceAnalysisWithAdmission(w http.ResponseWriter, r *http.Requ
 				return
 			}
 			inspected = true
+			continue
+		}
+		if waitForForeground(err) {
 			continue
 		}
 		if !errors.Is(err, errPreviewPending) {
@@ -209,7 +243,7 @@ func (s *Server) sourceAnalysisWithAdmission(w http.ResponseWriter, r *http.Requ
 		writeSourceAdmissionError(w, ctx, err)
 		return
 	}
-	rangeMS := Range{StartMS: start, EndMS: min(start+previewWindowMS, v.DurationMS)}
+	rangeMS := Range{StartMS: start, EndMS: min(start+windowMS, v.DurationMS)}
 	if cached != nil {
 		defer cached.Close()
 		serveAnalysisWindow(w, r, cached, rangeMS, "hit", kind)

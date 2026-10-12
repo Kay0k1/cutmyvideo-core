@@ -217,17 +217,22 @@ func remainingJobReserve(c Config, j Job, platform bool) (int64, error) {
 		}
 		return 0, nil
 	}
-	var size, staging int64
+	var size, staging, sourceText int64
 	for _, item := range j.Items {
 		if item.Status == "succeeded" && item.Artifact != nil {
 			continue
 		}
 		r := Range{StartMS: item.StartMS, EndMS: item.EndMS}
 		budget := outputBudget(c, r, j.Request)
-		if subtitles, err := subtitleWorkBudget(c, j.Request, budget); err != nil || subtitles > math.MaxInt64-budget {
+		// Source text is shared across the operation. Rebased text and the
+		// subtitle-free media producer remain charged per unfinished output.
+		if subtitles, err := subtitleStageBudget(j.Request, budget, subtitleTrackAllowance); err != nil || subtitles > math.MaxInt64-budget {
 			return 0, errStorageUnavailable
 		} else {
 			budget += subtitles
+		}
+		if j.Request.SubtitleMode == "preserve" {
+			sourceText = subtitleTrackAllowance
 		}
 		if budget <= 0 || budget > math.MaxInt64-size {
 			return 0, errStorageUnavailable
@@ -237,6 +242,10 @@ func remainingJobReserve(c Config, j Job, platform bool) (int64, error) {
 			staging = max(staging, inputBudget(c, r, j.Request))
 		}
 	}
+	if sourceText > math.MaxInt64-size {
+		return 0, errStorageUnavailable
+	}
+	size += sourceText
 	// Only one interval is staged at a time. Published files are charged
 	// separately, while the unfinished outputs retain their exact ceilings.
 	if staging < 0 || staging > (math.MaxInt64-size)/2 {

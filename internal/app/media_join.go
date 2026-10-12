@@ -12,6 +12,12 @@ import (
 
 // ExportJoinedLocal joins ranges from one local source in caller order.
 func ExportJoinedLocal(ctx context.Context, c Config, path, out string, ranges []Range, request ExportRequest) ([]ArtifactSegment, error) {
+	if localExportSession(ctx, path, false) == nil {
+		var session *LocalExportSession
+		ctx, session = BeginLocalExport(ctx, path)
+		session.SetWorkspace(filepath.Dir(out))
+		defer session.Close()
+	}
 	return exportJoinedInputsProgress(ctx, c, []mediaInput{{Path: path}}, ranges, request, out, nil)
 }
 func exportJoinedInputsProgress(ctx context.Context, c Config, inputs []mediaInput, ranges []Range, request ExportRequest, out string, report func(int64)) ([]ArtifactSegment, error) {
@@ -63,6 +69,7 @@ func exportJoinedSegmentInputsProgress(ctx context.Context, c Config, inputs [][
 	request.Ranges = ranges
 	limit := joinedOutputBudget(c, request)
 	media := out
+	var subtitleSource probeInfo
 	if request.SubtitleMode == "preserve" {
 		if len(inputs[0]) != 1 || inputs[0][0].Remote {
 			return nil, &sourceProblem{"subtitle_unavailable", "Preserving subtitles requires a local source"}
@@ -74,6 +81,7 @@ func exportJoinedSegmentInputsProgress(ctx context.Context, c Config, inputs [][
 		if _, err = trackManifest(p, selections[0], request); err != nil {
 			return nil, err
 		}
+		subtitleSource = p
 		media = filepath.Join(dir, "media."+request.Format)
 	}
 	var segments []ArtifactSegment
@@ -86,14 +94,7 @@ func exportJoinedSegmentInputsProgress(ctx context.Context, c Config, inputs [][
 		return nil, e
 	}
 	if request.SubtitleMode == "preserve" {
-		p, e := probeStreams(ctx, c, inputs[0][0].Path, false)
-		if e != nil {
-			return nil, e
-		}
-		if _, e = trackManifest(p, selections[0], request); e != nil {
-			return nil, e
-		}
-		e = muxTextSubtitles(ctx, c, inputs[0][0].Path, p, media, out, segments, request, limit)
+		e = muxTextSubtitles(ctx, c, inputs[0][0].Path, subtitleSource, media, out, segments, request, limit)
 		if e != nil {
 			return nil, e
 		}
@@ -181,7 +182,7 @@ func joinCopy(ctx context.Context, c Config, inputs [][]mediaInput, ranges []Ran
 	if _, e := runCommand(ctx, c.FFmpeg, args...); e != nil {
 		return nil, copyExportDiagnostic(e, request.Format)
 	}
-	if e := verifyJoined(ctx, c, out, request, elapsed, limit); e != nil {
+	if _, e := verifyJoined(ctx, c, out, request, elapsed, limit); e != nil {
 		return nil, e
 	}
 	if report != nil {
@@ -298,10 +299,7 @@ func joinAccurate(ctx context.Context, c Config, inputs [][]mediaInput, ranges [
 	if e != nil {
 		return nil, e
 	}
-	if e = verifyJoined(ctx, c, out, request, elapsed, limit); e != nil {
-		return nil, e
-	}
-	final, _, e := probe(ctx, c, out, false)
+	final, e := verifyJoined(ctx, c, out, request, elapsed, limit)
 	if e != nil {
 		return nil, e
 	}
@@ -320,28 +318,28 @@ func joinAccurate(ctx context.Context, c Config, inputs [][]mediaInput, ranges [
 	return segments, nil
 }
 
-func verifyJoined(ctx context.Context, c Config, path string, request ExportRequest, expected, limit int64) error {
+func verifyJoined(ctx context.Context, c Config, path string, request ExportRequest, expected, limit int64) (probeInfo, error) {
 	stat, e := os.Stat(path)
 	if e != nil {
-		return e
+		return probeInfo{}, e
 	}
 	if stat.Size() >= limit {
-		return errOutputLimit
+		return probeInfo{}, errOutputLimit
 	}
 	p, duration, e := probe(ctx, c, path, false)
 	if e != nil {
-		return e
+		return p, e
 	}
 	if request.Format != "mp3" && p.selectedVideo() == nil {
-		return errUnsupportedStream
+		return p, errUnsupportedStream
 	}
 	if request.Format == "mp3" && p.selectedAudio() == nil {
-		return errNoAudio
+		return p, errNoAudio
 	}
 	if math.Abs(float64(duration-expected)) > 350 {
-		return fmt.Errorf("joined result duration does not match its selected intervals")
+		return p, fmt.Errorf("joined result duration does not match its selected intervals")
 	}
-	return nil
+	return p, nil
 }
 
 // B-frame stream-copy limits use DTS. Video can therefore retain presentation

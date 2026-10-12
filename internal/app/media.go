@@ -191,6 +191,13 @@ func probe(ctx context.Context, c Config, path string, remote bool) (probeInfo, 
 // HLS staging can have no finite duration until timestamps have been remuxed.
 // Stream selection still uses the same bounded probe and validation as files.
 func probeStreams(ctx context.Context, c Config, path string, remote bool) (probeInfo, error) {
+	if session := localExportSession(ctx, path, remote); session != nil {
+		return session.inspect(ctx, c)
+	}
+	return probeStreamsUncached(ctx, c, path, remote)
+}
+
+func probeStreamsUncached(ctx context.Context, c Config, path string, remote bool) (probeInfo, error) {
 	protocols := "file"
 	if remote {
 		protocols = "http,tcp"
