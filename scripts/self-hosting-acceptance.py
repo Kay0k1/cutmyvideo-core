@@ -220,14 +220,23 @@ def current_installation_module():
     return sys.modules[name]
 
 
+def source_media_cleanup_module():
+    name='source_media_cleanup_transition'
+    if name not in sys.modules:
+        spec=importlib.util.spec_from_file_location(name,REPO/'scripts/source-media-cleanup-transition.py')
+        value=importlib.util.module_from_spec(spec);sys.modules[name]=value;spec.loader.exec_module(value)
+    return sys.modules[name]
+
+
 def validate_report(report, evidence_directory=None):
     """Fail closed even if all visible partial check records say PASS."""
     mode = report.get('mode', 'same-schema')
-    require(mode in ('same-schema', 'source-retention-004-to-005', 'current-installation'), 'unknown acceptance mode')
-    current = current_installation_module() if mode == 'current-installation' else None
+    require(mode in ('same-schema', 'source-retention-004-to-005', 'current-installation', 'source-media-cleanup-005-to-006'), 'unknown acceptance mode')
+    cleanup = source_media_cleanup_module() if mode == 'source-media-cleanup-005-to-006' else None
+    current = cleanup or (current_installation_module() if mode == 'current-installation' else None)
     transition = transition_module() if mode == 'source-retention-004-to-005' else None
     required_groups = transition.groups(GROUPS) if transition else current.groups(GROUPS) if current else GROUPS
-    require(report.get('schema_version') == (2 if transition else 3 if current else 1) and report.get('ok') is True
+    require(report.get('schema_version') == (2 if transition else 4 if mode == 'source-media-cleanup-005-to-006' else 3 if current else 1) and report.get('ok') is True
             and report.get('errors') == [], 'acceptance did not finish successfully')
     require(set(report.get('groups', {})) == set(required_groups), 'required group missing or unknown')
     for group, checks in required_groups.items():
@@ -293,6 +302,8 @@ def validate_report(report, evidence_directory=None):
         validate_packet_snapshots(report, evidence_directory)
     if transition:
         transition.validate_transition(report, evidence_directory, sys.modules.get(__name__) or globals())
+    elif mode == 'source-media-cleanup-005-to-006':
+        source_media_cleanup_module().validate_release_transition(report,evidence_directory)
     elif current:
         current.validate_current(report, evidence_directory)
     else:
@@ -2081,13 +2092,13 @@ def parse_args(argv=None):
     parser.add_argument('--revision')
     parser.add_argument('--pr-head', help='Actual PR head SHA (checkout may be its provider merge); otherwise checkout SHA')
     parser.add_argument('--upgrade-from')
-    parser.add_argument('--mode', choices=('same-schema', 'source-retention-004-to-005', 'current-installation'), default='same-schema',
+    parser.add_argument('--mode', choices=('same-schema', 'source-retention-004-to-005', 'current-installation', 'source-media-cleanup-005-to-006'), default='same-schema',
                         help='Schema changes require the explicitly selected, pinned transition mode')
     parser.add_argument('--output', type=Path)
     parser.add_argument('--temp-directory', type=Path, default=Path(tempfile.gettempdir()))
     args = parser.parse_args(argv)
     if args.upgrade_from is None:
-        args.upgrade_from = current_installation_module().BASELINE if args.mode == 'current-installation' else UPGRADE_FROM
+        args.upgrade_from = source_media_cleanup_module().BASELINE if args.mode == 'source-media-cleanup-005-to-006' else current_installation_module().BASELINE if args.mode == 'current-installation' else UPGRADE_FROM
     require(args.verify_report is not None or (args.revision and args.output), 'explicit revision/output required')
     return args
 
@@ -2102,6 +2113,7 @@ def main(argv=None):
         print('Public profile acceptance: all ' + str(count) + ' groups and cleanup PASS')
         return 0
     acceptance = (transition_module().acceptance_class(sys.modules[__name__]) if args.mode == 'source-retention-004-to-005'
+                  else source_media_cleanup_module().acceptance_class(sys.modules[__name__]) if args.mode == 'source-media-cleanup-005-to-006'
                   else current_installation_module().acceptance_class(sys.modules[__name__]) if args.mode == 'current-installation'
                   else Acceptance)
     result = acceptance(args).execute()

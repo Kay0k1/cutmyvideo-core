@@ -131,6 +131,7 @@ func remoteSourceBudget(c Config) int64 {
 }
 
 type Source struct {
+	MediaRemoved     bool       `json:"media_removed"`
 	ID               string     `json:"id"`
 	ExpiresAt        *time.Time `json:"expires_at"`
 	RetentionBlocked bool       `json:"retention_blocked"`
@@ -166,18 +167,23 @@ type Range struct {
 }
 
 type ExportRequest struct {
-	SourceID     string  `json:"source_id"`
-	Ranges       []Range `json:"ranges"`
-	Format       string  `json:"format"`
-	Quality      string  `json:"quality"`
-	CutMode      string  `json:"cut_mode"`
-	OutputMode   string  `json:"output_mode,omitempty"`
-	AudioTrack   *int    `json:"audio_track,omitempty"`
-	NoAudio      bool    `json:"no_audio,omitempty"`
-	SubtitleMode string  `json:"subtitle_mode,omitempty"`
+	SourceID      string  `json:"source_id"`
+	Ranges        []Range `json:"ranges"`
+	Format        string  `json:"format"`
+	Quality       string  `json:"quality"`
+	CutMode       string  `json:"cut_mode"`
+	OutputMode    string  `json:"output_mode,omitempty"`
+	AudioTrack    *int    `json:"audio_track,omitempty"`
+	NoAudio       bool    `json:"no_audio,omitempty"`
+	SubtitleMode  string  `json:"subtitle_mode,omitempty"`
+	Crop          *Crop   `json:"crop,omitempty"`
+	CleanupSource bool    `json:"cleanup_source,omitempty"`
 }
 
 func (r *ExportRequest) Validate(c Config, s Source) error {
+	if err := validateCropMode(*r); err != nil {
+		return err
+	}
 	if len(r.Ranges) == 0 {
 		return errors.New("choose at least one range; mark a start and an end before exporting")
 	}

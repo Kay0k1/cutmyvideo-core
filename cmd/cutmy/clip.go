@@ -32,6 +32,7 @@ func runClip(args []string, stdout, stderr io.Writer) error {
 	mode := f.String("mode", "accurate", "accurate or copy")
 	audio := f.String("audio-track", "default", "default, none, or inspected absolute audio stream index")
 	subtitles := f.String("subtitles", "omit", "omit or preserve compatible text subtitles")
+	cropFlag := f.String("crop", "", "normalized upright crop x,y,width,height (accurate MP4 only)")
 	profile := f.String("profile", "fast", "fast (larger files) or compact")
 	threads := f.Int("threads", 2, "FFmpeg threads, 1 through 32")
 	timeout := f.Duration("timeout", 30*time.Minute, "whole export timeout, including inspection")
@@ -65,17 +66,44 @@ func runClip(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return invalidCLI(err)
 	}
+	crop, err := parseCrop(*cropFlag)
+	if err != nil {
+		return invalidCLI(err)
+	}
 	// Media commands run in their own process group. Cancel their context before
 	// exiting on a terminal signal so neither the encoder nor its children leak.
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	ctx, cancel := context.WithTimeout(signalCtx, *timeout)
 	defer cancel()
-	result, err := engine.New(engine.Config{FFmpegPath: os.Getenv("FFMPEG_PATH"), FFprobePath: os.Getenv("FFPROBE_PATH"), EncodeProfile: *profile, FFmpegThreads: *threads, ExportTimeout: *timeout}).ExportWithOptions(ctx, *input, *output, engine.Range{StartMS: startMS, EndMS: endMS}, engine.AdvancedOptions{Options: engine.Options{Quality: *quality, CutMode: *mode}, AudioTrack: audioTrack, NoAudio: noAudio, SubtitleMode: *subtitles})
+	result, err := engine.New(engine.Config{FFmpegPath: os.Getenv("FFMPEG_PATH"), FFprobePath: os.Getenv("FFPROBE_PATH"), EncodeProfile: *profile, FFmpegThreads: *threads, ExportTimeout: *timeout}).ExportWithOptions(ctx, *input, *output, engine.Range{StartMS: startMS, EndMS: endMS}, engine.AdvancedOptions{Options: engine.Options{Quality: *quality, CutMode: *mode}, AudioTrack: audioTrack, NoAudio: noAudio, SubtitleMode: *subtitles, Crop: crop})
 	if err != nil {
 		return err
 	}
 	return json.NewEncoder(stdout).Encode(result)
+}
+
+func parseCrop(value string) (*engine.Crop, error) {
+	if value == "" {
+		return nil, nil
+	}
+	parts := strings.Split(value, ",")
+	if len(parts) != 4 {
+		return nil, errors.New("crop must be x,y,width,height in normalized displayed coordinates")
+	}
+	var values [4]float64
+	for i, part := range parts {
+		v, err := strconv.ParseFloat(strings.TrimSpace(part), 64)
+		if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
+			return nil, errors.New("crop coordinates must be finite numbers")
+		}
+		values[i] = v
+	}
+	crop := &engine.Crop{X: values[0], Y: values[1], Width: values[2], Height: values[3]}
+	if err := crop.Validate(); err != nil {
+		return nil, err
+	}
+	return crop, nil
 }
 
 func parseAudioSelection(value string) (*int, bool, error) {

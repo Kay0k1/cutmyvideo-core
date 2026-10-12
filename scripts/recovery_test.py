@@ -38,7 +38,7 @@ class UpgradeSnapshotChecks(unittest.TestCase):
         for row in self.after["storage_files"]:
             row.update(delete_retry_at="-infinity", delete_failures=0)
         for row in self.after["sources"]:
-            row.update(retention_job_pins=1, retention_preview_pins=1, retention_pins_valid=True, retention_pin_revision=0)
+            row.update(retention_job_pins=1, retention_preview_pins=1, retention_pins_valid=True, retention_pin_revision=0, media_removed=False)
 
     def rejects(self, mutate):
         changed = copy.deepcopy(self.after)
@@ -116,7 +116,7 @@ class UpgradeSnapshotChecks(unittest.TestCase):
     def test_source_pins_are_required_typed_and_exact_on_every_source(self):
         self.before["sources"].append({"id": "src_empty", "owner": "owner_b", "path": "/fixture/empty", "duration_ms": 9000})
         self.after["sources"].append({**self.before["sources"][-1], "retention_job_pins": 0, "retention_preview_pins": 0,
-                                       "retention_pins_valid": True, "retention_pin_revision": 0})
+                                       "retention_pins_valid": True, "retention_pin_revision": 0, "media_removed": False})
         self.assertEqual(recovery.verify_upgrade_snapshot(self.before, self.after), 2)
         for index in (0, 1):
             for field in ("retention_job_pins", "retention_preview_pins", "retention_pins_valid", "retention_pin_revision"):
@@ -145,6 +145,12 @@ class UpgradeSnapshotChecks(unittest.TestCase):
         self.rejects(lambda s: s["sources"][0].update(id="src_elsewhere"))
         self.rejects(lambda s: s["sources"][0].pop("path"))
         self.rejects(lambda s: s["sources"].append(copy.deepcopy(s["sources"][0])))
+
+    def test_cleanup_default_must_preserve_original_media(self):
+        self.rejects(lambda s: s["sources"][0].pop("media_removed"))
+        for value in (True, None, 0, "false"):
+            with self.subTest(value=value):
+                self.rejects(lambda s: s["sources"][0].update(media_removed=value))
 
     def test_fixture_must_represent_pre_005_schema(self):
         for field in ("retention_job_pins", "retention_preview_pins", "retention_pins_valid", "retention_pin_revision"):

@@ -44,6 +44,20 @@ files; platform sources use provider format metadata. Source metadata reads do
 not launch a fresh media inspection. They do not expose the SDK/CLI display
 fields, which are not database columns.
 
+Owner-protected `GET /api/v1/sources/{id}/tracks` freshly inspects a local source
+and also returns optional `display_width` and `display_height`. Use these fields,
+rather than persisted coded dimensions, to select a displayed crop.
+
+Window previews also return `X-Source-Display-Width` and
+`X-Source-Display-Height`, describing the original upright square-pixel image
+before the 480p preview cap. This supports crop presets for platform sources
+whose provider dimensions may describe coded pixels. Fresh preview generation
+stores the trusted dimensions in a bounded 20-byte standard MP4 `free` box.
+The entire MP4, including this box, is durably published and charged together.
+Owner-protected warm hits read those fixed bytes without media tools. Malformed
+or absent metadata is ignored instead of inventing geometry. Video preview
+cache identity advances independently of storyboard/waveform identities.
+
 Before a worker processes a local source or prepares a new local window
 preview, bounded inspection refreshes persisted selected coded dimensions.
 This corrects historical snapshots that described a cover image and prevents
@@ -64,6 +78,42 @@ bounded valid display dimensions. Accurate MP4, previews and resolution-capped
 copy refuse unsupported geometry instead of silently stretching or changing
 orientation. Inspection, MP3 and uncapped compatible copy can still use the
 source; inspection does not invent display dimensions.
+
+## Audio waveform
+
+Owner-protected source windows retain one absolute channel peak per 100 ms, with
+at most 300 bins per 30-second interval. PCM is streamed at the inspected source
+sample rate capped at 48 kHz; unknown rates use 48 kHz. Lower source rates retain
+their original cadence, avoiding unnecessary upsampling. Integer source-time
+binning supports fractional samples per bin. Channel peaks are combined without
+mono averaging, so opposite-phase stereo and audible high-frequency activity
+are not represented as silence. Up to 32 channels are accepted; decoded PCM is
+never retained as a whole interval. Foreground-preview priority, private caches,
+guarded network input and source cleanup remain shared with existing windows.
+
+## Crop
+
+Accurate MP4 exports optionally accept `crop: {x, y, width, height}`. All values
+are normalized to the upright square-pixel displayed image, with both opposite
+edges inside 0..1. An omitted crop keeps the full image. Copy, MKV and MP3 reject
+crop explicitly; they never silently change mode. One crop applies to all ranges
+in separate or joined exports.
+
+The renderer first applies display rotation and normalizes sample aspect ratio,
+then crops and applies the chosen resolution cap. Crop edges round to the
+nearest even boundary within the image for H.264 4:2:0 (at most one displayed
+pixel per edge).
+Areas resolving to less than two displayed pixels in either dimension fail.
+There is no aspect stretching or padding. The browser selection overlay describes
+the same normalized region over the uncropped preview. HDR conversion and VFR
+timing retain the existing accurate-export policy.
+
+Go callers use `AdvancedOptions.Crop` with `engine.Crop`; the legacy three-field
+`Options` remains compatible. JSON plans use `options.crop`. CLI example:
+
+```sh
+cutmy clip --input input.mp4 --output portrait.mp4 --end 30 --crop 0.25,0,0.5,1
+```
 
 ## Timing
 

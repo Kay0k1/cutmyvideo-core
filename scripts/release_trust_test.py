@@ -17,6 +17,8 @@ t = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(t)
 m = t.m
 ROOT = Path(__file__).resolve().parents[1]
+NATIVE_RECEIPT_COUNTS = {('linux', 'amd64'): 47, ('linux', 'arm64'): 47,
+                         ('darwin', 'amd64'): 47, ('darwin', 'arm64'): 47, ('windows', 'amd64'): 45}
 
 
 class TrustControls(unittest.TestCase):
@@ -45,10 +47,13 @@ class TrustControls(unittest.TestCase):
             manifest_sha256=m.digest(m.canonical(self.manifest)), mode='candidate', publishable=False,
             native=[{'os': a['os'], 'arch': a['arch'], 'archive': {k: a[k] for k in ('name', 'sha256', 'bytes')},
                 'binary_sha256': a['contents']['cutmy.exe' if a['os'] == 'windows' else 'cutmy']['sha256'],
-                'required_groups': 7, 'required_checks': 37 if a['os'] == 'windows' else 39,
+                'required_groups': 7, 'required_checks': NATIVE_RECEIPT_COUNTS[(a['os'], a['arch'])],
                 'report_sha256': 'b' * 64} for a in self.manifest['archives']],
             linux_archive_recovery={'required_groups': 9, 'decoded_media_observations': 11,
-                'schema_versions': sorted(t.SCHEMAS), 'binary_sha256': self.manifest['archives'][0]['contents']['cutmy']['sha256'],
+                'schema_versions': ['20261005-storage-queue-v3', '20261010-cache-retention-v1',
+                                    '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1',
+                                    '20261011-source-retention-v1', '20261012-source-media-cleanup-v1'],
+                'binary_sha256': self.manifest['archives'][0]['contents']['cutmy']['sha256'],
                 'report_sha256': 'c' * 64})
         self.verdict_path = self.root / 'verdict.json'
         self.verdict_path.write_bytes(m.canonical(self.verdict))
@@ -164,6 +169,60 @@ class TrustControls(unittest.TestCase):
         self.assertEqual(trust['manifest_sha256'], self.args.expected_manifest_sha256)
         self.assertEqual(trust['archive_run'], self.run)
         self.assertEqual(len(t.subjects(trust, m.digest(m.canonical(trust)))), 7)
+
+    def test_trust_requires_exact_six_migration_archive_recovery(self):
+        t.validate_verdict(self.verdict, self.source, self.manifest, self.run)
+        for mutation in ('old005', 'omitted', 'changed006', 'duplicate', 'extra'):
+            with self.subTest(mutation=mutation):
+                changed = deepcopy(self.verdict)
+                versions = changed['linux_archive_recovery']['schema_versions']
+                if mutation == 'old005':
+                    versions.pop()
+                elif mutation == 'omitted':
+                    versions.pop(0)
+                elif mutation == 'changed006':
+                    versions[-1] = '20261012-source-media-cleanup-v2'
+                elif mutation == 'duplicate':
+                    versions.append(versions[-1])
+                else:
+                    versions.append('20261013-unreviewed-v1')
+                self.reject(t.validate_verdict, changed, self.source, self.manifest, self.run)
+
+    def test_frozen_native_inventory_matches_archive_gate_policy(self):
+        spec = importlib.util.spec_from_file_location('trust_native_policy', ROOT / 'scripts/release-native.py')
+        native = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(native)
+        self.assertEqual(tuple(group for group, _ in t.NATIVE_GROUP_CHECK_COUNTS), native.REQUIRED_GROUPS)
+        for os_, arch in NATIVE_RECEIPT_COUNTS:
+            with self.subTest(os=os_, arch=arch):
+                expected = dict(t.NATIVE_GROUP_CHECK_COUNTS)
+                if os_ != 'windows':
+                    expected['process'] += t.NATIVE_UNIX_PROCESS_CHECKS
+                observed = {group: len(checks) for group, checks in native.required_checks(os_).items()}
+                self.assertEqual(observed, expected)
+                self.assertEqual(sum(observed.values()), NATIVE_RECEIPT_COUNTS[(os_, arch)])
+
+    def test_trust_rejects_old_or_changed_native_group_and_check_counts(self):
+        t.validate_verdict(self.verdict, self.source, self.manifest, self.run)
+        for index, receipt in enumerate(self.verdict['native']):
+            for mutation in ('old', 'missing', 'extra', 'other_platform', 'missing_group', 'extra_group',
+                             'checks_float', 'groups_float'):
+                with self.subTest(os=receipt['os'], arch=receipt['arch'], mutation=mutation):
+                    changed = deepcopy(self.verdict)
+                    native = changed['native'][index]
+                    if mutation == 'old':
+                        native['required_checks'] = 37 if receipt['os'] == 'windows' else 39
+                    elif mutation == 'other_platform':
+                        native['required_checks'] = 47 if receipt['os'] == 'windows' else 45
+                    elif mutation == 'checks_float':
+                        native['required_checks'] = float(native['required_checks'])
+                    elif mutation == 'groups_float':
+                        native['required_groups'] = float(native['required_groups'])
+                    elif mutation in ('missing_group', 'extra_group'):
+                        native['required_groups'] += -1 if mutation == 'missing_group' else 1
+                    else:
+                        native['required_checks'] += -1 if mutation == 'missing' else 1
+                    self.reject(t.validate_verdict, changed, self.source, self.manifest, self.run)
 
     def test_candidate_manual_pr_wrong_ref_or_event_cannot_sign(self):
         self.reject(t.signing_policy, self.source, self.run, 'push', 'refs/tags/' + self.source['version'])

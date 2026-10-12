@@ -81,6 +81,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/sources/{id}/media", s.withSession(s.sourceMedia))
 	mux.HandleFunc("GET /api/v1/sources/{id}/preview", s.withSession(s.sourcePreview))
 	mux.HandleFunc("GET /api/v1/sources/{id}/storyboard", s.withSession(s.sourceStoryboard))
+	mux.HandleFunc("GET /api/v1/sources/{id}/waveform", s.withSession(s.sourceWaveform))
 	mux.HandleFunc("GET /api/v1/sources/{id}/tracks", s.withSession(s.sourceTracks))
 	mux.HandleFunc("GET /api/v1/sources/{id}/thumbnail", s.withSession(s.sourceThumbnail))
 	mux.HandleFunc("POST /api/v1/jobs", s.withSession(s.createJob))
@@ -708,17 +709,31 @@ func (s *Server) sourceMedia(w http.ResponseWriter, r *http.Request, owner strin
 		lookupError(w, err)
 		return
 	}
+	if v.MediaRemoved {
+		sourceMediaError(w, ErrSourceMediaRemoved)
+		return
+	}
 	if v.Path == "" {
 		writeError(w, 404, "preview_unavailable", "A native preview is not available for this source")
 		return
 	}
-	serveFile(w, r, v.Path, v.Title, false)
+	ctx, release, err := s.pinSourceMediaReader(r.Context(), v)
+	if err != nil {
+		sourceMediaError(w, err)
+		return
+	}
+	defer release()
+	serveFile(w, r.WithContext(ctx), v.Path, v.Title, false)
 }
 
 func (s *Server) sourceTracks(w http.ResponseWriter, r *http.Request, owner string) {
 	source, err := s.databaseSource(r.Context(), r.PathValue("id"), owner)
 	if err != nil {
 		lookupError(w, err)
+		return
+	}
+	if source.MediaRemoved {
+		sourceMediaError(w, ErrSourceMediaRemoved)
 		return
 	}
 	if source.Path == "" {
@@ -763,8 +778,10 @@ func (s *Server) sourceTracks(w http.ResponseWriter, r *http.Request, owner stri
 	}
 	w.Header().Set("Cache-Control", "private, no-store")
 	writeJSON(w, http.StatusOK, struct {
-		Tracks []Track `json:"tracks"`
-	}{inspected.Tracks})
+		Tracks        []Track `json:"tracks"`
+		DisplayWidth  int     `json:"display_width,omitempty"`
+		DisplayHeight int     `json:"display_height,omitempty"`
+	}{inspected.Tracks, inspected.DisplayWidth, inspected.DisplayHeight})
 }
 
 func (s *Server) createJob(w http.ResponseWriter, r *http.Request, owner string) {
@@ -797,11 +814,15 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request, owner string)
 		lookupError(w, err)
 		return
 	}
+	if v.MediaRemoved {
+		sourceMediaError(w, ErrSourceMediaRemoved)
+		return
+	}
 	if err = request.Validate(s.Config, v); err != nil {
 		writeError(w, 400, "invalid_export", err.Error())
 		return
 	}
-	if v.Path != "" && (request.AudioTrack != nil || request.SubtitleMode == "preserve") {
+	if v.Path != "" && (request.AudioTrack != nil || request.SubtitleMode == "preserve" || request.Crop != nil) {
 		timeout := s.Config.SourceTimeout
 		if timeout <= 0 {
 			timeout = 2 * time.Minute
@@ -913,7 +934,7 @@ func serveFile(w http.ResponseWriter, r *http.Request, path, name string, attach
 	if !attachment {
 		privateSourceFileHeaders(w, name, info)
 	}
-	http.ServeContent(w, r, name, info.ModTime(), f)
+	http.ServeContent(w, r, name, info.ModTime(), contextReadSeeker{r.Context(), f})
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
@@ -971,6 +992,10 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, map[string]APIError{"error": {Code: code, Message: message}})
 }
 func lookupError(w http.ResponseWriter, err error) {
+	if errors.Is(err, ErrSourceMediaRemoved) {
+		sourceMediaError(w, err)
+		return
+	}
 	if errors.Is(err, ErrNotFound) {
 		writeError(w, 404, "not_found", "The resource was not found or is not accessible in this session")
 		return

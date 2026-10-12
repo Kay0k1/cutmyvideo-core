@@ -46,9 +46,19 @@ func videoDisplayGeometry(stream *probeStream) (int, int, error) {
 }
 
 func videoOutputGeometry(stream *probeStream, quality string, preview bool) (int, int, error) {
+	return videoOutputGeometryWithCrop(stream, quality, preview, nil)
+}
+
+func videoOutputGeometryWithCrop(stream *probeStream, quality string, preview bool, crop *Crop) (int, int, error) {
 	width, height, err := videoDisplayGeometry(stream)
 	if err != nil || stream == nil {
 		return 0, 0, errUnsupportedStream
+	}
+	if crop != nil {
+		_, _, width, height, err = cropPixelGeometry(width, height, crop)
+		if err != nil {
+			return 0, 0, &sourceProblem{"crop_invalid", err.Error()}
+		}
 	}
 	factor := 1.0
 	if preview {
@@ -62,7 +72,10 @@ func videoOutputGeometry(stream *probeStream, quality string, preview bool) (int
 	}
 	// H.264 4:2:0 needs even dimensions. Apply the same ratio to both axes;
 	// merely resetting SAR would stretch anamorphic input.
-	return max(2, int(float64(width)*factor)/2*2), max(2, int(float64(height)*factor)/2*2), nil
+	// Avoid losing two pixels when an exact cap such as 480 is represented as
+	// 479.99999999999994 after multiplication. This epsilon is far below one
+	// displayed pixel and does not round genuine fractional dimensions up.
+	return max(2, int(math.Floor(float64(width)*factor+1e-9))/2*2), max(2, int(math.Floor(float64(height)*factor+1e-9))/2*2), nil
 }
 
 func videoEncoderTimeBase(stream *probeStream) (string, error) {
@@ -135,8 +148,12 @@ func renderedMediaFailure(err error, hdr bool) error {
 }
 
 func validateRenderedVideo(info probeInfo, source *probeStream, quality string, preview, hdr bool) error {
+	return validateRenderedVideoWithCrop(info, source, quality, preview, hdr, nil)
+}
+
+func validateRenderedVideoWithCrop(info probeInfo, source *probeStream, quality string, preview, hdr bool, crop *Crop) error {
 	video := info.selectedVideo()
-	width, height, err := videoOutputGeometry(source, quality, preview)
+	width, height, err := videoOutputGeometryWithCrop(source, quality, preview, crop)
 	if err != nil {
 		return err
 	}

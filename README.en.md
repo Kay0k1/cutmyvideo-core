@@ -16,6 +16,8 @@ An open tool for manually trimming video and audio: choose a source and interval
 - Local files, API uploads, direct HTTPS files and accessible public recordings through yt-dlp.
 - Named intervals in one job, with separate files or one result in selected order; saved JSON plans for the CLI and Go.
 - Accurate H.264/AAC MP4, MP3 and original-stream MP4/MKV copy; selected audio, silent video and compatible text subtitles.
+- Upright normalized crop for accurate MP4, including rotation and sample aspect ratio; bounded selected-audio waveform windows.
+- Optional successful-export original-media cleanup preserves metadata and finished clips under their existing retention policy.
 - Original-file playback, YouTube embeds and short server-rendered MP4 windows for platforms or browser codec fallback.
 - PostgreSQL queue, history, cancellation, idempotency, restart recovery and stale-worker fencing.
 - Configurable byte/time/storage/concurrency budgets, retention cleanup and explicit source deletion.

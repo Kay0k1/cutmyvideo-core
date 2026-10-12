@@ -16,6 +16,7 @@ import (
 type Track = app.Track
 type TrackSelection = app.TrackSelection
 type Segment = app.ArtifactSegment
+type Crop = app.Crop
 
 type AdvancedSourceInfo struct {
 	SourceInfo
@@ -34,6 +35,7 @@ type AdvancedOptions struct {
 	AudioTrack   *int   `json:"audio_track,omitempty"`
 	NoAudio      bool   `json:"no_audio,omitempty"`
 	SubtitleMode string `json:"subtitle_mode,omitempty"`
+	Crop         *Crop  `json:"crop,omitempty"`
 }
 type NamedRange struct {
 	Label   string `json:"label"`
@@ -130,7 +132,7 @@ func (e *Engine) ExecutePlan(ctx context.Context, plan Plan, output string) (res
 	for i, r := range plan.Ranges {
 		ranges[i] = app.Range{StartMS: r.StartMS, EndMS: r.EndMS, Label: r.Label}
 	}
-	request := app.ExportRequest{Ranges: ranges, Format: o.Format, Quality: o.Quality, CutMode: o.CutMode, OutputMode: mode, AudioTrack: o.AudioTrack, NoAudio: o.NoAudio, SubtitleMode: o.SubtitleMode}
+	request := app.ExportRequest{Ranges: ranges, Format: o.Format, Quality: o.Quality, CutMode: o.CutMode, OutputMode: mode, AudioTrack: o.AudioTrack, NoAudio: o.NoAudio, SubtitleMode: o.SubtitleMode, Crop: o.Crop}
 	if err = request.Validate(e.config, app.Source{DurationMS: source.DurationMS, Path: input}); err != nil {
 		return result, invalidArgument(err)
 	}

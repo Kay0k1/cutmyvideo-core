@@ -194,7 +194,7 @@ func (e *Engine) ExportWithOptions(ctx context.Context, input, output string, r 
 	if o.Format == "" {
 		o.Format = strings.TrimPrefix(strings.ToLower(filepath.Ext(output)), ".")
 	}
-	req := app.ExportRequest{Ranges: []app.Range{{StartMS: r.StartMS, EndMS: r.EndMS}}, Format: o.Format, Quality: o.Quality, CutMode: o.CutMode, AudioTrack: o.AudioTrack, NoAudio: o.NoAudio, SubtitleMode: o.SubtitleMode}
+	req := app.ExportRequest{Ranges: []app.Range{{StartMS: r.StartMS, EndMS: r.EndMS}}, Format: o.Format, Quality: o.Quality, CutMode: o.CutMode, AudioTrack: o.AudioTrack, NoAudio: o.NoAudio, SubtitleMode: o.SubtitleMode, Crop: o.Crop}
 	if err = req.Validate(e.config, app.Source{DurationMS: s.DurationMS, Path: input}); err != nil {
 		return AdvancedResult{}, invalidArgument(err)
 	}

@@ -30,6 +30,14 @@ const previewOwnerCacheBytes int64 = 128 << 20
 const previewCacheEntries = 64
 const previewOwnerCacheEntries = 16
 
+type windowKind int
+
+const (
+	windowVideo windowKind = iota
+	windowStoryboard
+	windowWaveform
+)
+
 // Inspection may discover that persisted dimensions describe a small cover
 // instead of the playable stream. Persist its conservative weight in the
 // existing lease token so admission across API processes keeps the full pool.
@@ -55,6 +63,16 @@ func (s *Server) sourceWindowWithPublisher(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) sourceWindowWithAdmission(w http.ResponseWriter, r *http.Request, owner string, storyboard bool, publish func(context.Context, Config, Source, string, *os.File) error, acquire func(context.Context, Config, Source, string, string, bool, bool) (*os.File, error)) {
+	kind := windowVideo
+	if storyboard {
+		kind = windowStoryboard
+	}
+	s.sourceAnalysisWithAdmission(w, r, owner, kind, publish, acquire)
+}
+
+func (s *Server) sourceAnalysisWithAdmission(w http.ResponseWriter, r *http.Request, owner string, kind windowKind, publish func(context.Context, Config, Source, string, *os.File) error, acquire func(context.Context, Config, Source, string, string, bool, bool) (*os.File, error)) {
+	storyboard := kind == windowStoryboard
+	waveform := kind == windowWaveform
 	ctx, cancel := context.WithTimeout(r.Context(), previewTimeout)
 	defer cancel()
 	v, err := s.databaseSource(ctx, r.PathValue("id"), owner)
@@ -62,6 +80,18 @@ func (s *Server) sourceWindowWithAdmission(w http.ResponseWriter, r *http.Reques
 		lookupError(w, err)
 		return
 	}
+	if v.MediaRemoved {
+		sourceMediaError(w, ErrSourceMediaRemoved)
+		return
+	}
+	readCtx, releaseRead, err := s.pinSourceMediaReader(ctx, v)
+	if err != nil {
+		sourceMediaError(w, err)
+		return
+	}
+	defer releaseRead()
+	ctx = readCtx
+	r = r.WithContext(ctx)
 	start, err := strconv.ParseInt(r.URL.Query().Get("start_ms"), 10, 64)
 	if err != nil || start < 0 || start >= v.DurationMS {
 		writeError(w, 400, "invalid_preview", "Choose a position inside the video")
@@ -102,7 +132,7 @@ func (s *Server) sourceWindowWithAdmission(w http.ResponseWriter, r *http.Reques
 	}
 	// Canonical intervals make nearby seeks reuse the same result.
 	start = start / previewWindowMS * previewWindowMS
-	key := previewCacheKeyOptions(v, start, request)
+	key := "display-v1:" + previewCacheKeyOptions(v, start, request)
 	filename := "preview.mp4"
 	outputLimit := previewOutputBytes
 	renderWindow := renderPreviewOptions
@@ -112,13 +142,16 @@ func (s *Server) sourceWindowWithAdmission(w http.ResponseWriter, r *http.Reques
 		request = ExportRequest{NoAudio: true}
 		key = "storyboard:" + previewCacheKeyOptions(v, start, request)
 		filename, outputLimit, renderWindow = "storyboard.jpg", storyboardOutputBytes, renderStoryboardOptions
+	} else if waveform {
+		key = "waveform:frequency-v3:" + previewCacheKeyOptions(v, start, request)
+		filename, outputLimit, renderWindow = "waveform.json", waveformOutputBytes, renderWaveformOptions
 	}
 	id := newID("preview")
 	var cached *os.File
 	inspected := v.Path == ""
 	for {
 		cached, err = apiDatabase(ctx, func(dbCtx context.Context) (*os.File, error) {
-			return acquire(dbCtx, s.Config, v, id, key, storyboard || r.URL.Query().Get("priority") == "background", !inspected)
+			return acquire(dbCtx, s.Config, v, id, key, kind != windowVideo || r.URL.Query().Get("priority") == "background", !inspected)
 		})
 		if errors.Is(err, errPreviewNeedsInspection) {
 			// Cache hits need neither tool. A miss releases the storage fence
@@ -179,7 +212,7 @@ func (s *Server) sourceWindowWithAdmission(w http.ResponseWriter, r *http.Reques
 	rangeMS := Range{StartMS: start, EndMS: min(start+previewWindowMS, v.DurationMS)}
 	if cached != nil {
 		defer cached.Close()
-		serveWindow(w, r, cached, rangeMS, "hit", storyboard)
+		serveAnalysisWindow(w, r, cached, rangeMS, "hit", kind)
 		return
 	}
 	dir := filepath.Join(s.Config.DataDir, "previews", id)
@@ -214,6 +247,9 @@ func (s *Server) sourceWindowWithAdmission(w http.ResponseWriter, r *http.Reques
 		defer guard.Close()
 		render := func(fresh bool) error {
 			request.Quality, request.Format, request.CutMode = "480p", "mp4", "accurate"
+			if waveform {
+				request.Format = "mp3"
+			}
 			resolved, streams, playlists, _, e := platformInputs(ctx, c, s.Store, v, guard, request, fresh)
 			if e != nil {
 				return e
@@ -276,11 +312,11 @@ func (s *Server) sourceWindowWithAdmission(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	retain = true
-	serveWindow(w, r, file, rangeMS, "miss", storyboard)
+	serveAnalysisWindow(w, r, file, rangeMS, "miss", kind)
 }
 
 func previewCacheKey(source Source, start int64) string {
-	return previewCacheKeyOptions(source, start, ExportRequest{})
+	return "display-v1:" + previewCacheKeyOptions(source, start, ExportRequest{})
 }
 
 func previewCacheKeyOptions(source Source, start int64, request ExportRequest) string {
@@ -310,6 +346,15 @@ func servePreview(w http.ResponseWriter, r *http.Request, file *os.File, interva
 }
 
 func serveWindow(w http.ResponseWriter, r *http.Request, file *os.File, interval Range, cache string, storyboard bool) {
+	kind := windowVideo
+	if storyboard {
+		kind = windowStoryboard
+	}
+	serveAnalysisWindow(w, r, file, interval, cache, kind)
+}
+
+func serveAnalysisWindow(w http.ResponseWriter, r *http.Request, file *os.File, interval Range, cache string, kind windowKind) {
+	storyboard := kind == windowStoryboard
 	info, err := file.Stat()
 	if err != nil {
 		internalError(w, err)
@@ -324,11 +369,21 @@ func serveWindow(w http.ResponseWriter, r *http.Request, file *os.File, interval
 		w.Header().Set("X-Storyboard-Step-MS", strconv.FormatInt(storyboardStepMS, 10))
 		w.Header().Set("X-Storyboard-Frames", strconv.FormatInt((interval.EndMS-interval.StartMS+storyboardStepMS-1)/storyboardStepMS, 10))
 	}
+	if kind == windowWaveform {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Waveform-Step-MS", strconv.FormatInt(waveformStepMS, 10))
+	}
+	if kind == windowVideo {
+		if width, height := readPreviewGeometry(file, info.Size()); width > 0 && height > 0 {
+			w.Header().Set("X-Source-Display-Width", strconv.Itoa(width))
+			w.Header().Set("X-Source-Display-Height", strconv.Itoa(height))
+		}
+	}
 	w.Header().Set("X-Preview-Cache", cache)
 	w.Header().Set("X-Preview-Start-MS", strconv.FormatInt(interval.StartMS, 10))
 	w.Header().Set("X-Preview-End-MS", strconv.FormatInt(interval.EndMS, 10))
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(30 * time.Second))
-	http.ServeContent(w, r, "preview.mp4", info.ModTime(), file)
+	http.ServeContent(w, r, "preview.mp4", info.ModTime(), contextReadSeeker{r.Context(), file})
 }
 
 func trimPreviewWorkspace(ctx context.Context, dir string) error {
@@ -407,7 +462,11 @@ func renderPreviewOptions(ctx context.Context, c Config, inputs []mediaInput, r 
 	if delta := duration - (r.EndMS - r.StartMS); delta > 350 || delta < -350 {
 		return errors.New("preview duration does not match requested interval")
 	}
-	return nil
+	width, height, err := videoDisplayGeometry(selection.Video)
+	if err != nil {
+		return err
+	}
+	return appendPreviewGeometry(out, width, height)
 }
 
 func (s *Store) reservePreview(ctx context.Context, c Config, source Source, id string) error {
@@ -434,6 +493,9 @@ func (s *Store) acquirePreviewAfterCacheLookup(ctx context.Context, c Config, so
 		return nil, err
 	}
 	defer rollbackStorage(tx)
+	if err = checkSourceMedia(ctx, tx, source.ID, source.Owner); err != nil {
+		return nil, err
+	}
 	var exists bool
 	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM sources WHERE id=$1 AND owner=$2)", source.ID, source.Owner).Scan(&exists); err != nil {
 		return nil, err
@@ -452,6 +514,8 @@ func (s *Store) acquirePreviewAfterCacheLookup(ctx context.Context, c Config, so
 		limit := previewOutputBytes
 		if strings.HasPrefix(key, "storyboard:") {
 			filename, limit = "storyboard.jpg", storyboardOutputBytes
+		} else if strings.HasPrefix(key, "waveform:") {
+			filename, limit = "waveform.json", waveformOutputBytes
 		}
 		file, openErr := os.Open(filepath.Join(path, filename))
 		if openErr == nil {
@@ -597,7 +661,7 @@ func (s *Store) publishPreviewWithSync(ctx context.Context, c Config, source Sou
 		return err
 	}
 	filename := filepath.Base(file.Name())
-	if filename != "preview.mp4" && filename != "storyboard.jpg" {
+	if filename != "preview.mp4" && filename != "storyboard.jpg" && filename != "waveform.json" {
 		return errors.New("preview descriptor does not name a supported window asset")
 	}
 	path := filepath.Join(dir, filename)
@@ -615,6 +679,8 @@ func (s *Store) publishPreviewWithSync(ctx context.Context, c Config, source Sou
 	limit := previewOutputBytes
 	if filename == "storyboard.jpg" {
 		limit = storyboardOutputBytes
+	} else if filename == "waveform.json" {
+		limit = waveformOutputBytes
 	}
 	if !os.SameFile(info, descriptor) || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() >= limit {
 		return errors.New("invalid completed preview file")

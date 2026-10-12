@@ -41,7 +41,7 @@ def require(condition, message):
 
 
 def verify_upgrade_snapshot(before, after):
-    """Preserve historical values and validate exactly the 003/005 additions."""
+    """Preserve historical values and validate exactly the 003/005/006 additions."""
     failure = "Upgrade changed existing sources/jobs/items/leases/storage records"
     require(set(before) == set(after) and {"sources", "jobs", "storage_files", "storage_reservations"} <= set(before), failure)
     pin_fields = {"retention_job_pins", "retention_preview_pins", "retention_pins_valid", "retention_pin_revision"}
@@ -73,9 +73,11 @@ def verify_upgrade_snapshot(before, after):
                         and type(row.get("retention_pin_revision")) is int
                         and row["retention_pin_revision"] == 0,
                         "Upgrade added invalid source retention counts or defaults")
-                # Validate all four known additions first, then compare every
-                # historical field. Unknown additions are still rejected.
-                row = {key: value for key, value in row.items() if key not in pin_fields}
+                require(row.get("media_removed") is False,
+                        "Upgrade removed source media or added an invalid cleanup default")
+                # Validate known additions first, then compare every historical
+                # field. Unknown additions are still rejected.
+                row = {key: value for key, value in row.items() if key not in pin_fields | {"media_removed"}}
             historical_after[table].append(row)
 
     def records(snapshot):

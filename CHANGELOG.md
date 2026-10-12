@@ -4,6 +4,17 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
+## 1.2.0 - 2026-10-12
+
+### Added
+- Normalized upright crop for accurate MP4 in Go advanced options, CLI, saved cutting plans and HTTP jobs; crop precedes the resolution cap and accounts for rotation and sample aspect ratio.
+- Private selected-audio waveform windows with bounded streaming peak aggregation, source timestamps, silent-source handling and background preview admission. Stereo channels cannot cancel each other's waveform.
+- Opt-in successful-export original-media cleanup, preserving source metadata, jobs and completed artifacts. Migration 6 persists cleanup requests and bounded renewable media-reader leases; active operations settle before physical deletion.
+
+### Changed
+- Preview windows carry their original display dimensions in a charged MP4 metadata box, including tool-free cache hits, so clients can position crop presets before preview downscaling.
+- A binary supporting only migration 5 refuses migration 6. Upgrade recovery requires a compatible migration-6 binary, or coordinated database and media restoration; image-only rollback does not reverse this change.
+
 ### Fixed
 - Range-count errors show the configured maximum and submitted count, with a correction for splitting a larger selection into multiple jobs.
 

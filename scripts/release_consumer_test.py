@@ -65,8 +65,11 @@ def make_fixture(directory):
         source_sha256=m.digest(m.canonical(source)), manifest_sha256=m.digest(m.canonical(manifest)), mode='release', publishable=True,
         native=[{'os': a['os'], 'arch': a['arch'], 'archive': {k: a[k] for k in ('name', 'sha256', 'bytes')},
             'binary_sha256': a['contents']['cutmy.exe' if a['os'] == 'windows' else 'cutmy']['sha256'],
-            'required_groups': 7, 'required_checks': 37 if a['os'] == 'windows' else 39, 'report_sha256': 'b' * 64} for a in manifest['archives']],
-        linux_archive_recovery={'required_groups': 9, 'decoded_media_observations': 11, 'schema_versions': sorted(t.SCHEMAS),
+            'required_groups': 7, 'required_checks': 45 if a['os'] == 'windows' else 47, 'report_sha256': 'b' * 64} for a in manifest['archives']],
+        linux_archive_recovery={'required_groups': 9, 'decoded_media_observations': 11,
+            'schema_versions': ['20261005-storage-queue-v3', '20261010-cache-retention-v1',
+                                '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1',
+                                '20261011-source-retention-v1', '20261012-source-media-cleanup-v1'],
             'binary_sha256': manifest['archives'][0]['contents']['cutmy']['sha256'], 'report_sha256': 'c' * 64})
     sbom = t.spdx(source, manifest, go_sum=inputs['go.sum'], notices=inputs['THIRD_PARTY_NOTICES.md'], project_license=inputs['LICENSE'])
     trust = t.make_trust(source, manifest, sbom, verdict, run)

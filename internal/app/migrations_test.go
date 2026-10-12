@@ -324,9 +324,9 @@ INSERT INTO storage_work_cleanup(data_dir,path) VALUES('/fixture/data','/fixture
 	snapshot := func(retainSourceXmin bool) string {
 		t.Helper()
 		var value string
-		sourceRow := `jsonb_build_object('row',to_jsonb(s)-'retention_job_pins'-'retention_preview_pins'-'retention_pins_valid'-'retention_pin_revision','xmin',s.xmin::text)`
+		sourceRow := `jsonb_build_object('row',to_jsonb(s)-'retention_job_pins'-'retention_preview_pins'-'retention_pins_valid'-'retention_pin_revision'-'media_removed','xmin',s.xmin::text)`
 		if !retainSourceXmin {
-			sourceRow = `jsonb_build_object('row',to_jsonb(s)-'retention_job_pins'-'retention_preview_pins'-'retention_pins_valid'-'retention_pin_revision','xmin','005-derived-count-backfill')`
+			sourceRow = `jsonb_build_object('row',to_jsonb(s)-'retention_job_pins'-'retention_preview_pins'-'retention_pins_valid'-'retention_pin_revision'-'media_removed','xmin','005-derived-count-backfill')`
 		}
 		if err := f.db.QueryRow(context.Background(), `SELECT jsonb_build_object(
  'sources',(SELECT jsonb_agg(`+sourceRow+` ORDER BY id) FROM sources s),
@@ -548,11 +548,12 @@ func TestMigrationSQLChecksumsArePinnedAcrossWindowsNewlines(t *testing.T) {
 	// shipped with the first ordered migration ledger. The baseline is also
 	// compared with the separately captured actual v0.2.1 fixture above.
 	pinned := map[string]string{
-		"20261005-storage-queue-v3":       "8630cebd9bf2bb2c038519d807f75456a60d8dea24cc1114304551270b3e949f",
-		"20261010-ordered-migrations-v1":  "17caf6f352044a62dd4bbfee154d02965d9c411ca6783422b96db5eed6b40e57",
-		"20261010-storage-maintenance-v1": "1c06b5c041a45201496d20655078515b5ca4b7896e2a43c3c848d51b2aa00627",
-		"20261010-cache-retention-v1":     "d7654c6a981edea4506d7265057e9349ab9fee85cd3ce3a63412384374e4709a",
-		"20261011-source-retention-v1":    "b460686dc29fa1a156cbf74ca73da8afd2e4394cc7f2a3d6465f72e047b7c0e0",
+		"20261005-storage-queue-v3":        "8630cebd9bf2bb2c038519d807f75456a60d8dea24cc1114304551270b3e949f",
+		"20261010-ordered-migrations-v1":   "17caf6f352044a62dd4bbfee154d02965d9c411ca6783422b96db5eed6b40e57",
+		"20261010-storage-maintenance-v1":  "1c06b5c041a45201496d20655078515b5ca4b7896e2a43c3c848d51b2aa00627",
+		"20261010-cache-retention-v1":      "d7654c6a981edea4506d7265057e9349ab9fee85cd3ce3a63412384374e4709a",
+		"20261011-source-retention-v1":     "b460686dc29fa1a156cbf74ca73da8afd2e4394cc7f2a3d6465f72e047b7c0e0",
+		"20261012-source-media-cleanup-v1": "e2d36a97a35a158dead1ed47519209ca67eb92fe0a9fffef4ceb9ad50c34d7bb",
 	}
 	for _, migration := range schemaMigrations {
 		t.Run(migration.version, func(t *testing.T) {

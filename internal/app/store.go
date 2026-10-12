@@ -57,6 +57,9 @@ func (s *Store) CreateJobLimited(ctx context.Context, owner string, r ExportRequ
 	if err != nil {
 		return Job{}, err
 	}
+	if err = checkSourceMedia(ctx, tx, sourceID, owner); err != nil {
+		return Job{}, err
+	}
 	c := s.storageConfig()
 	if c.MaxStorageBytes > 0 {
 		items := jobItems(r)
@@ -137,12 +140,12 @@ func newID(prefix string) string {
 	return prefix + "_" + hex.EncodeToString(b)
 }
 
-const sourceSelect = `SELECT id,owner,title,duration_ms,kind,path,url,width,height,embed_url,thumbnail_url,provider_id,provider,thumbnail_path,created_at,EXISTS(SELECT 1 FROM jobs WHERE source_id=sources.id) FROM sources`
+const sourceSelect = `SELECT id,owner,title,duration_ms,kind,path,url,width,height,embed_url,thumbnail_url,provider_id,provider,thumbnail_path,created_at,EXISTS(SELECT 1 FROM jobs WHERE source_id=sources.id),media_removed FROM sources`
 
 func scanSource(row pgx.Row, c Config) (Source, error) {
 	var v Source
 	var created time.Time
-	err := row.Scan(&v.ID, &v.Owner, &v.Title, &v.DurationMS, &v.Kind, &v.Path, &v.URL, &v.Width, &v.Height, &v.EmbedURL, &v.ThumbnailURL, &v.ProviderID, &v.Provider, &v.ThumbnailPath, &created, &v.RetentionBlocked)
+	err := row.Scan(&v.ID, &v.Owner, &v.Title, &v.DurationMS, &v.Kind, &v.Path, &v.URL, &v.Width, &v.Height, &v.EmbedURL, &v.ThumbnailURL, &v.ProviderID, &v.Provider, &v.ThumbnailPath, &created, &v.RetentionBlocked, &v.MediaRemoved)
 	if err == nil && c.SourceTTL > 0 && !v.RetentionBlocked {
 		expires := created.Add(c.SourceTTL)
 		v.ExpiresAt = &expires
@@ -159,7 +162,29 @@ func (s *Store) Source(ctx context.Context, id, owner string) (Source, error) {
 }
 
 func (s *Store) CreateJob(ctx context.Context, owner string, r ExportRequest, key string) (Job, error) {
-	return insertJob(ctx, s.DB, owner, r, key)
+	tx, err := s.storageTx(ctx)
+	if err != nil {
+		return Job{}, err
+	}
+	defer rollbackStorage(tx)
+	if key != "" {
+		var id string
+		err = tx.QueryRow(ctx, "SELECT id FROM jobs WHERE owner=$1 AND idempotency_key=$2", owner, key).Scan(&id)
+		if err == nil {
+			return readJob(ctx, tx, id, owner)
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return Job{}, err
+		}
+	}
+	if err = checkSourceMedia(ctx, tx, r.SourceID, owner); err != nil {
+		return Job{}, err
+	}
+	j, err := insertJob(ctx, tx, owner, r, key)
+	if err != nil {
+		return j, err
+	}
+	return j, tx.Commit(ctx)
 }
 
 func insertJob(ctx context.Context, db dbExecutor, owner string, r ExportRequest, key string) (Job, error) {
@@ -280,7 +305,18 @@ WHERE id IN (SELECT id FROM leased WHERE lease_until>clock_timestamp()) RETURNIN
 
 func (s *Store) SaveJob(ctx context.Context, j Job, token string) error {
 	items, _ := json.Marshal(j.Items)
-	tag, err := s.DB.Exec(ctx, `WITH leased AS MATERIALIZED (
+	var db dbExecutor = s.DB
+	var cleanupTx pgx.Tx
+	if j.Status == "succeeded" && j.Request.CleanupSource {
+		var err error
+		cleanupTx, err = s.storageTx(ctx)
+		if err != nil {
+			return err
+		}
+		defer rollbackStorage(cleanupTx)
+		db = cleanupTx
+	}
+	tag, err := db.Exec(ctx, `WITH leased AS MATERIALIZED (
  SELECT id,lease_until FROM jobs WHERE id=$1 AND lease_token=$2 AND status='running' FOR UPDATE
 ) UPDATE jobs SET
 status=CASE WHEN cancel_requested AND $3 IN ('succeeded','failed','cancelled') THEN 'cancelled' ELSE $3 END,
@@ -296,7 +332,16 @@ WHERE id IN (SELECT id FROM leased WHERE lease_until>clock_timestamp())`, j.ID, 
 	if err == nil && tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	if cleanupTx != nil {
+		if err = requestSourceMediaCleanup(ctx, cleanupTx, j.ID); err != nil {
+			return err
+		}
+		return cleanupTx.Commit(ctx)
+	}
+	return nil
 }
 
 func (s *Store) Cancel(ctx context.Context, id, owner string) error {

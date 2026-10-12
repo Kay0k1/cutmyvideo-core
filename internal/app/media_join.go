@@ -30,6 +30,9 @@ func sameJoinedStream(a, b *probeStream) bool {
 }
 
 func exportJoinedSegmentInputsProgress(ctx context.Context, c Config, inputs [][]mediaInput, ranges []Range, request ExportRequest, out string, report func(int64)) ([]ArtifactSegment, error) {
+	if err := validateCropMode(request); err != nil {
+		return nil, &sourceProblem{"crop_invalid", err.Error()}
+	}
 	if len(ranges) == 0 || len(inputs) != len(ranges) {
 		return nil, fmt.Errorf("joined export needs inputs for every range")
 	}
@@ -251,7 +254,7 @@ func joinAccurate(ctx context.Context, c Config, inputs [][]mediaInput, ranges [
 	}
 	args = append(args, "-t", seconds(elapsed))
 	if request.Format != "mp3" {
-		filter, hdr, e := videoRenderFilter(selection.Video, request.Quality, false)
+		filter, hdr, e := videoCropRenderFilter(selection.Video, request.Quality, request.Crop)
 		if e != nil {
 			return nil, e
 		}
@@ -306,11 +309,11 @@ func joinAccurate(ctx context.Context, c Config, inputs [][]mediaInput, ranges [
 		return nil, errNoAudio
 	}
 	if request.Format != "mp3" {
-		_, hdr, e := videoRenderFilter(selection.Video, request.Quality, false)
+		_, hdr, e := videoCropRenderFilter(selection.Video, request.Quality, request.Crop)
 		if e != nil {
 			return nil, e
 		}
-		if e = validateRenderedVideo(final, selection.Video, request.Quality, false, hdr); e != nil {
+		if e = validateRenderedVideoWithCrop(final, selection.Video, request.Quality, false, hdr, request.Crop); e != nil {
 			return nil, e
 		}
 	}

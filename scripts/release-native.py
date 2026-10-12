@@ -36,10 +36,13 @@ REQUIRED_CHECKS = {
     'version': ('actual_extracted_version', 'native_os_arch', 'source_version_time_go'),
     'cli': ('help', 'invalid_argument_single_json', 'missing_input_single_json', 'no_database_for_local_cli'),
     'media': ('real_fixture_oracles', 'inspect_coded_and_display_geometry', 'accurate_mp4', 'copy_mp4', 'mp3',
-              'full_decode', 'default_audio_880hz', 'rotated_corners', 'existing_output_preserved'),
+              'full_decode', 'default_audio_880hz', 'rotated_corners', 'existing_output_preserved',
+              'cropped_accurate_mp4', 'crop_copy_refused', 'cropped_saved_plan_joined'),
     'process': PROCESS_CHECKS,
     'service': ('real_server_and_worker', 'session_upload_exact_bytes', 'preview_miss_and_hit', 'queued_job_completion',
-                'download_decode_geometry_audio', 'ownership_404', 'range_206', 'same_binary_healthchecks'),
+                'download_decode_geometry_audio', 'ownership_404', 'range_206', 'same_binary_healthchecks',
+                'original_display_preview_metadata', 'waveform_selected_audio_private_cache', 'waveform_high_frequency_activity',
+                'cropped_api_download', 'cleanup_preserves_source_metadata_jobs_and_downloads'),
     'deletion': ('acknowledged_source_delete', 'all_routes_404', 'physical_files_absent', 'zero_stored_and_reserved',
                  'zero_ledger_entries', 'no_preview_or_work_media_remaining'),
 }
@@ -272,7 +275,8 @@ class Client:
             require(len(content) <= 8 << 20, 'HTTP smoke response exceeded its size bound')
             kept_headers = {key: value for key, value in response.getheaders()
                             if key.lower() in ('content-type', 'content-length', 'content-range',
-                                               'content-disposition', 'x-preview-cache')}
+                                               'content-disposition', 'x-preview-cache', 'x-source-display-width',
+                                               'x-source-display-height', 'x-waveform-step-ms')}
             self.records.append({'method': method, 'path': path, 'status': response.status,
                                  'bytes': len(content), 'sha256': m.digest(content), 'headers': kept_headers})
             (self.evidence / 'http.json').write_bytes(m.canonical(self.records))
@@ -550,8 +554,36 @@ class Native:
             self.app('clip', '--input', self.input, '--output', path, '--start', '0', '--end', '1',
                      env=env, expected=1)
             require(file_hash(path) == outputs[name]['sha256'], 'Existing output was replaced by failed clip')
+        crop = {'x': 0, 'y': 0, 'width': .5, 'height': .5}
+        cropped = self.work / 'cropped.mp4'
+        out, err, _ = self.app('clip', '--input', self.input, '--output', cropped, '--start', '0', '--end', '2',
+                              '--crop', '0,0,0.5,0.5', '--threads', '1', '--timeout', '30s', env=env)
+        require(not err and json.loads(out)['size_bytes'] == cropped.stat().st_size, 'Crop CLI publication mismatch')
+        self.decode(cropped)
+        self.frame(cropped, 48, 80, (1, 1, 1, 1))
+        self.tone(cropped)
+        refused = self.work / 'refused-crop-copy.mp4'
+        out, err, code = self.app('--json-errors', 'clip', '--input', self.input, '--output', refused,
+                                  '--end', '1', '--mode', 'copy', '--crop', '0,0,0.5,0.5', env=env, expected=None)
+        error_envelope(out, err, code, 2, 'invalid_argument')
+        require(not refused.exists(), 'Incompatible crop silently published copied media')
+        plan = self.work / 'crop-plan.json'
+        plan.write_text(json.dumps({'version': 1, 'input': str(self.input), 'output_mode': 'joined',
+            'ranges': [{'start_ms': 2500, 'end_ms': 3500, 'label': 'Later'}, {'start_ms': 0, 'end_ms': 1000, 'label': 'Earlier'}],
+            'options': {'format': 'mp4', 'quality': 'best', 'cut_mode': 'accurate', 'crop': crop}}), encoding='utf-8')
+        joined = self.work / 'crop-joined.mp4'
+        out, err, _ = self.app('batch', '--plan', plan, '--output', joined, '--threads', '1', '--timeout', '30s', env=env)
+        batch = json.loads(out)
+        require(not err and len(batch['outputs']) == 1 and
+                [s['source_start_ms'] for s in batch['outputs'][0]['segments']] == [2500, 0], 'Saved crop plan order changed')
+        self.decode(joined)
+        self.frame(joined, 48, 80, (1, 1, 1, 1))
+        self.tone(joined)
+        outputs['cropped'] = {'sha256': file_hash(cropped), 'probe': self.probe(cropped)}
+        outputs['cropped_joined'] = {'sha256': file_hash(joined), 'probe': self.probe(joined)}
         return ['real_fixture_oracles', 'inspect_coded_and_display_geometry', 'accurate_mp4', 'copy_mp4',
-                'mp3', 'full_decode', 'default_audio_880hz', 'rotated_corners', 'existing_output_preserved'], {
+                'mp3', 'full_decode', 'default_audio_880hz', 'rotated_corners', 'existing_output_preserved',
+                'cropped_accurate_mp4', 'crop_copy_refused', 'cropped_saved_plan_joined'], {
                     'fixture': fixture, 'inspect': info, 'outputs': outputs}
 
     def listener(self, address):
@@ -758,6 +790,30 @@ class Native:
         require(headers.get('X-Preview-Cache') == 'miss', 'Preview did not execute its cache miss')
         cached, headers = client.request('GET', preview_url)
         require(headers.get('X-Preview-Cache') == 'hit' and cached == preview, 'Preview cache did not serve the same bytes')
+        require(headers.get('X-Source-Display-Width') == '96' and headers.get('X-Source-Display-Height') == '160',
+                'Warm preview lost trusted original display geometry')
+        waveform_url = '/api/v1/sources/' + source['id'] + '/waveform?start_ms=0&audio_track=1'
+        waveform, wave_headers = client.request('GET', waveform_url)
+        require(wave_headers.get('X-Preview-Cache') == 'miss' and waveform.get('has_audio') is True
+                and waveform.get('audio_track') == 1 and waveform.get('start_ms') == 0
+                and waveform.get('end_ms') == source['duration_ms'] and waveform.get('step_ms') == 100
+                and len(waveform.get('peaks', [])) == math.ceil(source['duration_ms']/100)
+                and all(isinstance(p,(int,float)) and math.isfinite(p) and 0 <= p <= 1 for p in waveform['peaks'])
+                and max(waveform['peaks']) > .05, 'Selected audio waveform lost bounded source-time activity')
+        warm_wave, wave_headers = client.request('GET', waveform_url)
+        require(wave_headers.get('X-Preview-Cache') == 'hit' and warm_wave == waveform, 'Waveform cache changed selected audio')
+        high_audio = self.work / 'waveform-8khz.wav'
+        self.ff('-f','lavfi','-i','sine=frequency=8000:sample_rate=48000:duration=0.5','-c:a','pcm_s16le',high_audio)
+        high_boundary = 'cutmy-frequency-' + uuid.uuid4().hex
+        high_upload = (f'--{high_boundary}\r\nContent-Disposition: form-data; name="file"; filename="8khz.wav"\r\n'
+            'Content-Type: audio/wav\r\n\r\n').encode()+high_audio.read_bytes()+f'\r\n--{high_boundary}--\r\n'.encode()
+        high_source,_=client.request('POST','/api/v1/uploads',raw=high_upload,
+            headers={'Content-Type':'multipart/form-data; boundary='+high_boundary},expected=201)
+        high_wave,_=client.request('GET','/api/v1/sources/'+high_source['id']+'/waveform?start_ms=0')
+        require(high_wave.get('has_audio') is True and len(high_wave.get('peaks',[]))==5
+            and all(abs(peak-math.sin(math.pi/3)/8)<.001 for peak in high_wave['peaks']),
+            'Audible8kHz audio was drawn as silence')
+        client.request('DELETE','/api/v1/sources/'+high_source['id'],expected=204)
         preview_path = self.work / 'preview.mp4'
         preview_path.write_bytes(preview)
         self.decode(preview_path)
@@ -788,7 +844,7 @@ class Native:
         require(partial == output[:32], 'Archived download did not preserve byte ranges')
         foreign = Client(port, self.evidence, self.http_records)
         foreign.cookie = 'cutmy_session=' + base64.urlsafe_b64encode(bytes([1]) * 32).decode().rstrip('=')
-        inaccessible = ['/api/v1/jobs/' + job['id'], artifact['download_url'], source['preview_url'], preview_url]
+        inaccessible = ['/api/v1/jobs/' + job['id'], artifact['download_url'], source['preview_url'], preview_url, waveform_url]
         for path in inaccessible:
             foreign.request('GET', path, expected=404)
         path = self.work / 'download.mp4'
@@ -796,17 +852,47 @@ class Native:
         self.decode(path)
         self.frame(path, 96, 160, (1, 3, 0, 2))
         self.tone(path)
+        cleanup_job, _ = client.request('POST', '/api/v1/jobs', data={'source_id':source['id'],
+            'ranges':[{'start_ms':0,'end_ms':1000,'label':'Cleanup crop'}], 'format':'mp4', 'quality':'best',
+            'cut_mode':'accurate', 'crop':{'x':0,'y':0,'width':.5,'height':.5}, 'cleanup_source':True}, expected=202)
+        until=time.monotonic()+40
+        while time.monotonic()<until:
+            cleanup_job,_=client.request('GET','/api/v1/jobs/'+cleanup_job['id'])
+            if cleanup_job['status']=='succeeded':break
+            require(cleanup_job['status'] in ('queued','running'), 'Cleanup export failed')
+            time.sleep(.05)
+        else:raise RuntimeError('Cleanup export did not finish')
+        cleanup_artifact=cleanup_job['items'][0]['artifact']
+        crop_bytes,_=client.request('GET',cleanup_artifact['download_url'])
+        crop_path=self.work/'api-crop.mp4';crop_path.write_bytes(crop_bytes)
+        self.decode(crop_path);self.frame(crop_path,48,80,(1,1,1,1));self.tone(crop_path)
+        until=time.monotonic()+20
+        while time.monotonic()<until:
+            retained,_=client.request('GET','/api/v1/sources/'+source['id'])
+            if retained.get('media_removed') is True:break
+            time.sleep(.05)
+        else:raise RuntimeError('Successful export did not clean original media')
+        require(retained['id']==source['id'] and retained['duration_ms']==source['duration_ms'], 'Cleanup lost source project metadata')
+        for route in (source['preview_url'],preview_url,waveform_url):client.request('GET',route,expected=410)
+        kept_output,_=client.request('GET',artifact['download_url'])
+        require(kept_output==output,'Source cleanup removed or altered an earlier completed clip')
+        kept_job,_=client.request('GET','/api/v1/jobs/'+job['id'])
+        require(kept_job['status']=='succeeded','Source cleanup removed completed job')
+        inaccessible.extend(['/api/v1/jobs/'+cleanup_job['id'],cleanup_artifact['download_url']])
+        for route in inaccessible:foreign.request('GET',route,expected=404)
         self.client, self.source, self.inaccessible = client, source, inaccessible
         self.media_root = media
         return ['real_server_and_worker', 'session_upload_exact_bytes', 'preview_miss_and_hit', 'queued_job_completion',
-                'download_decode_geometry_audio', 'ownership_404', 'range_206', 'same_binary_healthchecks'], {
+                'download_decode_geometry_audio', 'ownership_404', 'range_206', 'same_binary_healthchecks',
+                'original_display_preview_metadata', 'waveform_selected_audio_private_cache', 'waveform_high_frequency_activity',
+                'cropped_api_download', 'cleanup_preserves_source_metadata_jobs_and_downloads'], {
                     'source_geometry': [source['width'], source['height']], 'preview_sha256': file_hash(preview_path),
                     'output_sha256': file_hash(path), 'output_bytes': len(output), 'processes': self.service_records}
 
     def deletion(self):
         # Recreate the cache after startup housekeeping, then observe all exact
         # retained paths before the acknowledgement of explicit source deletion.
-        self.client.request('GET', '/api/v1/sources/' + self.source['id'] + '/preview?start_ms=1000')
+        self.client.request('GET', '/api/v1/sources/' + self.source['id'] + '/preview?start_ms=1000', expected=410)
         files = json.loads(self.pg.sql("SELECT COALESCE(json_agg(path),'[]') FROM storage_files"))
         require(len(files) >= 2, 'Service did not account for real source and artifact files')
         for path in files:

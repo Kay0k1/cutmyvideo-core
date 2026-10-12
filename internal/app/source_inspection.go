@@ -17,6 +17,9 @@ func (s *Store) reserveSourceInspection(ctx context.Context, source Source, id s
 		return err
 	}
 	defer rollbackStorage(tx)
+	if err = checkSourceMedia(ctx, tx, source.ID, source.Owner); err != nil {
+		return err
+	}
 	var path string
 	if err = tx.QueryRow(ctx, "SELECT path FROM sources WHERE id=$1 AND owner=$2 FOR KEY SHARE", source.ID, source.Owner).Scan(&path); errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
