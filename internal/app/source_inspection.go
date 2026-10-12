@@ -46,21 +46,22 @@ func (s *Store) reserveSourceInspection(ctx context.Context, source Source, id s
 	if err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	return commitPreviewAdmission(ctx, tx)
 }
 
 func (s *Server) pinSourceInspection(ctx context.Context, source Source, timeout time.Duration) (func(), error) {
+	return s.pinSourceInspectionWithReserve(ctx, source, timeout, s.Store.reserveSourceInspection)
+}
+
+func (s *Server) pinSourceInspectionWithReserve(ctx context.Context, source Source, timeout time.Duration, reserve func(context.Context, Source, string, time.Duration) error) (func(), error) {
 	id := newID("inspection")
-	err := apiDatabaseExec(ctx, func(dbCtx context.Context) error { return s.Store.reserveSourceInspection(dbCtx, source, id, timeout) })
+	release := func() { s.releasePreviewAdmission(source, id, false) }
+	err := apiDatabaseExec(ctx, func(dbCtx context.Context) error { return reserve(dbCtx, source, id, timeout) })
 	if err != nil {
+		if errors.Is(err, errPreviewAdmissionUncertain) {
+			release()
+		}
 		return nil, err
 	}
-	return func() {
-		releaseCtx, cancel := context.WithTimeout(context.Background(), workerDatabaseTimeout)
-		defer cancel()
-		_ = apiDatabaseExec(releaseCtx, func(dbCtx context.Context) error {
-			_, err := s.Store.DB.Exec(dbCtx, "DELETE FROM storage_reservations WHERE id=$1 AND owner=$2 AND kind='preview'", id, source.Owner)
-			return err
-		})
-	}, nil
+	return release, nil
 }
