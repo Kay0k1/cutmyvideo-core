@@ -25,8 +25,9 @@ ARCHIVE_RECOVERY_CHECKS = (
     'restored_new_upload_MP3_and_copy_MP4_download_range_probe_decode',
     'restored_media_ledger_files_and_counters_match',
 )
-SCHEMA_VERSIONS = {'20261005-storage-queue-v3', '20261010-cache-retention-v1',
-                   '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1', '20261011-source-retention-v1'}
+SCHEMA_VERSIONS = frozenset({'20261005-storage-queue-v3', '20261010-cache-retention-v1',
+                             '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1',
+                             '20261011-source-retention-v1', '20261012-source-media-cleanup-v1'})
 RECOVERY_MEDIA_LABELS = {'before-upgrade', 'after-upgrade-retained', 'after-upgrade-recovered',
                          'after-upgrade-queued', 'before-backup', 'after-restore-retained',
                          'after-restore-recovered', 'after-restore-queued', 'after-restore-first-result',
@@ -39,7 +40,8 @@ def validate_recovery(report, source, manifest, *, repository, run_id, run_attem
     m.require(report['historical_revision'] == 'f2be62c42a6a0d3d7a017b40bd683596bc578b95'
               and report['current_revision'] == source['commit']
               and report['go_version'] == f"go version {source['toolchain']} linux/amd64"
-              and set(report['schema_versions']) == SCHEMA_VERSIONS and len(report['schema_versions']) == 5
+              and set(report['schema_versions']) == SCHEMA_VERSIONS
+              and len(report['schema_versions']) == len(SCHEMA_VERSIONS)
               and report['upgrade_storage_defaults_checked'] == 3,
               'Archive recovery revision, schemas or upgrade defaults differ.')
     media = report['artifacts']

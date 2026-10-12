@@ -47,7 +47,10 @@ class AggregateControls(unittest.TestCase):
                          'historical_revision': 'f2be62c42a6a0d3d7a017b40bd683596bc578b95',
                          'current_revision': self.source['commit'],
                          'go_version': f"go version {self.source['toolchain']} linux/amd64",
-                         'schema_versions': sorted(gate.SCHEMA_VERSIONS), 'upgrade_storage_defaults_checked': 3,
+                         'schema_versions': ['20261005-storage-queue-v3', '20261010-cache-retention-v1',
+                                             '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1',
+                                             '20261011-source-retention-v1', '20261012-source-media-cleanup-v1'],
+                         'upgrade_storage_defaults_checked': 3,
                          'artifacts': [{'label': label, 'bytes': 100, 'sha256': 'e' * 64, 'duration_seconds': 1,
                                         'codecs': {'audio': 'mp3'} if label == 'fresh-after-restore-mp3'
                                         else {'video': 'h264', 'audio': 'aac'}} for label in sorted(gate.RECOVERY_MEDIA_LABELS)],
@@ -127,6 +130,25 @@ class AggregateControls(unittest.TestCase):
         value = gate.validate_recovery(self.recovery, self.source, self.manifest, **kwargs)
         self.assertEqual(value['required_groups'], 9)
         self.assertEqual(value['decoded_media_observations'], 11)
+        self.assertEqual(value['schema_versions'], self.recovery['schema_versions'])
+
+    def test_old_missing_changed_extra_or_duplicate_schema_versions_are_rejected(self):
+        kwargs = {key: value for key, value in self.kwargs.items() if key not in ('manifest_sha256', 'event_sha')}
+        for mutation in ('old005', 'missing', 'changed006', 'extra', 'duplicate'):
+            with self.subTest(mutation=mutation):
+                wrong = deepcopy(self.recovery)
+                if mutation == 'old005':
+                    wrong['schema_versions'].pop()
+                elif mutation == 'missing':
+                    wrong['schema_versions'].pop(0)
+                elif mutation == 'changed006':
+                    wrong['schema_versions'][-1] = '20261012-source-media-cleanup-v2'
+                elif mutation == 'extra':
+                    wrong['schema_versions'].append('20261013-unreviewed-v1')
+                else:
+                    wrong['schema_versions'].append(wrong['schema_versions'][-1])
+                with self.assertRaises((ValueError, RuntimeError, KeyError)):
+                    gate.validate_recovery(wrong, self.source, self.manifest, **kwargs)
 
     def test_missing_rebuilt_changed_wrong_source_or_old_recovery_is_rejected(self):
         kwargs = {key: value for key, value in self.kwargs.items() if key not in ('manifest_sha256', 'event_sha')}

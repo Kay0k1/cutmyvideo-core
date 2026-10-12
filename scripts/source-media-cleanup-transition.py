@@ -78,6 +78,36 @@ def original_media_deleted(sql, source_path, physical_exists):
     return charged is True and present is False
 
 
+def stored_cleanup_job(sql, job_id):
+    proof = module('cleanup_job_proof', 'source-retention-transition.py')
+    literal = "'" + job_id.replace("'", "''") + "'"
+    value = proof.strict_json(sql("SELECT jsonb_build_object('job_id',id,'source_id',source_id,'request',request) "
+                                  "FROM jobs WHERE id=" + literal))
+    proof.require(isinstance(value, dict) and set(value) == {'job_id', 'source_id', 'request'},
+                  'stored cleanup job binding missing')
+    return value
+
+
+def validate_cleanup_job_binding(cleanup):
+    proof = module('cleanup_job_binding_proof', 'source-retention-transition.py')
+    stored = cleanup.get('stored_job')
+    planned = cleanup.get('planned_request')
+    proof.require(isinstance(stored, dict) and set(stored) == {'job_id', 'source_id', 'request'}
+                  and isinstance(stored.get('request'), dict) and isinstance(planned, dict),
+                  'stored cleanup job/request binding missing')
+    source_id = cleanup.get('source_id')
+    job_id = cleanup['job'].get('id')
+    proof.require(isinstance(source_id, str) and source_id
+                  and isinstance(job_id, str) and job_id
+                  and job_id == stored['job_id'] == cleanup.get('retained_job_id')
+                  and source_id == cleanup['source'].get('id') == stored['source_id']
+                  == stored['request'].get('source_id') == planned.get('source_id')
+                  and stored['request'].get('cleanup_source') is True
+                  and planned.get('cleanup_source') is True
+                  and proof.canonical(stored['request']) == proof.canonical(planned),
+                  'stored cleanup job/request binding differs')
+
+
 def validate_catalog(value, position, expected, migrations):
     proof = module('cleanup_catalog_proof', 'source-retention-transition.py')
     proof.require(value['position'] == position and type(value['position']) is int
@@ -138,8 +168,8 @@ def validate_release_transition(report, directory):
     proof.require(proof.artifact(directory, value['restore_before']) == proof.artifact(directory, value['restore_after']),
                   'compatible006 restore changed durable lifecycle state')
     cleanup = proof.strict_json(proof.artifact(directory, value['cleanup']))
+    validate_cleanup_job_binding(cleanup)
     proof.require(cleanup['source']['media_removed'] is True and cleanup['job']['status'] == 'succeeded'
-                  and cleanup['source_id'] == cleanup['job']['request']['source_id']
                   and cleanup['decoded']['sha256'] == cleanup['download_sha256']
                   and cleanup['foreign_status'] == 404 and cleanup['removed_status'] == 410
                   and cleanup['retained_job_id'] == cleanup['job']['id']
@@ -287,13 +317,14 @@ def acceptance_class(base):
             self.b.request('GET',result['items'][0]['artifact']['download_url'],expected=404)
             self.a.request('GET','/api/v1/sources/'+source['id']+'/media',expected=410)
             retained,_=self.a.request('GET','/api/v1/jobs/'+job['id'])
+            stored_job=stored_cleanup_job(lambda query:self.sql(self.current,query),job['id'])
             def deleted_physically():
                 return original_media_deleted(lambda query:self.sql(self.current,query),source_path,
                     lambda path:self.json(self.compose(self.current)+['exec','-T','api','python3','-c','import os,json,sys;print(json.dumps(os.path.exists(sys.argv[1])))',path]))
             self.wait(deleted_physically,30)
             physical=True
             decoded=self.decode(content,'cleanup-result.mp4',seconds=1.0)
-            self.transition['cleanup']=self.raw('cleanup-download-proof.json',dict(source_id=source['id'],source=removed,job=result,decoded=decoded,download_sha256=proof.digest(content),foreign_status=404,removed_status=410,retained_job_id=retained['id'],physical_original_removed=physical))
+            self.transition['cleanup']=self.raw('cleanup-download-proof.json',dict(source_id=source['id'],source=removed,job=result,planned_request=body,stored_job=stored_job,decoded=decoded,download_sha256=proof.digest(content),foreign_status=404,removed_status=410,retained_job_id=retained['id'],physical_original_removed=physical))
             self.check('automatic_cleanup_preserves_downloads')
 
         def wrapper(self,project,action,*extra,expected=0):

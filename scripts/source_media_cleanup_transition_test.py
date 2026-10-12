@@ -62,8 +62,11 @@ class CleanupFixture(existing.SyntheticCurrentReceipt):
         for key in ('guard_before','guard_after','restore_before','restore_after'):
             value[key]=self.raw(key,after)
         value['rollback_originals']=self.raw('rollback',before)
-        value['cleanup']=self.raw('cleanup',dict(source_id='source',source={'media_removed':True},
-            job={'id':'job','status':'succeeded','request':{'source_id':'source'}},
+        request={'source_id':'source','ranges':[{'start_ms':0,'end_ms':1000,'label':'cleanup'}],
+                 'format':'mp4','quality':'best','cut_mode':'accurate','cleanup_source':True}
+        value['cleanup']=self.raw('cleanup',dict(source_id='source',source={'id':'source','media_removed':True},
+            job={'id':'job','status':'succeeded'},planned_request=deepcopy(request),
+            stored_job={'job_id':'job','source_id':'source','request':deepcopy(request)},
             decoded={'sha256':'a'*64},download_sha256='a'*64,foreign_status=404,removed_status=410,
             retained_job_id='job',physical_original_removed=True))
         checks=report['groups']['identity']['checks'];checks.pop('current_application_sources_bound')
@@ -85,6 +88,8 @@ class CleanupReceiptControls(unittest.TestCase):
         self.fixture=CleanupFixture(self.temp.name)
 
     def test_explicit006_mode_accepts_complete_bound_sources_and_real_evidence_shape(self):
+        observed=json.loads(proof.artifact(self.fixture.directory,self.fixture.value['cleanup']))
+        self.assertNotIn('request',observed['job'])
         self.fixture.validate()
 
     def test_missing_extra_group_or_legacy_mode_cannot_claim006_acceptance(self):
@@ -116,6 +121,31 @@ class CleanupReceiptControls(unittest.TestCase):
                        lambda v:v.update(physical_original_removed=False),lambda v:v.update(download_sha256='b'*64),
                        lambda v:v['source'].update(media_removed=False),lambda v:v.update(retained_job_id='other')):
             with self.subTest(change=change):
+                fixture=CleanupFixture(self.temp.name);fixture.change_raw('cleanup',change)
+                with self.assertRaises(RuntimeError):fixture.validate()
+
+    def test_cleanup_requires_authoritative_job_source_and_submitted_request_binding(self):
+        faults={
+            'missing_stored_job':lambda v:v.pop('stored_job'),
+            'missing_planned_request':lambda v:v.pop('planned_request'),
+            'missing_stored_request':lambda v:v['stored_job'].pop('request'),
+            'missing_stored_source':lambda v:v['stored_job'].pop('source_id'),
+            'wrong_public_job':lambda v:v['job'].update(id='other'),
+            'wrong_stored_job':lambda v:v['stored_job'].update(job_id='other'),
+            'wrong_source_id':lambda v:v.update(source_id='other'),
+            'wrong_public_source':lambda v:v['source'].update(id='other'),
+            'wrong_stored_source':lambda v:v['stored_job'].update(source_id='other'),
+            'wrong_stored_request_source':lambda v:v['stored_job']['request'].update(source_id='other'),
+            'wrong_planned_source':lambda v:v['planned_request'].update(source_id='other'),
+            'wrong_stored_request':lambda v:v['stored_job']['request'].update(format='mp3'),
+            'wrong_planned_request':lambda v:v['planned_request']['ranges'][0].update(end_ms=2000),
+            'stored_cleanup_false':lambda v:v['stored_job']['request'].update(cleanup_source=False),
+            'planned_cleanup_false':lambda v:v['planned_request'].update(cleanup_source=False),
+            'missing_stored_cleanup':lambda v:v['stored_job']['request'].pop('cleanup_source'),
+            'nonboolean_cleanup':lambda v:v['stored_job']['request'].update(cleanup_source='true'),
+        }
+        for name,change in faults.items():
+            with self.subTest(fault=name):
                 fixture=CleanupFixture(self.temp.name);fixture.change_raw('cleanup',change)
                 with self.assertRaises(RuntimeError):fixture.validate()
 
@@ -177,3 +207,19 @@ class OriginalDeletionObservationControls(unittest.TestCase):
         for raw in (b't\n',b'f\n',b'null\n',b'1\n'):
             with self.subTest(raw=raw),self.assertRaises((ValueError,RuntimeError)):
                 cleanup.original_media_deleted(lambda query:raw,'/data/sources/source.media',lambda path:False)
+
+
+class StoredCleanupJobObservationControls(unittest.TestCase):
+    def test_binding_is_read_directly_from_stored_row_for_the_accepted_job(self):
+        binding={'job_id':"owner's-job",'source_id':'source','request':{'source_id':'source','cleanup_source':True}}
+        def sql(query):
+            self.assertEqual(query,"SELECT jsonb_build_object('job_id',id,'source_id',source_id,'request',request) "
+                                   "FROM jobs WHERE id='owner''s-job'")
+            return proof.canonical(binding)
+        self.assertEqual(cleanup.stored_cleanup_job(sql,"owner's-job"),binding)
+
+    def test_missing_partial_or_extra_stored_row_is_not_accepted_as_binding(self):
+        for binding in (None,{}, {'job_id':'job','source_id':'source'},
+                        {'job_id':'job','source_id':'source','request':{},'owner':'private'}):
+            with self.subTest(binding=binding),self.assertRaises(RuntimeError):
+                cleanup.stored_cleanup_job(lambda query:proof.canonical(binding),'job')
