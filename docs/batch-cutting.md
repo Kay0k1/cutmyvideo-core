@@ -20,6 +20,9 @@ batch. The Go method returns completed outputs alongside its error.
 Each range has a label and millisecond `start_ms`/`end_ms`; errors identify the
 range and explain which boundary or limit to change. Up to 128 ranges are
 accepted locally. Server limits remain configurable and are returned by session.
+If a submitted plan exceeds that limit, the diagnostic states the configured
+maximum and submitted count; remove extra intervals or submit another job.
+Empty plans explain that a start and end must be marked before exporting.
 
 For one output, set `"output_mode": "joined"` and run:
 
@@ -96,6 +99,9 @@ only after temporary files are removed.
 
 See [OpenAPI](../api/openapi.yaml), [API usage](api.md) and
 [performance measurements](performance.md) for exact contracts and evidence.
+The [short/one-hour export acceptance](../verification/2026-10-12-cutting-export/README.md)
+covers accurate MP4, copied MP4 and MP3 from source opening through independent
+download decoding, including the advertised range-count limit and one above it.
 
 New fixed diagnostics include `audio_track_unavailable`, `subtitle_unsupported`,
 `subtitle_unavailable`, `join_incompatible` and inspection `tracks_unavailable`.
