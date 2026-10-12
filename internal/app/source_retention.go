@@ -24,19 +24,19 @@ const sourceRetentionSQL = `WITH source_retention_candidates AS MATERIALIZED (
  SELECT source.id FROM sources source
  WHERE source.retention_pins_valid AND source.retention_job_pins=0 AND source.retention_preview_pins=0
  AND source.created_at<now()-($1*interval '1 second')
- AND NOT EXISTS(SELECT 1 FROM source_media_readers WHERE source_id=source.id AND expires_at>clock_timestamp())
- AND NOT EXISTS(SELECT 1 FROM source_media_cleanup WHERE source_id=source.id)
  ORDER BY source.created_at,source.id LIMIT $2
 ), checked AS MATERIALIZED (
  SELECT candidate.id,
  EXISTS(SELECT 1 FROM jobs WHERE source_id=candidate.id OFFSET 0)
- OR EXISTS(SELECT 1 FROM storage_reservations WHERE kind='preview' AND job_id=candidate.id) AS pinned
+ OR EXISTS(SELECT 1 FROM storage_reservations WHERE kind='preview' AND job_id=candidate.id) AS pinned,
+ EXISTS(SELECT 1 FROM source_media_readers WHERE source_id=candidate.id AND expires_at>clock_timestamp())
+ OR EXISTS(SELECT 1 FROM source_media_cleanup WHERE source_id=candidate.id) AS media_in_use
  FROM source_retention_candidates candidate
 ), quarantined AS (
  UPDATE sources source SET retention_pins_valid=false
  WHERE source.id=ANY(ARRAY(SELECT id FROM checked WHERE pinned)) RETURNING source.id
 ), deleted AS (
- DELETE FROM sources source WHERE source.id=ANY(ARRAY(SELECT id FROM checked WHERE NOT pinned))
+ DELETE FROM sources source WHERE source.id=ANY(ARRAY(SELECT id FROM checked WHERE NOT pinned AND NOT media_in_use))
  RETURNING source.path,source.thumbnail_path,source.owner
 )
 SELECT 'deleted'::text,path,thumbnail_path,owner,0::bigint,0::bigint FROM deleted

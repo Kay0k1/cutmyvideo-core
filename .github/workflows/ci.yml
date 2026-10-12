@@ -199,6 +199,8 @@ jobs:
           echo '1fa6733c37ea6fb51c99ad8fe785e7b7e5f3246c9b980230329d4fb72ed8d4d6  /tmp/cutmy-yt-dlp' | sha256sum --check
           chmod 755 /tmp/cutmy-yt-dlp
       - name: Full checks (media, PostgreSQL, docs, workflows, race and vulnerabilities)
+        env:
+          CUTMY_TEST_PGTOOLS_CONTAINER: ${{ job.services.postgres.id }}
         run: make check-full
       - name: Retained job recovery and uncertain source registration
         shell: bash
