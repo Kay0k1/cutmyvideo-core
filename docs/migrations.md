@@ -27,6 +27,7 @@ There are no invented `v1`/`v2` markers for those unversioned installations.
 | 3 | `20261010-storage-maintenance-v1` | Adds persisted directory scan progress, a workspace cleanup queue, and deletion retry times/failure counts. Pending files stay charged and are immediately eligible after upgrade. |
 | 4 | `20261010-cache-retention-v1` | Replaces the cache expiry index with `(expires_at, source_id)` for ordered, bounded cache cleanup. Leaves cache payloads, scan progress, deletion retries and storage accounting unchanged. |
 | 5 | `20261011-source-retention-v1` | Adds derived job/preview pin counts, exact membership triggers, an eligible-source index and durable bounded audit progress. Backfills counts while excluding membership writers; leaves original source values, jobs, media and byte accounting intact. |
+| 6 | `20261012-source-media-cleanup-v1` | Adds durable post-success source-media cleanup and read leases; retains source metadata, jobs and result artifacts independently. |
 
 SQL files and expected catalog layouts live in
 [`internal/app/migrations`](../internal/app/migrations). `app_schema_versions`
@@ -109,3 +110,20 @@ unknown/future/corrupt refusal, cancellation rollback and namespace isolation.
 Run the broader API/worker and backup/restore acceptance checks before release.
 Catalog validation is a compatibility check, not a replacement for backup
 verification, data-integrity checks or media recovery.
+
+## Migration 6: source media cleanup
+
+`006_20261012_source_media_cleanup_v1.sql` adds `sources.media_removed` with a
+false default, a durable cleanup queue and bounded renewable read leases. It
+changes no historical source/job/artifact values or byte counters. Its expected
+catalog was captured on isolated PostgreSQL 17.11. Positions 1–5 and their SQL,
+checksums and catalog manifests remain unchanged.
+
+As with migration 5, an earlier guarded binary refuses the newer marker and
+source column. Prepare a recovery build that understands migration 6 before
+production rollout. It may retain the prior UI/behavior while sharing this
+lifecycle contract. Reverting to the pre-006 binary instead requires a
+coordinated pre-upgrade database/media restore; removing version markers or
+columns is not a valid rollback. Restoring only metadata cannot recreate source
+bytes that successful cleanup intentionally removed. Backups and the prepared
+compatible recovery release must be verified before deployment.

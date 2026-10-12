@@ -214,6 +214,7 @@ func completeSourcePresentation(v *Source) {
 		id := v.ProviderID
 		v.ProviderVideoID = &id
 	}
+	v.PreviewURL = nil
 	v.PreviewKind = "none"
 	if v.Path != "" {
 		u := "/api/v1/sources/" + v.ID + "/media"
@@ -224,8 +225,11 @@ func completeSourcePresentation(v *Source) {
 	} else if v.Kind == "platform" || v.Kind == "youtube" {
 		v.PreviewKind = "window"
 	}
+	if v.MediaRemoved {
+		v.PreviewKind, v.PreviewURL, v.EmbedURL = "none", nil, nil
+	}
 	v.ThumbnailURL = nil
-	if v.ThumbnailPath != "" {
+	if !v.MediaRemoved && v.ThumbnailPath != "" {
 		u := "/api/v1/sources/" + v.ID + "/thumbnail"
 		v.ThumbnailURL = &u
 	}

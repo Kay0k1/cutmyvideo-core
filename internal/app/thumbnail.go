@@ -103,6 +103,17 @@ func (s *Server) sourceThumbnail(w http.ResponseWriter, r *http.Request, owner s
 		lookupError(w, err)
 		return
 	}
+	if v.MediaRemoved {
+		sourceMediaError(w, ErrSourceMediaRemoved)
+		return
+	}
+	ctx, release, err := s.pinSourceMediaReader(r.Context(), v)
+	if err != nil {
+		sourceMediaError(w, err)
+		return
+	}
+	defer release()
+	r = r.WithContext(ctx)
 	if v.ThumbnailPath == "" {
 		writeError(w, 404, "preview_unavailable", "A thumbnail is not available for this source")
 		return
@@ -128,5 +139,5 @@ func (s *Server) sourceThumbnail(w http.ResponseWriter, r *http.Request, owner s
 	_, _ = f.Seek(0, io.SeekStart)
 	w.Header().Set("Content-Type", mime)
 	privateSourceFileHeaders(w, v.ID, info)
-	http.ServeContent(w, r, "thumbnail", info.ModTime(), f)
+	http.ServeContent(w, r, "thumbnail", info.ModTime(), contextReadSeeker{r.Context(), f})
 }

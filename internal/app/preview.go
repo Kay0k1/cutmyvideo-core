@@ -80,6 +80,18 @@ func (s *Server) sourceAnalysisWithAdmission(w http.ResponseWriter, r *http.Requ
 		lookupError(w, err)
 		return
 	}
+	if v.MediaRemoved {
+		sourceMediaError(w, ErrSourceMediaRemoved)
+		return
+	}
+	readCtx, releaseRead, err := s.pinSourceMediaReader(ctx, v)
+	if err != nil {
+		sourceMediaError(w, err)
+		return
+	}
+	defer releaseRead()
+	ctx = readCtx
+	r = r.WithContext(ctx)
 	start, err := strconv.ParseInt(r.URL.Query().Get("start_ms"), 10, 64)
 	if err != nil || start < 0 || start >= v.DurationMS {
 		writeError(w, 400, "invalid_preview", "Choose a position inside the video")
@@ -365,7 +377,7 @@ func serveAnalysisWindow(w http.ResponseWriter, r *http.Request, file *os.File, 
 	w.Header().Set("X-Preview-Start-MS", strconv.FormatInt(interval.StartMS, 10))
 	w.Header().Set("X-Preview-End-MS", strconv.FormatInt(interval.EndMS, 10))
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(30 * time.Second))
-	http.ServeContent(w, r, "preview.mp4", info.ModTime(), file)
+	http.ServeContent(w, r, "preview.mp4", info.ModTime(), contextReadSeeker{r.Context(), file})
 }
 
 func trimPreviewWorkspace(ctx context.Context, dir string) error {
@@ -471,6 +483,9 @@ func (s *Store) acquirePreviewAfterCacheLookup(ctx context.Context, c Config, so
 		return nil, err
 	}
 	defer rollbackStorage(tx)
+	if err = checkSourceMedia(ctx, tx, source.ID, source.Owner); err != nil {
+		return nil, err
+	}
 	var exists bool
 	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM sources WHERE id=$1 AND owner=$2)", source.ID, source.Owner).Scan(&exists); err != nil {
 		return nil, err

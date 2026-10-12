@@ -90,3 +90,33 @@ This packet has prepared source/tests, not measured PostgreSQL performance or
 accepted platform/upgrade evidence. The old 32×5ms reconciliation/bootstrap
 stress requirements stay unchanged and are separate from source TTL. Migration
 startup/backfill and rollback rules are in [migrations](migrations.md).
+
+## Optional cleanup after successful export
+
+`cleanup_source: true` is an additive export option; omission preserves the
+existing retention behavior. A fully successful terminal job snapshot schedules
+cleanup transactionally. The request captures active and contemporaneous jobs;
+a failure or cancellation among that work cancels cleanup and preserves media.
+Older failed jobs do not prevent cleanup following a later successful retry.
+Pending cleanup rejects new media/job admissions, so it cannot race new work.
+Existing accepted jobs, preview/inspection reservations and renewable HTTP read
+leases finish first. A reader stops accessing bytes before its acknowledged lease
+expires; crashed reader rows expire. Background retries do not refetch a removed
+platform source.
+
+Cleanup removes original staged media, thumbnails and all cached preview
+workspaces (including storyboards and waveform files). It leaves the source
+metadata, all job snapshots and finished artifact records untouched. Persistent
+media paths become charged tombstones in the same transaction that clears their
+source references and sets `media_removed: true`; the existing deletion worker
+releases their charge only after physical removal and directory synchronization.
+Errors retain durable requests or tombstones and recover after process restart.
+
+Source metadata GET/list remains owner-protected and returns `media_removed`.
+Media, track inspection, preview and new exports return owner-checked
+`410 source_removed`. The original must be reopened to continue editing. Existing
+idempotency keys still recover their accepted job, and artifact downloads retain
+the independent artifact expiry policy. The owner’s explicit source DELETE keeps
+its documented destructive cascade; automatic media cleanup never calls it.
+Projects are client-side data and are not deleted by media cleanup. Local CLI/SDK
+input files never participate in this server lifecycle.

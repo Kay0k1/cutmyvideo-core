@@ -120,7 +120,7 @@ paths:
   /api/v1/sources/{id}/tracks:
     parameters: [{$ref: '#/components/parameters/ID'}]
     get:
-      description: Fresh owner-protected track inspection for a staged local upload/direct source. Audio indices are absolute source stream indices. Platform sources without a staged file return tracks_unavailable; their deterministic default audio or no-audio export remains available.
+      description: Returns 410 source_removed after automatic media cleanup. Fresh owner-protected track inspection for a staged local upload/direct source. Audio indices are absolute source stream indices. Platform sources without a staged file return tracks_unavailable; their deterministic default audio or no-audio export remains available.
       responses:
         '200':
           description: Available source tracks
@@ -139,7 +139,7 @@ paths:
   /api/v1/sources/{id}/media:
     parameters: [{$ref: '#/components/parameters/ID'}]
     get:
-      description: Original staged bytes; requires owner session. Range supported. Private conditional caching with ETag requires owner and file revalidation on every request.
+      description: Returns 410 source_removed after automatic media cleanup. Original staged bytes; requires owner session. Range supported. Private conditional caching with ETag requires owner and file revalidation on every request.
       responses:
         '503': {$ref: '#/components/responses/DatabaseUnavailable'}
         '200': {description: Media bytes}
@@ -396,6 +396,7 @@ components:
         id: {type: string}
         expires_at: {type: [string, 'null'], format: date-time, description: 'RFC3339 source retention target, or null while linked jobs pin the source.'}
         retention_blocked: {type: boolean, description: A retained job currently pins this source.}
+        media_removed: {type: boolean, default: false, description: Original media was removed after successful export. Metadata and results remain retained; reopen the recording to continue editing.}
         title: {type: string}
         duration_ms: {type: integer, minimum: 1}
         kind: {type: string, enum: [upload, direct, youtube, platform]}
@@ -485,6 +486,7 @@ components:
       required: [source_id, ranges, format, quality, cut_mode]
       properties:
         source_id: {type: string}
+        cleanup_source: {type: boolean, default: false, description: Remove original media and preview assets after full success and accepted operations settle. Projects and finished artifacts remain available. Omission preserves legacy retention. Concurrent failure or cancellation preserves the source.}
         ranges:
           type: array
           minItems: 1

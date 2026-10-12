@@ -29,3 +29,9 @@ normalized; application data is not included. Startup uses these small manifests
 to reject incompatible managed schema before changing it.
 
 See the [migration policy](../../../docs/migrations.md).
+
+`006_20261012_source_media_cleanup_v1.sql` adds a false-default media tombstone
+flag, the durable post-success cleanup queue and renewable HTTP read leases.
+It preserves historical values and accounting and is serialized by the existing
+storage fence. `006_schema.json` captures the actual isolated PostgreSQL 17.11
+catalog. See migration 6 rollout/compatible-recovery requirements in the policy.

@@ -229,7 +229,7 @@ func (s *Store) DeleteSource(ctx context.Context, id, owner string) ([]string, e
 		return nil, err
 	}
 	var active bool
-	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM jobs WHERE source_id=$1 AND status IN ('queued','running','waiting_storage')) OR EXISTS(SELECT 1 FROM storage_reservations WHERE kind='preview' AND job_id=$1)", id).Scan(&active); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM jobs WHERE source_id=$1 AND status IN ('queued','running','waiting_storage')) OR EXISTS(SELECT 1 FROM storage_reservations WHERE kind='preview' AND job_id=$1) OR EXISTS(SELECT 1 FROM source_media_readers WHERE source_id=$1 AND expires_at>clock_timestamp())", id).Scan(&active); err != nil {
 		return nil, err
 	}
 	if active {

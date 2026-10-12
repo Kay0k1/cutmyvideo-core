@@ -24,6 +24,8 @@ const sourceRetentionSQL = `WITH source_retention_candidates AS MATERIALIZED (
  SELECT source.id FROM sources source
  WHERE source.retention_pins_valid AND source.retention_job_pins=0 AND source.retention_preview_pins=0
  AND source.created_at<now()-($1*interval '1 second')
+ AND NOT EXISTS(SELECT 1 FROM source_media_readers WHERE source_id=source.id AND expires_at>clock_timestamp())
+ AND NOT EXISTS(SELECT 1 FROM source_media_cleanup WHERE source_id=source.id)
  ORDER BY source.created_at,source.id LIMIT $2
 ), checked AS MATERIALIZED (
  SELECT candidate.id,

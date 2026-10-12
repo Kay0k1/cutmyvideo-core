@@ -50,6 +50,11 @@ func RunWorker(ctx context.Context, c Config, s *Store) error {
 			// Capture before claiming so a commit between the empty claim and
 			// waiting cannot lose its wakeup. The lease still decides ownership.
 			notified := wakeup.snapshot()
+			cleanupCtx, cleanupCancel := context.WithTimeout(ctx, workerDatabaseTimeout)
+			if err := s.ProcessSourceMediaCleanup(cleanupCtx, c); err != nil {
+				slog.Warn("source media cleanup pending", "error", err)
+			}
+			cleanupCancel()
 			job, token, err := claimWorkerJob(ctx, s)
 			if errors.Is(err, ErrNotFound) {
 				health.Touch()
@@ -199,6 +204,10 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 		} else {
 			finishFailure("server_error", "Could not read the source; try exporting again")
 		}
+		return
+	}
+	if source.MediaRemoved {
+		finishFailure("source_removed", "Original recording was removed; reopen it to continue editing")
 		return
 	}
 	inputs := []mediaInput{{Path: source.Path}}
@@ -587,6 +596,9 @@ func cleanupFiles(ctx context.Context, c Config, s *Store) error {
 	var problems []error
 	retentionCtx, retentionCancel := maintenanceStageContext(ctx, 2)
 	defer retentionCancel()
+	if err := s.ProcessSourceMediaCleanup(retentionCtx, c); err != nil {
+		problems = append(problems, err)
+	}
 	if err := s.cleanupPreviews(retentionCtx, c); err != nil {
 		problems = append(problems, err)
 	}
