@@ -293,7 +293,15 @@ func previewCacheKeyOptions(source Source, start int64, request ExportRequest) s
 	}
 	// A prior rendition may have selected different tracks or display/color
 	// handling. Leave its charged cache entry to expire, without reusing it.
-	sum := sha256.Sum256([]byte("media-contract-v3:" + source.ID + ":" + strconv.FormatInt(start, 10) + ":" + audio))
+	contract := "media-contract-v3:"
+	if source.Path == "" {
+		if page, err := normalizeSourceURL(source.URL); err == nil && page.Hostname() == "clips.twitch.tv" {
+			// Both video windows and storyboards must stop reusing the portrait
+			// adaptation after the original Twitch clip selection is repaired.
+			contract += "twitch-original-v1:"
+		}
+	}
+	sum := sha256.Sum256([]byte(contract + source.ID + ":" + strconv.FormatInt(start, 10) + ":" + audio))
 	return hex.EncodeToString(sum[:])
 }
 

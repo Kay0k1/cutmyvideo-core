@@ -1,6 +1,8 @@
 package app
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -209,6 +211,53 @@ func TestPlatformMetadataExtractorTwitchOriginalPreference(t *testing.T) {
 		got, err := pickStreams(info, quality, "mp4")
 		if err != nil || len(got) != 1 || got[0].ID != want {
 			t.Fatalf("%s selected %v, want %s: %v", quality, streamIDs(got), want, err)
+		}
+	}
+}
+
+func TestTwitchClipsPreviewCacheNamespacesOriginalRendition(t *testing.T) {
+	legacyKey := func(source Source, start int64, audio string) string {
+		sum := sha256.Sum256([]byte(fmt.Sprintf("media-contract-v3:%s:%d:%s", source.ID, start, audio)))
+		return hex.EncodeToString(sum[:])
+	}
+	track := 1
+	options := []struct {
+		request ExportRequest
+		audio   string
+	}{{ExportRequest{}, "default"}, {ExportRequest{NoAudio: true}, "none"}, {ExportRequest{AudioTrack: &track}, "1"}}
+	for _, raw := range []string{
+		"https://clips.twitch.tv/Fixture",
+		"https://www.twitch.tv/creator/clip/Fixture",
+		"https://clips.twitch.tv/embed?clip=Fixture",
+	} {
+		source := Source{ID: "src_fixture", Kind: "platform", Provider: "twitch", ProviderID: "123", URL: raw}
+		seen := make(map[string]bool)
+		for _, option := range options {
+			key := previewCacheKeyOptions(source, 30000, option.request)
+			if key == legacyKey(source, 30000, option.audio) {
+				t.Fatal("old portrait preview/storyboard remains reusable")
+			}
+			if seen[key] {
+				t.Fatal("original clip cache aliases audio options")
+			}
+			seen[key] = true
+		}
+		source.Provider = ""
+		if previewCacheKey(source, 30000) == legacyKey(source, 30000, "default") {
+			t.Fatal("legacy clip row without provider retains portrait cache")
+		}
+	}
+	for _, source := range []Source{
+		{ID: "src_fixture", Kind: "platform", Provider: "twitch", ProviderID: "v123", URL: "https://www.twitch.tv/videos/123"},
+		{ID: "src_fixture", Kind: "platform", Provider: "twitch", ProviderID: "v123", URL: "https://player.twitch.tv/?video=v123"},
+		{ID: "src_fixture", Kind: "youtube", Provider: "youtube", URL: "https://www.youtube.com/watch?v=N3REfH4N9Dg"},
+		{ID: "src_fixture", Kind: "upload", Path: "/data/source.mp4", URL: "https://clips.twitch.tv/Fixture"},
+		{ID: "src_fixture", Kind: "direct", URL: "https://media.example/source.mp4"},
+	} {
+		for _, option := range options {
+			if previewCacheKeyOptions(source, 30000, option.request) != legacyKey(source, 30000, option.audio) {
+				t.Fatal("unaffected recording cache changed")
+			}
 		}
 	}
 }
