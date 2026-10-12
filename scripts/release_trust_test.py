@@ -48,7 +48,10 @@ class TrustControls(unittest.TestCase):
                 'required_groups': 7, 'required_checks': 37 if a['os'] == 'windows' else 39,
                 'report_sha256': 'b' * 64} for a in self.manifest['archives']],
             linux_archive_recovery={'required_groups': 9, 'decoded_media_observations': 11,
-                'schema_versions': sorted(t.SCHEMAS), 'binary_sha256': self.manifest['archives'][0]['contents']['cutmy']['sha256'],
+                'schema_versions': ['20261005-storage-queue-v3', '20261010-cache-retention-v1',
+                                    '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1',
+                                    '20261011-source-retention-v1', '20261012-source-media-cleanup-v1'],
+                'binary_sha256': self.manifest['archives'][0]['contents']['cutmy']['sha256'],
                 'report_sha256': 'c' * 64})
         self.verdict_path = self.root / 'verdict.json'
         self.verdict_path.write_bytes(m.canonical(self.verdict))
@@ -164,6 +167,24 @@ class TrustControls(unittest.TestCase):
         self.assertEqual(trust['manifest_sha256'], self.args.expected_manifest_sha256)
         self.assertEqual(trust['archive_run'], self.run)
         self.assertEqual(len(t.subjects(trust, m.digest(m.canonical(trust)))), 7)
+
+    def test_trust_requires_exact_six_migration_archive_recovery(self):
+        t.validate_verdict(self.verdict, self.source, self.manifest, self.run)
+        for mutation in ('old005', 'omitted', 'changed006', 'duplicate', 'extra'):
+            with self.subTest(mutation=mutation):
+                changed = deepcopy(self.verdict)
+                versions = changed['linux_archive_recovery']['schema_versions']
+                if mutation == 'old005':
+                    versions.pop()
+                elif mutation == 'omitted':
+                    versions.pop(0)
+                elif mutation == 'changed006':
+                    versions[-1] = '20261012-source-media-cleanup-v2'
+                elif mutation == 'duplicate':
+                    versions.append(versions[-1])
+                else:
+                    versions.append('20261013-unreviewed-v1')
+                self.reject(t.validate_verdict, changed, self.source, self.manifest, self.run)
 
     def test_candidate_manual_pr_wrong_ref_or_event_cannot_sign(self):
         self.reject(t.signing_policy, self.source, self.run, 'push', 'refs/tags/' + self.source['version'])
