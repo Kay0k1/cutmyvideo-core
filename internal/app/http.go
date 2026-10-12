@@ -21,6 +21,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type Server struct {
@@ -78,6 +80,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/sources/{id}", s.withSession(s.source))
 	mux.HandleFunc("GET /api/v1/sources/{id}/media", s.withSession(s.sourceMedia))
 	mux.HandleFunc("GET /api/v1/sources/{id}/preview", s.withSession(s.sourcePreview))
+	mux.HandleFunc("GET /api/v1/sources/{id}/storyboard", s.withSession(s.sourceStoryboard))
 	mux.HandleFunc("GET /api/v1/sources/{id}/tracks", s.withSession(s.sourceTracks))
 	mux.HandleFunc("GET /api/v1/sources/{id}/thumbnail", s.withSession(s.sourceThumbnail))
 	mux.HandleFunc("POST /api/v1/jobs", s.withSession(s.createJob))
@@ -996,7 +999,22 @@ func internalError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusServiceUnavailable, "storage_initializing", "Storage accounting is being prepared; try again shortly")
 		return
 	}
-	slog.Error("request failed", "error", fmt.Sprintf("%T", err))
+	attributes := []any{"error", fmt.Sprintf("%T", err)}
+	// A bounded database code helps distinguish constraints from exhausted
+	// storage without logging statements, parameters or private diagnostics.
+	var postgres *pgconn.PgError
+	if errors.As(err, &postgres) && len(postgres.Code) == 5 {
+		valid := true
+		for _, character := range postgres.Code {
+			if !(character >= 'A' && character <= 'Z' || character >= '0' && character <= '9') {
+				valid = false
+			}
+		}
+		if valid {
+			attributes = append(attributes, "sqlstate", postgres.Code)
+		}
+	}
+	slog.Error("request failed", attributes...)
 	writeError(w, 500, "internal", sourcePersistenceMessage(err, "The operation could not be completed; try again"))
 }
 

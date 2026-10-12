@@ -4,6 +4,9 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
+### Fixed
+- Range-count errors show the configured maximum and submitted count, with a correction for splitting a larger selection into multiple jobs.
+
 ## 1.1.0 - 2026-10-12
 
 ### Added

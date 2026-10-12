@@ -28,7 +28,7 @@ func (s *Store) reserveSourceInspection(ctx context.Context, source Source, id s
 		return ErrNotFound
 	}
 	var weight int
-	if err = tx.QueryRow(ctx, `SELECT COALESCE(sum(CASE WHEN s.width>0 AND s.height>0 AND s.width<=8388608/GREATEST(1,s.height) THEN 1 ELSE 2 END),0) FROM storage_reservations r LEFT JOIN sources s ON s.id=r.job_id WHERE r.kind='preview'`).Scan(&weight); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT COALESCE(sum(`+previewWeightSQL+`),0) FROM storage_reservations r LEFT JOIN sources s ON s.id=r.job_id WHERE r.kind='preview'`).Scan(&weight); err != nil {
 		return err
 	}
 	needed := 1
@@ -38,7 +38,11 @@ func (s *Store) reserveSourceInspection(ctx context.Context, source Source, id s
 	if weight+needed > 2 {
 		return errSourceServerBusy
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO storage_reservations(id,owner,kind,size_bytes,expires_at,job_id,token) VALUES($1,$2,'preview',0,clock_timestamp()+($3*interval '1 second'),$4,$1)`, id, source.Owner, (timeout + time.Minute).Seconds(), source.ID)
+	token := id
+	if needed == 2 {
+		token = "inspection-full:" + id
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO storage_reservations(id,owner,kind,size_bytes,expires_at,job_id,token) VALUES($1,$2,'preview',0,clock_timestamp()+($3*interval '1 second'),$4,$5)`, id, source.Owner, (timeout + time.Minute).Seconds(), source.ID, token)
 	if err != nil {
 		return err
 	}

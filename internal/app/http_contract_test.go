@@ -211,6 +211,14 @@ func TestHTTPPublicContract(t *testing.T) {
 		servePreview(w, r, file, Range{EndMS: 10000}, "hit")
 		file.Close()
 		record("preview-"+rangeValue, "GET", "/api/v1/sources/{id}/preview", w)["parameters"] = map[string]any{"query:start_ms": 0, "query:priority": "background"}
+		file, err = os.Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w = httptest.NewRecorder()
+		serveWindow(w, r, file, Range{EndMS: 10000}, "hit", true)
+		file.Close()
+		record("storyboard-"+rangeValue, "GET", "/api/v1/sources/{id}/storyboard", w)["parameters"] = map[string]any{"query:start_ms": 0, "query:priority": "background"}
 	}
 	for _, condition := range []struct {
 		name, value string

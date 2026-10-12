@@ -72,6 +72,12 @@ reservation. At most two render globally. Completed windows are charged at actua
 size and cached for 30 minutes idle, up to 512 MiB/64 files globally and 128 MiB/16
 per owner. These are not environment settings.
 
+Search strips share those preview slots, reservations and cache limits. Each
+aligned 30-second interval produces one JPEG up to 256 KiB, with six 160×90 cells
+sampled every five seconds. Only visible intervals should be requested; there is
+no whole-recording preparation. Strip requests always use background admission,
+prepare no audio, and cancel their subprocesses when the HTTP request ends.
+
 PostgreSQL pools default to four connections per process. Explicit `pool_max_conns`,
 `pool_min_conns` and `pool_min_idle_conns` DSN options can alter the budget. Current
 public hosting uses one API because IP rate limits are process-local. Multiple

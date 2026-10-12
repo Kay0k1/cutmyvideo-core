@@ -1,5 +1,8 @@
 # Performance and recovery
 
+Responsive preview evidence: [five identical-tool cold/warm observations and
+bounded search-strip design, 2026-10-12](../benchmarks/2026-10-12-responsive-preview/README.md).
+
 Current batch-cutting evidence: [complete HTTP workflow and independent media checks, 2026-10-12](../verification/2026-10-12-batch-cutting/README.md).
 Five alternating baseline/candidate pairs measured fresh uploads, uncached first
 server previews and receipt of every exported byte. Median upload-through-download

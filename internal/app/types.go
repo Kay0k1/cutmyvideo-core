@@ -178,8 +178,11 @@ type ExportRequest struct {
 }
 
 func (r *ExportRequest) Validate(c Config, s Source) error {
-	if len(r.Ranges) == 0 || len(r.Ranges) > c.MaxRanges {
-		return errors.New("choose between 1 and the allowed number of ranges")
+	if len(r.Ranges) == 0 {
+		return errors.New("choose at least one range; mark a start and an end before exporting")
+	}
+	if len(r.Ranges) > c.MaxRanges {
+		return fmt.Errorf("choose between 1 and %d ranges (received %d); remove extra ranges or submit another job", c.MaxRanges, len(r.Ranges))
 	}
 	if r.Format != "mp4" && r.Format != "mp3" && r.Format != "mkv" {
 		return errors.New("format must be mp4, mp3, or mkv")

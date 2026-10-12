@@ -86,6 +86,16 @@ func videoRenderFilter(stream *probeStream, quality string, preview bool) (strin
 		return "", false, err
 	}
 	filter := fmt.Sprintf("scale=%d:%d,setsar=1", width, height)
+	if preview {
+		// Discard frames before scaling and HDR conversion. High frame-rate
+		// recordings otherwise pay for processing frames the preview drops.
+		// fps uses the same source timestamps and 24 fps policy as before.
+		filter = "fps=24," + filter
+	}
+	return videoColorRenderFilter(stream, filter)
+}
+
+func videoColorRenderFilter(stream *probeStream, filter string) (string, bool, error) {
 	hdr := stream.ColorTransfer == "smpte2084" || stream.ColorTransfer == "arib-std-b67"
 	if hdr {
 		// PQ/HLG must be linearized before tone mapping. npl sets the 100-nit
@@ -102,9 +112,6 @@ func videoRenderFilter(stream *probeStream, quality string, preview bool) (strin
 		// tonemap needs BT.709 luminance coefficients even though its pixels
 		// are float RGB. Restore the RGB input matrix explicitly for zscale.
 		filter += ",zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,setparams=colorspace=bt709,tonemap=mobius:param=0.3:desat=2:peak=" + peak + ",zscale=t=bt709:m=bt709:matrixin=gbr:r=limited,format=yuv420p"
-	}
-	if preview {
-		filter += ",fps=24"
 	}
 	return filter, hdr, nil
 }
