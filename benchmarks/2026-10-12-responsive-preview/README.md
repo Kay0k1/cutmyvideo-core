@@ -25,6 +25,27 @@ Operator artifacts are under `/root/video_cut/preview-evidence-20261012`;
 generated media are not committed. Source SHA-256:
 `10e6bbbb94ac9bcfac48e4d66c7392426a9874fe18ca33e5546ccb87fe4f15fe`.
 
+## Memory observations
+
+Three alternating direct-encoder pairs measured the peak RSS of each FFmpeg
+child in a fresh Python process with the same source, tools, thread bounds and
+codec options. Baseline median is **73,056 KiB** (72,092–73,096); candidate median
+is **75,000 KiB** (74,560–75,364). Moving FPS first retains source-size frames
+briefly, costing **1,944 KiB / 2.66%** on this fixture. This small measured increase
+is accepted in exchange for less conversion work; decoder/pixel/thread limits
+and the full-pool weight for >8MP or unknown sources remain enforced. The result
+does not establish peak memory for other codecs or 8K inputs.
+
+Raw observations and exact arguments are in `memory.json`. A frontend build
+overlapped part of this memory cohort, so its wall times are diagnostic only and
+do not support speed claims. Other processes do not enter the per-child RSS.
+Run `python3 memory-observations.py SOURCE OUTPUT baseline` and then `candidate`
+in fresh processes to reproduce the measurement; the helper deletes its output
+after recording size-independent RSS and the MP4 hash. Five of six memory-run
+encodes matched the retained MP4 hash; one compressed stream differed under
+multithreaded x264/VBV. Byte identity of the original controlled retained pair
+does not imply universal encoder determinism.
+
 ## Environment and controls
 
 - Linux 5.15.0-190-generic x86_64; Go 1.27.2.
