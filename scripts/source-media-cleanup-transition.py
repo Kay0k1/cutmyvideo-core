@@ -67,6 +67,17 @@ def project_originals(before, after):
             proof.require(proof.canonical(observed) == proof.canonical(row), 'migration006 changed historical record values')
 
 
+def original_media_deleted(sql, source_path, physical_exists):
+    proof=module('cleanup_deleted_proof','source-retention-transition.py')
+    literal="'"+source_path.replace("'","''")+"'"
+    # psql prints a bare SQL boolean as t/f. Request a JSON scalar explicitly
+    # so strict decoding preserves the same charged-file and physical-file gate.
+    charged=proof.strict_json(sql("SELECT to_jsonb(NOT EXISTS(SELECT 1 FROM storage_files WHERE path="+literal+"))"))
+    present=physical_exists(source_path)
+    proof.require(type(charged) is bool and type(present) is bool,'original deletion observation must contain booleans')
+    return charged is True and present is False
+
+
 def validate_catalog(value, position, expected, migrations):
     proof = module('cleanup_catalog_proof', 'source-retention-transition.py')
     proof.require(value['position'] == position and type(value['position']) is int
@@ -277,9 +288,8 @@ def acceptance_class(base):
             self.a.request('GET','/api/v1/sources/'+source['id']+'/media',expected=410)
             retained,_=self.a.request('GET','/api/v1/jobs/'+job['id'])
             def deleted_physically():
-                charged=proof.strict_json(self.sql(self.current,"SELECT NOT EXISTS(SELECT 1 FROM storage_files WHERE path='"+source_path+"')"))
-                present=self.json(self.compose(self.current)+['exec','-T','api','python3','-c','import os,json,sys;print(json.dumps(os.path.exists(sys.argv[1])))',source_path])
-                return charged is True and present is False
+                return original_media_deleted(lambda query:self.sql(self.current,query),source_path,
+                    lambda path:self.json(self.compose(self.current)+['exec','-T','api','python3','-c','import os,json,sys;print(json.dumps(os.path.exists(sys.argv[1])))',path]))
             self.wait(deleted_physically,30)
             physical=True
             decoded=self.decode(content,'cleanup-result.mp4',seconds=1.0)

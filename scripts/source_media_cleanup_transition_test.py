@@ -161,3 +161,19 @@ class CleanupAdmissionControls(unittest.TestCase):
         for mode in (None,'current-installation','same-schema',proof.MODE):
             with self.assertRaises(RuntimeError):value(SimpleNamespace(mode=mode))
         init.assert_not_called()
+
+
+class OriginalDeletionObservationControls(unittest.TestCase):
+    def test_psql_json_scalar_preserves_charge_and_physical_file_gate(self):
+        for charged,present,expected in ((True,False,True),(True,True,False),(False,False,False),(False,True,False)):
+            with self.subTest(charged=charged,present=present):
+                def sql(query):
+                    self.assertTrue(query.startswith('SELECT to_jsonb(NOT EXISTS('))
+                    self.assertIn("path='/data/sources/owner''s-source.media'",query)
+                    return json.dumps(charged).encode()+b'\n'
+                self.assertIs(cleanup.original_media_deleted(sql,"/data/sources/owner's-source.media",lambda path:present),expected)
+
+    def test_bare_sql_boolean_is_not_mistaken_for_json_or_completion(self):
+        for raw in (b't\n',b'f\n',b'null\n',b'1\n'):
+            with self.subTest(raw=raw),self.assertRaises((ValueError,RuntimeError)):
+                cleanup.original_media_deleted(lambda query:raw,'/data/sources/source.media',lambda path:False)
