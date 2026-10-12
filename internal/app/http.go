@@ -81,6 +81,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/sources/{id}/media", s.withSession(s.sourceMedia))
 	mux.HandleFunc("GET /api/v1/sources/{id}/preview", s.withSession(s.sourcePreview))
 	mux.HandleFunc("GET /api/v1/sources/{id}/storyboard", s.withSession(s.sourceStoryboard))
+	mux.HandleFunc("GET /api/v1/sources/{id}/waveform", s.withSession(s.sourceWaveform))
 	mux.HandleFunc("GET /api/v1/sources/{id}/tracks", s.withSession(s.sourceTracks))
 	mux.HandleFunc("GET /api/v1/sources/{id}/thumbnail", s.withSession(s.sourceThumbnail))
 	mux.HandleFunc("POST /api/v1/jobs", s.withSession(s.createJob))
