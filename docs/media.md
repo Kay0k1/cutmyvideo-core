@@ -81,13 +81,13 @@ source; inspection does not invent display dimensions.
 
 ## Audio waveform
 
-Owner-protected source windows retain one absolute channel peak per100ms, with
-at most300bins per30-second interval. PCM is streamed at the inspected source
-sample rate capped at48kHz; unknown rates use48kHz. Lower source rates retain
+Owner-protected source windows retain one absolute channel peak per 100 ms, with
+at most 300 bins per 30-second interval. PCM is streamed at the inspected source
+sample rate capped at 48 kHz; unknown rates use 48 kHz. Lower source rates retain
 their original cadence, avoiding unnecessary upsampling. Integer source-time
-binning supports fractional samples perbin. Channel peaks are combined without
+binning supports fractional samples per bin. Channel peaks are combined without
 mono averaging, so opposite-phase stereo and audible high-frequency activity
-are not represented as silence. Up to32channels are accepted; decoded PCM is
+are not represented as silence. Up to 32 channels are accepted; decoded PCM is
 never retained as a whole interval. Foreground-preview priority, private caches,
 guarded network input and source cleanup remain shared with existing windows.
 
