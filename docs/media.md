@@ -48,6 +48,16 @@ Owner-protected `GET /api/v1/sources/{id}/tracks` freshly inspects a local sourc
 and also returns optional `display_width` and `display_height`. Use these fields,
 rather than persisted coded dimensions, to select a displayed crop.
 
+Window previews also return `X-Source-Display-Width` and
+`X-Source-Display-Height`, describing the original upright square-pixel image
+before the 480p preview cap. This supports crop presets for platform sources
+whose provider dimensions may describe coded pixels. Fresh preview generation
+stores the trusted dimensions in a bounded 20-byte standard MP4 `free` box.
+The entire MP4, including this box, is durably published and charged together.
+Owner-protected warm hits read those fixed bytes without media tools. Malformed
+or absent metadata is ignored instead of inventing geometry. Video preview
+cache identity advances independently of storyboard/waveform identities.
+
 Before a worker processes a local source or prepares a new local window
 preview, bounded inspection refreshes persisted selected coded dimensions.
 This corrects historical snapshots that described a cover image and prevents

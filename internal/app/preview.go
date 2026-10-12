@@ -132,7 +132,7 @@ func (s *Server) sourceAnalysisWithAdmission(w http.ResponseWriter, r *http.Requ
 	}
 	// Canonical intervals make nearby seeks reuse the same result.
 	start = start / previewWindowMS * previewWindowMS
-	key := previewCacheKeyOptions(v, start, request)
+	key := "display-v1:" + previewCacheKeyOptions(v, start, request)
 	filename := "preview.mp4"
 	outputLimit := previewOutputBytes
 	renderWindow := renderPreviewOptions
@@ -316,7 +316,7 @@ func (s *Server) sourceAnalysisWithAdmission(w http.ResponseWriter, r *http.Requ
 }
 
 func previewCacheKey(source Source, start int64) string {
-	return previewCacheKeyOptions(source, start, ExportRequest{})
+	return "display-v1:" + previewCacheKeyOptions(source, start, ExportRequest{})
 }
 
 func previewCacheKeyOptions(source Source, start int64, request ExportRequest) string {
@@ -372,6 +372,12 @@ func serveAnalysisWindow(w http.ResponseWriter, r *http.Request, file *os.File, 
 	if kind == windowWaveform {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-Waveform-Step-MS", strconv.FormatInt(waveformStepMS, 10))
+	}
+	if kind == windowVideo {
+		if width, height := readPreviewGeometry(file, info.Size()); width > 0 && height > 0 {
+			w.Header().Set("X-Source-Display-Width", strconv.Itoa(width))
+			w.Header().Set("X-Source-Display-Height", strconv.Itoa(height))
+		}
 	}
 	w.Header().Set("X-Preview-Cache", cache)
 	w.Header().Set("X-Preview-Start-MS", strconv.FormatInt(interval.StartMS, 10))
@@ -456,7 +462,11 @@ func renderPreviewOptions(ctx context.Context, c Config, inputs []mediaInput, r 
 	if delta := duration - (r.EndMS - r.StartMS); delta > 350 || delta < -350 {
 		return errors.New("preview duration does not match requested interval")
 	}
-	return nil
+	width, height, err := videoDisplayGeometry(selection.Video)
+	if err != nil {
+		return err
+	}
+	return appendPreviewGeometry(out, width, height)
 }
 
 func (s *Store) reservePreview(ctx context.Context, c Config, source Source, id string) error {

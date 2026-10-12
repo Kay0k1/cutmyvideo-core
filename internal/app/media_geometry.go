@@ -72,7 +72,10 @@ func videoOutputGeometryWithCrop(stream *probeStream, quality string, preview bo
 	}
 	// H.264 4:2:0 needs even dimensions. Apply the same ratio to both axes;
 	// merely resetting SAR would stretch anamorphic input.
-	return max(2, int(float64(width)*factor)/2*2), max(2, int(float64(height)*factor)/2*2), nil
+	// Avoid losing two pixels when an exact cap such as 480 is represented as
+	// 479.99999999999994 after multiplication. This epsilon is far below one
+	// displayed pixel and does not round genuine fractional dimensions up.
+	return max(2, int(math.Floor(float64(width)*factor+1e-9))/2*2), max(2, int(math.Floor(float64(height)*factor+1e-9))/2*2), nil
 }
 
 func videoEncoderTimeBase(stream *probeStream) (string, error) {

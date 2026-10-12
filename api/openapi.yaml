@@ -151,7 +151,7 @@ paths:
   /api/v1/sources/{id}/preview:
     parameters: [{$ref: '#/components/parameters/ID'}]
     get:
-      description: Owner-protected H.264/AAC MP4 interval, up to 30 seconds and 16 MiB. Works for accessible platform recordings and staged files with browser-incompatible codecs. Original source time is supplied in response headers. Aligned windows are retained in a private owner-protected cache for up to 30 idle minutes (512 MiB globally, 128 MiB per owner). Responses remain no-store. Rendering pins the source and uses a bounded reservation; completed cache entries do not pin sources. Duplicate interval requests coalesce.
+      description: Owner-protected H.264/AAC MP4 interval, up to 30 seconds and 16 MiB. Works for accessible platform recordings and staged files with browser-incompatible codecs. Original source time and fresh upright square-pixel source display dimensions are supplied in response headers, including cache hits and conditional/range responses. Display dimensions describe the original before preview scaling, suitable for normalized crop presets. Aligned windows are retained in a private owner-protected cache for up to 30 idle minutes (512 MiB globally, 128 MiB per owner). Responses remain no-store. Rendering pins the source and uses a bounded reservation; completed cache entries do not pin sources. Duplicate interval requests coalesce.
       parameters:
         - in: query
           name: start_ms
@@ -174,6 +174,8 @@ paths:
         '200':
           description: Preview interval
           headers:
+            X-Source-Display-Width: {description: Original upright square-pixel width before preview scaling, schema: {type: integer, minimum: 2}}
+            X-Source-Display-Height: {description: Original upright square-pixel height before preview scaling, schema: {type: integer, minimum: 2}}
             X-Preview-Cache: {$ref: '#/components/headers/PreviewCache'}
             X-Preview-Start-MS: {$ref: '#/components/headers/PreviewStart'}
             X-Preview-End-MS: {$ref: '#/components/headers/PreviewEnd'}
