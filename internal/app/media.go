@@ -323,9 +323,24 @@ func pickStreams(info platformInfo, quality, format string) ([]platformFormat, e
 	// Rank complete, supported inputs. A high-bitrate HLS video-only rendition
 	// must not hide a progressive video/audio pair from the same recording.
 	// Separate HLS clocks remain unsupported; no rendition is silently merged.
-	var video, fallbackVideo *platformFormat
+	var supported []*platformFormat
+	preferOriginal := false
 	for _, f := range candidates {
 		if f.ACodec == "none" && (format == "mp3" || isHLS(*f) || progressiveAudio == nil) {
+			continue
+		}
+		supported = append(supported, f)
+		if strings.EqualFold(info.Extractor, "TwitchClips") && !strings.HasPrefix(f.ID, "portrait-") {
+			preferOriginal = true
+		}
+	}
+	var video, fallbackVideo *platformFormat
+	for _, f := range supported {
+		// Twitch exposes separately cropped portrait adaptations. Its extractor
+		// sorts those first with quality=-2, so resolution ties must not select
+		// them over the original edit. Keep this family preference before the
+		// quality cap, while allowing portrait-only or unsupported-original clips.
+		if preferOriginal && strings.HasPrefix(f.ID, "portrait-") {
 			continue
 		}
 		if f.Height <= capHeight && (video == nil || f.Height > video.Height || f.Height == video.Height && f.TBR > video.TBR) {
@@ -358,6 +373,16 @@ func pickStreams(info platformInfo, quality, format string) ([]platformFormat, e
 		}
 	}
 	return nil, errUnsupportedStream
+}
+
+func platformSourceDimensions(info platformInfo) (int, int) {
+	streams, err := pickStreams(info, "best", "mp4")
+	if err != nil || len(streams) == 0 {
+		return 0, 0
+	}
+	// Preserve unknown dimensions from the extractor. The resource admission
+	// guard stays conservative until real media inspection can establish them.
+	return max(0, streams[0].Width), max(0, streams[0].Height)
 }
 
 func seconds(ms int64) string { return strconv.FormatFloat(float64(ms)/1000, 'f', 3, 64) }
