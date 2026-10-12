@@ -88,8 +88,9 @@ crop explicitly; they never silently change mode. One crop applies to all ranges
 in separate or joined exports.
 
 The renderer first applies display rotation and normalizes sample aspect ratio,
-then crops and applies the chosen resolution cap. Pixel origins and dimensions
-round down to even values for H.264 4:2:0 (at most one displayed pixel per edge).
+then crops and applies the chosen resolution cap. Crop edges round to the
+nearest even boundary within the image for H.264 4:2:0 (at most one displayed
+pixel per edge).
 Areas resolving to less than two displayed pixels in either dimension fail.
 There is no aspect stretching or padding. The browser selection overlay describes
 the same normalized region over the uncropped preview. HDR conversion and VFR

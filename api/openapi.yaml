@@ -476,7 +476,7 @@ components:
       type: object
       additionalProperties: false
       required: [x, y, width, height]
-      description: Normalized rectangle in the upright square-pixel displayed image. Requires accurate MP4. Both opposite edges must remain inside the image; dimensions must resolve to at least two displayed pixels. Chroma-aligned pixel boundaries round down by at most one pixel before the normal resolution cap.
+      description: Normalized rectangle in the upright square-pixel displayed image. Requires accurate MP4. Both opposite edges must remain inside the image; dimensions must resolve to at least two displayed pixels. Each edge rounds to the nearest even pixel boundary within the image by at most one displayed pixel, before the normal resolution cap.
       properties:
         x: {type: number, minimum: 0, maximum: 1}
         y: {type: number, minimum: 0, maximum: 1}

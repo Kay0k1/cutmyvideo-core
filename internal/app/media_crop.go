@@ -40,8 +40,8 @@ func validateCropMode(request ExportRequest) error {
 	return nil
 }
 
-// Pixel coordinates are rounded down to a chroma-aligned grid. At most one
-// pixel per boundary is lost; there is no stretching or out-of-frame padding.
+// Each edge rounds to the nearest chroma-aligned pixel boundary, clamped to
+// the image. Every boundary differs by at most one displayed pixel.
 func cropPixelGeometry(width, height int, crop *Crop) (x, y, w, h int, err error) {
 	if err = crop.Validate(); err != nil {
 		return
@@ -49,10 +49,13 @@ func cropPixelGeometry(width, height int, crop *Crop) (x, y, w, h int, err error
 	if crop == nil {
 		return 0, 0, width, height, nil
 	}
-	x = int(math.Floor(crop.X*float64(width)+1e-9)) / 2 * 2
-	y = int(math.Floor(crop.Y*float64(height)+1e-9)) / 2 * 2
-	w = int(math.Floor(crop.Width*float64(width)+1e-9)) / 2 * 2
-	h = int(math.Floor(crop.Height*float64(height)+1e-9)) / 2 * 2
+	if crop.Width*float64(width)+1e-9 < 2 || crop.Height*float64(height)+1e-9 < 2 {
+		return 0, 0, 0, 0, errors.New("crop is too small for this source; select an area at least two displayed pixels wide and high")
+	}
+	nearest := func(v float64, size int) int { return min(size/2*2, int(math.Floor(v*float64(size)/2+.5))*2) }
+	x, y = nearest(crop.X, width), nearest(crop.Y, height)
+	w = nearest(crop.X+crop.Width, width) - x
+	h = nearest(crop.Y+crop.Height, height) - y
 	if w < 2 || h < 2 || x+w > width || y+h > height {
 		return 0, 0, 0, 0, errors.New("crop is too small for this source; select an area at least two displayed pixels wide and high")
 	}

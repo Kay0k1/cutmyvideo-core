@@ -85,6 +85,26 @@ func TestCropResolutionCapIsAppliedAfterSelection(t *testing.T) {
 	}
 }
 
+func TestCropFractionalBoundariesStayWithinOneDisplayedPixel(t *testing.T) {
+	for _, dimensions := range [][2]int{{1280, 720}, {481, 271}} {
+		width, height := dimensions[0], dimensions[1]
+		for _, crop := range []*Crop{{X: .341796875, Width: .31640625, Height: 1}, {X: .1, Y: .15, Width: .7, Height: .8}, {X: 0, Y: 0, Width: 1, Height: 1}} {
+			x, y, w, h, err := cropPixelGeometry(width, height, crop)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, edge := range [][2]float64{{float64(x), crop.X * float64(width)}, {float64(y), crop.Y * float64(height)}, {float64(x + w), (crop.X + crop.Width) * float64(width)}, {float64(y + h), (crop.Y + crop.Height) * float64(height)}} {
+				if math.Abs(edge[0]-edge[1]) > 1.000001 {
+					t.Fatalf("crop boundary %v exceeds one pixel for %+v", edge, crop)
+				}
+			}
+			if x%2 != 0 || y%2 != 0 || w%2 != 0 || h%2 != 0 || x+w > width || y+h > height {
+				t.Fatal("unsafe crop pixels", x, y, w, h)
+			}
+		}
+	}
+}
+
 func TestMediaCropRetainsHDRColorAndVariableFrameTiming(t *testing.T) {
 	c, ctx := mcConfig(t)
 	for _, name := range []string{"pq-10bit.mp4", "hlg-10bit.mp4", "mono-silence-vfr.mp4"} {
