@@ -490,12 +490,7 @@ func (s *Server) addSourceWithClient(w http.ResponseWriter, r *http.Request, own
 			embed := "https://www.youtube-nocookie.com/embed/" + info.ID
 			v.EmbedURL = &embed
 		}
-		for _, f := range info.Formats {
-			if f.Height > v.Height {
-				v.Height = f.Height
-				v.Width = f.Width
-			}
-		}
+		v.Width, v.Height = platformSourceDimensions(info)
 		v.ThumbnailPath, _ = fetchThumbnail(ctx, s.Config, v.ID, info.Thumbnail)
 		completeSourcePresentation(&v)
 		if e = s.databaseAddSource(ctx, v); e != nil {
