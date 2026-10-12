@@ -39,6 +39,37 @@ class NativeResultsChecks(unittest.TestCase):
         return subprocess.run([sys.executable, str(SCRIPT), *map(str, self.reports if reports is None else reports)],
                               capture_output=True, text=True, timeout=10)
 
+    def test_new_release_features_are_required_and_selected_on_all_native_targets(self):
+        workflow = SCRIPT.parent.parent / ".github" / "workflows" / "ci.yml"
+        lines = workflow.read_text(encoding="utf-8").splitlines()
+        for index, names, report in ((2, native_results.NEW_SERVICE_REQUIRED, "native-service-tests.jsonl"),
+                                     (4, native_results.NEW_MEDIA_REQUIRED | {"TestAdvancedCropPlanPublishesActualCroppedOutput"}, "native-media-contract-tests.jsonl")):
+            command = next(line for line in lines if "tee " + report in line)
+            selector = re.search(r"-run '([^']+)'", command).group(1)
+            original = self.reports[index].read_text(encoding="utf-8")
+            for name in names:
+                self.assertIn(name, native_results.REQUIRED[index])
+                self.assertIsNotNone(re.fullmatch(selector, name))
+                for action in ("missing", "skip", "failed-subtest"):
+                    with self.subTest(name=name, action=action):
+                        events = [json.loads(line) for line in original.splitlines()]
+                        if action != "failed-subtest":
+                            events = [event for event in events if event.get("Test") != name]
+                        if action != "missing":
+                            events.append({"Action":"skip" if action == "skip" else "fail", "Test":name if action == "skip" else name + "/fault", "Package":native_results.APP_PACKAGE})
+                        self.reports[index].write_text("".join(json.dumps(event)+"\n" for event in events),encoding="utf-8")
+                        self.assertNotEqual(self.run_gate().returncode, 0)
+            self.reports[index].write_text(original,encoding="utf-8")
+        bookworm = next(line for line in lines if "tee bookworm-media-tests.jsonl" in line)
+        selector = re.search(r"-run '([^']+)'", bookworm).group(1)
+        for name in native_results.NEW_MEDIA_REQUIRED:
+            self.assertIn(name,native_results.BOOKWORM_REQUIRED)
+            self.assertIsNotNone(re.fullmatch(selector,name))
+        self.assertIsNone(re.fullmatch(selector,"TestWaveformPrivateCacheAccountingAndDeletion"))
+        service = next(line for line in lines if "tee native-service-tests.jsonl" in line)
+        selector = re.search(r"-run '([^']+)'", service).group(1)
+        self.assertIsNone(re.fullmatch(selector,"TestSourceMediaCleanupCoordinated005ReverseAndCompatible006BackupRestore"))
+
     def test_complete_reports_pass(self):
         self.assertEqual(self.run_gate().returncode, 0)
 
@@ -124,7 +155,7 @@ class NativeResultsChecks(unittest.TestCase):
                  "TestStorageScanSessionReadBatchPreservesNonISODateStyle",
                  "TestStorageScanSessionReadBatchLookupFailureRollsBackAndRecovers")
         self.assertEqual(len(native_results.REQUIRED[3]), 45)
-        self.assertEqual(sum(map(len, native_results.REQUIRED)), 79)
+        self.assertEqual(sum(map(len, native_results.REQUIRED)), 107)
         workflow = SCRIPT.parent.parent / ".github" / "workflows" / "ci.yml"
         commands = [line for line in workflow.read_text(encoding="utf-8").splitlines()
                     if "tee native-storage-tests.jsonl" in line]

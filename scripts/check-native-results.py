@@ -9,6 +9,28 @@ ENGINE_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/pkg/engine"
 FS_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
 CLI_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/cmd/cutmy"
 
+NEW_MEDIA_REQUIRED = {
+    "TestWaveformPCMStreamingBoundsAndSplitSamples", "TestWaveformMatchesIndependentAudioTimelineAndOffsets",
+    "TestWaveformSelectsActualAudioTrack", "TestWaveformPreservesAntiphaseStereoActivity",
+    "TestCropRejectsInvalidCoordinatesAndModes", "TestCropResolutionCapIsAppliedAfterSelection",
+    "TestCropFractionalBoundariesStayWithinOneDisplayedPixel",
+    "TestMediaCropDecodedRegionMatchesDisplayedRotationAndSAR", "TestMediaCropRetainsHDRColorAndVariableFrameTiming",
+    "TestPreviewGeometryIgnoresMalformedMetadataAndEnforcesSize", "TestPreviewScalingKeepsExactHeightCapDespiteFloatRounding",
+}
+NEW_SERVICE_REQUIRED = {
+    "TestSourceMediaReaderSaturationHasRetryableDiagnostic", "TestSourceMediaReaderRetentionIsBoundedWithoutCounterQuarantine",
+    "TestExpiredSourceMediaReadersPruneInBoundedUnlockedBatches",
+    "TestWaveformPrivateCacheAccountingAndDeletion", "TestPreviewOriginalDisplayGeometrySurvivesChargedToolFreeCache",
+    "TestSourceMediaCleanupKeepsMetadataJobsArtifactsAndDownloads",
+    "TestSourceMediaCleanupWaitsForReadersPreviewsAndAcceptedJobs",
+    "TestSourceMediaCleanupFailureCancellationAndLegacyKeepSource",
+    "TestSourceMediaCleanupPartialSuccessAndCancellationRaceKeepSource",
+    "TestSourceMediaCleanupRestartTombstoneChargeAndPlatformUnavailable",
+    "TestSourceMediaCleanupJobAdmissionAndCleanupShareFence", "TestSourceMediaCleanupMigrationUpgradeKeepsOldData",
+    "TestSourceMediaCleanupJSONCompatibility", "TestSourceMediaCleanupRecoversPendingRequestAfterReaderCrash",
+    "TestSourceMediaCleanupPreservesEarlierOverlappingFailure",
+}
+
 REQUIRED = [
     {"TestEngineInspectAndExportActualMedia", "TestConcurrentPublicationHasExactlyOneCompleteWinner", "TestCLIInspectAndClipActualMedia", "TestCLIBatchSavedPlanRelativeInputAndJoinedAudio", "TestPlanRoundTripActualOutputsAndPartialPublication"},
     {"TestProcessCancellationTerminatesDescendants", "TestProcessOutputStopsUnboundedProducer"},
@@ -62,6 +84,10 @@ REQUIRED = [
      "TestBatchAudioSelectionSubtitlesAndJoinedTimeline", "TestJoinedRemoteEntryKeepsMediaFormatAndProtocolRestrictions"},
 ]
 
+REQUIRED[0].add("TestParseCrop")
+REQUIRED[2].update(NEW_SERVICE_REQUIRED)
+REQUIRED[4].update(NEW_MEDIA_REQUIRED | {"TestAdvancedCropPlanPublishesActualCroppedOutput"})
+
 REQUIRED_PACKAGES = [
     {ENGINE_PACKAGE, FS_PACKAGE, CLI_PACKAGE},
     {APP_PACKAGE},
@@ -83,6 +109,8 @@ BOOKWORM_REQUIRED = {
     "TestHDRCapabilityFailureKeepsProcessCause", "TestHDRFailurePreservesCancellationAndLimits",
     "TestBatchAudioSelectionSubtitlesAndJoinedTimeline", "TestJoinedRemoteEntryKeepsMediaFormatAndProtocolRestrictions",
 }
+
+BOOKWORM_REQUIRED.update(NEW_MEDIA_REQUIRED)
 
 
 def verify_report(filename, names, packages):
