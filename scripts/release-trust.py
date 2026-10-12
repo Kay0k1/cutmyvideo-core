@@ -43,6 +43,10 @@ PROJECT_LICENSE = 'dbd22263d7218a09000bf90ab07b53de55b246220392696d52e71b4b0b4b1
 SCHEMAS = frozenset({'20261005-storage-queue-v3', '20261010-cache-retention-v1',
                     '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1',
                     '20261011-source-retention-v1', '20261012-source-media-cleanup-v1'})
+# Reviewed archive-gate inventory; changing native scenarios requires a new review.
+NATIVE_GROUP_CHECK_COUNTS = (('archive', 4), ('version', 3), ('cli', 4), ('media', 12),
+                             ('process', 3), ('service', 13), ('deletion', 6))
+NATIVE_UNIX_PROCESS_CHECKS = 2
 
 
 def identifier(kind, value):
@@ -193,9 +197,14 @@ def validate_verdict(verdict, source, manifest, run):
     for n in native:
         row = next(r for r in manifest['archives'] if (r['os'], r['arch']) == (n['os'], n['arch']))
         binary = 'cutmy.exe' if n['os'] == 'windows' else 'cutmy'
+        required_checks = sum(count for _, count in NATIVE_GROUP_CHECK_COUNTS)
+        if n['os'] != 'windows':
+            required_checks += NATIVE_UNIX_PROCESS_CHECKS
         m.require(n['archive'] == {k: row[k] for k in ('name', 'sha256', 'bytes')}
-                  and n['binary_sha256'] == row['contents'][binary]['sha256'] and n['required_groups'] == 7
-                  and n['required_checks'] == (37 if n['os'] == 'windows' else 39) and m.HASH.fullmatch(n['report_sha256']), 'Native verdict receipt differs.')
+                  and n['binary_sha256'] == row['contents'][binary]['sha256']
+                  and type(n['required_groups']) is int and n['required_groups'] == len(NATIVE_GROUP_CHECK_COUNTS)
+                  and type(n['required_checks']) is int and n['required_checks'] == required_checks
+                  and m.HASH.fullmatch(n['report_sha256']), 'Native verdict receipt differs.')
     recovery = verdict.get('linux_archive_recovery', {})
     linux = next(r for r in manifest['archives'] if (r['os'], r['arch']) == ('linux', 'amd64'))
     m.require(recovery.get('required_groups') == 9 and recovery.get('decoded_media_observations') == 11

@@ -17,6 +17,8 @@ t = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(t)
 m = t.m
 ROOT = Path(__file__).resolve().parents[1]
+NATIVE_RECEIPT_COUNTS = {('linux', 'amd64'): 47, ('linux', 'arm64'): 47,
+                         ('darwin', 'amd64'): 47, ('darwin', 'arm64'): 47, ('windows', 'amd64'): 45}
 
 
 class TrustControls(unittest.TestCase):
@@ -45,7 +47,7 @@ class TrustControls(unittest.TestCase):
             manifest_sha256=m.digest(m.canonical(self.manifest)), mode='candidate', publishable=False,
             native=[{'os': a['os'], 'arch': a['arch'], 'archive': {k: a[k] for k in ('name', 'sha256', 'bytes')},
                 'binary_sha256': a['contents']['cutmy.exe' if a['os'] == 'windows' else 'cutmy']['sha256'],
-                'required_groups': 7, 'required_checks': 37 if a['os'] == 'windows' else 39,
+                'required_groups': 7, 'required_checks': NATIVE_RECEIPT_COUNTS[(a['os'], a['arch'])],
                 'report_sha256': 'b' * 64} for a in self.manifest['archives']],
             linux_archive_recovery={'required_groups': 9, 'decoded_media_observations': 11,
                 'schema_versions': ['20261005-storage-queue-v3', '20261010-cache-retention-v1',
@@ -185,6 +187,42 @@ class TrustControls(unittest.TestCase):
                 else:
                     versions.append('20261013-unreviewed-v1')
                 self.reject(t.validate_verdict, changed, self.source, self.manifest, self.run)
+
+    def test_frozen_native_inventory_matches_archive_gate_policy(self):
+        spec = importlib.util.spec_from_file_location('trust_native_policy', ROOT / 'scripts/release-native.py')
+        native = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(native)
+        self.assertEqual(tuple(group for group, _ in t.NATIVE_GROUP_CHECK_COUNTS), native.REQUIRED_GROUPS)
+        for os_, arch in NATIVE_RECEIPT_COUNTS:
+            with self.subTest(os=os_, arch=arch):
+                expected = dict(t.NATIVE_GROUP_CHECK_COUNTS)
+                if os_ != 'windows':
+                    expected['process'] += t.NATIVE_UNIX_PROCESS_CHECKS
+                observed = {group: len(checks) for group, checks in native.required_checks(os_).items()}
+                self.assertEqual(observed, expected)
+                self.assertEqual(sum(observed.values()), NATIVE_RECEIPT_COUNTS[(os_, arch)])
+
+    def test_trust_rejects_old_or_changed_native_group_and_check_counts(self):
+        t.validate_verdict(self.verdict, self.source, self.manifest, self.run)
+        for index, receipt in enumerate(self.verdict['native']):
+            for mutation in ('old', 'missing', 'extra', 'other_platform', 'missing_group', 'extra_group',
+                             'checks_float', 'groups_float'):
+                with self.subTest(os=receipt['os'], arch=receipt['arch'], mutation=mutation):
+                    changed = deepcopy(self.verdict)
+                    native = changed['native'][index]
+                    if mutation == 'old':
+                        native['required_checks'] = 37 if receipt['os'] == 'windows' else 39
+                    elif mutation == 'other_platform':
+                        native['required_checks'] = 47 if receipt['os'] == 'windows' else 45
+                    elif mutation == 'checks_float':
+                        native['required_checks'] = float(native['required_checks'])
+                    elif mutation == 'groups_float':
+                        native['required_groups'] = float(native['required_groups'])
+                    elif mutation in ('missing_group', 'extra_group'):
+                        native['required_groups'] += -1 if mutation == 'missing_group' else 1
+                    else:
+                        native['required_checks'] += -1 if mutation == 'missing' else 1
+                    self.reject(t.validate_verdict, changed, self.source, self.manifest, self.run)
 
     def test_candidate_manual_pr_wrong_ref_or_event_cannot_sign(self):
         self.reject(t.signing_policy, self.source, self.run, 'push', 'refs/tags/' + self.source['version'])
