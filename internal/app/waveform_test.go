@@ -15,9 +15,10 @@ import (
 )
 
 func TestWaveformPCMStreamingBoundsAndSplitSamples(t *testing.T) {
-	p := &pcmPeaks{peaks: make([]float64, 2), maxSamples: 800}
-	data := make([]byte, 1600)
-	for i := 400; i < 800; i++ {
+	bin := waveformSampleRate / 10
+	p := &pcmPeaks{peaks: make([]float64, 2), maxSamples: int64(2 * bin)}
+	data := make([]byte, 4*bin)
+	for i := bin; i < 2*bin; i++ {
 		binary.LittleEndian.PutUint16(data[i*2:], uint16(16384))
 	}
 	for _, part := range [][]byte{data[:1], data[1:799], data[799:]} {
@@ -25,11 +26,54 @@ func TestWaveformPCMStreamingBoundsAndSplitSamples(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if p.samples != 800 || p.hasPending || p.peaks[0] != 0 || p.peaks[1] != .5 {
+	if p.samples != int64(2*bin) || p.hasPending || p.peaks[0] != 0 || p.peaks[1] != .5 {
 		t.Fatalf("incorrect sample bins: %+v", p)
 	}
 	if _, err := p.Write([]byte{0, 0}); err == nil {
 		t.Fatal("unbounded PCM accepted")
+	}
+}
+
+func TestWaveformRetainsAudibleHighFrequencyActivity(t *testing.T) {
+	c := mediaConfig(t)
+	input := filepath.Join(c.DataDir, "audible-8khz.wav")
+	if _, err := runCommand(context.Background(), c.FFmpeg, "-v", "error", "-f", "lavfi", "-i", "sine=frequency=8000:sample_rate=48000:duration=0.5", "-c:a", "pcm_s16le", input); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(c.DataDir, "waveform.json")
+	if err := renderWaveformOptions(context.Background(), c, []mediaInput{{Path: input}}, Range{EndMS: 500}, out, ExportRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	wave := readWaveform(t, out)
+	if len(wave.Peaks) != 5 {
+		t.Fatal("wrong high-frequency bins", wave)
+	}
+	// Independently authored48kHz sine has peak sin(pi/3)/8, never silence.
+	want := math.Sin(math.Pi/3) / 8
+	for i, peak := range wave.Peaks {
+		if math.Abs(peak-want) > .001 {
+			t.Fatalf("audible8kHz bin%d=%f want%f", i, peak, want)
+		}
+	}
+}
+
+func TestWaveformSourceRatePreservesClockAndChannelFrameBins(t *testing.T) {
+	for rate, want := range map[string]int64{"4000": 4000, "11025": 11025, "44100": 44100, "48000": 48000, "192000": 48000, "0": 48000, "invalid": 48000, "1": 1} {
+		if got := waveformRate(&probeStream{SampleRate: rate}); got != want {
+			t.Fatalf("rate%s=%d want%d", rate, got, want)
+		}
+	}
+	//11025Hz has1102.5 samples per100ms. Both channels of frame1102
+	// belong to bin0; frame1103 belongs to bin1 without integer-bin drift.
+	p := &pcmPeaks{peaks: make([]float64, 2), channels: 2, sampleRate: 11025, maxSamples: 2206 * 2}
+	data := make([]byte, 1104*2*2)
+	binary.LittleEndian.PutUint16(data[1102*4+2:], 16384)
+	binary.LittleEndian.PutUint16(data[1103*4:], 8192)
+	if _, err := p.Write(data); err != nil {
+		t.Fatal(err)
+	}
+	if p.peaks[0] != .5 || p.peaks[1] != .25 {
+		t.Fatal("fractional-clock or channel-frame bin mismatch", p.peaks)
 	}
 }
 

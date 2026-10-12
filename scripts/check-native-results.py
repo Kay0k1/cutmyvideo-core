@@ -12,6 +12,7 @@ CLI_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/cmd/cutmy"
 NEW_MEDIA_REQUIRED = {
     "TestWaveformPCMStreamingBoundsAndSplitSamples", "TestWaveformMatchesIndependentAudioTimelineAndOffsets",
     "TestWaveformSelectsActualAudioTrack", "TestWaveformPreservesAntiphaseStereoActivity",
+    "TestWaveformRetainsAudibleHighFrequencyActivity", "TestWaveformSourceRatePreservesClockAndChannelFrameBins",
     "TestCropRejectsInvalidCoordinatesAndModes", "TestCropResolutionCapIsAppliedAfterSelection",
     "TestCropFractionalBoundariesStayWithinOneDisplayedPixel",
     "TestMediaCropDecodedRegionMatchesDisplayedRotationAndSAR", "TestMediaCropRetainsHDRColorAndVariableFrameTiming",

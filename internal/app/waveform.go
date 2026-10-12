@@ -8,10 +8,11 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"strconv"
 )
 
 const waveformStepMS int64 = 100
-const waveformSampleRate = 4000
+const waveformSampleRate = 48000
 const waveformOutputBytes int64 = 64 << 10
 const waveformMaxChannels = 32
 
@@ -38,6 +39,7 @@ type pcmPeaks struct {
 	samples    int64
 	maxSamples int64
 	channels   int64
+	sampleRate int64
 	pending    byte
 	hasPending bool
 }
@@ -54,7 +56,12 @@ func (p *pcmPeaks) Write(data []byte) (int, error) {
 		}
 		value := int16(uint16(p.pending) | uint16(b)<<8)
 		amplitude := math.Abs(float64(value)) / 32768
-		index := p.samples / (max(1, p.channels) * waveformSampleRate * waveformStepMS / 1000)
+		frame := p.samples / max(1, p.channels)
+		rate := p.sampleRate
+		if rate <= 0 {
+			rate = waveformSampleRate
+		}
+		index := frame * 1000 / (rate * waveformStepMS)
 		if index < int64(len(p.peaks)) && amplitude > p.peaks[index] {
 			p.peaks[index] = amplitude
 		}
@@ -62,6 +69,15 @@ func (p *pcmPeaks) Write(data []byte) (int, error) {
 		p.hasPending = false
 	}
 	return length, nil
+}
+
+func waveformRate(stream *probeStream) int64 {
+	if stream != nil {
+		if rate, err := strconv.ParseInt(stream.SampleRate, 10, 32); err == nil && rate > 0 {
+			return min(rate, waveformSampleRate)
+		}
+	}
+	return waveformSampleRate
 }
 
 func renderWaveformOptions(ctx context.Context, c Config, inputs []mediaInput, interval Range, out string, request ExportRequest) error {
@@ -79,6 +95,8 @@ func renderWaveformOptions(ctx context.Context, c Config, inputs []mediaInput, i
 		if channels < 1 || channels > waveformMaxChannels {
 			return errUnsupportedStream
 		}
+		rate := waveformRate(selection.Audio)
+		rateString := strconv.FormatInt(rate, 10)
 		index := selection.Audio.Index
 		data.AudioTrack = &index
 		input := inputs[selection.AudioInput]
@@ -94,10 +112,10 @@ func renderWaveformOptions(ctx context.Context, c Config, inputs []mediaInput, i
 		args = append(args, mediaInputBounds(c)...)
 		args = append(args, "-ss", seconds(interval.StartMS-input.OffsetMS), "-i", input.Path,
 			"-t", seconds(interval.EndMS-interval.StartMS), "-map", fmt.Sprintf("0:%d", index), "-vn", "-sn", "-dn",
-			"-af", "aresample=4000:async=1:first_pts=0", "-ar", "4000", "-threads", "1", "-c:a", "pcm_s16le", "-f", "s16le", "pipe:1")
+			"-af", "aresample="+rateString+":async=1:first_pts=0", "-ar", rateString, "-threads", "1", "-c:a", "pcm_s16le", "-f", "s16le", "pipe:1")
 		// Preserve every selected channel and take its absolute peak. A mono
 		// downmix can cancel antiphase stereo, falsely displaying silence.
-		peaks := &pcmPeaks{peaks: data.Peaks, channels: int64(channels), maxSamples: ((interval.EndMS-interval.StartMS)*waveformSampleRate/1000 + waveformSampleRate/10) * int64(channels)}
+		peaks := &pcmPeaks{peaks: data.Peaks, channels: int64(channels), sampleRate: rate, maxSamples: (((interval.EndMS-interval.StartMS)*rate+999)/1000 + (rate+9)/10) * int64(channels)}
 		if err := runCommandOutput(ctx, c.FFmpeg, args, peaks); err != nil {
 			return err
 		}

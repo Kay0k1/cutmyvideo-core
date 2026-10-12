@@ -41,7 +41,7 @@ REQUIRED_CHECKS = {
     'process': PROCESS_CHECKS,
     'service': ('real_server_and_worker', 'session_upload_exact_bytes', 'preview_miss_and_hit', 'queued_job_completion',
                 'download_decode_geometry_audio', 'ownership_404', 'range_206', 'same_binary_healthchecks',
-                'original_display_preview_metadata', 'waveform_selected_audio_private_cache',
+                'original_display_preview_metadata', 'waveform_selected_audio_private_cache', 'waveform_high_frequency_activity',
                 'cropped_api_download', 'cleanup_preserves_source_metadata_jobs_and_downloads'),
     'deletion': ('acknowledged_source_delete', 'all_routes_404', 'physical_files_absent', 'zero_stored_and_reserved',
                  'zero_ledger_entries', 'no_preview_or_work_media_remaining'),
@@ -802,6 +802,18 @@ class Native:
                 and max(waveform['peaks']) > .05, 'Selected audio waveform lost bounded source-time activity')
         warm_wave, wave_headers = client.request('GET', waveform_url)
         require(wave_headers.get('X-Preview-Cache') == 'hit' and warm_wave == waveform, 'Waveform cache changed selected audio')
+        high_audio = self.work / 'waveform-8khz.wav'
+        self.ff('-f','lavfi','-i','sine=frequency=8000:sample_rate=48000:duration=0.5','-c:a','pcm_s16le',high_audio)
+        high_boundary = 'cutmy-frequency-' + uuid.uuid4().hex
+        high_upload = (f'--{high_boundary}\r\nContent-Disposition: form-data; name="file"; filename="8khz.wav"\r\n'
+            'Content-Type: audio/wav\r\n\r\n').encode()+high_audio.read_bytes()+f'\r\n--{high_boundary}--\r\n'.encode()
+        high_source,_=client.request('POST','/api/v1/uploads',raw=high_upload,
+            headers={'Content-Type':'multipart/form-data; boundary='+high_boundary},expected=201)
+        high_wave,_=client.request('GET','/api/v1/sources/'+high_source['id']+'/waveform?start_ms=0')
+        require(high_wave.get('has_audio') is True and len(high_wave.get('peaks',[]))==5
+            and all(abs(peak-math.sin(math.pi/3)/8)<.001 for peak in high_wave['peaks']),
+            'Audible8kHz audio was drawn as silence')
+        client.request('DELETE','/api/v1/sources/'+high_source['id'],expected=204)
         preview_path = self.work / 'preview.mp4'
         preview_path.write_bytes(preview)
         self.decode(preview_path)
@@ -872,7 +884,7 @@ class Native:
         self.media_root = media
         return ['real_server_and_worker', 'session_upload_exact_bytes', 'preview_miss_and_hit', 'queued_job_completion',
                 'download_decode_geometry_audio', 'ownership_404', 'range_206', 'same_binary_healthchecks',
-                'original_display_preview_metadata', 'waveform_selected_audio_private_cache',
+                'original_display_preview_metadata', 'waveform_selected_audio_private_cache', 'waveform_high_frequency_activity',
                 'cropped_api_download', 'cleanup_preserves_source_metadata_jobs_and_downloads'], {
                     'source_geometry': [source['width'], source['height']], 'preview_sha256': file_hash(preview_path),
                     'output_sha256': file_hash(path), 'output_bytes': len(output), 'processes': self.service_records}
