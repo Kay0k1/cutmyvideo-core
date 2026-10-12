@@ -417,3 +417,21 @@ func TestSourceMediaCleanupRecoversPendingRequestAfterReaderCrash(t *testing.T) 
 	}
 	assertCleanupSource(t, s, source, true)
 }
+
+func TestSourceMediaCleanupPreservesEarlierOverlappingFailure(t *testing.T) {
+	s, c, source := sourceCleanupFixture(t)
+	earlier, earlierToken := cleanupJob(t, s, source, false)
+	requested, token := cleanupJob(t, s, source, true)
+	finishCleanupJob(t, s, c, earlier, earlierToken, "failed")
+	finishCleanupJob(t, s, c, requested, token, "succeeded")
+	if err := s.ProcessSourceMediaCleanup(context.Background(), c); err != nil {
+		t.Fatal(err)
+	}
+	assertCleanupSource(t, s, source, false)
+	retry, retryToken := cleanupJob(t, s, source, true)
+	finishCleanupJob(t, s, c, retry, retryToken, "succeeded")
+	if err := s.ProcessSourceMediaCleanup(context.Background(), c); err != nil {
+		t.Fatal(err)
+	}
+	assertCleanupSource(t, s, source, true)
+}

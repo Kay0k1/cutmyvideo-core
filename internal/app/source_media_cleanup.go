@@ -34,7 +34,7 @@ func checkSourceMedia(ctx context.Context, db dbExecutor, id, owner string) erro
 // jobs permanently prevent cleanup after a successful retry.
 func requestSourceMediaCleanup(ctx context.Context, tx pgx.Tx, jobID string) error {
 	_, err := tx.Exec(ctx, `INSERT INTO source_media_cleanup(source_id,successful_job_id,protected_job_ids)
- SELECT j.source_id,j.id,ARRAY(SELECT other.id FROM jobs other WHERE other.source_id=j.source_id AND (other.created_at>=j.created_at OR other.status IN ('queued','running','waiting_storage')))
+ SELECT j.source_id,j.id,ARRAY(SELECT other.id FROM jobs other WHERE other.source_id=j.source_id AND (other.created_at>=j.created_at OR other.updated_at>=j.created_at OR other.status IN ('queued','running','waiting_storage')))
  FROM jobs j JOIN sources source ON source.id=j.source_id
  WHERE j.id=$1 AND j.status='succeeded' AND NOT j.cancel_requested AND NOT source.media_removed
  AND j.request->'cleanup_source'='true'::jsonb
