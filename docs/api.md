@@ -31,6 +31,7 @@ for ordinary database failures. Readiness retains `503 not_ready`.
 | GET | `/sources/{id}/media` | Authorized source bytes; Range supported |
 | GET | `/sources/{id}/preview?start_ms=…` | Aligned 30-second H.264/AAC MP4 window, no-store; source time in X-Preview-Start-MS / X-Preview-End-MS; X-Preview-Cache is hit/miss; optional priority=background yields rendering capacity to foreground seeks |
 | GET | `/sources/{id}/storyboard?start_ms=…` | Private 960×90 JPEG search strip for the aligned 30-second window; six 160×90 cells sampled every 5 seconds; X-Storyboard-Frames gives used cells and X-Storyboard-Step-MS is 5000; same interval/cache headers, source cleanup and shared cache bounds as previews; always background admission |
+| GET | `/sources/{id}/waveform?start_ms=…` | Private aligned 30-second selected-audio peaks, one per 100 ms; source timestamps, at most 300 peaks and less than 64 KiB; always background admission and bounded preview cache |
 | GET | `/sources/{id}/thumbnail` | Authorized, inspected PNG/JPEG; Range supported |
 | POST | `/jobs` | Job, HTTP 202 |
 | GET | `/jobs` | `{jobs:[JobSummary...]}`; up to 30 owned exports, active jobs first |
@@ -64,6 +65,7 @@ and headers are never returned to clients.
 |---|---|
 | `expires_at` | Nullable RFC3339 retention target; null while linked jobs pin the source |
 | `retention_blocked` | Whether retained jobs currently protect this source |
+| `media_removed` | Optional true after successful-export cleanup; metadata and retained outputs survive, but original media/analysis and new exports return `410 source_removed` |
 | `provider` | `upload`, `direct`, `generic`, or one of the [15 recognized providers](providers.md) |
 | `provider_video_id` | Actual extractor video identity, or null; Twitch VOD IDs may start with `v` |
 | `source_url` | Platform page URL only; null for uploaded/direct files; never an extracted CDN URL |
@@ -98,7 +100,31 @@ most one playable video and one audio stream: default audio, otherwise first
 audio. MP3 exports the selected audio only. HTTP source `width`/`height` remain
 persisted coded dimensions
 for local files and provider format metadata for platforms. Only fresh SDK/CLI
-inspection exposes additive display dimensions; metadata reads do not re-probe.
+inspection and the fresh local `/tracks` response expose additive display dimensions; metadata reads do not re-probe. Preview headers `X-Source-Display-Width` and `X-Source-Display-Height` describe the upright original before preview scaling, including cache hits.
+
+Optional `crop: {x,y,width,height}` uses normalized upright square-pixel display
+coordinates. It requires accurate MP4, a rectangle inside the image and at least
+two displayed pixels per dimension. Crop runs before the normal resolution cap;
+both edges round to the nearest even pixel boundary by at most one displayed pixel.
+Other modes fail explicitly instead of silently discarding the crop.
+
+Optional `cleanup_source: true` requests removal of the original file, thumbnail,
+preview caches and preparation workspaces after the entire export succeeds and
+accepted concurrent operations settle. Omission/false retains legacy behavior.
+A concurrent failed/cancelled export cancels that cleanup request. Renewable
+reader leases protect in-flight media responses; physical deletion remains
+charged and retryable until durable completion. Source metadata, jobs and ready
+artifacts retain their own existing retention deadlines; cleanup does not delete
+them or extend their lifetime. Explicit `DELETE /sources/{id}` still removes all
+terminal outputs. This API policy is distinct from the website's default-on
+cleanup checkbox.
+
+Waveform JSON is `{start_ms,end_ms,step_ms:100,has_audio,audio_track?,peaks}`.
+`start_ms` is aligned down to 30 seconds and `end_ms` is bounded by the source
+end. Peak values are finite numbers in `[0,1]`; silent sources use zeros and
+`has_audio:false`. Audio selection matches export/preview: optional absolute
+`audio_track` or `no_audio:true`, never both. It shares background admission,
+owner authorization, no-store delivery and quota/expiry with preview windows.
 
 The source URL is bounded to 8192 UTF-8 bytes both before and after normalization;
 normalization can percent-encode Unicode and expand its byte size. An idempotency

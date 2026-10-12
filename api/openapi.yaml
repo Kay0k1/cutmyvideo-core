@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
   title: cutmyvideo-core HTTP API
-  version: 0.1.0
+  version: 1.2.0
   description: >-
-    Manual media selection and asynchronous separate-fragment export. Clients
+    Manual media selection and asynchronous separate or joined export. Clients
     must ignore unknown response fields and accept unknown additive error codes
     with a generic fallback. Human messages are not stable identifiers.
 servers:
@@ -230,6 +230,44 @@ paths:
         '304': {description: Authorized storyboard is unchanged; empty response body}
         '412': {description: A request precondition failed; empty response body}
         '416': {$ref: '#/components/responses/RangeError'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/sources/{id}/waveform:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    get:
+      description: Owner-protected peaks for an aligned 30-second source window. One absolute peak per 100 ms across every channel of the selected audio track; silent sources return zero peaks with has_audio false. Source timestamps remain global when a remote interval is staged. Always background admission in the shared preview pool, with the same bounded private cache, cancellation and cleanup. No whole-recording decode is started. Removed originals return 410 source_removed.
+      parameters:
+        - in: query
+          name: start_ms
+          required: true
+          schema: {type: integer, minimum: 0}
+        - in: query
+          name: audio_track
+          schema: {type: integer, minimum: 0}
+          description: Absolute audio stream index for staged local media; omission uses default audio, otherwise the first audio stream.
+        - in: query
+          name: no_audio
+          schema: {type: boolean}
+          description: true returns silence; cannot be combined with audio_track.
+        - in: query
+          name: priority
+          schema: {type: string, examples: [background]}
+          description: Accepted for consistency; waveforms always use background admission.
+      responses:
+        '200':
+          description: Bounded JSON waveform, less than 64 KiB; private no-store response
+          headers:
+            X-Preview-Cache: {$ref: '#/components/headers/PreviewCache'}
+            X-Preview-Start-MS: {$ref: '#/components/headers/PreviewStart'}
+            X-Preview-End-MS: {$ref: '#/components/headers/PreviewEnd'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Waveform'}
+        '206': {description: Requested waveform byte range}
+        '304': {description: Authorized waveform is unchanged; empty body}
+        '410': {$ref: '#/components/responses/Error'}
+        '412': {description: Failed precondition; empty body}
+        '416': {$ref: '#/components/responses/RangeError'}
+        '503': {$ref: '#/components/responses/StorageUnavailable'}
         default: {$ref: '#/components/responses/Error'}
   /api/v1/sources/{id}/thumbnail:
     parameters: [{$ref: '#/components/parameters/ID'}]
@@ -472,6 +510,19 @@ components:
         start_ms: {type: integer, minimum: 0}
         end_ms: {type: integer, minimum: 1}
         label: {type: string, x-maxBytes: 200, x-trimSpace: true, description: Optional label; maximum 200 UTF-8 bytes after trimming Unicode whitespace}
+    Waveform:
+      type: object
+      required: [start_ms, end_ms, step_ms, has_audio, peaks]
+      properties:
+        start_ms: {type: integer, minimum: 0, description: Aligned source timeline start}
+        end_ms: {type: integer, minimum: 1, description: Source end or start plus 30000 ms}
+        step_ms: {type: integer, const: 100}
+        has_audio: {type: boolean}
+        audio_track: {type: integer, minimum: 0}
+        peaks:
+          type: array
+          maxItems: 300
+          items: {type: number, minimum: 0, maximum: 1}
     Crop:
       type: object
       additionalProperties: false
