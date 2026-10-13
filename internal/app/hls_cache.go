@@ -140,7 +140,42 @@ func (c *hlsDownloadCache) remember(key, path string) {
 	c.bytes += info.Size()
 }
 
-func fetchHLSPayload(ctx context.Context, guard *networkGuard, format platformFormat, raw string, output *os.File, downloaded *atomic.Int64, limit int64) error {
+// A payload becomes immutable only after its writer has closed successfully.
+// Windows may finalize its last-write timestamp at close, and a cache identity
+// captured sooner would immediately invalidate an otherwise reusable file.
+func fetchHLSPayload(ctx context.Context, guard *networkGuard, format platformFormat, raw, path string, downloaded *atomic.Int64, limit int64) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	output, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	keep := false
+	defer func() {
+		if !keep {
+			_ = os.Remove(path)
+		}
+	}()
+	err = writeHLSPayload(ctx, guard, format, raw, output, downloaded, limit)
+	closeErr := output.Close()
+	if err != nil {
+		return err
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	if cache, _ := ctx.Value(hlsDownloadCacheKey{}).(*hlsDownloadCache); cache != nil {
+		cache.remember(hlsPayloadKey(raw, format), path)
+	}
+	keep = true
+	return nil
+}
+
+func writeHLSPayload(ctx context.Context, guard *networkGuard, format platformFormat, raw string, output *os.File, downloaded *atomic.Int64, limit int64) error {
 	cache, _ := ctx.Value(hlsDownloadCacheKey{}).(*hlsDownloadCache)
 	writer := &stagingWriter{writer: output, downloaded: downloaded, limit: limit}
 	if cache == nil {
@@ -159,26 +194,20 @@ func fetchHLSPayload(ctx context.Context, guard *networkGuard, format platformFo
 		_, err = io.Copy(writer, contextReadSeeker{context: ctx, ReadSeeker: file})
 		return err
 	}
-	if err := guard.fetch(ctx, raw, format.Headers, writer, limit); err != nil {
-		return err
-	}
-	cache.remember(key, output.Name())
-	return nil
+	return guard.fetch(ctx, raw, format.Headers, writer, limit)
 }
 
 func appendHLSInitialization(ctx context.Context, guard *networkGuard, format platformFormat, raw, dir string, stream int, output *os.File, downloaded *atomic.Int64, limit int64) error {
 	path := filepath.Join(dir, fmt.Sprintf("map-%d.part", stream))
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+	if err := fetchHLSPayload(ctx, guard, format, raw, path, downloaded, limit); err != nil {
+		return err
+	}
+	defer os.Remove(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = file.Close(); _ = os.Remove(path) }()
-	if err = fetchHLSPayload(ctx, guard, format, raw, file, downloaded, limit); err != nil {
-		return err
-	}
-	if _, err = file.Seek(0, io.SeekStart); err != nil {
-		return err
-	}
+	defer file.Close()
 	// Initialization bytes have their own immutable inode. Linking the mutable
 	// concatenation output would let later segments corrupt the cached map and
 	// exceed its recorded allowance.

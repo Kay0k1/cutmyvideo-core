@@ -27,7 +27,7 @@ func TestCopyJoinAudioPacketCopyPreservesClocks(t *testing.T) {
 
 func testCopyJoinAudioMatrix(t *testing.T, unconditional bool) {
 	c := mediaConfig(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	base, delayed := filepath.Join(c.DataDir, "base.mp4"), filepath.Join(c.DataDir, "delayed.mp4")
 	for _, fixture := range []struct {
@@ -95,10 +95,13 @@ func testCopyJoinAudioMatrix(t *testing.T, unconditional bool) {
 	fallbackConfig := c
 	fallbackCommands := countMediaCommands(t, &fallbackConfig)
 	fallbackCommandCount := 0
+	cancel()
 	for inputIndex, fixture := range fixtures {
 		for _, format := range []string{"mp4", "mkv"} {
 			for _, requested := range []int64{0, 100, 3500} {
 				t.Run(fmt.Sprintf("%s-%s-start%d", fixture.name, format, requested), func(t *testing.T) {
+					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+					defer cancel()
 					inputs := fixture.inputs
 					request := ExportRequest{Format: format, Quality: "best", CutMode: "copy"}
 					if fixture.refIndex == 2 {

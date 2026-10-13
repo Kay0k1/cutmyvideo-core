@@ -513,14 +513,7 @@ func fetchHLSSegments(ctx context.Context, g *networkGuard, format platformForma
 					if !ok {
 						return
 					}
-					file, err := os.OpenFile(job.path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-					if err == nil {
-						err = fetchHLSPayload(fetchCtx, g, format, segments[job.index].URL, file, downloaded, limit)
-						closeErr := file.Close()
-						if err == nil {
-							err = closeErr
-						}
-					}
+					err := fetchHLSPayload(fetchCtx, g, format, segments[job.index].URL, job.path, downloaded, limit)
 					select {
 					case results <- completion{job.index, err}:
 					case <-fetchCtx.Done():

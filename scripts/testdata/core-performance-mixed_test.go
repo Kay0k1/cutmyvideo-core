@@ -252,6 +252,7 @@ func TestCorePerformanceMixedPipelineObservation(t *testing.T) {
 	count, maxClaimed := 0, 0
 	var outputs []map[string]any
 	finished := make([]int64, 4)
+	polls := make([]int, 4)
 	for count < 4 {
 		if ctx.Err() != nil {
 			t.Fatal("mixed witness deadline", ctx.Err())
@@ -269,8 +270,15 @@ func TestCorePerformanceMixedPipelineObservation(t *testing.T) {
 				continue
 			}
 			data, status, err := request(clients[owner], http.MethodGet, "/api/v1/jobs/"+jobs[owner].ID, nil, "")
+			polls[owner]++
 			if err != nil || status != 200 {
-				t.Fatal("poll", status, err)
+				var failure struct {
+					Error struct {
+						Code string `json:"code"`
+					} `json:"error"`
+				}
+				_ = json.Unmarshal(data, &failure)
+				t.Fatal("poll", status, "code", failure.Error.Code, "error", err)
 			}
 			var job Job
 			if err := json.Unmarshal(data, &job); err != nil {
@@ -313,7 +321,7 @@ func TestCorePerformanceMixedPipelineObservation(t *testing.T) {
 			select {
 			case <-ctx.Done():
 				t.Fatal(ctx.Err())
-			case <-time.After(20 * time.Millisecond):
+			case <-time.After(500 * time.Millisecond):
 			}
 		}
 	}
@@ -337,7 +345,7 @@ func TestCorePerformanceMixedPipelineObservation(t *testing.T) {
 			}
 		}
 	}
-	report := map[string]any{"outputs": ordered, "preparation": preparation, "burst_start_ns": burst.UnixNano(), "burst_end_ns": end.UnixNano(), "burst_seconds": end.Sub(burst).Seconds(), "jobs_per_minute": 4 * 60 / end.Sub(burst).Seconds(), "accepted_ns": accepted, "all_downloads_ns": finished, "max_observed_claimed": maxClaimed, "reserved_bytes_at_stop": reserved, "network": network, "scope": "Supplemental in-process HTTP API and worker with independent Stores/pools; fixed HTTPS fixture transport and extractor JSON adapter, not public network or process-isolated production throughput."}
+	report := map[string]any{"outputs": ordered, "preparation": preparation, "burst_start_ns": burst.UnixNano(), "burst_end_ns": end.UnixNano(), "burst_seconds": end.Sub(burst).Seconds(), "jobs_per_minute": 4 * 60 / end.Sub(burst).Seconds(), "accepted_ns": accepted, "all_downloads_ns": finished, "poll_interval_ms": 500, "poll_requests_per_owner": polls, "max_observed_claimed": maxClaimed, "reserved_bytes_at_stop": reserved, "network": network, "scope": "Supplemental in-process HTTP API and worker with independent Stores/pools; fixed HTTPS fixture transport and extractor JSON adapter, not public network or process-isolated production throughput. Burst completion includes up to 500ms client polling quantization; native tool/network intervals distinguish actual work."}
 	data, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		t.Fatal(err)

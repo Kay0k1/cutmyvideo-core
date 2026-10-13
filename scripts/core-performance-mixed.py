@@ -37,11 +37,11 @@ def register(args):
                                'local_ranges_ms': [[2400, 8400], [14200, 20200]],
                                'local_fixture': frozen['fixtures']['complex'], 'hls_fixture': frozen['fixtures']['hls'],
                                'latency_ms_per_request': 250, 'profile': 'accurate-mp4 separate',
-                               'poll_ms': 20, 'outputs': 12,
+                               'poll_ms': 500, 'outputs': 12,
                                'storage': '2 GiB global / 512 MiB owner / 64 MiB filesystem safety / 128 MiB source+network / 64 MiB output'},
                   'cohorts': {'baseline_p0_references': 3, 'candidate_p0_p1_pairs': 5,
                               'ordering': 'baseline P0 references first; then P0/P1, P1/P0, P0/P1, P1/P0, P0/P1',
-                              'operations': 13},
+                              'operations': 13, 'optional_functional_baseline_smoke_operations': 1},
                   'oracles': ['Independent full-output probe/decode and exact packet-clock/content fingerprints against baseline reference.',
                               'Every run: at most two overlapping actual FFmpeg/FFprobe process intervals; no command arguments retained.',
                               'Candidate P1: local FFmpeg input interval overlaps a remote HTTPS wait by at least 50 ms in every run.',
@@ -50,7 +50,10 @@ def register(args):
                   'adapters': {'network': 'Replace constructor client: safeClient() with the fixed fixture client; retain guarded URI validation, budgets, HLS staging and exports.',
                                'metadata': 'Rename original platformMetadata and supply fixed validated platformInfo decoded from registered JSON for exactly two known page URLs.',
                                'config': 'Baseline rejects P1 and keeps P0; candidate changes only WorkerPreparationConcurrency to 0/1.'},
-                  'timing': 'Coordinator idle window only. Primary worker-start to all downloaded outputs excludes imports/uploads/queued admission. Outer process resources include setup, schema cleanup and Go wrapper overhead. No production throughput claim.'}
+                  'timing': 'Coordinator idle window only. Primary worker-start to all downloaded outputs excludes imports/uploads/queued admission and includes 500ms client completion-poll quantization. Actual tool/network intervals distinguish work/overlap from polling. Outer process resources include setup, schema cleanup and Go wrapper overhead. An optional --baseline-smoke runs one functional baseline operation only; it is not an A/B performance result. No production throughput claim.'}
+    if args.supersedes:
+        supplement['amendment'] = {'supersedes': perf.metadata(args.supersedes),
+                                  'reason': 'Preserved first baseline pilot failed because 20ms detail polling exhausted unchanged 180 requests/minute owner quota, then t.Fatal canceled running exports. Only helper polling changes to 500ms; quotas, jobs, fixtures, pairs and semantic oracles unchanged. The optional baseline-only functional smoke precedes final receipts/paired timing.'}
     perf.write_json(args.output, supplement, exclusive=True)
     args.output.with_suffix('.sha256').write_text(perf.sha256(args.output) + '\n')
     print(json.dumps({'supplement': str(args.output), 'sha256': perf.sha256(args.output)}))
@@ -161,10 +164,11 @@ def run(args):
                         'supplement_sha256': perf.sha256(args.supplement), 'provenance': perf.metadata(args.provenance),
                         'runner': perf.metadata(__file__), 'measurement_harness': perf.metadata(ROOT / 'core-performance.py'),
                         'idle_window': args.idle_window, 'utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                        'scope': supplement['scope']}, exclusive=True)
-        cohorts = [('baseline', 0, index) for index in range(3)]
-        for pair in range(5):
-            cohorts += [('candidate', preparation, pair) for preparation in ((0, 1) if pair % 2 == 0 else (1, 0))]
+                        'scope': supplement['scope'], 'baseline_functional_smoke_only': args.baseline_smoke}, exclusive=True)
+        cohorts = [('baseline', 0, 0)] if args.baseline_smoke else [('baseline', 0, index) for index in range(3)]
+        if not args.baseline_smoke:
+            for pair in range(5):
+                cohorts += [('candidate', preparation, pair) for preparation in ((0, 1) if pair % 2 == 0 else (1, 0))]
         records, reference = [], None
         for side, preparation, pair in cohorts:
             perf.ensure_space(root, 512 << 20)
@@ -189,7 +193,11 @@ def run(args):
                                 'CUTMY_CORE_PERF_IDLE_WINDOW': args.idle_window})
             invocation = [receipt['products'][side]['path'], '-test.run=^TestCorePerformanceMixedPipelineObservation$',
                           '-test.count=1', '-test.timeout=170s']
-            metrics = perf.measured_process(invocation, environment, case)
+            try:
+                metrics = perf.measured_process(invocation, environment, case)
+            except RuntimeError as error:
+                raise RuntimeError(f'{error}\nPreserved mixed witness stdout: '
+                                   + (case / 'stdout.txt').read_text()[-3000:]) from error
             payload = json.loads((case / 'mixed-result.json').read_text())
             if len(payload['outputs']) != 12:
                 raise RuntimeError('Mixed witness lost an admitted output')
@@ -203,10 +211,12 @@ def run(args):
                 perf.compare_fingerprints(reference, outputs)
             record = {'side': side, 'preparation': preparation, 'pair': pair, **metrics,
                       'burst_seconds': payload['burst_seconds'], 'jobs_per_minute': payload['jobs_per_minute'],
-                      'proof': proof, 'outputs': outputs, 'case_path': str(case), 'verified_media_deleted': False}
+                      'proof': proof, 'outputs': outputs, 'case_path': str(case), 'verified_media_deleted': False,
+                      'poll_interval_ms': payload['poll_interval_ms'],
+                      'poll_requests_per_owner': payload['poll_requests_per_owner']}
             records.append(record)
             perf.write_json(case / 'metrics.json', record, exclusive=True)
-            if len(records) > 1:
+            if len(records) > 1 or args.baseline_smoke:
                 for prior in records:
                     if not prior['verified_media_deleted']:
                         shutil.rmtree(Path(prior['case_path']) / 'media')
@@ -215,15 +225,19 @@ def run(args):
             perf.write_json(root / 'raw-results.json', records)
             print(json.dumps({key: record[key] for key in ('side', 'preparation', 'pair', 'burst_seconds')}), flush=True)
         summary = {'operations': len(records), 'verified': True,
-                   'scope': supplement['scope'], 'cohorts': {}}
+                   'scope': supplement['scope'], 'baseline_functional_smoke_only': args.baseline_smoke,
+                   'poll_interval_ms': 500, 'cohorts': {}}
         for side, preparation in [('baseline', 0), ('candidate', 0), ('candidate', 1)]:
             selected = [r for r in records if r['side'] == side and r['preparation'] == preparation]
+            if not selected:
+                continue
             summary['cohorts'][f'{side}-P{preparation}'] = {'operations': len(selected),
                 'median_burst_seconds': statistics.median(r['burst_seconds'] for r in selected),
                 'max_actual_tools': max(r['proof']['actual_tool_peak_overlap'] for r in selected),
                 'min_observed_overlap_seconds': min(r['proof']['maximum_local_export_network_wait_overlap_seconds'] for r in selected)}
-        summary['paired_candidate_P0_over_P1'] = [next(r['burst_seconds'] for r in records if r['side'] == 'candidate' and r['preparation'] == 0 and r['pair'] == pair) /
-                                                   next(r['burst_seconds'] for r in records if r['side'] == 'candidate' and r['preparation'] == 1 and r['pair'] == pair) for pair in range(5)]
+        if not args.baseline_smoke:
+            summary['paired_candidate_P0_over_P1'] = [next(r['burst_seconds'] for r in records if r['side'] == 'candidate' and r['preparation'] == 0 and r['pair'] == pair) /
+                                                       next(r['burst_seconds'] for r in records if r['side'] == 'candidate' and r['preparation'] == 1 and r['pair'] == pair) for pair in range(5)]
         perf.write_json(root / 'summary.json', summary, exclusive=True)
         print(json.dumps(summary))
 
@@ -237,12 +251,15 @@ def main():
         sub.add_argument('--output', type=Path, required=True)
         if action != 'register':
             sub.add_argument('--supplement', type=Path, required=True)
+        if action == 'register':
+            sub.add_argument('--supersedes', type=Path)
         if action == 'build':
             sub.add_argument('--baseline-root', type=Path, required=True)
             sub.add_argument('--candidate-root', type=Path, required=True)
         if action == 'run':
             sub.add_argument('--provenance', type=Path, required=True)
             sub.add_argument('--idle-window', required=True)
+            sub.add_argument('--baseline-smoke', action='store_true', help='One functional baseline operation only; no A/B claim')
     args = parser.parse_args()
     {'register': register, 'build': build, 'run': run}[args.action](args)
 

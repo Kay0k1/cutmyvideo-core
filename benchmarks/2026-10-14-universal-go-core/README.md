@@ -27,19 +27,44 @@ A universal contiguous decode across distant cuts is rejected. On the registered
 bounding continuous region covers 3531.1 seconds. A separate diagnostic measured
 0.182 versus 6.074 seconds wall time and 0.300 versus 12.786 seconds CPU. These
 are stage observations, with different output semantics, not equivalent complete
-exports. Close-only shared decoding remains a future adaptive planner candidate;
-exact repeat reuse is implemented without changing the decode plan for gaps.
+exports. A second, output-equivalent two-cut prototype passed complete byte identity,
+raw video/PCM hashes, PTS and duration checks. On three alternating pairs,
+ordinary total encode time fell 107.89→92.56 ms and 1080p60 fell
+1.03946→0.96827 s. Complex-input CPU fell 3.67%, while peak process RSS rose
+121.07→174.42 MB (44.1%). The first-output process-complete bound worsened
+485.03→968.27 ms; it excludes inspection, publication and download. The shared
+process uses two simultaneous encoders, requiring revised memory/thread
+admission and portable publication semantics. The current planner therefore
+retains separate exports; this is a measured future opportunity, not evidence
+that close sharing has no benefit. Exact repeat reuse is implemented.
 
 The first one-pass copy-audio experiment used an output seek and lost complete
-B-frame GOPs. That experiment is rejected. A packet-trimming variant is being
-checked against the original staged path, including production-family FFmpeg
-5.1.9, intentional delays, selected tracks, dual inputs, large offsets and
+B-frame GOPs. That experiment is rejected. The guarded packet-trimming variant passed host/production-family FFmpeg 5.1.9
+checks for intentional delays, selected tracks, dual inputs, large offsets and
 unknown presentation timestamps. Matching packet payloads alone does not prove
-correct audible timing; Opus/Matroska requires an explicit safe fallback unless
-its delay matches the reference.
+correct audible timing. Opus/Matroska keeps the original staged path: on 5.1.9
+both versions retain a pre-existing 13 ms source-relative offset, with exact
+candidate/baseline packet and decoded-clock equality. Optimized combinations
+retain the source-relative 1 ms gate.
 
 A smaller copy reservation is not inferred from source file size plus an
 arbitrary mux-overhead allowance. Likewise, packet copy retains conservative
 decoder weights while its composite verification/subtitle path can decode.
 Storage lock redesign depends on measured wait/hold time; durability fences are
 not removed on the basis of query counts.
+
+## Isolated Go costs
+
+Five alternating process pairs, each with five internal 100 ms benchmark
+repeats, compare the same observation helper on Go 1.27.2. Median process
+medians: 32 MiB PCM peaks 66.42→13.78 ms (79.3% less), with identical peaks and
+unchanged 16 KiB allocation. Clipping 10,000 already-parsed subtitle cues across
+32 cuts took 321.08→80.67 µs (74.9% less), with identical text; allocation rose
+22,449→104,373 bytes because of the overlap index. These exclude decoding,
+subtitle parsing, extraction and publication and are not full-export timings.
+
+The full check suite passed, including package race tests (app 275.310 s),
+HTTP/OpenAPI contracts, release/hosting controls, workflow checks and vulnerability
+scanning. A final metadata-only fencing delta passed focused race tests and vet;
+all final native-gate negative controls also passed. The full paired corpus and
+native CI remain in progress.

@@ -31,12 +31,7 @@ func TestHLSJobCacheReusesBytesButKeepsIntervalAndNetworkBudgets(t *testing.T) {
 	}
 	defer closeCache()
 	fetch := func(name string, format platformFormat, downloaded *atomic.Int64, limit int64) error {
-		file, err := os.Create(filepath.Join(work, name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer file.Close()
-		return fetchHLSPayload(ctx, guard, format, "https://media.example/segment", file, downloaded, limit)
+		return fetchHLSPayload(ctx, guard, format, "https://media.example/segment", filepath.Join(work, name), downloaded, limit)
 	}
 	var bytes atomic.Int64
 	if err := fetch("first", platformFormat{}, &bytes, 16); err != nil {
@@ -64,6 +59,47 @@ func TestHLSJobCacheReusesBytesButKeepsIntervalAndNetworkBudgets(t *testing.T) {
 	if requests.Load() != 2 {
 		t.Fatal("cache reused payload with different accepted headers")
 	}
+	t.Run("closed-payload-still-checks-modification-time", func(t *testing.T) {
+		cache := ctx.Value(hlsDownloadCacheKey{}).(*hlsDownloadCache)
+		key := hlsPayloadKey("https://media.example/segment", platformFormat{})
+		entry := cache.entries[key]
+		if entry == nil {
+			t.Fatal("completed payload was not cached after close")
+		}
+		changed := entry.file.ModTime().Add(-time.Hour)
+		if err := os.Chtimes(entry.path, changed, changed); err != nil {
+			t.Fatal(err)
+		}
+		file, release := cache.open(key)
+		if file != nil {
+			release()
+			t.Fatal("same-size cached payload bypassed modification-time validation")
+		}
+		if cache.bytes != 4 || len(cache.entries) != 1 {
+			t.Fatal("invalid cache entry retained its charge", cache.bytes, len(cache.entries))
+		}
+		var retried atomic.Int64
+		for _, name := range []string{"after-mutation", "after-mutation-cached"} {
+			if err := fetch(name, platformFormat{}, &retried, 16); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if requests.Load() != 3 || guard.bytes.Load() != 12 || retried.Load() != 8 {
+			t.Fatal("changed payload was not replaced by one reusable closed download", requests.Load(), guard.bytes.Load(), retried.Load())
+		}
+		canceled, cancel := context.WithCancel(ctx)
+		cancel()
+		path := filepath.Join(work, "canceled-cache-hit")
+		if err := fetchHLSPayload(canceled, guard, platformFormat{}, "https://media.example/segment", path, &retried, 16); !errors.Is(err, context.Canceled) {
+			t.Fatal("canceled cache read did not preserve cancellation", err)
+		}
+		if requests.Load() != 3 || guard.bytes.Load() != 12 || retried.Load() != 8 {
+			t.Fatal("canceled cache hit performed transfer or staging")
+		}
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatal("canceled cache hit created a destination", err)
+		}
+	})
 }
 
 func TestHLSInitializationCacheHasImmutableMapAndBoundedPinnedEntries(t *testing.T) {
@@ -120,6 +156,31 @@ func TestHLSInitializationCacheHasImmutableMapAndBoundedPinnedEntries(t *testing
 	if _, ok := cache.entries[key]; !ok {
 		t.Fatal("pinned entry removed")
 	}
+	t.Run("preexisting-map-is-not-owned-by-failed-download", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "map-0.part")
+		if err := os.WriteFile(path, []byte("sentinel"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		output, err := os.Create(filepath.Join(dir, "output"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer output.Close()
+		beforeRequests, beforeNetwork := requests.Load(), guard.bytes.Load()
+		var downloaded atomic.Int64
+		err = appendHLSInitialization(ctx, guard, platformFormat{}, "https://media.example/init", dir, 0, output, &downloaded, 16)
+		if !errors.Is(err, os.ErrExist) {
+			t.Fatal("preexisting map was not rejected by exclusive creation", err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil || string(data) != "sentinel" {
+			t.Fatal("failed download removed or changed an unowned map", string(data), err)
+		}
+		if requests.Load() != beforeRequests || guard.bytes.Load() != beforeNetwork || downloaded.Load() != 0 {
+			t.Fatal("preexisting map rejection performed a transfer")
+		}
+	})
 }
 
 func TestHLSJobCacheDisabledForSmallStores(t *testing.T) {
