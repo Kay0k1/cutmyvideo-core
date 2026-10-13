@@ -181,6 +181,8 @@ func (e *Engine) ExportWithOptions(ctx context.Context, input, output string, r 
 	if err != nil {
 		return AdvancedResult{}, err
 	}
+	ctx, session := app.BeginLocalExport(ctx, input)
+	defer session.Close()
 	s, err := e.InspectWithTracks(ctx, input)
 	if err != nil {
 		return AdvancedResult{}, err
@@ -212,6 +214,7 @@ func (e *Engine) ExportWithOptions(ctx context.Context, input, output string, r 
 		return AdvancedResult{}, fmt.Errorf("%w: create output workspace: %w", fsdurable.ErrPublicationFailed, err)
 	}
 	defer os.RemoveAll(dir)
+	session.SetWorkspace(dir)
 	if err = e.preflight(dir, filepath.Dir(output)); err != nil {
 		return AdvancedResult{}, err
 	}

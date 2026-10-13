@@ -228,9 +228,10 @@ func completeSourcePresentation(v *Source) {
 	if v.MediaRemoved {
 		v.PreviewKind, v.PreviewURL, v.EmbedURL = "none", nil, nil
 	}
+	u := "/api/v1/sources/" + v.ID + "/thumbnail"
+	lazyThumbnail := (v.Kind == "platform" || v.Kind == "youtube") && v.ThumbnailURL != nil && *v.ThumbnailURL == u
 	v.ThumbnailURL = nil
-	if !v.MediaRemoved && v.ThumbnailPath != "" {
-		u := "/api/v1/sources/" + v.ID + "/thumbnail"
+	if !v.MediaRemoved && (v.ThumbnailPath != "" || lazyThumbnail) {
 		v.ThumbnailURL = &u
 	}
 }

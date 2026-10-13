@@ -179,6 +179,55 @@ func TestMigrationsFreshAndCurrentStartupsNeverRewriteSchema(t *testing.T) {
 	}
 }
 
+func TestMetadataResolutionMigrationPreserves006RowsAndRestartsWithoutWrites(t *testing.T) {
+	f := newMigrationFixture(t)
+	ctx := context.Background()
+	migrationExec(t, f.db, `CREATE TABLE app_schema_versions(version text PRIMARY KEY)`)
+	for i, migration := range schemaMigrations[:6] {
+		migrationExec(t, f.db, migrationSQL(migration))
+		sourcePinExec(t, f.db, `INSERT INTO app_schema_versions(version) VALUES($1)`, migration.version)
+		if i == 1 {
+			for n := range 2 {
+				sourcePinExec(t, f.db, `INSERT INTO app_schema_migrations(position,version,checksum) VALUES($1,$2,$3)`, n+1, schemaMigrations[n].version, migrationChecksum(schemaMigrations[n]))
+			}
+		} else if i > 1 {
+			sourcePinExec(t, f.db, `INSERT INTO app_schema_migrations(position,version,checksum) VALUES($1,$2,$3)`, i+1, migration.version, migrationChecksum(migration))
+		}
+	}
+	old := &Store{DB: f.db}
+	source, info := storedMetadataSource(t, old)
+	if err := old.CachePlatformMetadata(ctx, source, info); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := old.CreateJob(ctx, source.Owner, requestFor(source), "retained-request"); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := func() string {
+		var data []byte
+		if err := f.db.QueryRow(ctx, `SELECT jsonb_build_object(
+ 'sources',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(s),'xmin',s.xmin::text) ORDER BY id) FROM sources s),
+ 'jobs',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(j),'xmin',j.xmin::text) ORDER BY id) FROM jobs j),
+ 'cache',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(c),'xmin',c.xmin::text) ORDER BY source_id) FROM source_metadata_cache c),
+ 'counters',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(c),'xmin',c.xmin::text) ORDER BY id) FROM storage_counters c),
+ 'ledger',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(m),'xmin',m.xmin::text) ORDER BY position) FROM app_schema_migrations m WHERE position<=6),
+ 'versions',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(v),'xmin',v.xmin::text) ORDER BY version) FROM app_schema_versions v WHERE version<>$1))`, schemaVersion).Scan(&data); err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	before := snapshot()
+	current := openMigrationStore(t, f)
+	assertMigrationLedger(t, current)
+	if after := snapshot(); after != before {
+		t.Fatal("metadata resolution migration rewrote historical rows/history")
+	}
+	full := migrationSnapshot(t, f.db)
+	_ = openMigrationStore(t, f)
+	if after := migrationSnapshot(t, f.db); after != full {
+		t.Fatal("current restart rewrote metadata claims or historical state")
+	}
+}
+
 const historicalRows = `
 INSERT INTO sources(id,owner,title,duration_ms,kind,path) VALUES('src_legacy','legacy_owner','Legacy source',10000,'upload','/fixture/source');
 INSERT INTO jobs(id,owner,source_id,request,items,status,stage,idempotency_key) VALUES
@@ -548,12 +597,13 @@ func TestMigrationSQLChecksumsArePinnedAcrossWindowsNewlines(t *testing.T) {
 	// shipped with the first ordered migration ledger. The baseline is also
 	// compared with the separately captured actual v0.2.1 fixture above.
 	pinned := map[string]string{
-		"20261005-storage-queue-v3":        "8630cebd9bf2bb2c038519d807f75456a60d8dea24cc1114304551270b3e949f",
-		"20261010-ordered-migrations-v1":   "17caf6f352044a62dd4bbfee154d02965d9c411ca6783422b96db5eed6b40e57",
-		"20261010-storage-maintenance-v1":  "1c06b5c041a45201496d20655078515b5ca4b7896e2a43c3c848d51b2aa00627",
-		"20261010-cache-retention-v1":      "d7654c6a981edea4506d7265057e9349ab9fee85cd3ce3a63412384374e4709a",
-		"20261011-source-retention-v1":     "b460686dc29fa1a156cbf74ca73da8afd2e4394cc7f2a3d6465f72e047b7c0e0",
-		"20261012-source-media-cleanup-v1": "e2d36a97a35a158dead1ed47519209ca67eb92fe0a9fffef4ceb9ad50c34d7bb",
+		"20261005-storage-queue-v3":              "8630cebd9bf2bb2c038519d807f75456a60d8dea24cc1114304551270b3e949f",
+		"20261010-ordered-migrations-v1":         "17caf6f352044a62dd4bbfee154d02965d9c411ca6783422b96db5eed6b40e57",
+		"20261010-storage-maintenance-v1":        "1c06b5c041a45201496d20655078515b5ca4b7896e2a43c3c848d51b2aa00627",
+		"20261010-cache-retention-v1":            "d7654c6a981edea4506d7265057e9349ab9fee85cd3ce3a63412384374e4709a",
+		"20261011-source-retention-v1":           "b460686dc29fa1a156cbf74ca73da8afd2e4394cc7f2a3d6465f72e047b7c0e0",
+		"20261012-source-media-cleanup-v1":       "e2d36a97a35a158dead1ed47519209ca67eb92fe0a9fffef4ceb9ad50c34d7bb",
+		"20261014-metadata-resolution-leases-v1": "01f421ef7efdf02386f7d284491ccf1bccee2dc3014a24f24b85bcd356dcbc0f",
 	}
 	for _, migration := range schemaMigrations {
 		t.Run(migration.version, func(t *testing.T) {

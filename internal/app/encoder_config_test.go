@@ -4,6 +4,26 @@ import (
 	"testing"
 )
 
+func TestWorkerPreparationSettingsKeepLegacyDefaultAndBoundExtraJobs(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://configuration-only")
+	t.Setenv("WORKER_PREPARATION_CONCURRENCY", "0")
+	c, err := ConfigFromEnv()
+	if err != nil || c.WorkerPreparationConcurrency != 0 {
+		t.Fatal("legacy pipeline default changed", c.WorkerPreparationConcurrency, err)
+	}
+	t.Setenv("WORKER_PREPARATION_CONCURRENCY", "8")
+	c, err = ConfigFromEnv()
+	if err != nil || c.WorkerPreparationConcurrency != 8 {
+		t.Fatal("bounded preparation configuration failed", c.WorkerPreparationConcurrency, err)
+	}
+	for _, value := range []string{"-1", "9", "auto", "999999999999999999999"} {
+		t.Setenv("WORKER_PREPARATION_CONCURRENCY", value)
+		if _, err := ConfigFromEnv(); err == nil {
+			t.Fatal("unbounded preparation accepted", value)
+		}
+	}
+}
+
 func TestEncoderSettingsRejectUnboundedThreadsAndUnknownProfiles(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://configuration-only")
 	t.Setenv("FFMPEG_THREADS", "2")

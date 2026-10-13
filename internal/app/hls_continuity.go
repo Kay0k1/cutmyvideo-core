@@ -127,6 +127,17 @@ func hlsPacketAnchor(ctx context.Context, c Config, path string, info probeInfo)
 	return int64(math.Round(value * 1000)), nil
 }
 
+// A period's remux permit has already been released. Its packet inspection
+// must reacquire the shared decoder budget before starting another probe.
+func hlsPreparedPacketAnchor(ctx context.Context, c Config, format platformFormat, path string, info probeInfo) (int64, error) {
+	release, err := acquireMediaInspection(ctx, Source{}, []platformFormat{format})
+	if err != nil {
+		return 0, err
+	}
+	defer release()
+	return hlsPacketAnchor(ctx, c, path, info)
+}
+
 func stageHLSGroups(ctx context.Context, c Config, guard *networkGuard, format platformFormat, groups [][]hlsSegment, dir string, stream int, downloaded *atomic.Int64, limit int64, progress func(int, int)) (string, int64, error) {
 	var temporary []string
 	defer func() {
@@ -159,15 +170,11 @@ func stageHLSGroups(ctx context.Context, c Config, guard *networkGuard, format p
 		if remaining <= 0 {
 			return "", 0, errSourceTooLarge
 		}
-		path, _, err := stageHLSGroup(ctx, c, guard, format, group, groupDir, stream, downloaded, min(limit, downloaded.Load()+remaining), remaining, func(done, _ int) {
+		path, _, info, err := stageHLSGroupWithInfo(ctx, c, guard, format, group, groupDir, stream, downloaded, min(limit, downloaded.Load()+remaining), remaining, func(done, _ int) {
 			if progress != nil {
 				progress(processed+done, total)
 			}
 		})
-		if err != nil {
-			return "", 0, err
-		}
-		info, _, err := probe(ctx, c, path, false)
 		if err != nil {
 			return "", 0, err
 		}
@@ -178,7 +185,7 @@ func stageHLSGroups(ctx context.Context, c Config, guard *networkGuard, format p
 			// into one track. Never publish a superficially valid broken MP4.
 			return "", 0, errUnsupportedStream
 		}
-		anchor, err := hlsPacketAnchor(ctx, c, path, info)
+		anchor, err := hlsPreparedPacketAnchor(ctx, c, format, path, info)
 		if err != nil {
 			return "", 0, err
 		}
@@ -207,6 +214,11 @@ func stageHLSGroups(ctx context.Context, c Config, guard *networkGuard, format p
 			_ = os.Remove(output)
 		}
 	}()
+	release, inspectionErr := acquireMediaInspection(ctx, Source{}, []platformFormat{format})
+	if inspectionErr != nil {
+		return "", 0, inspectionErr
+	}
+	defer release()
 	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-max_alloc", "268435456", "-protocol_whitelist", "file", "-format_whitelist", "concat,matroska,webm,mov"}
 	args = append(args, mediaInputBounds(c)...)
 	args = append(args, "-f", "concat", "-safe", "1", "-i", manifest)

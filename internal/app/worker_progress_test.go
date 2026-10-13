@@ -2,12 +2,57 @@ package app
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+func TestWorkerCompactProgressPreservesOtherItemsAndLeaseFencing(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	source := storedSource(t, s, "owner")
+	request := requestFor(source)
+	request.Ranges = append(request.Ranges, Range{StartMS: 4000, EndMS: 6000, Label: "Second"})
+	j, err := s.CreateJob(ctx, source.Owner, request, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	j, token, err := s.Claim(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j.Items[0].Status, j.Items[0].Message = "failed", "Retained diagnostic"
+	j.Items[1].Status = "running"
+	if err := s.SaveJob(ctx, j, token); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveJobProgress(ctx, j.ID, token, "processing", "Encoding", 1, 700); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Job(ctx, j.ID, j.Owner)
+	if err != nil || got.Stage != "processing" || got.Message != "Encoding" || got.Items[0].Status != "failed" || got.Items[0].Message != "Retained diagnostic" || got.Items[1].ProgressMS != 700 || got.Items[1].Status != "running" || got.Request.SourceID != source.ID {
+		t.Fatalf("progress replaced durable state: %+v %v", got, err)
+	}
+	for _, invalid := range []struct {
+		token string
+		item  int
+	}{{"other-lease", 1}, {token, 0}, {token, 2}} {
+		if err := s.SaveJobProgress(ctx, j.ID, invalid.token, "fetching", "Invalid", invalid.item, 900); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("invalid callback updated job: %+v %v", invalid, err)
+		}
+	}
+	sourcePinExec(t, s.DB, `UPDATE jobs SET lease_until=clock_timestamp()-interval '1 second' WHERE id=$1`, j.ID)
+	if err := s.SaveJobProgress(ctx, j.ID, token, "processing", "Expired", 1, 1000); !errors.Is(err, ErrNotFound) {
+		t.Fatal("expired lease updated progress", err)
+	}
+	got, err = s.Job(ctx, j.ID, j.Owner)
+	if err != nil || got.Items[1].ProgressMS != 700 || got.Message != "Encoding" {
+		t.Fatal("rejected progress changed the snapshot", got, err)
+	}
+}
 
 func TestWorkerProgressPersistenceFailureKeepsJobRecoverable(t *testing.T) {
 	s := testStore(t)

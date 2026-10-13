@@ -159,7 +159,10 @@ func runCommandOutput(ctx context.Context, path string, args []string, stdout io
 	stderr := &limitedBuffer{limit: 16 << 10}
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	if err := runProcess(cmd); err != nil {
+	started := time.Now()
+	processErr := runProcess(cmd)
+	recordMediaProcess(ctx, path, time.Since(started), processErr)
+	if err := processErr; err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -400,17 +403,33 @@ type copyKeyframe struct {
 }
 
 func nearestKeyframe(ctx context.Context, c Config, path string, start int64, remote bool, streamIndex int) (copyKeyframe, error) {
-	from := start - 30000
+	if session := localExportSession(ctx, path, remote); session != nil {
+		return session.nearestKeyframe(ctx, c, start, streamIndex)
+	}
+	from, until := keyframeProbeBounds(start)
+	frames, err := probeKeyframes(ctx, c, path, remote, streamIndex, from, until)
+	if err != nil {
+		return copyKeyframe{}, err
+	}
+	return selectCopyKeyframe(frames, start)
+}
+
+func keyframeProbeBounds(start int64) (from, until int64) {
+	from = start - 30000
 	if from < 0 {
 		from = 0
 	}
-	until := start + 1
+	until = start + 1
 	if start == 0 {
 		// Matroska can place its first video packet after zero (for example
 		// because audio starts first). Read the same bounded initial window
 		// accepted below; a 1 ms interval can otherwise contain no keyframe.
 		until = 2001
 	}
+	return from, until
+}
+
+func probeKeyframes(ctx context.Context, c Config, path string, remote bool, streamIndex int, from, until int64) ([]copyKeyframe, error) {
 	protocols := "file"
 	if remote {
 		protocols = "http,tcp"
@@ -420,7 +439,7 @@ func nearestKeyframe(ctx context.Context, c Config, path string, start int64, re
 	args = append(args, "-select_streams", strconv.Itoa(streamIndex), "-read_intervals", seconds(from)+"%"+seconds(until), "-show_packets", "-show_entries", "packet=pts_time,dts_time,flags", "-of", "json", path)
 	b, err := runCommand(ctx, c.FFprobe, args...)
 	if err != nil {
-		return copyKeyframe{}, err
+		return nil, err
 	}
 	var p struct {
 		Packets []struct {
@@ -430,9 +449,9 @@ func nearestKeyframe(ctx context.Context, c Config, path string, start int64, re
 		} `json:"packets"`
 	}
 	if err = json.Unmarshal(b, &p); err != nil {
-		return copyKeyframe{}, err
+		return nil, err
 	}
-	found := copyKeyframe{PTS: -1}
+	var frames []copyKeyframe
 	for _, v := range p.Packets {
 		if !strings.Contains(v.Flags, "K") {
 			continue
@@ -442,12 +461,23 @@ func nearestKeyframe(ctx context.Context, c Config, path string, start int64, re
 			continue
 		}
 		ms := int64(math.Round(n * 1000))
-		if (ms <= start || start == 0 && found.PTS < 0 && ms <= 2000) && ms >= 0 && ms > found.PTS {
-			found = copyKeyframe{PTS: ms}
+		if ms >= 0 {
+			frame := copyKeyframe{PTS: ms}
 			if dts, err := strconv.ParseFloat(v.DTS, 64); err == nil && !math.IsNaN(dts) && !math.IsInf(dts, 0) && math.Abs(dts-n) <= 2 {
 				// Rounding DTS upwards can discard the very keyframe we selected.
-				found.DTS, found.HasDTS = int64(math.Floor(dts*1000)), true
+				frame.DTS, frame.HasDTS = int64(math.Floor(dts*1000)), true
 			}
+			frames = append(frames, frame)
+		}
+	}
+	return frames, nil
+}
+
+func selectCopyKeyframe(frames []copyKeyframe, start int64) (copyKeyframe, error) {
+	found := copyKeyframe{PTS: -1}
+	for _, frame := range frames {
+		if (frame.PTS <= start || start == 0 && found.PTS < 0 && frame.PTS <= 2000) && frame.PTS > found.PTS {
+			found = frame
 		}
 	}
 	if found.PTS < 0 || !found.HasDTS && found.PTS > 2000 {
@@ -474,6 +504,16 @@ func exportInputs(ctx context.Context, c Config, inputs []mediaInput, r Range, r
 }
 
 func exportInputsCoreProgress(ctx context.Context, c Config, inputs []mediaInput, r Range, request ExportRequest, out string, report func(int64)) (int64, int64, error) {
+	return exportInputsCoreProgressMode(ctx, c, inputs, r, request, out, report, true)
+}
+
+// Intermediate MP4s are read locally by a later mux. Only the final result
+// needs faststart's second pass moving its index to the front of the file.
+func exportInputsCoreProgressMode(ctx context.Context, c Config, inputs []mediaInput, r Range, request ExportRequest, out string, report func(int64), finalOutput bool) (int64, int64, error) {
+	return exportInputsCoreVerifiedProgress(ctx, c, inputs, r, request, out, report, finalOutput, nil)
+}
+
+func exportInputsCoreVerifiedProgress(ctx context.Context, c Config, inputs []mediaInput, r Range, request ExportRequest, out string, report func(int64), finalOutput bool, verified *probeInfo) (int64, int64, error) {
 	if err := validateCropMode(request); err != nil {
 		return 0, 0, &sourceProblem{"crop_invalid", err.Error()}
 	}
@@ -604,7 +644,7 @@ func exportInputsCoreProgress(ctx context.Context, c Config, inputs []mediaInput
 			args = append(args, "-vf", filter, "-fps_mode:v", "passthrough", "-enc_time_base:v", encoderTimeBase)
 			args = append(args, hdrOutputColorArgs(hdr)...)
 		}
-		if request.Format == "mp4" {
+		if request.Format == "mp4" && finalOutput {
 			args = append(args, "-movflags", "+faststart")
 		}
 	}
@@ -653,6 +693,9 @@ func exportInputsCoreProgress(ctx context.Context, c Config, inputs []mediaInput
 	expected := r.EndMS - start
 	if request.CutMode == "accurate" && math.Abs(float64(duration-expected)) > 350 {
 		return 0, 0, errors.New("result duration does not match the requested range")
+	}
+	if verified != nil {
+		*verified = p
 	}
 	return start, start + duration, nil
 }

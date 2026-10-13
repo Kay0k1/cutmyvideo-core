@@ -9,6 +9,37 @@ import (
 	"time"
 )
 
+func TestPlatformHLSCacheReservationIsBoundedSharedAndDisabledOnSmallStores(t *testing.T) {
+	request := ExportRequest{Format: "mp4", Quality: "720p", CutMode: "accurate", Ranges: []Range{{EndMS: 1000}, {StartMS: 2000, EndMS: 3000}}}
+	for _, mode := range []string{"", "joined"} {
+		request.OutputMode = mode
+		job := Job{Request: request, Items: jobItems(request)}
+		for _, storage := range []int64{0, 16 << 20, 256 << 20, 512 << 20, 1 << 30, 96 << 30} {
+			c := Config{MaxStorageBytes: storage, MaxOutputBytes: 4 << 20, MaxSourceBytes: 4 << 20, MaxFetchBytes: 4 << 20}
+			media, err := remainingJobMediaReserve(c, job, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			reserved, err := remainingJobReserve(c, job, true)
+			if err != nil || reserved-media != hlsJobCacheBudget(c) || reserved-media > hlsJobCacheBytes || storage <= 256<<20 && reserved != media {
+				t.Fatalf("HLS cache charge disagrees: mode=%s storage=%d media=%d reserve=%d %v", mode, storage, media, reserved, err)
+			}
+			local, err := remainingJobReserve(c, job, false)
+			localMedia, mediaErr := remainingJobMediaReserve(c, job, false)
+			if err != nil || mediaErr != nil || local != localMedia {
+				t.Fatal("local export was charged for a remote cache", local, localMedia, err, mediaErr)
+			}
+		}
+		for i := range job.Items {
+			job.Items[i].Status = "succeeded"
+			job.Items[i].Artifact = &Artifact{ID: "complete"}
+		}
+		if reserved, err := remainingJobReserve(Config{MaxStorageBytes: 1 << 30}, job, true); err != nil || reserved != 0 {
+			t.Fatal("finished recovery job retained a new cache charge", reserved, err)
+		}
+	}
+}
+
 func TestLongExportDefaultsAndAdmission(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://configuration-only")
 	c, err := ConfigFromEnv()

@@ -16,6 +16,7 @@ type Config struct {
 	FFmpegProfile                                                          string
 	FFmpegThreads                                                          int
 	WorkerConcurrency                                                      int
+	WorkerPreparationConcurrency                                           int
 	MaxSourceBytes, MaxOutputBytes, MaxStorageBytes, MaxOwnerBytes         int64
 	MaxFetchBytes                                                          int64
 	StorageSafetyBytes                                                     int64
@@ -50,6 +51,10 @@ func ConfigFromEnv() (Config, error) {
 	c.WorkerConcurrency, err = strconv.Atoi(env("WORKER_CONCURRENCY", "1"))
 	if err != nil || c.WorkerConcurrency < 1 || c.WorkerConcurrency > 8 {
 		return c, errors.New("invalid WORKER_CONCURRENCY: use 1 through 8")
+	}
+	c.WorkerPreparationConcurrency, err = strconv.Atoi(env("WORKER_PREPARATION_CONCURRENCY", "0"))
+	if err != nil || c.WorkerPreparationConcurrency < 0 || c.WorkerPreparationConcurrency > 8 {
+		return c, errors.New("invalid WORKER_PREPARATION_CONCURRENCY: use 0 through 8")
 	}
 	c.FFmpegThreads, err = strconv.Atoi(env("FFMPEG_THREADS", "2"))
 	if err != nil || c.FFmpegThreads < 1 || c.FFmpegThreads > 32 {

@@ -196,6 +196,49 @@ func TestSourceMediaCleanupWaitsForReadersPreviewsAndAcceptedJobs(t *testing.T) 
 	assertCleanupSource(t, s, source, true)
 }
 
+func TestSourceMediaCleanupProtectedPrefixDoesNotHideEligibleRequests(t *testing.T) {
+	s, c, source := sourceCleanupFixture(t)
+	ctx := context.Background()
+	var protected []Source
+	for n := range 17 {
+		candidate := source
+		if n > 0 {
+			candidate.ID = newID("src")
+			candidate.Path = writeLedgerFile(t, c, "sources", candidate.ID+".mp4", 19)
+			candidate.ThumbnailPath = ""
+			if err := s.AddSource(ctx, candidate); err != nil {
+				t.Fatal(err)
+			}
+		}
+		j, token := cleanupJob(t, s, candidate, true)
+		finishCleanupJob(t, s, c, j, token, "succeeded")
+		if n < 16 {
+			protected = append(protected, candidate)
+			sourcePinExec(t, s.DB, `INSERT INTO source_media_readers(id,source_id,expires_at) VALUES($1,$2,clock_timestamp()+interval '1 minute')`, newID("reader"), candidate.ID)
+		} else {
+			source = candidate
+		}
+	}
+	if err := s.ProcessSourceMediaCleanup(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	assertCleanupSource(t, s, source, true)
+	for _, candidate := range protected {
+		assertCleanupSource(t, s, candidate, false)
+	}
+	var pending int
+	if err := s.DB.QueryRow(ctx, `SELECT count(*) FROM source_media_cleanup`).Scan(&pending); err != nil || pending != 16 {
+		t.Fatal("protected requests were lost", pending, err)
+	}
+	sourcePinExec(t, s.DB, `DELETE FROM source_media_readers`)
+	if err := s.ProcessSourceMediaCleanup(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range protected {
+		assertCleanupSource(t, s, candidate, true)
+	}
+}
+
 func TestSourceMediaCleanupFailureCancellationAndLegacyKeepSource(t *testing.T) {
 	for _, status := range []string{"failed", "cancelled", "succeeded"} {
 		t.Run(status, func(t *testing.T) {

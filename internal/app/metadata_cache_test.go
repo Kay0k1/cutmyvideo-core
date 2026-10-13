@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func metadataCacheFixture() (Source, platformInfo) {
@@ -35,6 +36,189 @@ func storedMetadataSource(t *testing.T, store *Store) (Source, platformInfo) {
 		t.Fatal(err)
 	}
 	return source, info
+}
+
+func TestMetadataResolutionInvalidationWaitsForPublisherAndRemovesFreshCache(t *testing.T) {
+	for _, recent := range []bool{false, true} {
+		t.Run(fmt.Sprintf("recent-%t", recent), func(t *testing.T) {
+			s := testStore(t)
+			source, info := storedMetadataSource(t, s)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if claimed, err := s.claimPlatformMetadataResolution(ctx, source, "publisher"); err != nil || !claimed {
+				t.Fatal("fixture claim failed")
+			}
+			publisher, err := s.DB.Begin(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer rollbackStorage(publisher)
+			var token string
+			if err := publisher.QueryRow(ctx, `SELECT token FROM source_metadata_resolutions WHERE source_id=$1 FOR UPDATE`, source.ID).Scan(&token); err != nil {
+				t.Fatal(err)
+			}
+			// A separate one-connection resolver pool makes its blocked backend
+			// identifiable without retaining any connection during upstream work.
+			config := s.DB.Config()
+			config.MaxConns = 1
+			pool, err := pgxpool.NewWithConfig(ctx, config)
+			if err != nil {
+				t.Fatal("independent invalidator pool failed")
+			}
+			defer pool.Close()
+			var invalidatorPID int32
+			if err := pool.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&invalidatorPID); err != nil {
+				t.Fatal(err)
+			}
+			invalidator := &Store{DB: pool}
+			done := make(chan error, 1)
+			go func() {
+				if recent {
+					invalidator.invalidateRecentPlatformMetadata(ctx, source.Owner, source.URL)
+					done <- nil
+				} else {
+					done <- invalidator.InvalidatePlatformMetadata(ctx, source)
+				}
+			}()
+			blocked := false
+			deadline := time.Now().Add(time.Second)
+			for time.Now().Before(deadline) {
+				if err := s.DB.QueryRow(ctx, `SELECT cardinality(pg_blocking_pids($1))>0`, invalidatorPID).Scan(&blocked); err != nil {
+					t.Fatal(err)
+				}
+				if blocked {
+					break
+				}
+				time.Sleep(5 * time.Millisecond)
+			}
+			if !blocked {
+				t.Fatal("invalidation did not wait on publishing lease")
+			}
+			if err := writePlatformMetadataCache(ctx, publisher, source, info, time.Now()); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := publisher.Exec(ctx, `DELETE FROM source_metadata_resolutions WHERE source_id=$1 AND token=$2`, source.ID, token); err != nil {
+				t.Fatal(err)
+			}
+			if err := publisher.Commit(ctx); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Fatal("invalidation failed after publisher committed")
+				}
+			case <-ctx.Done():
+				t.Fatal("invalidation failed to drain")
+			}
+			if _, hit := readPlatformMetadataCache(ctx, s.DB, source); hit {
+				t.Fatal("invalidation retained cache inserted by the blocked publisher")
+			}
+			var claims int
+			if err := s.DB.QueryRow(ctx, `SELECT count(*) FROM source_metadata_resolutions WHERE source_id=$1`, source.ID).Scan(&claims); err != nil || claims != 0 {
+				t.Fatal("invalidation retained resolution claim")
+			}
+		})
+	}
+}
+func TestMetadataResolutionForceFreshInvalidationAndWinnerFence(t *testing.T) {
+	for _, winner := range []bool{false, true} {
+		t.Run(fmt.Sprintf("newer-winner-%t", winner), func(t *testing.T) {
+			s := testStore(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			source, info := storedMetadataSource(t, s)
+			if err := s.CachePlatformMetadata(ctx, source, info); err != nil {
+				t.Fatal(err)
+			}
+			started, release, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
+			var releaseOnce sync.Once
+			unblock := func() { releaseOnce.Do(func() { close(release) }) }
+			var first platformInfo
+			var firstErr error
+			go func() {
+				defer close(done)
+				first, firstErr = s.forceFreshPlatformMetadata(ctx, source, func() (platformInfo, error) {
+					close(started)
+					<-release
+					return info, nil
+				})
+			}()
+			defer func() {
+				unblock()
+				select {
+				case <-done:
+				case <-time.After(3 * time.Second):
+					t.Error("force-refresh resolver did not drain")
+				}
+			}()
+			select {
+			case <-started:
+			case <-ctx.Done():
+				t.Fatal("force-refresh upstream did not start")
+			}
+			var claims int
+			if err := s.DB.QueryRow(ctx, "SELECT count(*) FROM source_metadata_resolutions WHERE source_id=$1", source.ID).Scan(&claims); err != nil || claims != 1 {
+				t.Fatal("force refresh did not persist a short claim before network work")
+			}
+			if winner {
+				newer := info
+				newer.Title = "Newer forced metadata"
+				got, err := s.forceFreshPlatformMetadata(ctx, source, func() (platformInfo, error) { return newer, nil })
+				if err != nil || got.Title != newer.Title {
+					t.Fatal("newer force refresh failed")
+				}
+			} else if err := s.InvalidatePlatformMetadata(ctx, source); err != nil {
+				t.Fatal(err)
+			}
+			unblock()
+			select {
+			case <-done:
+			case <-ctx.Done():
+				t.Fatal("older force refresh did not return fresh data")
+			}
+			if firstErr != nil || first.Title != info.Title || !first.cachedUntil.IsZero() {
+				t.Fatal("cache fencing changed the force-refresh caller's fresh result")
+			}
+			cached, hit := readPlatformMetadataCache(ctx, s.DB, source)
+			if winner {
+				if !hit || cached.Title != "Newer forced metadata" {
+					t.Fatal("older force refresh replaced the concurrent winner")
+				}
+			} else if hit {
+				t.Fatal("invalidated force refresh republished its older cache")
+			}
+			if err := s.DB.QueryRow(ctx, "SELECT count(*) FROM source_metadata_resolutions WHERE source_id=$1", source.ID).Scan(&claims); err != nil || claims != 0 {
+				t.Fatal("completed force refresh retained a claim")
+			}
+		})
+	}
+}
+
+func TestMetadataResolutionForceFreshUnavailableClaimReturnsFreshWithoutCaching(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	source, info := storedMetadataSource(t, s)
+	if err := s.CachePlatformMetadata(ctx, source, info); err != nil {
+		t.Fatal(err)
+	}
+	// A missing optional coordinator must not prevent a real fresh request or
+	// let an unclaimed resolver overwrite the previously published cache.
+	sourcePinExec(t, s.DB, "DROP TABLE source_metadata_resolutions")
+	newer := info
+	newer.Title = "Fresh without coordinator"
+	calls := 0
+	got, err := s.forceFreshPlatformMetadata(ctx, source, func() (platformInfo, error) {
+		calls++
+		return newer, nil
+	})
+	if err != nil || calls != 1 || got.Title != newer.Title || !got.cachedUntil.IsZero() {
+		t.Fatal("unavailable optional claim prevented fresh resolution")
+	}
+	cached, hit := readPlatformMetadataCache(ctx, s.DB, source)
+	if !hit || cached.Title != info.Title {
+		t.Fatal("unclaimed force refresh changed persisted metadata")
+	}
 }
 
 func TestMetadataCacheLifetimeAndStreamPreservation(t *testing.T) {
@@ -432,6 +616,93 @@ func TestMetadataCacheLockWaitFallsBackWithinBound(t *testing.T) {
 	}
 	if err := <-first; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestMetadataResolutionDoesNotRetainPoolConnections(t *testing.T) {
+	s := testStore(t) // The fixture has only two pool connections.
+	ctx := context.Background()
+	first, info := storedMetadataSource(t, s)
+	second := first
+	second.ID = newID("src")
+	if err := s.AddSource(ctx, second); err != nil {
+		t.Fatal(err)
+	}
+	started := make(chan struct{}, 2)
+	release := make(chan struct{})
+	finished := make(chan error, 2)
+	for _, source := range []Source{first, second} {
+		go func() {
+			_, _, err := s.resolvePlatformMetadata(ctx, source, func() (platformInfo, error) {
+				started <- struct{}{}
+				<-release
+				return info, nil
+			})
+			finished <- err
+		}()
+	}
+	defer func() {
+		close(release)
+		for range 2 {
+			if err := <-finished; err != nil {
+				t.Error("resolution failed after releasing the upstream", err)
+			}
+		}
+	}()
+	for range 2 {
+		select {
+		case <-started:
+		case <-time.After(4 * time.Second):
+			t.Fatal("two independent upstream resolutions did not start")
+		}
+	}
+	queryCtx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+	defer cancel()
+	var result int
+	if err := s.DB.QueryRow(queryCtx, `SELECT 1`).Scan(&result); err != nil || result != 1 {
+		t.Fatal("upstream work exhausted the database pool", err)
+	}
+}
+
+func TestMetadataResolutionExpiredAndInvalidatedOwnersCannotPublish(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	source, info := storedMetadataSource(t, s)
+	if claimed, err := s.claimPlatformMetadataResolution(ctx, source, "first"); err != nil || !claimed {
+		t.Fatal("initial resolver claim failed", claimed, err)
+	}
+	sourcePinExec(t, s.DB, `UPDATE source_metadata_resolutions SET expires_at=clock_timestamp()-interval '1 second' WHERE source_id=$1`, source.ID)
+	if claimed, err := s.claimPlatformMetadataResolution(ctx, source, "second"); err != nil || !claimed {
+		t.Fatal("expired resolver was not reclaimed", claimed, err)
+	}
+	_ = s.cacheResolvedPlatformMetadata(ctx, source, "first", info)
+	s.releasePlatformMetadataResolution(source, "first")
+	if _, hit := readPlatformMetadataCache(ctx, s.DB, source); hit {
+		t.Fatal("old resolution published after replacement")
+	}
+	var token string
+	if err := s.DB.QueryRow(ctx, `SELECT token FROM source_metadata_resolutions WHERE source_id=$1`, source.ID).Scan(&token); err != nil || token != "second" {
+		t.Fatal("old cleanup removed the replacement claim", token, err)
+	}
+	if err := s.InvalidatePlatformMetadata(ctx, source); err != nil {
+		t.Fatal(err)
+	}
+	_ = s.cacheResolvedPlatformMetadata(ctx, source, "second", info)
+	if _, hit := readPlatformMetadataCache(ctx, s.DB, source); hit {
+		t.Fatal("forced refresh permitted an old resolver publication")
+	}
+	if claimed, err := s.claimPlatformMetadataResolution(ctx, source, "third"); err != nil || !claimed {
+		t.Fatal("invalidation retained a claim", claimed, err)
+	}
+	if err := s.cacheResolvedPlatformMetadata(ctx, source, "third", info); err != nil {
+		t.Fatal(err)
+	}
+	if _, hit := readPlatformMetadataCache(ctx, s.DB, source); !hit {
+		t.Fatal("current resolver could not publish")
+	}
+	var pending int
+	if err := s.DB.QueryRow(ctx, `SELECT count(*) FROM source_metadata_resolutions`).Scan(&pending); err != nil || pending != 0 {
+		t.Fatal("successful resolution retained its claim", pending, err)
 	}
 }
 

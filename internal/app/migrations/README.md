@@ -35,3 +35,9 @@ flag, the durable post-success cleanup queue and renewable HTTP read leases.
 It preserves historical values and accounting and is serialized by the existing
 storage fence. `006_schema.json` captures the actual isolated PostgreSQL 17.11
 catalog. See migration 6 rollout/compatible-recovery requirements in the policy.
+
+`007_20261014_metadata_resolution_leases_v1.sql` adds expiring, token-fenced
+platform metadata resolution claims. No SQL connection remains occupied during
+upstream extraction; source deletion cascades its optional claim. Positions 1–6
+remain immutable. `007_schema.json` records the expected catalog, checked against
+the actual isolated PostgreSQL catalog by migration integration tests.

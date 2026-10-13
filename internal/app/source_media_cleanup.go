@@ -48,7 +48,16 @@ func requestSourceMediaCleanup(ctx context.Context, tx pgx.Tx, jobID string) err
 // No source/job/artifact cascade is involved. The durable request is retained
 // on errors; physical persistent files use the existing charged tombstone path.
 func (s *Store) ProcessSourceMediaCleanup(ctx context.Context, c Config) error {
-	rows, err := s.DB.Query(ctx, `SELECT source_id FROM source_media_cleanup ORDER BY requested_at,source_id LIMIT 16`)
+	// Filter protected requests before the bounded selection. Otherwise sixteen
+	// old requests with active readers/jobs can indefinitely hide later cleanup.
+	// Eligibility is rechecked under the admission fence before any deletion.
+	rows, err := s.DB.Query(ctx, `SELECT cleanup.source_id FROM source_media_cleanup cleanup WHERE
+ EXISTS(SELECT 1 FROM jobs WHERE id=ANY(cleanup.protected_job_ids) AND status IN ('failed','cancelled')) OR (
+ NOT EXISTS(SELECT 1 FROM jobs WHERE source_id=cleanup.source_id AND status IN ('queued','running','waiting_storage'))
+ AND NOT EXISTS(SELECT 1 FROM storage_reservations WHERE job_id=cleanup.source_id AND kind='preview')
+ AND NOT EXISTS(SELECT 1 FROM storage_reservations reservation JOIN jobs job ON job.id=reservation.job_id WHERE job.source_id=cleanup.source_id AND reservation.kind='job')
+ AND NOT EXISTS(SELECT 1 FROM source_media_readers WHERE source_id=cleanup.source_id AND expires_at>clock_timestamp()))
+ ORDER BY cleanup.requested_at,cleanup.source_id LIMIT 16`)
 	if err != nil {
 		return err
 	}

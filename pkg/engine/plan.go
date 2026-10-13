@@ -138,6 +138,7 @@ func (e *Engine) ExecutePlan(ctx context.Context, plan Plan, output string) (res
 	if err = request.Validate(e.config, app.Source{DurationMS: source.DurationMS, Path: input}); err != nil {
 		return result, invalidArgument(err)
 	}
+	session.SetRanges(ranges)
 	tracks, err := app.SelectExportTracks(source.Tracks, request)
 	if err != nil {
 		return result, err
@@ -186,9 +187,32 @@ func (e *Engine) ExecutePlan(ctx context.Context, plan Plan, output string) (res
 		prepared = append(prepared, BatchOutput{Result: Result{Path: path, ActualEndMS: duration}, Segments: segments, TrackManifest: tracks})
 	} else {
 		var totalBytes int64
+		type interval struct{ start, end int64 }
+		type reusable struct {
+			path       string
+			info       os.FileInfo
+			start, end int64
+		}
+		counts := make(map[interval]int)
+		for _, r := range ranges {
+			counts[interval{r.StartMS, r.EndMS}]++
+		}
+		completed := make(map[interval]reusable)
 		for i, r := range ranges {
 			path := filepath.Join(dir, fmt.Sprintf("output-%d.%s", i, o.Format))
-			start, end, exportErr := app.ExportLocal(ctx, e.config, input, path, r, request)
+			key := interval{r.StartMS, r.EndMS}
+			var start, end int64
+			var exportErr error
+			reused := false
+			if prior, ok := completed[key]; ok {
+				reused, exportErr = app.ReuseLocalExport(ctx, input, prior.path, path, prior.info, e.config.MaxOutputBytes)
+				if reused {
+					start, end = prior.start, prior.end
+				}
+			}
+			if exportErr == nil && !reused {
+				start, end, exportErr = app.ExportLocal(ctx, e.config, input, path, r, request)
+			}
 			if exportErr != nil {
 				return result, exportErr
 			}
@@ -208,6 +232,9 @@ func (e *Engine) ExecutePlan(ctx context.Context, plan Plan, output string) (res
 				return result, publishErr
 			}
 			result.Outputs = append(result.Outputs, BatchOutput{Result: Result{Path: names[i], SizeBytes: info.Size(), ActualStartMS: start, ActualEndMS: end}, Label: r.Label, Segments: []Segment{{Index: i, Label: r.Label, SourceStartMS: start, SourceEndMS: end, OutputEndMS: end - start}}, TrackManifest: tracks})
+			if counts[key] > 1 {
+				completed[key] = reusable{names[i], info, start, end}
+			}
 			_ = os.Remove(path)
 		}
 	}

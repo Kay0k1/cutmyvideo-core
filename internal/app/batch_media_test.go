@@ -128,6 +128,18 @@ func TestBatchAudioSelectionSubtitlesAndJoinedTimeline(t *testing.T) {
 
 func compareAudioTimeline(t *testing.T, ctx context.Context, c Config, input, out string, index int, sourceStart, outputStart int64, copyMode bool) {
 	t.Helper()
+	best, bestLag := audioTimelineAlignment(t, ctx, c, input, out, index, sourceStart, outputStart)
+	threshold, lagLimit := 0.95, 1200
+	if copyMode {
+		threshold, lagLimit = 0.99, 48
+	}
+	if best < threshold || int(math.Abs(float64(bestLag))) > lagLimit {
+		t.Fatalf("audio selection/alignment changed: correlation %.5f lag %d samples at source=%d output=%d", best, bestLag, sourceStart, outputStart)
+	}
+}
+
+func audioTimelineAlignment(t *testing.T, ctx context.Context, c Config, input, out string, index int, sourceStart, outputStart int64) (float64, int) {
+	t.Helper()
 	decode := func(path string, track int, start int64) []byte {
 		filter := "aresample=async=1000:min_hard_comp=0.001:first_pts=0,atrim=start=" + seconds(start) + ":end=" + seconds(start+300) + ",asetpts=PTS-STARTPTS"
 		pcm, e := runCommand(ctx, c.FFmpeg, "-v", "error", "-copyts", "-i", path, "-map", "0:"+strconv.Itoa(track), "-af", filter, "-ac", "1", "-ar", "48000", "-f", "s16le", "-")
@@ -155,13 +167,7 @@ func compareAudioTimeline(t *testing.T, ctx context.Context, c Config, input, ou
 			best, bestLag = score, lag
 		}
 	}
-	threshold, lagLimit := 0.95, 1200
-	if copyMode {
-		threshold, lagLimit = 0.99, 48
-	}
-	if best < threshold || int(math.Abs(float64(bestLag))) > lagLimit {
-		t.Fatalf("audio selection/alignment changed: correlation %.5f lag %d samples at source=%d output=%d", best, bestLag, sourceStart, outputStart)
-	}
+	return best, bestLag
 }
 
 func TestCopyContainerAndUnsupportedTrackDiagnostics(t *testing.T) {

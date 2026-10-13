@@ -17,7 +17,7 @@ import (
 
 func RunWorker(ctx context.Context, c Config, s *Store) error {
 	s.ConfigureStorage(c)
-	ctx = withMediaBudget(ctx, c.WorkerConcurrency)
+	ctx = withWorkerMediaBudget(ctx, c)
 	health, err := newWorkerHealth(c.WorkerHealthPath)
 	if err != nil {
 		return err
@@ -42,7 +42,7 @@ func RunWorker(ctx context.Context, c Config, s *Store) error {
 	defer stopMaintenance()
 	wakeup := startWorkerWakeup(ctx, s)
 	defer wakeup.close()
-	runWorkerPool(ctx, c.WorkerConcurrency, func() {
+	runWorkerPipelinePool(ctx, c, func() {
 		for {
 			if ctx.Err() != nil {
 				return
@@ -55,6 +55,7 @@ func RunWorker(ctx context.Context, c Config, s *Store) error {
 				slog.Warn("source media cleanup pending", "error", err)
 			}
 			cleanupCancel()
+			claimStarted := time.Now()
 			job, token, err := claimWorkerJob(ctx, s)
 			if errors.Is(err, ErrNotFound) {
 				health.Touch()
@@ -76,6 +77,7 @@ func RunWorker(ctx context.Context, c Config, s *Store) error {
 				continue
 			}
 			health.Touch()
+			slog.Info("job_claimed", "job_id", job.ID, "claim_elapsed_ms", time.Since(claimStarted).Milliseconds())
 			processJob(ctx, c, s, job, token)
 		}
 	})
@@ -106,6 +108,7 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 		slog.Info("job_processing_stopped", "job_id", j.ID, "status", j.Status, "stage", j.Stage, "elapsed_ms", time.Since(started).Milliseconds())
 	}()
 	ctx, cancel := context.WithTimeout(parent, c.JobTimeout)
+	ctx = withMediaDiagnostics(ctx, c, j.ID, "")
 	defer cancel()
 	stopHeartbeat := make(chan struct{})
 	heartbeatDone := make(chan struct{})
@@ -251,10 +254,24 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 	}
 	var localSession *LocalExportSession
 	if source.Path != "" {
-		ctx, localSession = BeginLocalExport(ctx, source.Path)
+		inspectionStarted := time.Now()
+		var cached bool
+		ctx, localSession, cached = s.beginCachedLocal(ctx, c, source)
 		localSession.SetWorkspace(work)
+		localSession.SetRanges(j.Request.Ranges)
 		defer localSession.Close()
-		source, err = s.refreshLocalMediaDimensions(ctx, c, source)
+		releaseInspection := func() {}
+		if !cached {
+			// Historical dimensions may describe an attached picture. A cold
+			// probe therefore reserves the full decoder budget conservatively.
+			releaseInspection, err = acquireMediaInspection(ctx, Source{Path: source.Path}, nil)
+		}
+		if err == nil {
+			source, err = s.refreshLocalMediaDimensions(ctx, c, source)
+		}
+		if releaseInspection != nil {
+			releaseInspection()
+		}
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				finishFailure("source_expired", "Source is unavailable or has expired")
@@ -274,12 +291,18 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 			}
 			return
 		}
+		s.rememberLocalProbe(ctx, c, source)
+		slog.Info("source_inspected", "job_id", j.ID, "cache_hit", cached, "elapsed_ms", time.Since(inspectionStarted).Milliseconds())
 	}
 
 	var mediaPermit mediaProcessingPermit
-	if budgetErr := mediaPermit.Acquire(ctx, source, streams, j.Request); budgetErr != nil {
-		finishFailure("job_timeout", "Processing stopped or exceeded the time limit")
-		return
+	if !pipelineMediaBudget(ctx) {
+		waitStarted := time.Now()
+		if budgetErr := mediaPermit.Acquire(ctx, source, streams, j.Request); budgetErr != nil {
+			finishFailure("job_timeout", "Processing stopped or exceeded the time limit")
+			return
+		}
+		slog.Info("media_processing_wait", "job_id", j.ID, "elapsed_ms", time.Since(waitStarted).Milliseconds(), "scope", "job")
 	}
 	defer mediaPermit.Release()
 
@@ -310,6 +333,21 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 		finishFailure("server_error", "Storage does not permit reliable result publication")
 		return
 	}
+	if source.Path == "" {
+		var closeCache func()
+		ctx, closeCache, err = withHLSDownloadCache(ctx, work, hlsJobCacheBudget(c))
+		if err != nil {
+			if storagePressureError(err) {
+				if !waitForJobStorage(parent, c, s, &j, token, work) {
+					finishFailure("server_error", "Could not wait for storage")
+				}
+			} else {
+				finishFailure("server_error", "Could not initialize source cache")
+			}
+			return
+		}
+		defer closeCache()
+	}
 	var sourceManifest []TrackSelection
 	if source.Path != "" {
 		sourceManifest, err = SelectExportTracks(source.Tracks, j.Request)
@@ -319,8 +357,17 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 			return
 		}
 	}
+	type verifiedLocalResult struct {
+		path     string
+		info     os.FileInfo
+		artifact Artifact
+	}
+	// Only this attempt's acknowledged publications are reusable. Recovered
+	// artifacts may predate this operation's verified source identity.
+	localResults := make(map[[2]int64]verifiedLocalResult)
 	for i := range j.Items {
 		item := &j.Items[i]
+		itemCtx := withMediaDiagnostics(ctx, c, j.ID, item.ID)
 		joined := j.Request.OutputMode == "joined"
 		selected := j.Request.Ranges[i]
 		if joined {
@@ -354,6 +401,15 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 		trackManifest := sourceManifest
 		var e error
 		var lastProgressSave time.Time
+		persistProgress := func() {
+			saveCtx, saveCancel := context.WithTimeout(context.WithoutCancel(parent), workerDatabaseTimeout)
+			defer saveCancel()
+			if err := s.SaveJobProgress(saveCtx, j.ID, token, j.Stage, j.Message, i, item.ProgressMS); err != nil {
+				slog.Error("job progress save failed", "job_id", j.ID, "error", err)
+				leaseUncertain.Store(true)
+				cancel()
+			}
+		}
 		report := func(ms int64) {
 			if duration := item.EndMS - item.StartMS; ms > duration {
 				ms = duration
@@ -361,7 +417,7 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 			item.ProgressMS = ms
 			if time.Since(lastProgressSave) >= time.Second {
 				lastProgressSave = time.Now()
-				persist()
+				persistProgress()
 			}
 		}
 		for {
@@ -421,7 +477,12 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 			if joined {
 				ranges = j.Request.Ranges
 			}
-			segmentInputs, stageErr := stageWorkerSegments(ctx, c, j.Request, guard, streams, playlists, inputs, ranges, fragmentDir, func(segmentIndex, done, total int) {
+			preparationStarted := time.Now()
+			var networkBefore int64
+			if guard != nil {
+				networkBefore = guard.bytes.Load()
+			}
+			segmentInputs, stageErr := stageWorkerSegments(itemCtx, c, j.Request, guard, streams, playlists, inputs, ranges, fragmentDir, func(segmentIndex, done, total int) {
 				j.Stage = "fetching"
 				fragment, count := i+1, len(j.Items)
 				if joined {
@@ -430,9 +491,14 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 				j.Message = fmt.Sprintf("Preparing fragment %d of %d: %d%% downloaded", fragment, count, done*100/max(1, total))
 				if time.Since(lastProgressSave) >= time.Second {
 					lastProgressSave = time.Now()
-					persist()
+					persistProgress()
 				}
 			})
+			var networkBytes int64
+			if guard != nil {
+				networkBytes = guard.bytes.Load() - networkBefore
+			}
+			slog.Info("source_preparation_finished", "job_id", j.ID, "item_id", item.ID, "elapsed_ms", time.Since(preparationStarted).Milliseconds(), "network_bytes", networkBytes, "success", stageErr == nil)
 			e = stageErr
 
 			if e == nil {
@@ -444,13 +510,40 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 				if !persist() {
 					return
 				}
-				if joined {
-					segments, e = exportJoinedSegmentInputsProgress(ctx, c, segmentInputs, ranges, j.Request, out, report)
+				reused := false
+				processingStarted := time.Now()
+				if !joined && source.Path != "" {
+					if prior, ok := localResults[[2]int64{selected.StartMS, selected.EndMS}]; ok {
+						owned, _, authorizationErr := s.ArtifactPath(ctx, prior.artifact.ID, j.Owner)
+						if authorizationErr == nil && owned == prior.path {
+							processingStarted = time.Now()
+							reused, e = ReuseLocalExport(ctx, source.Path, owned, out, prior.info, outputBudget(c, selected, j.Request))
+							if reused {
+								start, end = prior.artifact.ActualStartMS, prior.artifact.ActualEndMS
+								report(item.EndMS - item.StartMS)
+							}
+						}
+					}
+				}
+				if e == nil && !reused && pipelineMediaBudget(ctx) {
+					waitStarted := time.Now()
+					e = mediaPermit.Acquire(ctx, source, streams, j.Request)
+					slog.Info("media_processing_wait", "job_id", j.ID, "item_id", item.ID, "elapsed_ms", time.Since(waitStarted).Milliseconds(), "scope", "item", "success", e == nil)
+				}
+				if !reused {
+					processingStarted = time.Now()
+				}
+				if e == nil && !reused && joined {
+					segments, e = exportJoinedSegmentInputsProgress(itemCtx, c, segmentInputs, ranges, j.Request, out, report)
 					if e == nil && len(segments) > 0 {
 						start, end = 0, segments[len(segments)-1].OutputEndMS
 					}
-				} else {
-					start, end, e = exportInputsProgress(ctx, c, segmentInputs[0], selected, j.Request, out, report)
+				} else if e == nil && !reused {
+					start, end, e = exportInputsProgress(itemCtx, c, segmentInputs[0], selected, j.Request, out, report)
+				}
+				slog.Info("media_processing_finished", "job_id", j.ID, "item_id", item.ID, "elapsed_ms", time.Since(processingStarted).Milliseconds(), "reused", reused, "success", e == nil)
+				if pipelineMediaBudget(ctx) {
+					mediaPermit.Release()
 				}
 			}
 
@@ -470,8 +563,10 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 			if e != nil {
 				break
 			}
-			if e = mediaPermit.Acquire(ctx, source, streams, j.Request); e != nil {
-				break
+			if !pipelineMediaBudget(ctx) {
+				if e = mediaPermit.Acquire(ctx, source, streams, j.Request); e != nil {
+					break
+				}
 			}
 			j.Stage = "processing"
 			j.Message = fmt.Sprintf("Processing fragment %d of %d", i+1, len(j.Items))
@@ -522,8 +617,10 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 		}
 		id := newID("art")
 		path := filepath.Join(c.DataDir, "artifacts", id+"."+j.Request.Format)
+		publicationStarted := time.Now()
 		info, e := fsdurable.Publish(ctx, out, path)
 		if e != nil {
+			slog.Info("artifact_publication_finished", "job_id", j.ID, "item_id", item.ID, "elapsed_ms", time.Since(publicationStarted).Milliseconds(), "success", false)
 			if errors.Is(e, fsdurable.ErrPublicationUncertain) {
 				// No result is registered before the filesystem barrier. Retain
 				// any uncertain final name for bounded orphan reconciliation.
@@ -560,6 +657,7 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 		item.ProgressMS = item.EndMS - item.StartMS
 		item.Artifact = &a
 		e = publish(ctx, j, path, token, a)
+		slog.Info("artifact_publication_finished", "job_id", j.ID, "item_id", item.ID, "elapsed_ms", time.Since(publicationStarted).Milliseconds(), "size_bytes", a.SizeBytes, "success", e == nil)
 		if e != nil {
 			var publication *ArtifactPublicationError
 			if errors.As(e, &publication) && publication.CommitUncertain {
@@ -585,6 +683,9 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 				return
 			}
 			continue
+		}
+		if !joined && source.Path != "" {
+			localResults[[2]int64{selected.StartMS, selected.EndMS}] = verifiedLocalResult{path: path, info: info, artifact: a}
 		}
 	}
 	failed := 0

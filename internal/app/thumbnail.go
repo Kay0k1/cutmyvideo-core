@@ -20,27 +20,45 @@ const maxThumbnailBytes int64 = 2 << 20
 // Only locally staged, inspected images are shown by clients. Signed extractor
 // addresses never become visible URLs; the source owner guards the endpoint.
 func fetchThumbnail(ctx context.Context, c Config, id, raw string) (string, error) {
+	return fetchThumbnailWithLimit(ctx, c, id, raw, maxThumbnailBytes)
+}
+
+func fetchThumbnailWithLimit(ctx context.Context, c Config, id, raw string, limit int64) (string, error) {
+	return fetchThumbnailWithClient(ctx, c, id, raw, limit, safeClient)
+}
+
+func fetchThumbnailWithClient(ctx context.Context, c Config, id, raw string, limit int64, newClient func() *http.Client) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
+	if limit <= 0 || limit > maxThumbnailBytes {
+		return "", errors.New("invalid thumbnail allowance")
+	}
 	u, err := validateURL(raw)
 	if err != nil {
 		return "", err
 	}
 	req, _ := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
-	client := safeClient()
+	client := newClient()
 	defer client.CloseIdleConnections()
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", errors.New("thumbnail unavailable")
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK || resp.ContentLength > maxThumbnailBytes {
+	if resp.StatusCode != http.StatusOK || resp.ContentLength > limit {
 		return "", errors.New("thumbnail unavailable")
 	}
-	return stageThumbnail(ctx, c, id, resp.Body, fsdurable.Publish)
+	return stageThumbnailWithin(ctx, c, id, resp.Body, limit, fsdurable.Publish)
 }
 
 func stageThumbnail(ctx context.Context, c Config, id string, body io.Reader, publish func(context.Context, string, string) (os.FileInfo, error)) (string, error) {
+	return stageThumbnailWithin(ctx, c, id, body, maxThumbnailBytes, publish)
+}
+
+func stageThumbnailWithin(ctx context.Context, c Config, id string, body io.Reader, limit int64, publish func(context.Context, string, string) (os.FileInfo, error)) (string, error) {
+	if limit <= 0 || limit > maxThumbnailBytes {
+		return "", errors.New("invalid thumbnail allowance")
+	}
 	dir := filepath.Join(c.DataDir, "sources")
 	if err := fsdurable.EnsureDirectory(dir, 0700); err != nil {
 		return "", err
@@ -65,7 +83,11 @@ func stageThumbnail(ctx context.Context, c Config, id string, body io.Reader, pu
 			}
 		}
 	}()
-	if err = copyBounded(f, body, maxThumbnailBytes); err != nil {
+	if _, err = io.Copy(f, io.LimitReader(body, limit)); err != nil {
+		return "", errors.New("thumbnail unavailable")
+	}
+	var extra [1]byte
+	if _, err = io.ReadFull(body, extra[:]); err != io.EOF {
 		return "", errors.New("thumbnail exceeds limit")
 	}
 	if _, err = f.Seek(0, io.SeekStart); err != nil {
@@ -98,6 +120,10 @@ func stageThumbnail(ctx context.Context, c Config, id string, body io.Reader, pu
 	return path, nil
 }
 func (s *Server) sourceThumbnail(w http.ResponseWriter, r *http.Request, owner string) {
+	s.sourceThumbnailWithPreparation(w, r, owner, fetchThumbnailWithLimit, s.resolveThumbnailMetadata)
+}
+
+func (s *Server) sourceThumbnailWithPreparation(w http.ResponseWriter, r *http.Request, owner string, fetch thumbnailFetcher, resolve thumbnailResolver) {
 	v, err := s.databaseSource(r.Context(), r.PathValue("id"), owner)
 	if err != nil {
 		lookupError(w, err)
@@ -115,8 +141,15 @@ func (s *Server) sourceThumbnail(w http.ResponseWriter, r *http.Request, owner s
 	defer release()
 	r = r.WithContext(ctx)
 	if v.ThumbnailPath == "" {
-		writeError(w, 404, "preview_unavailable", "A thumbnail is not available for this source")
-		return
+		v, err = s.prepareLazyThumbnail(ctx, v, fetch, resolve)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) || errors.Is(err, ErrSourceMediaRemoved) {
+				sourceMediaError(w, err)
+			} else {
+				writeError(w, 404, "preview_unavailable", "A thumbnail is not available for this source")
+			}
+			return
+		}
 	}
 	f, err := os.Open(v.ThumbnailPath)
 	if err != nil {

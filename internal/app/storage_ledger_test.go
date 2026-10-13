@@ -22,6 +22,61 @@ import (
 func ledgerConfig(t *testing.T) Config {
 	return Config{DataDir: t.TempDir(), MaxSourceBytes: 4 << 20, MaxOutputBytes: 4 << 20, MaxStorageBytes: 16 << 20, MaxOwnerBytes: 32 << 20, MaxActiveJobs: 32, SourceTimeout: time.Second, JobTimeout: time.Minute, SourceTTL: time.Hour, ArtifactTTL: time.Hour, StorageWaitTimeout: time.Minute}
 }
+
+func TestFinalPlatformPublicationKeepsHLSCacheChargedUntilWorkspaceRemoval(t *testing.T) {
+	s := testStore(t)
+	c := ledgerConfig(t)
+	c.MaxStorageBytes = 1 << 30
+	s.ConfigureStorage(c)
+	ctx := context.Background()
+	source, _ := storedMetadataSource(t, s)
+	if _, err := s.CreateJob(ctx, source.Owner, requestFor(source), ""); err != nil {
+		t.Fatal(err)
+	}
+	j, token, err := s.Claim(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	work := filepath.Join(c.DataDir, "work", j.ID+"-"+token)
+	if err := os.MkdirAll(work, 0700); err != nil {
+		t.Fatal(err)
+	}
+	_, closeCache, err := withHLSDownloadCache(ctx, work, hlsJobCacheBudget(c))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeCache()
+	if err := os.WriteFile(filepath.Join(work, ".hls-cache", "retained"), make([]byte, 1024), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var before int64
+	if err := s.DB.QueryRow(ctx, `SELECT size_bytes FROM storage_reservations WHERE id=$1`, jobReservationID(j.ID, token)).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	path := writeLedgerFile(t, c, "artifacts", "final.mp4", 13)
+	a := Artifact{ID: newID("art"), Filename: "final.mp4", SizeBytes: 13}
+	j.Items[0].Status, j.Items[0].Artifact = "succeeded", &a
+	if err := s.PublishArtifact(ctx, j, path, token, a); err != nil {
+		t.Fatal(err)
+	}
+	var after int64
+	if err := s.DB.QueryRow(ctx, `SELECT size_bytes FROM storage_reservations WHERE id=$1`, jobReservationID(j.ID, token)).Scan(&after); err != nil || after < hlsJobCacheBudget(c) || before-after != outputBudget(c, Range{StartMS: j.Items[0].StartMS, EndMS: j.Items[0].EndMS}, j.Request) {
+		t.Fatal("final publication released retained cache bytes", before, after, err)
+	}
+	if err := s.ReleaseJobStorage(ctx, j.ID, token); err == nil {
+		t.Fatal("live cache/workspace released its reservation")
+	}
+	if err := removeStorageTree(ctx, work); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReleaseJobStorage(ctx, j.ID, token); err != nil {
+		t.Fatal(err)
+	}
+	_, reserved := ledgerBytes(t, s)
+	if reserved != 0 {
+		t.Fatal("removed workspace retained reservation", reserved)
+	}
+}
 func ledgerBytes(t *testing.T, s *Store) (int64, int64) {
 	t.Helper()
 	var files, reserved int64
