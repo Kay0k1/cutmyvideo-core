@@ -112,6 +112,30 @@ func (c *hlsDownloadCache) remember(key, path string) {
 	if c.entries[key] != nil {
 		return
 	}
+	cachePath := filepath.Join(c.dir, key)
+	// The completed stage is linked, not copied: no additional unbounded cache
+	// producer runs alongside downloads. Link support is an optional optimization.
+	if err := os.Link(path, cachePath); err != nil {
+		return
+	}
+	keep := false
+	defer func() {
+		if !keep {
+			_ = os.Remove(cachePath)
+		}
+	}()
+	file, err := os.Open(cachePath)
+	if err != nil {
+		return
+	}
+	cachedInfo, statErr := file.Stat()
+	closeErr := file.Close()
+	if statErr != nil || closeErr != nil || !cachedInfo.Mode().IsRegular() || cachedInfo.Size() != info.Size() || !cachedInfo.ModTime().Equal(info.ModTime()) {
+		return
+	}
+	// Windows path-based Stat defers loading file IDs until SameFile, which
+	// would reopen the producer path after staging has removed it. File.Stat
+	// captures IDs eagerly and keeps the cached inode's identity independent.
 	for len(c.entries) >= hlsJobCacheEntries || info.Size() > c.limit-c.bytes {
 		var oldestKey string
 		var oldest *hlsCacheEntry
@@ -129,15 +153,10 @@ func (c *hlsDownloadCache) remember(key, path string) {
 		delete(c.entries, oldestKey)
 		c.bytes -= oldest.file.Size()
 	}
-	cachePath := filepath.Join(c.dir, key)
-	// The completed stage is linked, not copied: no additional unbounded cache
-	// producer runs alongside downloads. Link support is an optional optimization.
-	if err := os.Link(path, cachePath); err != nil {
-		return
-	}
 	c.clock++
-	c.entries[key] = &hlsCacheEntry{path: cachePath, file: info, used: c.clock}
-	c.bytes += info.Size()
+	c.entries[key] = &hlsCacheEntry{path: cachePath, file: cachedInfo, used: c.clock}
+	c.bytes += cachedInfo.Size()
+	keep = true
 }
 
 // A payload becomes immutable only after its writer has closed successfully.
