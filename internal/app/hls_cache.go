@@ -42,6 +42,8 @@ type hlsDownloadCache struct {
 	limit, bytes int64
 	clock        uint64
 	entries      map[string]*hlsCacheEntry
+	remove       func(string) error
+	cleanupErr   error
 }
 
 func withHLSDownloadCache(ctx context.Context, work string, limit int64) (context.Context, func(), error) {
@@ -52,7 +54,7 @@ func withHLSDownloadCache(ctx context.Context, work string, limit int64) (contex
 	if err := os.Mkdir(dir, 0700); err != nil {
 		return ctx, func() {}, err
 	}
-	cache := &hlsDownloadCache{dir: dir, limit: max(int64(0), limit), entries: make(map[string]*hlsCacheEntry)}
+	cache := &hlsDownloadCache{dir: dir, limit: max(int64(0), limit), entries: make(map[string]*hlsCacheEntry), remove: os.Remove}
 	return context.WithValue(ctx, hlsDownloadCacheKey{}, cache), func() { _ = os.RemoveAll(dir) }, nil
 }
 
@@ -102,13 +104,16 @@ func (c *hlsDownloadCache) open(key string) (*os.File, func()) {
 	}
 }
 
-func (c *hlsDownloadCache) remember(key, path string) {
+func (c *hlsDownloadCache) remember(key, path string) (result error) {
 	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > c.limit {
-		return
-	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.cleanupErr != nil {
+		return c.cleanupErr
+	}
+	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > c.limit {
+		return nil
+	}
 	if c.entries[key] != nil {
 		return
 	}
@@ -121,7 +126,12 @@ func (c *hlsDownloadCache) remember(key, path string) {
 	keep := false
 	defer func() {
 		if !keep {
-			_ = os.Remove(cachePath)
+			if err := c.remove(cachePath); err != nil && !os.IsNotExist(err) {
+				// Stop this workspace's cache before another untracked link can
+				// survive admission. Its job keeps the storage fence until cleanup.
+				result = fmt.Errorf("could not remove rejected HLS cache entry: %w", err)
+				c.cleanupErr = result
+			}
 		}
 	}()
 	file, err := os.Open(cachePath)
@@ -157,6 +167,7 @@ func (c *hlsDownloadCache) remember(key, path string) {
 	c.entries[key] = &hlsCacheEntry{path: cachePath, file: cachedInfo, used: c.clock}
 	c.bytes += cachedInfo.Size()
 	keep = true
+	return nil
 }
 
 // A payload becomes immutable only after its writer has closed successfully.
@@ -188,7 +199,9 @@ func fetchHLSPayload(ctx context.Context, guard *networkGuard, format platformFo
 		return err
 	}
 	if cache, _ := ctx.Value(hlsDownloadCacheKey{}).(*hlsDownloadCache); cache != nil {
-		cache.remember(hlsPayloadKey(raw, format), path)
+		if err = cache.remember(hlsPayloadKey(raw, format), path); err != nil {
+			return err
+		}
 	}
 	keep = true
 	return nil

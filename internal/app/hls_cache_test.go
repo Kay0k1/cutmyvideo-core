@@ -149,7 +149,9 @@ func TestHLSInitializationCacheHasImmutableMapAndBoundedPinnedEntries(t *testing
 	if err := os.WriteFile(other, []byte("more"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	cache.remember("other", other)
+	if err := cache.remember("other", other); err != nil {
+		t.Fatal(err)
+	}
 	if cache.bytes != 4 || len(cache.entries) != 1 {
 		t.Fatal("pinned cache file was evicted or overcharged")
 	}
@@ -179,6 +181,48 @@ func TestHLSInitializationCacheHasImmutableMapAndBoundedPinnedEntries(t *testing
 		}
 		if requests.Load() != beforeRequests || guard.bytes.Load() != beforeNetwork || downloaded.Load() != 0 {
 			t.Fatal("preexisting map rejection performed a transfer")
+		}
+	})
+	t.Run("failed-admission-cleanup-fences-later-links", func(t *testing.T) {
+		failedKey := "failed-cleanup"
+		failedPath := filepath.Join(cache.dir, failedKey)
+		cleanupFailure := errors.New("owned cache link removal failed")
+		originalRemove := cache.remove
+		defer func() { cache.remove = originalRemove }()
+		removals := 0
+		cache.remove = func(path string) error {
+			if path == failedPath {
+				removals++
+				return cleanupFailure
+			}
+			return os.Remove(path)
+		}
+		if err := cache.remember(failedKey, other); !errors.Is(err, cleanupFailure) {
+			t.Fatal("untracked link cleanup failure was hidden", err)
+		}
+		if cache.bytes != 4 || len(cache.entries) != 1 || cache.entries[key] == nil {
+			t.Fatal("failed admission changed existing accounting", cache.bytes, len(cache.entries))
+		}
+		if _, err := os.Stat(failedPath); err != nil {
+			t.Fatal("injected cleanup failure did not preserve the owned link", err)
+		}
+		if err := cache.remember("must-not-be-created", other); !errors.Is(err, cleanupFailure) {
+			t.Fatal("cache forgot its fatal cleanup error", err)
+		}
+		if _, err := os.Stat(filepath.Join(cache.dir, "must-not-be-created")); !os.IsNotExist(err) {
+			t.Fatal("failed cache admitted another untracked link", err)
+		}
+		if removals != 1 {
+			t.Fatal("later admission reached link creation/cleanup", removals)
+		}
+		path := filepath.Join(work, "fatal-cache-fetch")
+		var downloaded atomic.Int64
+		err := fetchHLSPayload(ctx, guard, platformFormat{}, "https://media.example/init", path, &downloaded, 16)
+		if !errors.Is(err, cleanupFailure) {
+			t.Fatal("payload fetch did not propagate the cache cleanup failure", err)
+		}
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatal("failed payload retained its owned destination", err)
 		}
 	})
 }
