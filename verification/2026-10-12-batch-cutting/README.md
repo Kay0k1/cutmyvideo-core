@@ -5,7 +5,7 @@ exported media remain outside the repository under `/root/.cache/cutmy-stage`.
 
 ## Independent media acceptance
 
-[`media-acceptance.json`](media-acceptance.json) records 25 successful CLI plan
+[`media-acceptance.json`](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/verification/2026-10-12-batch-cutting/media-acceptance.json) records 25 successful CLI plan
 cases: ordinary video, variable frame rate, an actually rotated 90° source,
 a source with two language-tagged audio streams and text subtitles, and a source
 whose selected audio is a chirp that reveals timing displacement.
@@ -48,7 +48,7 @@ support for arbitrary containers, subtitle formats or codecs.
 
 ## Remote join restrictions
 
-[`remote-join-security.json`](remote-join-security.json) records a controlled
+[`remote-join-security.json`](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/verification/2026-10-12-batch-cutting/remote-join-security.json) records a controlled
 upstream that serves valid MP4 during inspection and a nested concat list during
 processing. The pre-fix negative control fetched a private HTTP endpoint. With
 per-entry media format and protocol restrictions, all three malicious variants
@@ -59,8 +59,8 @@ upstream changes after inspection.
 
 ## Initial performance observations
 
-[`initial-baseline-unpaired.json`](initial-baseline-unpaired.json) and
-[`initial-candidate-under-load.json`](initial-candidate-under-load.json) preserve
+[`initial-baseline-unpaired.json`](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/verification/2026-10-12-batch-cutting/initial-baseline-unpaired.json) and
+[`initial-candidate-under-load.json`](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/verification/2026-10-12-batch-cutting/initial-candidate-under-load.json) preserve
 the first five-sample runs. They were collected separately; the candidate run
 overlapped other repository checks. Their median first preview request times
 were 1.291 s and 1.833 s, and upload through completed export download was 3.467 s
@@ -69,19 +69,19 @@ or a regression. The paired measurement below supersedes them for comparison.
 
 ## Paired full HTTP workflow measurement
 
-[`workflow-profile-paired.json`](workflow-profile-paired.json) contains five
+[`workflow-profile-paired.json`](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/verification/2026-10-12-batch-cutting/workflow-profile-paired.json) contains five
 baseline/candidate pairs, with alternating first endpoint (AB, BA, AB, BA, AB).
 Both disposable API/worker pairs were restarted from consistently built,
 immutable binaries; source revisions are `1d684b4` and `e8fe7b7`.
-[`build-provenance.json`](build-provenance.json) records the exact build commands,
+[`build-provenance.json`](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/verification/2026-10-12-batch-cutting/build-provenance.json) records the exact build commands,
 binary digests, Go toolchain and nonsecret resource limits. Other repository
 checks and browser rendering were paused during the timed run.
 
 The final application snapshot `0fe726e` adds older-muxer error classification
 and portable test expectations after this measurement. Its successful H.264/AAC
 processing path is unchanged. The separate final media report uses that final
-snapshot. [`workflow-profile-paired-initial.json`](workflow-profile-paired-initial.json)
-and [`build-provenance-initial.json`](build-provenance-initial.json) retain the
+snapshot. [`workflow-profile-paired-initial.json`](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/verification/2026-10-12-batch-cutting/workflow-profile-paired-initial.json)
+and [`build-provenance-initial.json`](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/verification/2026-10-12-batch-cutting/build-provenance-initial.json) retain the
 earlier paired run against `6efc2ff`; the table below uses the later run.
 
 The fixture is 18 s of 1920 × 1080 video at 25 fps with mono 44.1 kHz audio,
@@ -110,7 +110,7 @@ All ten exported artifacts were exactly 14,761,820 bytes with the same SHA-256
 The speed difference therefore did not come from changing output quality or
 receiving fewer bytes. All saved output digests were checked after timing, and
 their shared bitstream was independently decoded and probed; see
-[`workflow-output-validation.json`](workflow-output-validation.json).
+[`workflow-output-validation.json`](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/verification/2026-10-12-batch-cutting/workflow-output-validation.json).
 
 These are local loopback observations on four available CPU affinities, with
 five samples per endpoint. They include backend preparation and completed HTTP
@@ -134,8 +134,8 @@ python3 scripts/stage-workflow-profile.py \
 
 ## Observed preparation and encoding costs
 
-[`tool-costs-baseline.json`](tool-costs-baseline.json) and
-[`tool-costs-candidate.json`](tool-costs-candidate.json) are separate instrumented
+[`tool-costs-baseline.json`](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/verification/2026-10-12-batch-cutting/tool-costs-baseline.json) and
+[`tool-costs-candidate.json`](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/verification/2026-10-12-batch-cutting/tool-costs-candidate.json) are separate instrumented
 workflows. An observer sampled only the owned API and worker child tools through
 Linux process statistics. It recorded names, parent roles, approximate lifetimes
 and process CPU time, without arguments, environment values or cookies.
@@ -159,3 +159,5 @@ be missed, and the last CPU sample excludes final unsampled work. Single-run
 variation and observer overhead affect these durations; they identify the main
 costs and do not establish a speed comparison. The uninstrumented paired report
 provides the before/after comparison.
+
+Raw diagnostics were retired from the working tree on 2026-10-13. The [original files](https://github.com/Kay0k1/cutmyvideo-core/tree/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/verification/2026-10-12-batch-cutting) remain in Git history; future runs follow [artifact retention](../../docs/artifacts.md).

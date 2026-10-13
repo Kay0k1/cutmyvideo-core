@@ -97,3 +97,5 @@ Tests independently decode colored fixtures to verify samples at 0/5/10/15
 seconds, offsets at hour eight, near-end padding and 100 ms windows; verify owner
 isolation, warm tool-free reuse, actual-byte charges, source deletion, canceled
 subprocess cleanup, and persisted full-pool inspection weight across admissions.
+
+Raw diagnostics were retired from the working tree on 2026-10-13. The [original files](https://github.com/Kay0k1/cutmyvideo-core/tree/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/benchmarks/2026-10-12-responsive-preview) remain in Git history; future runs follow [artifact retention](../../docs/artifacts.md).

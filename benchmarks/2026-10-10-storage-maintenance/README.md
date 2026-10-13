@@ -29,7 +29,7 @@ harness; runtime sources are unchanged from `f9bb68e`. Reproduction uses the
 public runtime and identical harness files, without needing that local leaf.
 Both runs use harness SHA-256
 `76c4ac7c0deae20083d4599e22d94992c1346985914ce29584ba78336b46115c`.
-[summary.json](summary.json) records matching tools/configuration checks.
+[summary.json](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/benchmarks/2026-10-10-storage-maintenance/summary.json) records matching tools/configuration checks.
 
 - Go 1.27.2 Linux/amd64, `GOMAXPROCS=2`, `GOFLAGS=-p=2`, ordinary builds without
   the race detector. The host has four CPU-affinity slots.
@@ -238,8 +238,8 @@ The `baseline/` and `after/` folders each contain `rows-10000.json.gz`,
 `rows-100000.json.gz`, `environment.json.gz`, `workload.log.gz` and `build.log.gz`.
 These are unmodified complete runner outputs, with no credentials or connection
 URL. Gzip uses an empty filename and `mtime=0`.
-[raw-manifest.json](raw-manifest.json) records compressed/uncompressed SHA-256 and
-lengths; [summary.json](summary.json) preserves compact provenance, matching
+[raw-manifest.json](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/benchmarks/2026-10-10-storage-maintenance/raw-manifest.json) records compressed/uncompressed SHA-256 and
+lengths; [summary.json](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/benchmarks/2026-10-10-storage-maintenance/summary.json) preserves compact provenance, matching
 configuration checks, all query percentiles/root buffers, workload curves,
 failures and separate memory scopes. For example:
 
@@ -252,3 +252,5 @@ fail. That is complete failing evidence, unlike an exhausted/failed fixture
 setup. Earlier smaller-environment and experimental runtime diagnostics are
 excluded from this public comparison. No production service, real recording or
 live provider was used, and owned namespaces/files were removed after each run.
+
+Raw diagnostics were retired from the working tree on 2026-10-13. The [original files](https://github.com/Kay0k1/cutmyvideo-core/tree/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/benchmarks/2026-10-10-storage-maintenance) remain in Git history; future runs follow [artifact retention](../../docs/artifacts.md).

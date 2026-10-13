@@ -66,6 +66,16 @@ one thread was slower. Avoid changing thread counts without measuring.
 
 ## Inspection and memory
 
+Local source operations now share a bounded, five-minute in-process cache of
+verified ffprobe metadata (at most 32 sources). Every use checks source ownership,
+retention and file identity/size/modification time. Replacement, removal, expiry
+or a changed probe tool invalidates reuse. Cold inspections retain conservative
+decoder admission; warm track/export validation consumes no preview slot.
+Each preview operation also reuses its initial source probe during rendering,
+while its completed output still receives an independent media verification.
+This removes redundant work without changing the media quality or resource caps.
+Generated diagnostics follow [artifact retention](artifacts.md).
+
 An owner-specific PostgreSQL cache reuses verified platform metadata between
 import and export, including across worker restarts. Its lifetime is at most
 five minutes and ends earlier than recognized signed-address expiry, with a

@@ -1,6 +1,6 @@
 # Cutting export acceptance — 2026-10-12
 
-[`export-acceptance.json`](export-acceptance.json) records 18 complete HTTP
+[`export-acceptance.json`](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/verification/2026-10-12-cutting-export/export-acceptance.json) records 18 complete HTTP
 workflows on deterministic 12-second and one-hour inputs. Each source has a
 160×96, 10 fps H.264 video, a default English 440 Hz audio track and a selected
 Russian chirp track. The changing chirp is unique across its 12-second periods,
@@ -61,7 +61,7 @@ responsibility. This run establishes behavior for these controlled media and
 tool versions; it does not claim support for inaccessible public platforms or
 measure long full-recording encoding performance.
 
-[`workflow-tests.txt`](workflow-tests.txt) records an uncached race-enabled
+[`workflow-tests.txt`](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/verification/2026-10-12-cutting-export/workflow-tests.txt) records an uncached race-enabled
 targeted Go run of cancellation, joined shutdown/recovery, independent partial
 publication, safe idempotency and source-link workflows. The new direct-link test
 uses an explicitly controlled HTTPS response at the HTTP client boundary, then
@@ -77,3 +77,5 @@ and one range / one millisecond above each boundary. Duration ceiling checks
 exercise admission validation, without claiming to encode 24 hours of media.
 Existing actual media tests separately cover byte-budget truncation and missing
 audio. The parent integration run performs the complete repository checks.
+
+Raw diagnostics were retired from the working tree on 2026-10-13. The [original files](https://github.com/Kay0k1/cutmyvideo-core/tree/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/verification/2026-10-12-cutting-export) remain in Git history; future runs follow [artifact retention](../../docs/artifacts.md).

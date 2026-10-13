@@ -161,6 +161,18 @@ func (s *Server) sourceAnalysisWithAdmission(w http.ResponseWriter, r *http.Requ
 	id := newID("preview")
 	var cached *os.File
 	inspected := v.Path == ""
+	if v.Path != "" {
+		var session *LocalExportSession
+		ctx, session, inspected = s.Store.beginCachedLocal(ctx, s.Config, v)
+		defer session.Close()
+		if inspected {
+			v, err = s.Store.refreshLocalMediaDimensions(ctx, s.Config, v)
+			if err != nil {
+				sourceMediaError(w, err)
+				return
+			}
+		}
+	}
 	admissionStarted := time.Now()
 	waitForForeground := func(err error) bool {
 		// A short foreground request may arrive with its source-track probe.
@@ -191,10 +203,24 @@ func (s *Server) sourceAnalysisWithAdmission(w http.ResponseWriter, r *http.Requ
 			// are known. Release the short inspection lease before admission.
 			inspectionSource := v
 			inspectionSource.Width, inspectionSource.Height = 0, 0
-			release, inspectionErr := s.pinSourceInspection(ctx, inspectionSource, previewTimeout)
+			// A parallel track request can publish its verified probe while this
+			// foreground request waits for admission. Reuse it before probing.
+			cachedCtx, candidate, hit := s.Store.beginCachedLocal(ctx, s.Config, v)
+			release := func() {}
+			var inspectionErr error
+			if hit {
+				ctx = cachedCtx
+				defer candidate.Close()
+			} else {
+				_ = candidate.Close()
+				release, inspectionErr = s.pinSourceInspection(ctx, inspectionSource, previewTimeout)
+			}
 			err = inspectionErr
 			if err == nil {
 				v, err = s.Store.refreshLocalMediaDimensions(ctx, s.Config, v)
+				if err == nil {
+					s.Store.rememberLocalProbe(ctx, s.Config, v)
+				}
 				release()
 			}
 			if err != nil {

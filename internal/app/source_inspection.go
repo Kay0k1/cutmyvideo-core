@@ -68,3 +68,55 @@ func (s *Server) pinSourceInspectionWithReserve(ctx context.Context, source Sour
 	}
 	return release, nil
 }
+
+// Reuse a verified inspection without occupying decoder slots. Cold callers
+// still enter the conservative pool and every caller pins source retention.
+func (s *Server) prepareLocalSource(ctx context.Context, source Source, timeout time.Duration) (context.Context, Source, func(), error) {
+	ctx, releaseRead, err := s.pinSourceMediaReader(ctx, source)
+	if err != nil {
+		return ctx, source, func() {}, err
+	}
+	baseCtx := ctx
+	ctx, session, cached := s.Store.beginCachedLocal(baseCtx, s.Config, source)
+	release := func() { _ = session.Close(); releaseRead() }
+	if !cached {
+		conservative := source
+		conservative.Width, conservative.Height = 0, 0
+		started := time.Now()
+		var releaseInspection func()
+		for {
+			releaseInspection, err = s.pinSourceInspection(ctx, conservative, timeout)
+			if !errors.Is(err, errSourceServerBusy) || time.Since(started) >= time.Second {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				err = ctx.Err()
+			case <-time.After(50 * time.Millisecond):
+			}
+			if err != nil && !errors.Is(err, errSourceServerBusy) {
+				break
+			}
+			// A concurrent preview/track request may have finished the probe.
+			ctx, session, cached = s.Store.beginCachedLocal(baseCtx, s.Config, source)
+			if cached {
+				err = nil
+				break
+			}
+		}
+		if err != nil {
+			release()
+			return ctx, source, func() {}, err
+		}
+		if releaseInspection != nil {
+			defer releaseInspection()
+		}
+	}
+	source, err = s.Store.refreshLocalMediaDimensions(ctx, s.Config, source)
+	if err != nil {
+		release()
+		return ctx, source, func() {}, err
+	}
+	s.Store.rememberLocalProbe(ctx, s.Config, source)
+	return ctx, source, release, nil
+}
