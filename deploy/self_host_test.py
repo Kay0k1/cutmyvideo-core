@@ -41,6 +41,30 @@ def configuration():
             'CUTMY_ADMIN_PASSWORD': 'a' * 48, 'CUTMY_MIGRATION_PASSWORD': 'b' * 48, 'CUTMY_APP_PASSWORD': 'c' * 48}
 
 
+def saved_profile(state, config, supported=False):
+    """Small sealed source/state fixture; image execution is mocked by callers."""
+    c.private_directory(state, create=True)
+    inputs = {'deploy/public_common.py': (ROOT / 'public_common.py').read_bytes() if supported else
+              b"KEYS = {'CUTMY_PROJECT'}\ndef parse_config(data):\n    return {}\n",
+              'deploy/compose.public.yml': (ROOT / 'compose.public.yml').read_bytes() if supported else
+              b'services:\n  worker:\n    environment:\n      WORKER_CONCURRENCY: "1"\n'}
+    for name in (*s.manifest.DOCUMENTS.values(), 'go.mod', 'go.sum', 'scripts/release.sh',
+                 'scripts/package-release.py', 'scripts/release_manifest.py', '.github/workflows/release.yml'):
+        inputs.setdefault(name, b'fixture\n')
+    source = {'schema_version': 1, 'mode': 'candidate', 'publishable': False,
+              'version': 'v0.0.0-candidate.g' + 'a' * 40, 'commit': 'a' * 40, 'tree': 'b' * 40,
+              'source_epoch': 0, 'build_time': s.manifest.timestamp(0), 'toolchain': 'go1.26.1', 'module': 'fixture',
+              'files': {name: {'git_blob': 'c' * 40, 'mode': '100644', 'sha256': c.digest(data), 'bytes': len(data)}
+                        for name, data in inputs.items()}}
+    s.manifest.validate_source_shape(source)
+    for name, data in inputs.items():
+        path = state / 'source' / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    s.save_state(state, config, source, 'sha256:' + 'd' * 64, {}, snapshot_exists=True)
+    return source
+
+
 def rules(config):
     desired = e.policy(config)
     lines = ['*filter', ':INPUT ACCEPT [0:0]', ':FORWARD DROP [0:0]', ':DOCKER-USER - [0:0]', ':DOCKER - [0:0]']
@@ -106,6 +130,127 @@ def helper_row(spec):
             'Mounts': [{'Type': 'volume', 'Name': spec['media'], 'Destination': '/data',
                         'RW': not spec['readonly_media']}] if spec['media'] else []}
 class PublicControls(unittest.TestCase):
+    def test_generated_legacy_config_can_adopt_unsupported_old_snapshot(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path, state = root / 'private.env', root / 'new-state'
+            with patch.object(sys, 'argv', ['self-host.py', '--config', str(config_path), '--state', str(state), 'init-config']), \
+                    patch.object(s.secrets, 'token_urlsafe', side_effect=['a' * 48, 'b' * 48, 'c' * 48]), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                s.main()
+            config = c.parse_config(c.private_read(config_path))
+            self.assertEqual(set(config), c.KEYS)
+            self.assertNotIn('CUTMY_WORKER_PREPARATION_CONCURRENCY', config)
+            old = root / 'old-state'
+            source = saved_profile(old, config)
+            with patch.object(s, 'image_verify') as image_verify, patch.object(s, 'run') as run:
+                s.adopt_image(state, config, old)
+                actual_source, record, snapshot, _ = s.load_state(state, config, verify_image=False)
+            self.assertEqual(actual_source, source)
+            self.assertEqual(record['configuration'], s.public_configuration(config))
+            self.assertEqual(s.state_snapshot(old, source).joinpath('deploy/public_common.py').read_bytes(),
+                             snapshot.joinpath('deploy/public_common.py').read_bytes())
+            self.assertEqual(image_verify.call_count, 1)
+            run.assert_not_called()
+
+    def test_explicit_preparation_refuses_old_adoption_before_image_or_state_writes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            old = root / 'old-state'
+            saved_profile(old, configuration())
+            before = {p.relative_to(old): p.read_bytes() for p in old.rglob('*') if p.is_file()}
+            for value in ('0', '1'):
+                target = root / ('new-state-' + value)
+                with self.subTest(value=value), patch.object(s, 'image_verify') as image_verify, \
+                        patch.object(s, 'save_state') as save, patch.object(s.shutil, 'copytree') as copy, \
+                        self.assertRaisesRegex(c.Refused, 'worker_preparation_requires_supported_snapshot'):
+                    s.adopt_image(target, {**configuration(), 'CUTMY_WORKER_PREPARATION_CONCURRENCY': value}, old)
+                self.assertFalse(target.exists())
+                image_verify.assert_not_called()
+                save.assert_not_called()
+                copy.assert_not_called()
+            self.assertEqual(before, {p.relative_to(old): p.read_bytes() for p in old.rglob('*') if p.is_file()})
+
+    def test_preparation_support_requires_both_parser_and_compose_mapping(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            enabled = {**configuration(), 'CUTMY_WORKER_PREPARATION_CONCURRENCY': '1'}
+            saved_profile(root / 'supported', enabled, supported=True)
+            snapshot = root / 'supported/source'
+            s.require_preparation_support(enabled, snapshot)
+            for name, unsupported in (('deploy/public_common.py', b"KEYS = {'CUTMY_PROJECT'}\ndef parse_config(data):\n    return {}\n"),
+                                      ('deploy/compose.public.yml', b'services: {}\n')):
+                path = snapshot / name
+                original = path.read_bytes()
+                path.write_bytes(unsupported)
+                with self.subTest(name=name), self.assertRaisesRegex(c.Refused, 'worker_preparation_requires_supported_snapshot'):
+                    s.require_preparation_support(enabled, snapshot)
+                path.write_bytes(original)
+            with patch.object(s, 'image_verify'):
+                s.adopt_image(root / 'new-supported', enabled, root / 'supported')
+                s.load_state(root / 'new-supported', enabled, verify_image=False)
+
+    def test_explicit_preparation_refuses_unsupported_build_before_state_materialization(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = saved_profile(root / 'old', configuration())
+            state = root / 'build-state'
+            with patch.object(s, 'REPO', root / 'old/source'), patch.object(s.manifest, 'immutable_source', return_value=source), \
+                    patch.object(s.manifest, 'validate_source') as validate, \
+                    patch.object(s.manifest, 'materialize_source') as materialize, patch.object(s, 'run') as run, \
+                    self.assertRaisesRegex(c.Refused, 'worker_preparation_requires_supported_snapshot'):
+                s.build(state, {**configuration(), 'CUTMY_WORKER_PREPARATION_CONCURRENCY': '0'}, source['commit'], None)
+            validate.assert_called_once()
+            materialize.assert_not_called()
+            run.assert_not_called()
+            self.assertFalse(state.exists())
+
+    def test_existing_unsupported_preparation_state_refuses_before_restore_or_image_access(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            state, config_path = root / 'state', root / 'private.env'
+            config = {**configuration(), 'CUTMY_WORKER_PREPARATION_CONCURRENCY': '0'}
+            saved_profile(state, config)
+            c.private_write(config_path, s.config_text(config))
+            before = {p.relative_to(state): p.read_bytes() for p in state.rglob('*') if p.is_file()}
+            with patch.object(sys, 'argv', ['self-host.py', '--config', str(config_path), '--state', str(state),
+                                          'restore', '--directory', str(root / 'backup')]), \
+                    patch.object(s, 'local_engine'), patch.object(s, 'image_verify') as image_verify, \
+                    patch.object(s, 'restore') as restore, patch.object(s, 'run') as run, \
+                    self.assertRaisesRegex(c.Refused, 'worker_preparation_requires_supported_snapshot'):
+                s.main()
+            image_verify.assert_not_called()
+            restore.assert_not_called()
+            run.assert_not_called()
+            self.assertEqual(before, {p.relative_to(state): p.read_bytes() for p in state.rglob('*') if p.is_file()})
+
+    def test_optional_worker_preparation_keeps_old_configs_and_bounds_explicit_values(self):
+        original = configuration()
+        self.assertEqual(c.parse_config(s.config_text(original)), original)
+        for value in ('0', '1', '8'):
+            requested = {**original, 'CUTMY_WORKER_PREPARATION_CONCURRENCY': value}
+            self.assertEqual(c.parse_config(s.config_text(requested)), requested)
+            self.assertEqual(c.runtime_environment(requested, 'sha256:' + 'a' * 64)['CUTMY_WORKER_PREPARATION_CONCURRENCY'], value)
+        for value in ('', '-1', '9', '01', '1 ', '$OTHER', '1;false'):
+            with self.subTest(value=value), self.assertRaises(c.Refused):
+                c.parse_config(s.config_text({**original, 'CUTMY_WORKER_PREPARATION_CONCURRENCY': value}))
+        with self.assertRaises(c.Refused):
+            c.parse_config(s.config_text(original) + b'CUTMY_WORKER_PREPARATION_CONCURRENCY=0\nCUTMY_WORKER_PREPARATION_CONCURRENCY=1\n')
+
+    def test_optional_worker_preparation_is_sealed_and_compose_reads_only_private_config(self):
+        original = configuration()
+        legacy = {key: original[key] for key in s.PUBLIC_KEYS if key in original}
+        self.assertEqual(s.public_configuration(original), legacy)
+        enabled = {**original, 'CUTMY_WORKER_PREPARATION_CONCURRENCY': '1'}
+        self.assertNotEqual(s.public_configuration(enabled), legacy)
+        self.assertNotEqual(s.public_configuration(enabled), s.public_configuration({**enabled, 'CUTMY_WORKER_PREPARATION_CONCURRENCY': '0'}))
+        public = yaml.safe_load((ROOT / 'compose.public.yml').read_text())
+        self.assertEqual(public['x-environment']['WORKER_PREPARATION_CONCURRENCY'], '${CUTMY_WORKER_PREPARATION_CONCURRENCY:-0}')
+        local = yaml.safe_load((ROOT / 'compose.example.yml').read_text())
+        self.assertEqual(local['services']['worker']['environment']['WORKER_PREPARATION_CONCURRENCY'], '${WORKER_PREPARATION_CONCURRENCY:-0}')
+        with patch.dict(os.environ, {'CUTMY_WORKER_PREPARATION_CONCURRENCY': '8', 'WORKER_PREPARATION_CONCURRENCY': '8'}, clear=True):
+            self.assertEqual(c.command_environment(), {})
+
     def test_real_python_entrypoint_imports_preserve_sealed_snapshot_without_env_override(self):
         with tempfile.TemporaryDirectory() as directory:
             snapshot = Path(directory) / 'source'

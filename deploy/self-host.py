@@ -8,6 +8,7 @@ configuration is implicit. Run egress-policy.py explicitly before starting apps.
 from __future__ import annotations
 
 import argparse
+import ast
 import datetime
 import gzip
 import importlib.util
@@ -34,7 +35,44 @@ REPO = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location('release_manifest', REPO / 'scripts/release_manifest.py')
 manifest = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(manifest)
-PUBLIC_KEYS = ('CUTMY_PROJECT', 'CUTMY_DOMAIN', 'CUTMY_HTTP_PORT', 'CUTMY_DATABASE_PREFIX', 'CUTMY_PROCESSING_PREFIX')
+PUBLIC_KEYS = ('CUTMY_PROJECT', 'CUTMY_DOMAIN', 'CUTMY_HTTP_PORT', 'CUTMY_DATABASE_PREFIX', 'CUTMY_PROCESSING_PREFIX',
+               'CUTMY_WORKER_PREPARATION_CONCURRENCY')
+
+
+def public_configuration(config):
+    # Omitted optional settings preserve the existing immutable state format.
+    return {key: config[key] for key in PUBLIC_KEYS if key in config}
+
+
+def default_configuration():
+    # Leaving optional keys absent also supports older immutable restore images.
+    return {'CUTMY_PROJECT': 'cutmy_public', 'CUTMY_DOMAIN': 'video.example.org',
+            'CUTMY_HTTP_PORT': '8080', 'CUTMY_DATABASE_PREFIX': '172.30.88', 'CUTMY_PROCESSING_PREFIX': '172.30.89',
+            **{key: secrets.token_urlsafe(48) for key in ('CUTMY_ADMIN_PASSWORD', 'CUTMY_MIGRATION_PASSWORD', 'CUTMY_APP_PASSWORD')}}
+
+
+def require_preparation_support(config, snapshot):
+    key = 'CUTMY_WORKER_PREPARATION_CONCURRENCY'
+    if key not in config:
+        return
+    supported = False
+    try:
+        compose_text = (snapshot / 'deploy/compose.public.yml').read_text()
+        tree = ast.parse((snapshot / 'deploy/public_common.py').read_text())
+        keys = set()
+        for node in tree.body:
+            if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                    and isinstance(node.targets[0], ast.Name) and node.targets[0].id in ('KEYS', 'OPTIONAL_KEYS')):
+                keys.update(ast.literal_eval(node.value))
+        parser = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'parse_config')
+        membership = ast.dump(ast.parse('key in KEYS | OPTIONAL_KEYS', mode='eval').body)
+        supported = (key in keys and any(ast.dump(node) == membership for node in ast.walk(parser))
+                     and '  WORKER_PREPARATION_CONCURRENCY: "${CUTMY_WORKER_PREPARATION_CONCURRENCY:-0}"' in compose_text.splitlines())
+    except (OSError, SyntaxError, ValueError, TypeError, StopIteration):
+        pass
+    require(supported, 'worker_preparation_requires_supported_snapshot')
+
+
 TOOL_PROBE_CODE = ('import json,subprocess; print(json.dumps({k:subprocess.check_output(v,stderr=subprocess.STDOUT)'
                    '.decode().splitlines()[0] for k,v in {"ffmpeg":["ffmpeg","-version"],'
                    '"ffprobe":["ffprobe","-version"],"yt_dlp":["yt-dlp","--version"],'
@@ -181,8 +219,9 @@ def load_state(state, config, verify_image=True):
     manifest.validate_source_shape(source)
     require(source_raw == manifest.canonical(source) and record['source_sha256'] == digest(source_raw)
             and record['profile'] == PROFILE and record['source_commit'] == source['commit']
-            and record['configuration'] == {k: config[k] for k in PUBLIC_KEYS}, 'state_identity_differ')
+            and record['configuration'] == public_configuration(config), 'state_identity_differ')
     snapshot = state_snapshot(state, source)
+    require_preparation_support(config, snapshot)
     env_file = state / 'compose.env'
     require(private_read(env_file, 8192) == config_text(runtime_environment(config, record['image_id'])),
             'private_configuration_differ')
@@ -200,9 +239,23 @@ def save_state(state, config, source, image, tools, snapshot_exists=False):
     private_write(state / 'image.json', canonical({
         'schema_version': 1, 'profile': PROFILE, 'source_sha256': digest(manifest.canonical(source)),
         'source_commit': source['commit'], 'image_id': image, 'runtime_version': expected_version(source),
-        'configuration': {k: config[k] for k in PUBLIC_KEYS}, 'tools': tools,
+        'configuration': public_configuration(config), 'tools': tools,
         'image_byte_reproducibility_claimed': False,
         'recorded_at': datetime.datetime.now(datetime.timezone.utc).isoformat()}))
+
+
+def adopt_image(state, config, from_state):
+    old = private_directory(from_state)
+    old_record = json.loads(private_read(old / 'image.json'))
+    source = json.loads(private_read(old / 'SOURCE.json'))
+    manifest.validate_source_shape(source)
+    require(old_record['source_sha256'] == digest(manifest.canonical(source)), 'adopted_source_differ')
+    snapshot = state_snapshot(old, source)
+    require_preparation_support(config, snapshot)
+    image_verify(old_record['image_id'], source, config)
+    state = private_directory(state, create=True)
+    shutil.copytree(snapshot, state / 'source')
+    save_state(state, config, source, old_record['image_id'], old_record['tools'], snapshot_exists=True)
 
 
 def build(state, config, revision, release):
@@ -210,6 +263,7 @@ def build(state, config, revision, release):
     source = manifest.immutable_source(REPO, 'release' if release else 'candidate', release or revision)
     require(source['commit'] == revision, 'release_tag_does_not_match_revision')
     manifest.validate_source(REPO, source)
+    require_preparation_support(config, REPO)
     state = private_directory(state, create=True)
     try:
         snapshot = manifest.materialize_source(REPO, source, state / 'source')
@@ -459,9 +513,7 @@ def main():
     args = parser.parse_args()
     manifest.outside_repo(args.state, REPO); manifest.outside_repo(args.config, REPO)
     if args.command == 'init-config':
-        private_write(args.config, config_text({'CUTMY_PROJECT': 'cutmy_public', 'CUTMY_DOMAIN': 'video.example.org',
-            'CUTMY_HTTP_PORT': '8080', 'CUTMY_DATABASE_PREFIX': '172.30.88', 'CUTMY_PROCESSING_PREFIX': '172.30.89',
-            **{key: secrets.token_urlsafe(48) for key in ('CUTMY_ADMIN_PASSWORD', 'CUTMY_MIGRATION_PASSWORD', 'CUTMY_APP_PASSWORD')}}))
+        private_write(args.config, config_text(default_configuration()))
         print('Private configuration created; review hostname, unused subnets and loopback port.')
         return
     config = parse_config(private_read(args.config, 8192))
@@ -471,16 +523,7 @@ def main():
         print('Immutable image state recorded: ' + str(args.state))
         return
     if args.command == 'adopt-image':
-        old = private_directory(args.from_state)
-        old_record = json.loads(private_read(old / 'image.json'))
-        source = json.loads(private_read(old / 'SOURCE.json'))
-        manifest.validate_source_shape(source)
-        require(old_record['source_sha256'] == digest(manifest.canonical(source)), 'adopted_source_differ')
-        snapshot = state_snapshot(old, source)
-        image_verify(old_record['image_id'], source, config)
-        state = private_directory(args.state, create=True)
-        shutil.copytree(snapshot, state / 'source')
-        save_state(state, config, source, old_record['image_id'], old_record['tools'], snapshot_exists=True)
+        adopt_image(args.state, config, args.from_state)
         print('Existing verified image adopted; no new image build performed.')
         return
     source, record, snapshot, env_file = load_state(args.state, config)

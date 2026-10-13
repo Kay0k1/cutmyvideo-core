@@ -88,6 +88,19 @@ host space for database/WAL, images, logs, backups and updates. The profile does
 not provision a filesystem quota. See [capacity evidence](performance.md) and
 [server limits](configuration.md).
 
+The private configuration accepts optional
+`CUTMY_WORKER_PREPARATION_CONCURRENCY=0` through `8`; generated configurations
+omit the key and retain zero. Compose
+passes it as `WORKER_PREPARATION_CONCURRENCY`. Additional preparation jobs retain
+their storage reservations and share the existing decoder/encoder limit; the
+profile still has one encoder slot. An explicitly configured value is sealed
+into the installation state. Changing it requires a new reviewed state rather
+than editing the saved Compose environment. Enable extra preparation only after
+measuring the workload's throughput, memory and disk use. Keep the key omitted
+when adopting an older image: an explicit value, including `0`, requires a
+snapshot whose private configuration parser and Compose mapping support it.
+Unsupported snapshots are refused before new installation state is written.
+
 ## Separate database roles
 
 `cutmy_admin` is PostgreSQL's bootstrap/operator administrator; its password
@@ -251,7 +264,20 @@ preexisting installations; never use `down -v` on retained state.
 
 ## Required acceptance before supported status
 
-The default `current-installation` mode checks a schema-005 installation and
+The default hosted acceptance mode is `metadata-resolution-006-to-007`. It pins
+the schema-006 predecessor `a9c75df83f965bf1d56e2263ca585ab77aeaf305` (tree
+`807d53bc6c19fac787fa0a57415b2ae0aa3a4dd2`) and its complete 218-file application
+inventory. Migration inputs 001–006 remain byte-identical; only the pinned007
+SQL/catalog pair is admitted. Its report requires all 42 checks across eight
+groups, actual catalogs and ordered histories, unchanged original rows, an
+old006 startup refusal, a fresh coordinated006 database/media rollback with
+retained downloads, and compatible007 database/media restoration including
+synthetic cached metadata and pending resolution leases. New-table CRUD runs
+over TCP as the restricted runtime role. Raw source and recovery records bind
+to the exact hosted candidate. This disposable-runner acceptance does not
+perform a production deployment.
+
+The historical `current-installation` mode checks a schema-005 installation and
 an actual image upgrade from immutable commit
 `1d684b4b0918138190439fc4ce223ff1bc22de40` (tree
 `c568f55433cd2be92e9e5dffc956e1f1dca6cadb`) to the exact hosted checkout.

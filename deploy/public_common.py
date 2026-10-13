@@ -19,6 +19,7 @@ PROFILE = 'public-v1'
 KEYS = {'CUTMY_PROJECT', 'CUTMY_DOMAIN', 'CUTMY_HTTP_PORT', 'CUTMY_DATABASE_PREFIX',
         'CUTMY_PROCESSING_PREFIX', 'CUTMY_ADMIN_PASSWORD', 'CUTMY_MIGRATION_PASSWORD',
         'CUTMY_APP_PASSWORD'}
+OPTIONAL_KEYS = {'CUTMY_WORKER_PREPARATION_CONCURRENCY'}
 PASSWORDS = ('CUTMY_ADMIN_PASSWORD', 'CUTMY_MIGRATION_PASSWORD', 'CUTMY_APP_PASSWORD')
 
 
@@ -83,10 +84,13 @@ def parse_config(data):
         if not raw or raw.startswith('#'):
             continue
         key, separator, value = raw.partition('=')
-        require(separator and key in KEYS and key not in values and value == value.strip(),
+        require(separator and key in KEYS | OPTIONAL_KEYS and key not in values and value == value.strip(),
                 'configuration_key_invalid')
         values[key] = value
-    require(set(values) == KEYS, 'configuration_keys_incomplete')
+    require(KEYS <= set(values), 'configuration_keys_incomplete')
+    if 'CUTMY_WORKER_PREPARATION_CONCURRENCY' in values:
+        require(re.fullmatch(r'[0-8]', values['CUTMY_WORKER_PREPARATION_CONCURRENCY']),
+                'worker_preparation_concurrency_invalid')
     require(re.fullmatch(r'cutmy_[a-z0-9][a-z0-9_]{0,24}', values['CUTMY_PROJECT']), 'project_name_invalid')
     require(len(values['CUTMY_DOMAIN']) <= 253 and re.fullmatch(
         r'(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?',
