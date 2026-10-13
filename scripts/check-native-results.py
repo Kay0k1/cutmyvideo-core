@@ -52,6 +52,59 @@ EFFICIENT_CUTTING_STORAGE_REQUIRED = {
     "TestSeparateSubtitleReservationChargesSharedSourceTextOnce",
 }
 
+UNIVERSAL_ENGINE_REQUIRED = {
+    "TestPlanRepeatedIntervalsProduceIndependentFilesAndPreserveLabels",
+    "TestPlanRepeatedIntervalRegeneratesChangedPublishedResult",
+}
+UNIVERSAL_SERVICE_REQUIRED = {
+    "TestWorkerReusesLocalProbeAcrossJobsAndStillVerifiesEachOutput",
+    "TestWorkerRepeatedLocalRangesReuseOwnedPublicationWithIndependentFiles",
+    "TestLazyThumbnailPresentationAcceptsOnlyCanonicalOwnerEndpoint",
+    "TestLazyThumbnailImportPublishesMetadataWithoutImageWork",
+    "TestLazyThumbnailOwnerRejectionPerformsNoResolutionOrFetch",
+    "TestLazyThumbnailConcurrentGetsReuseFileAndCommitExactCharge",
+    "TestLazyThumbnailCancelledBodyRemovesPartialAndReleasesPins",
+    "TestLazyThumbnailRestartAndExpiredMetadataRefresh",
+    "TestLazyThumbnailSmallQuotaBoundsActualTransfer",
+    "TestLazyThumbnailDisabledQuotaKeepsImageAllowanceBounded",
+    "TestLazyThumbnailDeadlineAndChangedIdentityDoNotFetch",
+    "TestLazyThumbnailOversizedBodyCannotWriteBeyondAllowance",
+    "TestLazyThumbnailUncertainAttachmentKeepsCompletedBytes",
+}
+UNIVERSAL_STORAGE_REQUIRED = {
+    "TestMetadataResolutionForceFreshInvalidationAndWinnerFence",
+    "TestMetadataResolutionForceFreshUnavailableClaimReturnsFreshWithoutCaching",
+    "TestMetadataResolutionInvalidationWaitsForPublisherAndRemovesFreshCache",
+    "TestMetadataResolutionRuntimeGrantsPermitLeaseCRUDWithoutOwnership",
+    "TestMetadataResolutionDoesNotRetainPoolConnections",
+    "TestMetadataResolutionExpiredAndInvalidatedOwnersCannotPublish",
+    "TestMetadataResolutionMigrationPreserves006RowsAndRestartsWithoutWrites",
+    "TestSourceMediaCleanupProtectedPrefixDoesNotHideEligibleRequests",
+    "TestWorkerCompactProgressPreservesOtherItemsAndLeaseFencing",
+    "TestFinalPlatformPublicationKeepsHLSCacheChargedUntilWorkspaceRemoval",
+    "TestPlatformHLSCacheReservationIsBoundedSharedAndDisabledOnSmallStores",
+    "TestPipelineInspectionSharesDecoderBudgetAndLegacyInspectionDoesNotReacquire",
+    "TestCopyExportsRetainDecoderBudgetForCompositeVerification",
+}
+UNIVERSAL_MEDIA_REQUIRED = {
+    "TestCopyJoinAudioPacketCopyPreservesClocks",
+    "TestCopyPacketDropPreservesUnknownPresentationTimestamps",
+    "TestCopyJoinAudioFallsBackWhenPacketTrimUnavailable",
+    "TestCopyKeyframeSelectionKeepsInitialAndDecodeClocks",
+    "TestLocalKeyframeCacheChecksSourceToolStreamAndCancellation",
+    "TestLocalKeyframeLookaheadBoundsFallbackAndCacheLimit",
+    "TestSubtitleIndexPreservesSpanningUnsortedRepeatedAndEmptyCues",
+    "TestSourceSubtitleIndexReusesOnlyOneBoundedTrack",
+    "TestCopyJoinReusesRepeatedSegmentsAndFaststartOnlyFinal",
+    "TestParallelHLSAdvancesPastStragglerInsideBoundedWindow",
+    "TestHLSJobCacheReusesBytesButKeepsIntervalAndNetworkBudgets",
+    "TestHLSInitializationCacheHasImmutableMapAndBoundedPinnedEntries",
+    "TestHLSJobCacheDisabledForSmallStores",
+    "TestHLSPacketAnchorHonorsPreparationDecoderBudget",
+    "TestPacketDropCapabilitiesCheckToolIdentityBoundsAndCancellation",
+    "TestCopyPacketTrimEligibilityPreservesUnprovenClockPaths",
+}
+
 REQUIRED = [
     {"TestEngineInspectAndExportActualMedia", "TestConcurrentPublicationHasExactlyOneCompleteWinner", "TestCLIInspectAndClipActualMedia", "TestCLIBatchSavedPlanRelativeInputAndJoinedAudio", "TestPlanRoundTripActualOutputsAndPartialPublication"},
     {"TestProcessCancellationTerminatesDescendants", "TestProcessOutputStopsUnboundedProducer"},
@@ -112,6 +165,11 @@ REQUIRED[2].update(EFFICIENT_CUTTING_SERVICE_REQUIRED)
 REQUIRED[3].update(EFFICIENT_CUTTING_STORAGE_REQUIRED)
 REQUIRED[4].update(EFFICIENT_CUTTING_MEDIA_REQUIRED)
 
+REQUIRED[0].update(UNIVERSAL_ENGINE_REQUIRED)
+REQUIRED[2].update(UNIVERSAL_SERVICE_REQUIRED)
+REQUIRED[3].update(UNIVERSAL_STORAGE_REQUIRED)
+REQUIRED[4].update(UNIVERSAL_MEDIA_REQUIRED)
+
 REQUIRED_PACKAGES = [
     {ENGINE_PACKAGE, FS_PACKAGE, CLI_PACKAGE},
     {APP_PACKAGE},
@@ -136,6 +194,7 @@ BOOKWORM_REQUIRED = {
 
 BOOKWORM_REQUIRED.update(NEW_MEDIA_REQUIRED)
 BOOKWORM_REQUIRED.update(EFFICIENT_CUTTING_MEDIA_REQUIRED)
+BOOKWORM_REQUIRED.update(UNIVERSAL_MEDIA_REQUIRED)
 
 
 def verify_report(filename, names, packages):
