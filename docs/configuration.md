@@ -37,7 +37,8 @@ real container acceptance.
 | `ARTIFACT_TTL` | `24h` | Deadline assigned to newly published results |
 | `STORAGE_SAFETY_BYTES` | 536870912 (512 MiB) | Actual disk headroom; zero allowed |
 | `STORAGE_WAIT_TIMEOUT` | `30m` | Persisted deadline for accepted storage-waiting jobs |
-| `WORKER_CONCURRENCY` | 1 | Local worker processing slots; allowed 1–8 |
+| `WORKER_CONCURRENCY` | 1 | Local encoder/decoder processing slots; allowed 1–8 |
+| `WORKER_PREPARATION_CONCURRENCY` | 0 | Additional admitted jobs that prepare inputs while encoder slots are occupied; allowed 0–8. Zero retains the legacy job count and job-wide permit. Total active worker jobs are bounded by the sum of these two settings, at most 16. |
 | `FFMPEG_THREADS` | 2 | Codec threads per process; allowed 1–32 |
 | `FFMPEG_PROFILE` | `fast` | `fast` favors CPU time; `compact` favors smaller files |
 | `FFMPEG_PATH` / `FFPROBE_PATH` / `YTDLP_PATH` | Executable names | Media/extractor executables |
@@ -60,6 +61,18 @@ remote staging reservation: remote producers use
 Exact exports cap bitrate to fit the output ceiling; copy retains packets and can
 fail the size limit. A 12-hour permitted interval does not guarantee completion
 within the configured deadline or disk budget.
+
+An enabled preparation pipeline releases encoder slots during upstream metadata
+resolution, network downloads and result publication. Cold local inspection and
+HLS media inspection/remux share the existing weighted decoder budget; unknown
+or above-UHD dimensions consume its whole capacity. Composite stream-copy
+exports retain this weight because their inspections can initialize decoder
+contexts even though the media producer preserves packets. Preparation does not
+increase the maximum simultaneous export processes. Additional admitted jobs
+reserve disk independently and renew their leases while waiting, so tune this
+setting using measured queue latency, container memory and reserved disk bytes.
+The default remains zero until representative throughput/resource observations
+justify enabling it for an installation.
 
 Outputs and bounded temporary inputs are reserved before processing. Accepted
 jobs can enter `waiting_storage`; impossible reservations are rejected. Files

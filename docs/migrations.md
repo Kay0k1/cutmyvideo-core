@@ -28,6 +28,7 @@ There are no invented `v1`/`v2` markers for those unversioned installations.
 | 4 | `20261010-cache-retention-v1` | Replaces the cache expiry index with `(expires_at, source_id)` for ordered, bounded cache cleanup. Leaves cache payloads, scan progress, deletion retries and storage accounting unchanged. |
 | 5 | `20261011-source-retention-v1` | Adds derived job/preview pin counts, exact membership triggers, an eligible-source index and durable bounded audit progress. Backfills counts while excluding membership writers; leaves original source values, jobs, media and byte accounting intact. |
 | 6 | `20261012-source-media-cleanup-v1` | Adds durable post-success source-media cleanup and read leases; retains source metadata, jobs and result artifacts independently. |
+| 7 | `20261014-metadata-resolution-leases-v1` | Coordinates platform metadata extraction through expiring owner/token leases without keeping SQL connections occupied during upstream work. |
 
 SQL files and expected catalog layouts live in
 [`internal/app/migrations`](../internal/app/migrations). `app_schema_versions`
@@ -127,3 +128,38 @@ coordinated pre-upgrade database/media restore; removing version markers or
 columns is not a valid rollback. Restoring only metadata cannot recreate source
 bytes that successful cleanup intentionally removed. Backups and the prepared
 compatible recovery release must be verified before deployment.
+
+## Migration 7: metadata resolution leases
+
+`007_20261014_metadata_resolution_leases_v1.sql` adds one optional coordination
+table keyed by source. It changes no historical values, media, byte counters or
+positions 1–6. Each lease expires after three minutes; an unavailable coordinator
+or a peer that takes more than the two-second cache wait budget retains the
+independent fresh-resolution fallback. Replacement tokens and explicit cache
+invalidation fence older resolver publications. Source deletion cascades leases.
+
+The SQL pool is used only for short claim, read and publication transactions.
+Upstream extraction does not retain a pooled connection, so concurrent cache
+misses leave lease heartbeats and other database work able to acquire one.
+Successful cache publication and claim removal commit together.
+
+Older guarded binaries refuse position 7. Before rollout, verify a compatible
+recovery image and coordinated backup/restore on the new catalog; current
+position-6 deployment evidence does not establish this transition. Runtime
+grants must include SELECT/INSERT/UPDATE/DELETE on the new table. The normal
+`deploy/public-grants.sql` catalog-based grant pass includes it automatically.
+
+The bounded owned-PostgreSQL17 gates verify the exact position-6 baseline CLI
+refuses position 7 without catalog or row-version changes, a restricted runtime
+LOGIN can start and perform the new lease CRUD/cache publication without schema
+ownership or CREATE, and a real custom-format `pg_dump`/`pg_restore` into a fresh
+owned database preserves all rows and coordinated media bytes. Compatible
+position-7 startup leaves restored row versions and catalog objects unchanged.
+These are `TestMetadataResolutionPreviousBinaryRefuses007WithoutWrites`,
+`TestMetadataResolutionRuntimeGrantsPermitLeaseCRUDWithoutOwnership`, and
+`TestMetadataResolutionCoordinated007BackupRestorePreservesRowsAndMedia`.
+The exact 6→7 upgrade also preserves historical rows and migration positions in
+`TestMetadataResolutionMigrationPreserves006RowsAndRestartsWithoutWrites`.
+These disposable-database checks establish local compatibility and recovery
+behavior. No position-7 recovery release image, public hosting transition, or
+production rollout has been performed by this work.

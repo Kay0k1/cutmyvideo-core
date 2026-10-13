@@ -9,6 +9,10 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 - Optional six-second foreground preview windows with independent cache identity and a bounded wait for overlapping source inspection; the ordinary thirty-second API remains compatible.
 
 ### Changed
+- Local singleton/batch exports reuse verified input probes, bounded keyframe windows, exact repeated results and parsed subtitle tracks; final MP4 faststart is omitted from temporary join components.
+- HLS downloads use a bounded rolling pool and charged job-local segment/init-map reuse; worker input probes can be reused across jobs without skipping output verification.
+- Metadata resolution releases PostgreSQL connections during upstream work. Additive migration 7 persists expiring resolving leases; older migration-6 binaries require coordinated recovery rather than an image-only rollback.
+- Optional thumbnails load on first authorized GET. Worker preparation overlap is opt-in, and progress updates retain per-item lease fencing.
 - Local batches reuse fresh input inspection and bounded per-track subtitle staging within one operation. Source replacement is rejected, while keyframe, staged-input and output verification remain fresh.
 - Accurate joins reserve only actual media producers; shared source-subtitle staging is reserved once per batch and cleaned before releasing its last reservation.
 

@@ -1,5 +1,9 @@
 # Performance and recovery
 
+The current universal-core pass is tracked in the
+[implementation and measurement report](../benchmarks/2026-10-14-universal-go-core/README.md).
+Its in-progress observations are separate from the completed historical results below.
+
 Responsive preview evidence: [five identical-tool cold/warm observations and
 bounded search-strip design, 2026-10-12](../benchmarks/2026-10-12-responsive-preview/README.md).
 
@@ -37,13 +41,56 @@ The core spends most export time in network inspection and FFmpeg, rather than
 Go function calls. Defaults prioritize short, accurate clips on a CPU-only
 server. Stream copy retains its documented keyframe boundary adjustment.
 
+## Bounded reuse in the Go core
+
+The library and CLI share one verified local-export session per operation.
+Singleton exports reuse their initial input inspection, and batches reuse exact
+repeated ranges while producing separate output files with independent inodes.
+The source and previously published file identities are checked before reuse;
+changed outputs regenerate from the verified source. Output probes and publication
+remain independent. No database is required by `pkg/engine`.
+
+Copy batches plan bounded keyframe windows (at most 16 windows and 4,096 retained
+keyframes), extending only across nearby requested starts. An unsuccessful
+optional lookahead falls back to the original scan. Temporary MP4 join components
+skip faststart; only the final MP4 pays the relocation cost. Extracted source
+subtitles retain at most one bounded parsed track, with indexed overlap searches
+and a disk-backed fallback for larger or unsorted data. PCM waveform aggregation
+uses integer per-bin peaks before normalization, preserving source-rate clocks,
+multichannel peaks and split sample handling.
+
+Worker processes also reuse verified input probes across jobs. HLS jobs can keep
+up to 128 complete segment/init-map files in a charged job-local cache, capped at
+32 MiB and disabled for stores of 256 MiB or less. Reads still consume each
+interval's staging budget; only real fetches consume the network guard's byte
+budget. A rolling pool retains ordered concatenation with four active downloads
+and at most eight outstanding positions, allowing later requests to progress
+while an earlier segment is slow. Files and reservations remain attached to the
+job workspace until acknowledged cleanup.
+
+`WORKER_PREPARATION_CONCURRENCY=0` retains the existing scheduling default.
+An explicit positive value permits bounded preparation overlap with the shared,
+weighted decoder/export budget; publication can proceed after releasing that
+budget. Stream-copy operations keep conservative dimension weights because
+output inspection and subtitles can still decode. Progress persistence updates
+only the affected item/stage under its lease fence, reducing application work;
+PostgreSQL can still rewrite the JSONB value, so this is not a claim of reduced WAL.
+Metadata misses use migration-7 persisted resolving leases, releasing pooled
+connections during upstream work. See [migration recovery](migrations.md).
+
+The finite comparison protocol is in
+[`scripts/core-performance.md`](../scripts/core-performance.md). It records
+whole-operation and isolated-stage costs separately and independently decodes
+every output. Reuse is an optimization for matching operations; it does not
+establish an arbitrary-media throughput or competitor comparison.
+
 ## Encoding profiles
 
 `FFMPEG_PROFILE=fast` is the server default. The CLI uses `--profile fast` and
 the Go package accepts `engine.Config{EncodeProfile: "fast"}`. It uses libx264
 ultrafast, CRF 18 and CABAC. `compact` uses the previous veryfast/CRF 20 settings.
-Both retain the requested resolution limit, frame cadence and AAC 192 kbit/s;
-neither increases source resolution. MP3 and stream-copy behavior are unchanged.
+Both retain the requested resolution limit, frame cadence and AAC 192 kbit/s
+(128 kbit/s for a selected mono track); neither increases source resolution. MP3 and stream-copy behavior are unchanged.
 Fast encoding produces larger files: choose compact when transfer size matters
 more than CPU time.
 

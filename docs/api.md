@@ -74,7 +74,7 @@ and headers are never returned to clients.
 | `embed_url` | YouTube embed, or null |
 | `thumbnail_url` | Owner-protected, bounded and inspected image endpoint, or null |
 
-All nullable fields are always included. `width` and `height` are optional. A source describes the **entire original recording**, not a preselected fragment. Finite HLS duration is measured from the verified full `ENDLIST` manifest; progressive sources use provider metadata. Streams are resolved again for processing; their video identity and timeline are checked against the stored snapshot. Thumbnails expire with the source and require the same session cookie as media.
+All nullable fields are always included. `width` and `height` are optional. A source describes the **entire original recording**, not a preselected fragment. Finite HLS duration is measured from the verified full `ENDLIST` manifest; progressive sources use provider metadata. Streams are resolved again for processing; their video identity and timeline are checked against the stored snapshot. Thumbnails expire with the source and require the same session cookie as media. A platform source may advertise `thumbnail_url` before the image is downloaded; this is an optional lazy endpoint, not a promise that an upstream image is available. Import does not wait for image transfer. The first authorized GET has a two-second preparation budget, may refresh expired private metadata, and publishes only a fully inspected PNG/JPEG. An absent, unsupported, oversized or unavailable optional image returns `404 preview_unavailable`; foreign/expired source IDs return 404, and removed original media returns `410 source_removed`. Reader-admission/database failures retain the endpoint's existing error behavior. Failed optional preparation does not remove the source or its exports.
 
 YouTube inputs support watch, short-link, Shorts, recorded-live, and embed forms on explicitly allowed hosts, including mobile/music and nocookie embeds. Recognized platform HTTP/schemeless pastes are upgraded to HTTPS before fetching. YouTube playlist, timestamp, tracking, and fragment parameters do not affect export intervals. Other platform access-essential page parameters are preserved; unknown/direct inputs retain their original signed query and require explicit HTTPS. Known malformed YouTube links return `400 invalid_youtube_url`; other known malformed platform URLs return `400 invalid_source_url` or `unsupported_collection`.
 
@@ -232,8 +232,15 @@ Known channel/collection URL rejections occur before source preparation: `400 un
 
 Source preparation uses a shared PostgreSQL reservation, rather than a process
 mutex alone. Four preparations globally and one per owner may be admitted.
-Uploads reserve the known body size (capped at `MAX_SOURCE_BYTES`) or `MAX_SOURCE_BYTES` for unknown sizes; metadata-only platform preparations reserve only the bounded
-2 MiB thumbnail in both the global and owner source budgets. Completed sources
+Uploads reserve the known body size (capped at `MAX_SOURCE_BYTES`) or `MAX_SOURCE_BYTES` for unknown sizes. Metadata-only platform imports retain the existing transient
+2 MiB admission reservation in the global and owner source budgets, even though
+the image download is deferred. This admission requirement can still reject an
+import when that headroom is unavailable. The reservation is released when the
+metadata-only source commits. A first thumbnail GET obtains a separate bounded
+reservation, capped at 2 MiB and the remaining enabled global/owner allowances;
+disabled quota limits do not remove the hard image-size ceiling. Its actual
+completed image size replaces the reservation atomically. Concurrent GETs wait
+within the preparation budget and can reuse the published file. Completed sources
 convert the reservation into actual registered file sizes atomically. An unknown
 commit outcome retains files and does not proactively release an unresolved
 reservation. Recovery consults the authoritative database state: a successful
