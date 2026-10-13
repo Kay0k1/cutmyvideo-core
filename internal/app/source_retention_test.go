@@ -43,6 +43,28 @@ func sourcePinRevision(t *testing.T, s *Store, id string) (revision int64, xmin 
 	return
 }
 
+func waitSourcePinBackendExit(t *testing.T, s *Store, pid int32, started time.Time) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	poll := time.NewTicker(5 * time.Millisecond)
+	defer poll.Stop()
+	for {
+		var present bool
+		if err := s.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid=$1 AND backend_start=$2)`, pid, started).Scan(&present); err != nil {
+			t.Fatal("could not observe canceled preview backend exit", err)
+		}
+		if !present {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("canceled preview backend did not exit while its storage fence was held", ctx.Err())
+		case <-poll.C:
+		}
+	}
+}
+
 func TestSourcePinMembershipTransitionsAndRollback(t *testing.T) {
 	s := testStore(t)
 	for _, id := range []string{"first", "second"} {
@@ -149,21 +171,50 @@ func TestSourcePinFenceSerializesDirectPreviewWithDeletion(t *testing.T) {
 	assertSourcePins(t, s, "raced", 0, 1, true)
 	// In the reverse order a direct membership writer must acquire the fence
 	// before touching rows, then cancel without a partial pin/counter update.
+	stored, reserved := ledgerBytes(t, s)
 	tx, err = s.storageTx(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer rollbackStorage(tx)
+	identityCtx, identityCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	connection, err := s.DB.Acquire(identityCtx)
+	if err != nil {
+		identityCancel()
+		t.Fatal(err)
+	}
+	defer connection.Release()
+	var backend int32
+	var backendStarted time.Time
+	err = connection.QueryRow(identityCtx, `SELECT pid,backend_start FROM pg_stat_activity WHERE pid=pg_backend_pid()`).Scan(&backend, &backendStarted)
+	identityCancel()
+	if err != nil {
+		t.Fatal(err)
+	}
 	ctx, cancel = context.WithTimeout(context.Background(), 50*time.Millisecond)
-	_, err = s.DB.Exec(ctx, `DELETE FROM storage_reservations WHERE id='raced-preview'`)
+	_, err = connection.Exec(ctx, `DELETE FROM storage_reservations WHERE id='raced-preview'`)
 	cancel()
 	if !errors.Is(err, context.DeadlineExceeded) {
-		rollbackStorage(tx)
 		t.Fatal("direct cancellation skipped storage fence", err)
 	}
+	// Exec's client deadline is not a server cancellation acknowledgement.
+	// pgx closes canceled sockets asynchronously; keep the fence until this
+	// exact backend has exited, so the autocommit DELETE cannot win an unlock.
+	closeCtx, closeCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	err = connection.Conn().Close(closeCtx)
+	closeCancel()
+	connection.Release()
+	if err != nil {
+		t.Fatal("could not close canceled preview connection", err)
+	}
+	waitSourcePinBackendExit(t, s, backend, backendStarted)
 	if err = tx.Rollback(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	assertSourcePins(t, s, "raced", 0, 1, true)
+	if actualStored, actualReserved := ledgerBytes(t, s); actualStored != stored || actualReserved != reserved {
+		t.Fatal("canceled direct preview changed byte accounting", actualStored, actualReserved, stored, reserved)
+	}
 }
 
 func TestSourceRetentionFalseZerosContinueToHealthyTail(t *testing.T) {
