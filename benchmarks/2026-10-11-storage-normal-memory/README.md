@@ -31,3 +31,5 @@ python3 -B benchmarks/storage-normal-memory/verify_saved.py --directory /absolut
 ```
 
 Do not add `-I`: the reader imports sibling modules. This command checks saved data only, including raw counters, endpoint/ACK binding, all seven verdicts and cleanup; it does not replay PostgreSQL or Go. The two historical failed artifacts are retained as refusal evidence and cannot produce a successful saved-data verdict. On failure, the corrected stream keeps its first rejected periodic row before validation: samples counts accepted rows, bytes counts all written rows, and a separate preservation error cannot replace the first refusal.
+
+Raw diagnostics were retired from the working tree on 2026-10-13. The [original files](https://github.com/Kay0k1/cutmyvideo-core/tree/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/benchmarks/2026-10-11-storage-normal-memory) remain in Git history; future runs follow [artifact retention](../../docs/artifacts.md).

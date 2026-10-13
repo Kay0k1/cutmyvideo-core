@@ -15,9 +15,10 @@ import (
 )
 
 type Store struct {
-	DB       *pgxpool.Pool
-	configMu sync.RWMutex
-	config   Config
+	DB          *pgxpool.Pool
+	configMu    sync.RWMutex
+	config      Config
+	localProbes localProbeCache
 }
 
 type dbExecutor interface {

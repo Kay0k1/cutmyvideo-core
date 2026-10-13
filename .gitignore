@@ -11,3 +11,11 @@ __pycache__/
 coverage.out
 *.cookies
 /cutmy
+/artifacts/
+/reports/
+/benchmark-results/
+/.cache/
+/benchmarks/20*/raw/
+/benchmarks/20*/*.zip
+/benchmarks/20*/*.gz
+/verification/20*/raw/

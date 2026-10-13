@@ -13,7 +13,7 @@ measurements retain their original toolchain; release builds now use Go 1.27.2.
 The baseline is `c9f339550ae3b6507cfb9d2c9f526d39be33c815` plus the same benchmark
 harness. The after implementation pools `gzip.BestSpeed` writers and resets them
 to `io.Discard` before returning them. Complete context is in
-[environment.json](environment.json).
+[environment.json](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/benchmarks/2026-10-10-metadata-compression/environment.json).
 
 | Fixture | Before median | After median | Time change | Allocated bytes before / after | Stored bytes |
 |---|---:|---:|---:|---:|---:|
@@ -26,17 +26,17 @@ repeated encoder construction even when compression is attempted and discarded.
 The small JSON control bypasses compression and retains ten allocations.
 Allocated bytes are cumulative per operation, not peak/RSS memory.
 
-Raw primary data: [before.txt](before.txt), [after.txt](after.txt). Machine-readable
+Raw primary data: [before.txt](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/benchmarks/2026-10-10-metadata-compression/before.txt), [after.txt](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/benchmarks/2026-10-10-metadata-compression/after.txt). Machine-readable
 medians/ranges: [summary.json](summary.json). Additional alternating three-pair
 five-second runs show the same allocation effect in
-[steady-before.txt](steady-before.txt) and [steady-after.txt](steady-after.txt).
+[steady-before.txt](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/benchmarks/2026-10-10-metadata-compression/steady-before.txt) and [steady-after.txt](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/benchmarks/2026-10-10-metadata-compression/steady-after.txt).
 Their third pair overlapped race-test compilation; those outliers remain in the
 raw data and are not hidden. Timings include normal GC/host variability.
 
 This is a steady-state benefit. `sync.Pool` may discard idle writers during GC;
 first or infrequent fills may receive no benefit. Completed output buffers are
 not pooled. Concurrency/ownership regressions, gzip compatibility and existing
-size/corruption limits are covered by [validation.txt](validation.txt).
+size/corruption limits are covered by [validation.txt](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/benchmarks/2026-10-10-metadata-compression/validation.txt).
 
 ## Reproduce
 
@@ -53,3 +53,5 @@ do not use that older security-patch level for a new production release. For new
 comparisons keep the toolchain identical between runs. Baseline and after must
 both include the encode-only harness; otherwise comparing benchmark names alone
 does not reproduce this experiment.
+
+Raw diagnostics were retired from the working tree on 2026-10-13. The [original files](https://github.com/Kay0k1/cutmyvideo-core/tree/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/benchmarks/2026-10-10-metadata-compression) remain in Git history; future runs follow [artifact retention](../../docs/artifacts.md).

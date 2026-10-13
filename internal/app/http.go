@@ -751,12 +751,17 @@ func (s *Server) sourceTracks(w http.ResponseWriter, r *http.Request, owner stri
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
-	release, err := s.pinSourceInspection(ctx, source, timeout)
+	ctx, source, release, err := s.prepareLocalSource(ctx, source, timeout)
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			lookupError(w, err)
-		} else {
+		if r.Context().Err() != nil {
+			return
+		}
+		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrSourceMediaRemoved) {
+			sourceMediaError(w, err)
+		} else if errors.Is(err, errSourceServerBusy) || errors.Is(err, errDatabaseUnavailable) || sourceTimedOut(ctx, err) {
 			writeSourceAdmissionError(w, ctx, err)
+		} else {
+			writeError(w, http.StatusUnprocessableEntity, "unsupported_media", "Could not inspect source tracks; upload a supported media file")
 		}
 		return
 	}
@@ -829,13 +834,19 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request, owner string)
 			timeout = 2 * time.Minute
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), timeout)
-		release, pinErr := s.pinSourceInspection(ctx, v, timeout)
+		ctx, _, release, pinErr := s.prepareLocalSource(ctx, v, timeout)
 		if pinErr != nil {
 			cancel()
-			if errors.Is(pinErr, ErrNotFound) {
-				lookupError(w, pinErr)
-			} else {
+			if r.Context().Err() != nil {
+				return
+			}
+			if errors.Is(pinErr, ErrNotFound) || errors.Is(pinErr, ErrSourceMediaRemoved) {
+				sourceMediaError(w, pinErr)
+			} else if errors.Is(pinErr, errSourceServerBusy) || errors.Is(pinErr, errDatabaseUnavailable) || sourceTimedOut(ctx, pinErr) {
 				writeSourceAdmissionError(w, r.Context(), pinErr)
+			} else {
+				problem := exportProblem(pinErr)
+				writeError(w, http.StatusUnprocessableEntity, problem.code, problem.message)
 			}
 			return
 		}

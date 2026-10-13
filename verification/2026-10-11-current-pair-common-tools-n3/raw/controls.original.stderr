@@ -1,7 +1,0 @@
-test_old_generator_with_distinct_common_runtime_is_retained_and_reported (current_pair_pure_controls.FixtureAndAudioControls.test_old_generator_with_distinct_common_runtime_is_retained_and_reported) ... ok
-test_generation_sha_substitution_or_missing_identity_is_rejected (current_pair_pure_controls.FixtureAndAudioControls.test_generation_sha_substitution_or_missing_identity_is_rejected) ... ok
-
-----------------------------------------------------------------------
-Ran 2 tests in 0.003s
-
-OK

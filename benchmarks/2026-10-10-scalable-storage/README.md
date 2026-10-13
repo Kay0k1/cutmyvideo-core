@@ -42,7 +42,7 @@ allocation churn, live heap, RSS and database/cache memory are different scopes.
 
 Observed baseline checkout may include the identical measurement harness on the immutable baseline runtime. The runtime and harness digests are independently checked against the listed revisions. Reproduce with that runtime and copy only the two frozen harness files from the after revision when needed.
 
-Matching tools/configuration are recorded in [summary.json](summary.json). Exact SQL, full plan trees, progress curves, environment/cgroup samples and workload logs are preserved byte-for-byte in the gzip files listed by [raw-manifest.json](raw-manifest.json). Each input size uses an isolated disposable schema. Database caches/WAL/MVCC state and workload ordering affect results; the container was not reset between compared runs.
+Matching tools/configuration are recorded in [summary.json](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/benchmarks/2026-10-10-scalable-storage/summary.json). Exact SQL, full plan trees, progress curves, environment/cgroup samples and workload logs are preserved byte-for-byte in the gzip files listed by [raw-manifest.json](https://github.com/Kay0k1/cutmyvideo-core/blob/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/benchmarks/2026-10-10-scalable-storage/raw-manifest.json). Each input size uses an isolated disposable schema. Database caches/WAL/MVCC state and workload ordering affect results; the container was not reset between compared runs.
 
 ## Environment and interpretation
 
@@ -257,3 +257,5 @@ gzip -dc after/rows-100000.json.gz
 No production server, real recording or live provider was used. Owned schemas
 and synthetic filesystem entries were removed after each size. Failed setup
 would be incomplete evidence; it is not silently treated as a successful run.
+
+Raw diagnostics were retired from the working tree on 2026-10-13. The [original files](https://github.com/Kay0k1/cutmyvideo-core/tree/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/benchmarks/2026-10-10-scalable-storage) remain in Git history; future runs follow [artifact retention](../../docs/artifacts.md).

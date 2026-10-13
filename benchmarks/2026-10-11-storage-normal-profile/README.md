@@ -36,3 +36,5 @@ python3 -B benchmarks/storage-normal-capacity/verify_saved.py \
 ```
 
 For the promotion campaign select run 38153402987, its own ZIP and matching context. This saved-data verifier reads original files and requires no Go compilation, database, container or workload execution. A successful result verifies the recorded observations; it does not reproduce timings or establish an SLA.
+
+Raw diagnostics were retired from the working tree on 2026-10-13. The [original files](https://github.com/Kay0k1/cutmyvideo-core/tree/faccc12e510fdb57c112f2df76a6bedb14b1d5fb/benchmarks/2026-10-11-storage-normal-profile) remain in Git history; future runs follow [artifact retention](../../docs/artifacts.md).

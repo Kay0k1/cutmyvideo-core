@@ -1,1 +1,0 @@
-ok  	github.com/Kay0k1/cutmyvideo-core/internal/app	4.196s

@@ -26,7 +26,7 @@ for ordinary database failures. Readiness retains `503 not_ready`.
 | POST | `/sources` | Source; request `{url}` |
 | POST | `/uploads` | Source; multipart field `file` |
 | GET | `/sources/{id}` | Source |
-| GET | `/sources/{id}/tracks` | Fresh local `{tracks:[Track...]}` with absolute indices and language/title metadata; requires owner, returns `tracks_unavailable` for unstaged platform media |
+| GET | `/sources/{id}/tracks` | Verified local `{tracks:[Track...]}` with absolute indices and language/title metadata; requires owner, returns `tracks_unavailable` for unstaged platform media |
 | DELETE | `/sources/{id}` | HTTP 204; source, terminal jobs and outputs removed; active exports return 409 `source_in_use` |
 | GET | `/sources/{id}/media` | Authorized source bytes; Range supported |
 | GET | `/sources/{id}/preview?start_ms=…` | Aligned 30-second H.264/AAC MP4 window, no-store; source time in X-Preview-Start-MS / X-Preview-End-MS; X-Preview-Cache is hit/miss; optional priority=background yields rendering capacity to foreground seeks |
@@ -100,7 +100,7 @@ most one playable video and one audio stream: default audio, otherwise first
 audio. MP3 exports the selected audio only. HTTP source `width`/`height` remain
 persisted coded dimensions
 for local files and provider format metadata for platforms. Only fresh SDK/CLI
-inspection and the fresh local `/tracks` response expose additive display dimensions; metadata reads do not re-probe. Preview headers `X-Source-Display-Width` and `X-Source-Display-Height` describe the upright original before preview scaling, including cache hits.
+inspection and the verified local `/tracks` response expose additive display dimensions; metadata reads do not re-probe. Local operations may reuse bounded, owner-specific probe metadata for five minutes after checking the original file identity, size and modification time; changed or removed files never use that cache. Preview headers `X-Source-Display-Width` and `X-Source-Display-Height` describe the upright original before preview scaling, including cache hits.
 
 Optional `crop: {x,y,width,height}` uses normalized upright square-pixel display
 coordinates. It requires accurate MP4, a rectangle inside the image and at least

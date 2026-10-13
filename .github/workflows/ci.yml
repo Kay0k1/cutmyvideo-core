@@ -17,6 +17,13 @@ permissions:
   contents: read
 
 jobs:
+  artifact-policy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - run: python3 scripts/check-artifacts.py
   native:
     name: Native media (${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
@@ -92,13 +99,14 @@ jobs:
           ffprobe -version | tee ffprobe-version.txt
           python_command=python3
           if [ "$RUNNER_OS" = Windows ]; then python_command=python; fi
+          "$python_command" -m unittest discover -s scripts -p prune_workspace_artifacts_test.py
           "$python_command" -m unittest discover -s scripts -p release_consumer_test.py
           "$python_command" -m unittest discover -s scripts -p release_download_test.py
           "$python_command" -m unittest discover -s scripts -p consumer_process_native_test.py
           "$python_command" scripts/check-media-capabilities.py
           go test -json -race -count=1 -timeout=8m ./pkg/engine ./internal/fsdurable ./cmd/cutmy | tee native-media-tests.jsonl
           go test -json -race -count=1 -timeout=3m ./internal/app -run '^(TestProcess.*|TestDiagnosticCopyCannotBypassMemoryBound)$' | tee native-process-tests.jsonl
-          go test -json -race -count=1 -timeout=3m ./internal/app -run '^(TestNativeServiceUploadExportAndDownload|TestSourceMediaCleanup(Keeps.*|Waits.*|Failure.*|Partial.*|Restart.*|Job.*|Migration.*|JSON.*|Recovers.*|Preserves.*)|TestSourceMediaReader.*|TestExpiredSourceMediaReadersPruneInBoundedUnlockedBatches|TestWaveformPrivateCacheAccountingAndDeletion|TestPreviewOriginalDisplayGeometrySurvivesChargedToolFreeCache|TestPreviewMediaPolicyUpgradeDoesNotReuseLegacyCache|TestLocalMediaDimensionsRefresh(FencesLegacyDecoderCapacity|PreservesIdentityAndCancellation|KeepsUnknownInputConservative)|TestHTTPTracksAreFreshOwnerProtectedAndRemoteExplicit|TestSeparateBatchPartialFailureKeepsCompletedDownload|TestJoinedLostPublicationAcknowledgementResumesWithoutRendering|TestWorkerNotificationWakesAfterCommitAndClosesOnCancellation|TestInsertedJobEmitsQueueNotification|TestArchive.*|TestQuickPreviewUsesIndependentAlignedCacheAndWaitsForTrackInspection|TestWorkerSubtitleCacheRemainsChargedUntilFinalUnfinishedPublication)$' | tee native-service-tests.jsonl
+          go test -json -race -count=1 -timeout=3m ./internal/app -run '^(TestLocalProbeCache.*|TestVerifiedExportAdmissionDoesNotWaitForBusyPreviewPool|TestNativeServiceUploadExportAndDownload|TestSourceMediaCleanup(Keeps.*|Waits.*|Failure.*|Partial.*|Restart.*|Job.*|Migration.*|JSON.*|Recovers.*|Preserves.*)|TestSourceMediaReader.*|TestExpiredSourceMediaReadersPruneInBoundedUnlockedBatches|TestWaveformPrivateCacheAccountingAndDeletion|TestPreviewOriginalDisplayGeometrySurvivesChargedToolFreeCache|TestPreviewMediaPolicyUpgradeDoesNotReuseLegacyCache|TestLocalMediaDimensionsRefresh(FencesLegacyDecoderCapacity|PreservesIdentityAndCancellation|KeepsUnknownInputConservative)|TestHTTPTracksAreFreshOwnerProtectedAndRemoteExplicit|TestSeparateBatchPartialFailureKeepsCompletedDownload|TestJoinedLostPublicationAcknowledgementResumesWithoutRendering|TestWorkerNotificationWakesAfterCommitAndClosesOnCancellation|TestInsertedJobEmitsQueueNotification|TestArchive.*|TestQuickPreviewUsesIndependentAlignedCacheAndWaitsForTrackInspection|TestWorkerSubtitleCacheRemainsChargedUntilFinalUnfinishedPublication)$' | tee native-service-tests.jsonl
           go test -json -race -count=1 -timeout=4m ./internal/app -run '^(TestStorage(AdmissionChecksFilesystemSpaceIndependentlyOfLogicalCap|AdmissionChecksNearestExistingFilesystem|AdmissionIncludesOutstandingReservationsAndSafetyHeadroom|BootstrapProgressSurvivesRestart|BootstrapAmortizesLegacyExpiryAndResumesAfterCancellation|ScanCanceledBatchDoesNotAdvance|ScanSchedulingBatchFailuresPreserveClocks|ScanPrefixChangeRestartsCoverage|ScanClassesRemainFairAcrossNewWorkAndRestart|ReconcileCoverageGatesExpiredReservations|WorkProgressSurvivesRestartAndUnsafeCandidate|DeletePoisonBatchDoesNotStarveAcrossCyclesAndRestart|DeleteDirectorySyncFailureKeepsChargeUntilDurableRetry|DeleteLockAndCancellationFencePhysicalRemoval|DeleteStaleListCannotRemoveRegisteredReplacement|DeleteSerializesConcurrentReplacementRegistration|DeletePreservesAnotherSourceSharingTheFile|DeleteBackoffIsBoundedAndRetombstonePreservesSchedule|DeleteDuePickerUsesBoundedIndexBeforeFuturePoison|ScanSession.*)|TestMetadataRetention.*|TestMetadataCacheExpiryCorruptionAndFailureFallback|TestSourceRetentionFalsePreviewZerosPreservePinsAndBatchLimit|TestSourcePinAudit(OwnedBudgetKeepsContinuationAndAcknowledgedRepairs|OwnedBudgetPreservesGenuineFailures|ParentCancellationHasPrecedence|UnknownCommitResumesDurableState|BlockedAfterMediaCommitKeepsDrainablePaths|ParentCanceledAfterMediaCommitKeepsDrainablePaths)|TestMigrationsUpgradeMaintenancePredecessorPreservesProgressRetriesAndCache|TestAccurateJoinReservationOnlyIncludesActualProducers|TestAccurateJoinCanBeClaimedWithRoomForItsRealOutput|TestSeparateSubtitleReservationChargesSharedSourceTextOnce)$' | tee native-storage-tests.jsonl
           go test -json -race -count=1 -timeout=6m ./internal/app ./pkg/engine -run '^(TestMediaCrop.*|TestCrop.*|TestWaveform(PCMStreamingBoundsAndSplitSamples|MatchesIndependentAudioTimelineAndOffsets|SelectsActualAudioTrack|PreservesAntiphaseStereoActivity|RetainsAudibleHighFrequencyActivity|SourceRatePreservesClockAndChannelFrameBins)|TestPreviewGeometryIgnoresMalformedMetadataAndEnforcesSize|TestPreviewScalingKeepsExactHeightCapDespiteFloatRounding|TestAdvancedCropPlanPublishesActualCroppedOutput|TestMediaContract(RotationDisplayGeometry|SampleAspectNormalization|VariableFrameTimestamps|HDRToneMappingAndCopy|DefaultAudioSelection|AttachedPicturesAreNotVideo|CopyQualityUsesSelectedVideo)|TestHLSMediaContract(RotationAndSAR|DefaultAudio|HDRTags|ContinuityMetadata|FingerprintUsesSelectedTracks)|TestHDR(CapabilityFailureKeepsProcessCause|FailurePreservesCancellationAndLimits)|TestEngineInspectSeparatesCodedAndDisplayDimensions|TestBatchAudioSelectionSubtitlesAndJoinedTimeline|TestJoinedRemoteEntryKeepsMediaFormatAndProtocolRestrictions|TestLocalExportSession.*)$' | tee native-media-contract-tests.jsonl
           binary=cutmy-native
@@ -120,7 +128,7 @@ jobs:
             ffmpeg-version.txt
             ffprobe-version.txt
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3
   bookworm-media:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -158,7 +166,7 @@ jobs:
             ffmpeg-version.txt
             ffprobe-version.txt
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3
   test:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -228,7 +236,7 @@ jobs:
           name: recovery-verification-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/recovery-verification.json
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3
       - name: Retain recovery contract test events
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -236,4 +244,4 @@ jobs:
           name: recovery-contract-${{ github.run_id }}-${{ github.run_attempt }}
           path: recovery-contract-tests.jsonl
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3

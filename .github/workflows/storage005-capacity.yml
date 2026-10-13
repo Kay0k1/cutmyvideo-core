@@ -141,4 +141,4 @@ jobs:
           path: ${{ runner.temp }}/current-pair-hosted
           if-no-files-found: warn
           compression-level: 1
-          retention-days: 30
+          retention-days: 3

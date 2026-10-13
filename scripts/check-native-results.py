@@ -19,6 +19,9 @@ NEW_MEDIA_REQUIRED = {
     "TestPreviewGeometryIgnoresMalformedMetadataAndEnforcesSize", "TestPreviewScalingKeepsExactHeightCapDespiteFloatRounding",
 }
 NEW_SERVICE_REQUIRED = {
+    "TestLocalProbeCacheReusesVerifiedFileAndInvalidatesChanges",
+    "TestLocalProbeCacheBoundsMetadataAndDoesNotReuseOutputProbes",
+    "TestVerifiedExportAdmissionDoesNotWaitForBusyPreviewPool",
     "TestSourceMediaReaderSaturationHasRetryableDiagnostic", "TestSourceMediaReaderRetentionIsBoundedWithoutCounterQuarantine",
     "TestExpiredSourceMediaReadersPruneInBoundedUnlockedBatches",
     "TestWaveformPrivateCacheAccountingAndDeletion", "TestPreviewOriginalDisplayGeometrySurvivesChargedToolFreeCache",

@@ -81,7 +81,7 @@ jobs:
           name: signed-consumer-${{ matrix.os }}-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/signed-release-consumer
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3
   gate:
     name: All five signed release consumers
     if: always()
