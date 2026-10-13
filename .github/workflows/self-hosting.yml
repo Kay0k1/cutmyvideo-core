@@ -97,4 +97,4 @@ jobs:
             ${{ runner.temp }}/public-current-controls.log
             ${{ runner.temp }}/public-cleanup-controls.log
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3
