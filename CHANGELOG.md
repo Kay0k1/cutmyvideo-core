@@ -4,7 +4,12 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
+## 1.2.0 - 2026-10-14
+
 ### Added
+- Normalized upright crop for accurate MP4 in Go advanced options, CLI, saved cutting plans and HTTP jobs; crop precedes the resolution cap and accounts for rotation and sample aspect ratio.
+- Private selected-audio waveform windows with bounded streaming peak aggregation, source timestamps, silent-source handling and background preview admission. Stereo channels cannot cancel each other's waveform.
+- Opt-in successful-export original-media cleanup, preserving source metadata, jobs and completed artifacts. Migration 6 persists cleanup requests and bounded renewable media-reader leases; active operations settle before physical deletion.
 - Owner-protected streaming ZIP downloads of ready files, including prior successful outputs from partial retries of the same source; selected order and fragment names are preserved without recompression or retained archives.
 - Optional six-second foreground preview windows with independent cache identity and a bounded wait for overlapping source inspection; the ordinary thirty-second API remains compatible.
 
@@ -16,18 +21,10 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 - The completed [universal-core comparison](benchmarks/2026-10-14-universal-go-core/README.md) records 627 operations with production-family media tools, workload-specific gains, slower joined cases and resource costs. Preparation remains experimental and disabled by default.
 - Local batches reuse fresh input inspection and bounded per-track subtitle staging within one operation. Source replacement is rejected, while keyframe, staged-input and output verification remain fresh.
 - Accurate joins reserve only actual media producers; shared source-subtitle staging is reserved once per batch and cleaned before releasing its last reservation.
-
-
-## 1.2.0 - 2026-10-12
-
-### Added
-- Normalized upright crop for accurate MP4 in Go advanced options, CLI, saved cutting plans and HTTP jobs; crop precedes the resolution cap and accounts for rotation and sample aspect ratio.
-- Private selected-audio waveform windows with bounded streaming peak aggregation, source timestamps, silent-source handling and background preview admission. Stereo channels cannot cancel each other's waveform.
-- Opt-in successful-export original-media cleanup, preserving source metadata, jobs and completed artifacts. Migration 6 persists cleanup requests and bounded renewable media-reader leases; active operations settle before physical deletion.
-
-### Changed
+- Fresh bounded structural verification avoids an extra ffprobe process for recognized small owned MP3 and fast-profile MP4 outputs; unsupported, changed or corrupt files retain native verification. Encoding parameters and quality gates are unchanged.
+- The [joined-video comparison](benchmarks/2026-10-14-joined-video/README.md) records 132 exports with matched full decoded-media checks. Small joined MP4 and SDK cases improved; heavy 1080p60 encoding remains a bottleneck without a consistent end-to-end speed gain.
 - Preview windows carry their original display dimensions in a charged MP4 metadata box, including tool-free cache hits, so clients can position crop presets before preview downscaling.
-- A binary supporting only migration 5 refuses migration 6. Upgrade recovery requires a compatible migration-6 binary, or coordinated database and media restoration; image-only rollback does not reverse this change.
+- A binary supporting only migration 5 refuses migration 6; a migration-6 binary refuses migration 7. Recovery across these upgrades requires a compatible binary or coordinated database and media restoration; image-only rollback does not reverse them.
 
 ### Fixed
 - Range-count errors show the configured maximum and submitted count, with a correction for splitting a larger selection into multiple jobs.
