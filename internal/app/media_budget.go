@@ -10,6 +10,7 @@ type mediaBudgetKey struct{}
 type mediaBudget struct {
 	slots    int64
 	weighted *semaphore.Weighted
+	pipeline bool
 }
 
 // A refreshed platform URL can select a different input resolution. Drop the
@@ -42,6 +43,29 @@ func withMediaBudget(ctx context.Context, concurrency int) context.Context {
 		slots = 8
 	}
 	return context.WithValue(ctx, mediaBudgetKey{}, &mediaBudget{slots: slots, weighted: semaphore.NewWeighted(slots)})
+}
+
+func withWorkerMediaBudget(ctx context.Context, c Config) context.Context {
+	ctx = withMediaBudget(ctx, c.WorkerConcurrency)
+	budget := ctx.Value(mediaBudgetKey{}).(*mediaBudget)
+	budget.pipeline = c.WorkerPreparationConcurrency > 0
+	return ctx
+}
+
+// Preparation probes/remuxes share the encoder's decoder budget in pipeline
+// mode. Network-only work takes no decoder slots. Legacy workers already own a
+// job-wide permit, and callers outside RunWorker have no local pool to acquire.
+func acquireMediaInspection(ctx context.Context, source Source, streams []platformFormat) (func(), error) {
+	budget, ok := ctx.Value(mediaBudgetKey{}).(*mediaBudget)
+	if !ok || !budget.pipeline {
+		return func() {}, nil
+	}
+	return acquireMediaProcessing(ctx, source, streams, ExportRequest{Format: "mp4", CutMode: "accurate"})
+}
+
+func pipelineMediaBudget(ctx context.Context) bool {
+	budget, ok := ctx.Value(mediaBudgetKey{}).(*mediaBudget)
+	return ok && budget.pipeline
 }
 
 // Decoder memory depends on input dimensions even when output is scaled down.

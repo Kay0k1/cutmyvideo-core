@@ -139,6 +139,21 @@ caller deadlines win. Invalid config is reported by the operation. Library calls
 do not share server quotas/queue: integrate your application's admission and
 isolation layer. The [package source](../pkg/engine/engine.go) documents the contract.
 
+An `Engine` is immutable and safe to share between callers. Each operation gets
+its own workspace and deadline; its limits do not provide a shared CPU/RAM budget
+across concurrent calls. Keep that admission in the embedding application.
+
+The performance changes below are available in current source and are unreleased;
+the v0.2.1 install command above does not install this performance pass.
+For several ranges from the same input, use one `ExecutePlan` to share bounded
+source inspection, keyframe/subtitle work and verified repeated results. Separate
+`Inspect` and `Export` calls have separate sessions; inspecting first does not
+warm the next export. FFmpeg and FFprobe remain external dependencies, selectable
+through `FFmpegPath` and `FFprobePath`. Other languages can use the versioned CLI
+JSON or HTTP contract without a native FFI wrapper. See
+[batch cutting](batch-cutting.md#go-and-http) and
+[the current performance pass](../benchmarks/2026-10-14-universal-go-core/README.md).
+
 The following library diagnostics are **unreleased, available in current
 source**, rather than in the v0.2.1 module installed above. Operation errors have
 type `*engine.Error`, expose a stable `Code`, and retain the original cause

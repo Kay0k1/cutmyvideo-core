@@ -1,0 +1,173 @@
+{
+  "assembler": {
+    "bytes": 20488,
+    "path": "/root/video_cut/reports/joined-followup-20261014/final-report-assembler.py",
+    "sha256": "ec693442b755254fb61c7a39eca5eebbc7d98f65791d21178930d03b3cd2ce55"
+  },
+  "build_receipt": {
+    "bytes": 3673,
+    "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/build-receipt.json",
+    "sha256": "4b3b306286b6e54fd25e489ba224697a02a7f9c7bf655edb14a74b6ec92e2a09"
+  },
+  "direct": {
+    "complete.json": {
+      "bytes": 607,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/direct-run/complete.json",
+      "sha256": "c5035947ebce865b91dc5ce0e45450ed67ded00a0edc19d1dea6b9335a5a2943"
+    },
+    "environment.json": {
+      "bytes": 3460,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/direct-run/environment.json",
+      "sha256": "1271f483c02ad7db74e4188908345424a0047bc4c604d160b7f07286f19ed2b5"
+    },
+    "raw-results.json": {
+      "bytes": 349684,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/direct-run/raw-results.json",
+      "sha256": "92e508000802d96155286292f88b84e9db0086d50f41ce8052d190e44b57ec37"
+    }
+  },
+  "joined_output_files": {
+    "direct_control": 36,
+    "primary": 216
+  },
+  "manifest": {
+    "bytes": 225971,
+    "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/execution-manifest.json",
+    "sha256": "2c54ec05c3a2d08df09e81ce970effdab6afaa4dec5b4240925d046f884308c7"
+  },
+  "observations": [
+    {
+      "bytes": 61391,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-report-v1/observations-01.csv",
+      "sha256": "c0fa988203f96ec89da0bebbe9e3fdc0402df44e69f6b824b058f8d102d198ed"
+    },
+    {
+      "bytes": 3440,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-report-v1/observations-02.csv",
+      "sha256": "36b61f4b84c82fcf8c84bfc68209e5920339a1c515db8913bf813dab5a7b35f5"
+    }
+  ],
+  "operations": {
+    "direct_control": 36,
+    "primary": 216
+  },
+  "output_proof_rows": 252,
+  "output_proofs": [
+    {
+      "bytes": 61129,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-report-v1/output-proofs-01.csv",
+      "sha256": "9f4c60580cfb17e5ddb69712ff87b26799b8bbd165fa751e9b38badd4687ccca"
+    },
+    {
+      "bytes": 61093,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-report-v1/output-proofs-02.csv",
+      "sha256": "29b28291e49157e519ca2260f3cc983abc1de127a5a5713e33e97cd8bd6f1402"
+    },
+    {
+      "bytes": 33889,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-report-v1/output-proofs-03.csv",
+      "sha256": "690bd34551dd63884df04233f534d4163959f20fb1a17963a595663b5542e5fe"
+    }
+  ],
+  "pairs": [
+    {
+      "bytes": 59058,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-report-v1/pairs-01.csv",
+      "sha256": "a39578feca185f6bd9d13741bb1b0000e7b38a46c462f0718360d22613e14edf"
+    }
+  ],
+  "primary": {
+    "complete.json": {
+      "bytes": 608,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/primary-run/complete.json",
+      "sha256": "8eef25ee03ed0f114fa4078895b0e3673f2fcf464fd885cb40c347e7f6209aef"
+    },
+    "environment.json": {
+      "bytes": 3798,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/primary-run/environment.json",
+      "sha256": "785c988b744119772f83985f362aa5c21c084de4265a4ad69173b0958b9c406d"
+    },
+    "raw-results.json": {
+      "bytes": 4190743,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/primary-run/raw-results.json",
+      "sha256": "d80662e69a71709ded16030199278120e62bc9022fcd121a04516b3756a2fcc1"
+    }
+  },
+  "protocol": {
+    "bytes": 6644,
+    "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/protocol-provisional.json",
+    "sha256": "478b04a267a717c2995bf9e40578b089212620af0b9285a1230037783674c890"
+  },
+  "schema": "joined-final-report-extraction-v1",
+  "scope": {
+    "application_plus_spy_tail_cpu_seconds": "wait4 CPU minus recorded native CPU minus spy SELF. Contains application work and spy final-log/exit tail; not exact Go CPU and not a wall-stage duration.",
+    "direct_nulls": "Native attribution and external subprocess counts are unobserved, not zero.",
+    "external_command_counts": "Observed ffmpeg/ffprobe processes only; no assertion about internal libavformat probing calls.",
+    "fingerprint_proofs": "SHA256 of UTF-8 JSON with sorted keys, compact separators, default ASCII escaping and finite numbers. Full fingerprint retains file bytes/SHA and encoded packet payload maps. Semantic projection excludes only file_sha256 and bytes, plus accurate encoded packet payload map; copy retains payloads. Every A/B/C triad semantic SHA agrees. Packet-clock proof includes exact stream time bases, counts and full clock-sequence hashes; stream/source/segment/track proofs retain all recorded fields. Decoded receipt strings preserve the original FFmpeg SHA256= prefix when present.",
+    "native_wall_sum_seconds": "Sum of native invocation wait intervals; may overlap and is not the whole operation elapsed time.",
+    "primary_and_direct_are_separate_contexts": true,
+    "prior627_reused": false,
+    "publication": "Only bounded JSON and CSV; no raw media, argv, environment contents or native binaries.",
+    "ratios": "Median of six registered matched per-block ratios, not ratio of cohort medians; all12cases retained; no cross-case average.",
+    "rss_workspace_io": "20ms sampled lower bounds; summed tree RSS may double-count shared pages. wait4 max RSS is largest waited process, not simultaneous peak. wait4 block counters are counts, not bytes.",
+    "semantics": "Frozen runner performed full independent decode/clock/track/order verification for every output outside timing. This assembler only rechecks stored consistency.",
+    "wait4_cpu_seconds": "Measured helper and waited descendants; includes native tool and C spy CPU."
+  },
+  "summary_files": [
+    {
+      "bytes": 50461,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-report-v1/primary-cases.json",
+      "sha256": "00f6f526e383ca708c57c83d8ea221fe775fe648fa7094bf151ca16ce103d1de"
+    },
+    {
+      "bytes": 6579,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-report-v1/direct-cases.json",
+      "sha256": "d79930fbb128ce50fa7d35d2231f8574562a6dfeecd1269d7d7fc93fd523423f"
+    }
+  ],
+  "versions": {
+    "before": {
+      "actual_compile_revision": "865e4afd072f77206ba674e7922a2d31de6d3c99",
+      "cli": {
+        "bytes": 19746277,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/candidate-cutmy-v6",
+        "sha256": "879581327014b2b7c8bb977a508bb0abd6ba9aa6d5a371a258bd0cd14267697e"
+      },
+      "engine": {
+        "bytes": 8846344,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/candidate-engine",
+        "sha256": "448f7f6b3aabb36938223e020fcff0727e97abb6425ee26ff84ad1155308d69b"
+      },
+      "revision": "cc3eb26b32c4c1fdf15a0c5361c69a8cebfdab33",
+      "source_catalog_sha256": "3503f2bd511ce8fee94b174085fd0a151c7b787ed7e910e1561d32a3a7708e07"
+    },
+    "fixed": {
+      "cli": {
+        "bytes": 19771043,
+        "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/fixed-cutmy",
+        "sha256": "c8ecc72eee2068e2094affdb81ee776b91931c865d1d3ddfac634e6f338f81de"
+      },
+      "engine": {
+        "bytes": 8876070,
+        "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/fixed-engine",
+        "sha256": "4113c5b5762afc6ac8e8eb3fb1b1fbb085a1fc368e513b980f5ace99c45fba3b"
+      },
+      "revision": "b588c82de649d17146ec0c35b127e39f514e1e32",
+      "source_catalog_sha256": "0f1e41535792d90d71caf211e57c39656a48ec806569cb13405806906e750530"
+    },
+    "original": {
+      "cli": {
+        "bytes": 19509827,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/baseline-cutmy",
+        "sha256": "38f6d7970283a1e5db83fac92bce92c2a6f2e9bcc53810e38bcecb9191e9c02a"
+      },
+      "engine": {
+        "bytes": 8678702,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/baseline-engine",
+        "sha256": "027a925df1dbeff2a110ff93f0a568dbfc9d1ce6f5a51dfa33426c6c867824e3"
+      },
+      "revision": "a9c75df83f965bf1d56e2263ca585ab77aeaf305",
+      "source_catalog_sha256": "a7e75103f44e3e47acbdf26355205d79aa29072df73ec43d828865545186ef4e"
+    }
+  }
+}

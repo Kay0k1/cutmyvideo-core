@@ -1,0 +1,204 @@
+[
+  {
+    "case": "embedded-accurate-mp4-32",
+    "comparisons": {
+      "before_over_fixed": {
+        "candidate_wins": 2,
+        "external_ffmpeg_commands_saved": null,
+        "external_ffprobe_commands_saved": null,
+        "max": 1.0390686250900945,
+        "median": 0.9816956365460044,
+        "min": 0.8896072865051841,
+        "native_tool_cpu_saved_seconds": null,
+        "pairs": 6,
+        "ratios": [
+          1.035493256809278,
+          0.9670013855033305,
+          0.962114386081458,
+          1.0390686250900945,
+          0.9963898875886784,
+          0.8896072865051841
+        ]
+      },
+      "original_over_before": {
+        "candidate_wins": 2,
+        "external_ffmpeg_commands_saved": null,
+        "external_ffprobe_commands_saved": null,
+        "max": 1.1094613608576447,
+        "median": 0.9837834843920099,
+        "min": 0.9055848704244184,
+        "native_tool_cpu_saved_seconds": null,
+        "pairs": 6,
+        "ratios": [
+          1.1094613608576447,
+          1.069124798169111,
+          0.9844376909643346,
+          0.9055848704244184,
+          0.9831292778196851,
+          0.973509728414181
+        ]
+      },
+      "original_over_fixed": {
+        "candidate_wins": 2,
+        "external_ffmpeg_commands_saved": null,
+        "external_ffprobe_commands_saved": null,
+        "max": 1.1488397578585363,
+        "median": 0.9633608676447468,
+        "min": 0.8660413478809383,
+        "native_tool_cpu_saved_seconds": null,
+        "pairs": 6,
+        "ratios": [
+          1.1488397578585363,
+          1.0338451611054988,
+          0.947141664677599,
+          0.9409648262142918,
+          0.9795800706118947,
+          0.8660413478809383
+        ]
+      }
+    },
+    "context": "direct",
+    "versions": {
+      "before": {
+        "application_plus_spy_tail_cpu_seconds": null,
+        "ffmpeg_count": null,
+        "ffprobe_count": null,
+        "native_ffmpeg_cpu_seconds": null,
+        "native_ffprobe_cpu_seconds": null,
+        "native_tool_cpu_seconds": null,
+        "sampled_peak_media_workspace_bytes": 621755.0,
+        "sampled_tree_peak_rss_bytes": 79130624.0,
+        "toolspy_self_cpu_seconds": null,
+        "wait4_cpu_seconds": 1.2806535000000001,
+        "wall_seconds": 0.9644999629817903
+      },
+      "fixed": {
+        "application_plus_spy_tail_cpu_seconds": null,
+        "ffmpeg_count": null,
+        "ffprobe_count": null,
+        "native_ffmpeg_cpu_seconds": null,
+        "native_ffprobe_cpu_seconds": null,
+        "native_tool_cpu_seconds": null,
+        "sampled_peak_media_workspace_bytes": 621755.0,
+        "sampled_tree_peak_rss_bytes": 76226560.0,
+        "toolspy_self_cpu_seconds": null,
+        "wait4_cpu_seconds": 1.1876025,
+        "wall_seconds": 0.996320141479373
+      },
+      "original": {
+        "application_plus_spy_tail_cpu_seconds": null,
+        "ffmpeg_count": null,
+        "ffprobe_count": null,
+        "native_ffmpeg_cpu_seconds": null,
+        "native_ffprobe_cpu_seconds": null,
+        "native_tool_cpu_seconds": null,
+        "sampled_peak_media_workspace_bytes": 621755.0,
+        "sampled_tree_peak_rss_bytes": 79144960.0,
+        "toolspy_self_cpu_seconds": null,
+        "wait4_cpu_seconds": 1.2648389999999998,
+        "wall_seconds": 0.9501971470890567
+      }
+    }
+  },
+  {
+    "case": "local-mp3-joined-20",
+    "comparisons": {
+      "before_over_fixed": {
+        "candidate_wins": 5,
+        "external_ffmpeg_commands_saved": null,
+        "external_ffprobe_commands_saved": null,
+        "max": 1.5542930580850296,
+        "median": 1.207395661464409,
+        "min": 0.92247241098788,
+        "native_tool_cpu_saved_seconds": null,
+        "pairs": 6,
+        "ratios": [
+          1.3169736766856583,
+          0.92247241098788,
+          1.5542930580850296,
+          1.1790464822032212,
+          1.152496073300949,
+          1.2357448407255969
+        ]
+      },
+      "original_over_before": {
+        "candidate_wins": 3,
+        "external_ffmpeg_commands_saved": null,
+        "external_ffprobe_commands_saved": null,
+        "max": 1.1737312760048837,
+        "median": 1.026540801491832,
+        "min": 0.7708038677800468,
+        "native_tool_cpu_saved_seconds": null,
+        "pairs": 6,
+        "ratios": [
+          0.948794110994687,
+          0.9699581686814472,
+          0.7708038677800468,
+          1.1737312760048837,
+          1.0831234343022167,
+          1.1607239829129095
+        ]
+      },
+      "original_over_fixed": {
+        "candidate_wins": 5,
+        "external_ffmpeg_commands_saved": null,
+        "external_ffprobe_commands_saved": null,
+        "max": 1.4343586733910936,
+        "median": 1.2489161868539584,
+        "min": 0.8947596504209634,
+        "native_tool_cpu_saved_seconds": null,
+        "pairs": 6,
+        "ratios": [
+          1.2495368687743735,
+          0.8947596504209634,
+          1.1980551008356177,
+          1.3838837320254562,
+          1.2482955049335431,
+          1.4343586733910936
+        ]
+      }
+    },
+    "context": "direct",
+    "versions": {
+      "before": {
+        "application_plus_spy_tail_cpu_seconds": null,
+        "ffmpeg_count": null,
+        "ffprobe_count": null,
+        "native_ffmpeg_cpu_seconds": null,
+        "native_ffprobe_cpu_seconds": null,
+        "native_tool_cpu_seconds": null,
+        "sampled_peak_media_workspace_bytes": 534431.0,
+        "sampled_tree_peak_rss_bytes": 70180864.0,
+        "toolspy_self_cpu_seconds": null,
+        "wait4_cpu_seconds": 0.4050715,
+        "wall_seconds": 0.4057434900896624
+      },
+      "fixed": {
+        "application_plus_spy_tail_cpu_seconds": null,
+        "ffmpeg_count": null,
+        "ffprobe_count": null,
+        "native_ffmpeg_cpu_seconds": null,
+        "native_ffprobe_cpu_seconds": null,
+        "native_tool_cpu_seconds": null,
+        "sampled_peak_media_workspace_bytes": 534431.0,
+        "sampled_tree_peak_rss_bytes": 71041024.0,
+        "toolspy_self_cpu_seconds": null,
+        "wait4_cpu_seconds": 0.331569,
+        "wall_seconds": 0.33451822004280984
+      },
+      "original": {
+        "application_plus_spy_tail_cpu_seconds": null,
+        "ffmpeg_count": null,
+        "ffprobe_count": null,
+        "native_ffmpeg_cpu_seconds": null,
+        "native_ffprobe_cpu_seconds": null,
+        "native_tool_cpu_seconds": null,
+        "sampled_peak_media_workspace_bytes": 534431.0,
+        "sampled_tree_peak_rss_bytes": 70653952.0,
+        "toolspy_self_cpu_seconds": null,
+        "wait4_cpu_seconds": 0.41558399999999995,
+        "wall_seconds": 0.41778678400442004
+      }
+    }
+  }
+]

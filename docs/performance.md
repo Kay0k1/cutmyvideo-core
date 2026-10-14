@@ -1,5 +1,22 @@
 # Performance and recovery
 
+The current universal-core pass is tracked in the
+[implementation and measurement report](../benchmarks/2026-10-14-universal-go-core/README.md).
+Its completed 627-operation comparison and limits are separate from the
+historical results below; it establishes no single speed ratio across workloads.
+
+The [joined MP3 follow-up](../benchmarks/2026-10-14-joined-followup/README.md)
+adds 252 separately measured outputs on the final runtime source. Small own
+MP3 outputs use fresh bounded frame/CRC verification instead of one FFprobe
+process. Tested video thread/discovery changes were removed after adverse
+elapsed-time results; every slower case and observer-context limit is retained.
+
+The [joined MP4 follow-up](../benchmarks/2026-10-14-joined-video/README.md)
+adds 132 fully decoded matched outputs. Supported own fast MP4 results use
+fresh bounded container/sample/NAL inspection instead of one final FFprobe.
+Encoding settings are unchanged; heavy-video adverse cases, capped-encoder
+non-repeatability and interrupted cohorts remain explicit in that report.
+
 Responsive preview evidence: [five identical-tool cold/warm observations and
 bounded search-strip design, 2026-10-12](../benchmarks/2026-10-12-responsive-preview/README.md).
 
@@ -37,13 +54,70 @@ The core spends most export time in network inspection and FFmpeg, rather than
 Go function calls. Defaults prioritize short, accurate clips on a CPU-only
 server. Stream copy retains its documented keyframe boundary adjustment.
 
+## Bounded reuse in the Go core
+
+The library and CLI share one verified local-export session per operation.
+Singleton exports reuse their initial input inspection, and batches reuse exact
+repeated ranges while producing separate output files with independent inodes.
+The source and previously published file identities are checked before reuse;
+changed outputs regenerate from the verified source. Fresh media outputs receive
+fresh validation. Small (at most 1 MiB) CBR MPEG1 MP3 outputs from the accurate
+join's own libmp3lame encoder use a new bounded scan: all frame headers/counts,
+Info byte/duration fields and the muxer's audio payload CRC must agree, with
+file identity checked before and after. The existing source inspection supplies
+the actual FFprobe library family: versions 5–7 use raw frame duration, while
+8/current 63 use the tag's encoder delay/padding to match gapless duration.
+Unknown or ambiguous families keep the native probe. Unknown metadata, other encoder shapes,
+larger files or any unproved structure keep the existing fresh FFprobe path. Exact repeated byte copies inherit the prior semantic verification,
+with new file/byte-count checks and independent publication. No database is
+required by `pkg/engine`.
+
+Copy batches plan bounded keyframe windows (at most 16 windows and 4,096 retained
+keyframes), extending only across nearby requested starts. An unsuccessful
+optional lookahead falls back to the original scan. Temporary MP4 join components
+skip faststart; only the final MP4 pays the relocation cost. Extracted source
+subtitles retain at most one bounded parsed track, with indexed overlap searches
+for sorted cues. Small unsorted tracks use a cached linear scan; larger tracks
+fall back to the disk path. PCM waveform aggregation
+uses integer per-bin peaks before normalization, preserving source-rate clocks,
+multichannel peaks and split sample handling.
+
+Worker processes also reuse verified input probes across jobs. HLS jobs can keep
+up to 128 complete segment/init-map files in a charged job-local cache, capped at
+32 MiB and disabled for stores of 256 MiB or less. Reads still consume each
+interval's staging budget; only real fetches consume the network guard's byte
+budget. A rolling pool retains ordered concatenation with four active downloads
+and at most eight outstanding positions, allowing later requests to progress
+while an earlier segment is slow. Files and reservations remain attached to the
+job workspace until acknowledged cleanup.
+
+`WORKER_PREPARATION_CONCURRENCY=0` retains the existing scheduling default.
+An explicit positive value permits bounded preparation overlap with the shared,
+weighted decoder/export budget; publication can proceed after releasing that
+budget. Treat this as experimental: the controlled mixed fixture improves
+1.062× in five pairs, but does not establish production throughput or reliability.
+A preserved long-running media invocation remains unresolved. See the report's
+[limits](../benchmarks/2026-10-14-universal-go-core/README.md#deferred-changes-and-limits).
+Stream-copy operations keep conservative dimension weights because
+output inspection and subtitles can still decode. Progress persistence updates
+only the affected item/stage under its lease fence, reducing application work;
+PostgreSQL can still rewrite the JSONB value, so this is not a claim of reduced WAL.
+Metadata misses use migration-7 persisted resolving leases, releasing pooled
+connections during upstream work. See [migration recovery](migrations.md).
+
+The finite comparison protocol is in
+[`scripts/core-performance.md`](../scripts/core-performance.md). It records
+whole-operation and isolated-stage costs separately and independently decodes
+every output. Reuse is an optimization for matching operations; it does not
+establish an arbitrary-media throughput or competitor comparison.
+
 ## Encoding profiles
 
 `FFMPEG_PROFILE=fast` is the server default. The CLI uses `--profile fast` and
 the Go package accepts `engine.Config{EncodeProfile: "fast"}`. It uses libx264
 ultrafast, CRF 18 and CABAC. `compact` uses the previous veryfast/CRF 20 settings.
-Both retain the requested resolution limit, frame cadence and AAC 192 kbit/s;
-neither increases source resolution. MP3 and stream-copy behavior are unchanged.
+Both retain the requested resolution limit, frame cadence and AAC 192 kbit/s
+(128 kbit/s for a selected mono track); neither increases source resolution. MP3 and stream-copy behavior are unchanged.
 Fast encoding produces larger files: choose compact when transfer size matters
 more than CPU time.
 
@@ -426,9 +500,11 @@ checks file identity, size and modification time before reuse. A replacement or
 changed input fails with `source_changed` instead of silently keeping old track
 or geometry metadata. This is an operation cache, not a persistent file cache.
 
-Remote inputs, independently staged HLS files and output files remain uncached.
-HLS offsets are still applied per interval, and copy mode still probes each
-requested keyframe boundary. Accurate joined output performs one fresh final
+This source-inspection cache excludes remote inputs, independently staged HLS
+files and output files. HLS segment reuse and exact result-byte reuse have their
+own bounds described above. HLS offsets are still applied per interval, and copy
+mode validates each requested keyframe boundary, reusing successful bounded
+search windows where applicable. Accurate joined output performs one fresh final
 probe and uses that result for duration, geometry and audio validation; it no
 longer runs the identical final probe twice.
 

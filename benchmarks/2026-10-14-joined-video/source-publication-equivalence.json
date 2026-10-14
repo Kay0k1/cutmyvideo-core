@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "measured_runtime_revision": "9d02a0e23dc2754407599ccd41e2da84c4ad7323",
+  "measured_full_catalog_sha256": "91ea5191af278a299712cad1efc21bf055bde6bba23f750f62e8f5e455e4b037",
+  "measured_entries": 234,
+  "publication_full_catalog_sha256": "925b69c462866320eb40dc75387478ddf7d7f8bbb35f352442c7f49e36ab7002",
+  "production_input_catalog_sha256": "02cac2da65a060a44eac29dfe067c0b9422cd571b27a482650ce3b6f7ab67051",
+  "production_catalog_entries": 107,
+  "all_non_test_inputs_identical": true,
+  "later_changes": [
+    "internal/app/media_join_mp4_test.go"
+  ],
+  "reason": "Windows test captures old identity via an opened File.Stat before replacement, matching the existing MP3 gate; no runtime code change.",
+  "publication_cli_reproduces_measured_bytes": {
+    "path": "/root/video_cut/reports/joined-video-20261014/publication-cli-reproduction",
+    "sha256": "9ba762818e1aea5346298d69ae19841ae968d1782ee6bb7ce5ec50bc637e4a73",
+    "bytes": 19837032,
+    "note": "Exact measured build flags and version/catalog label held fixed; test-only publication change does not link."
+  }
+}

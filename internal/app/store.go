@@ -345,6 +345,25 @@ WHERE id IN (SELECT id FROM leased WHERE lease_until>clock_timestamp())`, j.ID, 
 	return nil
 }
 
+// SaveJobProgress transfers only the changing progress fields. Result snapshots
+// and item states are still committed by SaveJob/PublishArtifact; an old progress
+// callback cannot replace them or revive a job after its lease has changed.
+func (s *Store) SaveJobProgress(ctx context.Context, id, token, stage, message string, item int, progressMS int64) error {
+	if item < 0 || progressMS < 0 {
+		return errors.New("invalid job progress")
+	}
+	tag, err := s.DB.Exec(ctx, `WITH leased AS MATERIALIZED (
+ SELECT id,lease_until FROM jobs WHERE id=$1 AND lease_token=$2 AND status='running' FOR UPDATE
+) UPDATE jobs SET stage=$3,message=$4,
+items=jsonb_set(items,ARRAY[($5::integer)::text,'progress_ms'],to_jsonb($6::bigint),true),updated_at=now()
+WHERE id IN (SELECT id FROM leased WHERE lease_until>clock_timestamp())
+AND $5::integer<jsonb_array_length(items) AND items->$5::integer->>'status'='running'`, id, token, stage, message, item, progressMS)
+	if err == nil && tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return err
+}
+
 func (s *Store) Cancel(ctx context.Context, id, owner string) error {
 	tag, err := s.DB.Exec(ctx, `UPDATE jobs SET cancel_requested=true,status=CASE WHEN status IN ('queued','waiting_storage') THEN 'cancelled' ELSE status END,message=CASE WHEN status IN ('queued','waiting_storage') THEN 'Cancelled' ELSE message END,items=CASE WHEN status IN ('queued','waiting_storage') THEN (SELECT jsonb_agg(CASE WHEN item->>'status' IN ('queued','running','waiting_storage') THEN item || '{"status":"cancelled","message":"Cancelled","error_code":"cancelled"}'::jsonb ELSE item END) FROM jsonb_array_elements(items) item) ELSE items END,updated_at=now() WHERE id=$1 AND owner=$2 AND status IN ('queued','running','waiting_storage')`, id, owner)
 	if err != nil {

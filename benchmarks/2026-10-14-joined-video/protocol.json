@@ -1,0 +1,67 @@
+{
+  "schema": "joined-video-registered-v3",
+  "registered_utc": "2026-10-14T12:30:40.884816+00:00",
+  "cases": [
+    "local-accurate-mp4-joined-02",
+    "local-accurate-mp4-joined-20",
+    "local-accurate-mp4-joined-32",
+    "complex-accurate-mp4-joined-20",
+    "embedded-accurate-mp4-32",
+    "local-accurate-mp4-joined-01",
+    "local-mp3-joined-20",
+    "local-copy-mkv-joined-01"
+  ],
+  "direct_cases": [
+    "local-accurate-mp4-joined-20",
+    "embedded-accurate-mp4-32",
+    "complex-accurate-mp4-joined-20"
+  ],
+  "additional_cases": [],
+  "orders": [
+    [
+      "before",
+      "fixed"
+    ],
+    [
+      "fixed",
+      "before"
+    ],
+    [
+      "before",
+      "fixed"
+    ],
+    [
+      "fixed",
+      "before"
+    ],
+    [
+      "before",
+      "fixed"
+    ],
+    [
+      "fixed",
+      "before"
+    ]
+  ],
+  "primary_operations": 96,
+  "direct_operations": 36,
+  "acceptance": "Unchanged full decoded hashes/packet clocks/stream metadata/source-output segments; no quality tolerance changes. Copy retains compressed payload equality. Failed/unmatched media retained. Primary and direct contexts remain separate; no repeat/replacement.",
+  "observations": "Default C spy and original20ms RSS/workspace sampler in primary, actual native tool symlinks in direct; no native traces used for speed claims.",
+  "reserve_bytes": 3221225472,
+  "initial_free_bytes_floor": 3892314112,
+  "source_scope": "Before is measured1ea source, byte-identical compiled catalog at published91daccf. Historical627 and252 operation cohorts remain separate.",
+  "prior_cohort": {
+    "scope": "Retained terminal98-observation C1 cohort,96 fully matched files before2 capped decoded-hash mismatch outputs; no original rows replaced or pooled",
+    "next_source_reason": "Exact muxer tkhd/edit duration arithmetic supports the previously conservative32-cut AAC fallback",
+    "capped_scope": "Separate before-only reproducibility qualification; original unequal hashes and media retained, no change to exact primary oracle"
+  },
+  "capacity_history": {
+    "previous_context": "final-v2 primary terminal47 observations;46 prior matched/deleted outputs and1 unmatched candidate retained; failure before final before-side activation at disk guard",
+    "new_context_reason": "Owned reversible Go worktree build caches cleared; same source/binaries/tool/fixtures/oracles/cases/orders and unchanged reserve/floor. No resume or pooled observations",
+    "cleanup_receipts": [
+      "/root/video_cut/reports/joined-video-20261014/owned-cache-cleanup.json",
+      "/root/video_cut/reports/joined-video-20261014/owned-cache-cleanup-source.json",
+      "/root/video_cut/reports/joined-video-20261014/owned-cache-cleanup-worktree.json"
+    ]
+  }
+}

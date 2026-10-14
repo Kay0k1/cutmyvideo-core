@@ -1,0 +1,212 @@
+[
+  {
+    "arm": "unchanged",
+    "bytes": 382758,
+    "case": "local-accurate-mp4-joined-20",
+    "cpu_seconds": 0.735611,
+    "difference": null,
+    "quality_equal": true,
+    "receipt": {
+      "bytes": 8233,
+      "path": "/root/video_cut/reports/joined-video-20261014/diagnostic-v1/qualification/local-accurate-mp4-joined-20-unchanged/receipt.json",
+      "sha256": "0914ac30088c1736f51dbe692a37c19de83e3fd9c78cf75468ba2d2795f33845"
+    },
+    "scope": "qualification",
+    "wall_seconds": 0.5771666062064469
+  },
+  {
+    "arm": "cabac0",
+    "bytes": 385794,
+    "case": "local-accurate-mp4-joined-20",
+    "cpu_seconds": 0.646951,
+    "difference": null,
+    "quality_equal": true,
+    "receipt": {
+      "bytes": 8223,
+      "path": "/root/video_cut/reports/joined-video-20261014/diagnostic-v1/qualification/local-accurate-mp4-joined-20-cabac0/receipt.json",
+      "sha256": "7e0130085f7b76bf0dc76191675e89859e0ef73f656a5219951970a32d7426dc"
+    },
+    "scope": "qualification",
+    "wall_seconds": 0.474195210961625
+  },
+  {
+    "arm": "decoder_slice",
+    "bytes": 382758,
+    "case": "local-accurate-mp4-joined-20",
+    "cpu_seconds": 0.6848529999999999,
+    "difference": null,
+    "quality_equal": true,
+    "receipt": {
+      "bytes": 8287,
+      "path": "/root/video_cut/reports/joined-video-20261014/diagnostic-v1/qualification/local-accurate-mp4-joined-20-decoder_slice/receipt.json",
+      "sha256": "8cd20af11564caea7311aee634060de28bec06bd014a9ab55025d1fbd9688f9c"
+    },
+    "scope": "qualification",
+    "wall_seconds": 0.5661321959923953
+  },
+  {
+    "arm": "autoconvert0",
+    "bytes": 382758,
+    "case": "local-accurate-mp4-joined-20",
+    "cpu_seconds": 0.7093849999999999,
+    "difference": null,
+    "quality_equal": true,
+    "receipt": {
+      "bytes": 8292,
+      "path": "/root/video_cut/reports/joined-video-20261014/diagnostic-v1/qualification/local-accurate-mp4-joined-20-autoconvert0/receipt.json",
+      "sha256": "d0d69d5d6a68fdbda2f3d7d13d8a58832b97c5f034cdd571a607a2d959522777"
+    },
+    "scope": "qualification",
+    "wall_seconds": 0.5111899480689317
+  },
+  {
+    "arm": "unchanged",
+    "bytes": 39285314,
+    "case": "complex-accurate-mp4-joined-20",
+    "cpu_seconds": 19.204408,
+    "difference": null,
+    "quality_equal": true,
+    "receipt": {
+      "bytes": 8224,
+      "path": "/root/video_cut/reports/joined-video-20261014/diagnostic-v1/qualification/complex-accurate-mp4-joined-20-unchanged/receipt.json",
+      "sha256": "137283c39b426118bb119dea55b903d737d55bbff502cafc7223d548cc6a73c0"
+    },
+    "scope": "qualification",
+    "wall_seconds": 7.835255308076739
+  },
+  {
+    "arm": "cabac0",
+    "bytes": 52927069,
+    "case": "complex-accurate-mp4-joined-20",
+    "cpu_seconds": 17.657798,
+    "difference": null,
+    "quality_equal": true,
+    "receipt": {
+      "bytes": 8226,
+      "path": "/root/video_cut/reports/joined-video-20261014/diagnostic-v1/qualification/complex-accurate-mp4-joined-20-cabac0/receipt.json",
+      "sha256": "f24c0225d9798b46ed047eebd5612ee39138070656767def31e72379d8c24d94"
+    },
+    "scope": "qualification",
+    "wall_seconds": 6.897433427162468
+  },
+  {
+    "arm": "decoder_slice",
+    "bytes": 39285314,
+    "case": "complex-accurate-mp4-joined-20",
+    "cpu_seconds": 17.355035,
+    "difference": null,
+    "quality_equal": true,
+    "receipt": {
+      "bytes": 8269,
+      "path": "/root/video_cut/reports/joined-video-20261014/diagnostic-v1/qualification/complex-accurate-mp4-joined-20-decoder_slice/receipt.json",
+      "sha256": "cb2b5940e21b32264c83580d50a9371e7bb176edc2187585fea1adde620f28a4"
+    },
+    "scope": "qualification",
+    "wall_seconds": 8.616586557822302
+  },
+  {
+    "arm": "autoconvert0",
+    "bytes": 39285314,
+    "case": "complex-accurate-mp4-joined-20",
+    "cpu_seconds": 19.562878,
+    "difference": null,
+    "quality_equal": true,
+    "receipt": {
+      "bytes": 8263,
+      "path": "/root/video_cut/reports/joined-video-20261014/diagnostic-v1/qualification/complex-accurate-mp4-joined-20-autoconvert0/receipt.json",
+      "sha256": "c0a533e1c99a66819d8aa0bafb4ef8ee7f7375f6208ae863ecbeb9c2b9c56432"
+    },
+    "scope": "qualification",
+    "wall_seconds": 7.963784288149327
+  },
+  {
+    "arm": "unchanged",
+    "bytes": 382758,
+    "case": "local-accurate-mp4-joined-20",
+    "cpu_seconds": 0.715757,
+    "difference": null,
+    "quality_equal": true,
+    "receipt": {
+      "bytes": 8254,
+      "path": "/root/video_cut/reports/joined-video-20261014/diagnostic-v1/qualification-next/local-accurate-mp4-joined-20-unchanged/receipt.json",
+      "sha256": "7e350fd312e5d29c460f722a705c9fa2321787d550918b7c798f0fac63e99b4c"
+    },
+    "scope": "qualification-next",
+    "wall_seconds": 0.5172344550956041
+  },
+  {
+    "arm": "encoder1",
+    "bytes": 382758,
+    "case": "local-accurate-mp4-joined-20",
+    "cpu_seconds": 0.6346219999999999,
+    "difference": null,
+    "quality_equal": true,
+    "receipt": {
+      "bytes": 8259,
+      "path": "/root/video_cut/reports/joined-video-20261014/diagnostic-v1/qualification-next/local-accurate-mp4-joined-20-encoder1/receipt.json",
+      "sha256": "9f4f4cee510014faae810eaa76b26480767358375e76cf2747a1919c4d9eaea9"
+    },
+    "scope": "qualification-next",
+    "wall_seconds": 0.5462820241227746
+  },
+  {
+    "arm": "unchanged",
+    "bytes": 39285314,
+    "case": "complex-accurate-mp4-joined-20",
+    "cpu_seconds": 19.833536000000002,
+    "difference": null,
+    "quality_equal": true,
+    "receipt": {
+      "bytes": 8242,
+      "path": "/root/video_cut/reports/joined-video-20261014/diagnostic-v1/qualification-next/complex-accurate-mp4-joined-20-unchanged/receipt.json",
+      "sha256": "70c7923b67e00d2024d652e95b67f9ef4500e2c1c837f2e637d6db5dc7d7e906"
+    },
+    "scope": "qualification-next",
+    "wall_seconds": 7.970867180032656
+  },
+  {
+    "arm": "encoder1",
+    "bytes": 39291891,
+    "case": "complex-accurate-mp4-joined-20",
+    "cpu_seconds": 18.369314,
+    "difference": "Output 0 semantic mismatch: video_decoded_sha256",
+    "quality_equal": false,
+    "receipt": {
+      "bytes": 8309,
+      "path": "/root/video_cut/reports/joined-video-20261014/diagnostic-v1/qualification-next/complex-accurate-mp4-joined-20-encoder1/receipt.json",
+      "sha256": "581001df9b6360d0fde58e61404a5c3e638907009a8460f0bf966248b4abf75b"
+    },
+    "scope": "qualification-next",
+    "wall_seconds": 14.438192253001034
+  },
+  {
+    "arm": "unchanged",
+    "bytes": 24125489,
+    "case": "complex-vbv-8m",
+    "cpu_seconds": 18.182223,
+    "difference": null,
+    "quality_equal": true,
+    "receipt": {
+      "bytes": 8185,
+      "path": "/root/video_cut/reports/joined-video-20261014/diagnostic-v1/qualification-next/complex-vbv-8m-unchanged/receipt.json",
+      "sha256": "6553e1749cddd23a740c5a862484a1b2bacf650338ba43e991c87bb527a787e9"
+    },
+    "scope": "qualification-next",
+    "wall_seconds": 7.253713401965797
+  },
+  {
+    "arm": "cabac0",
+    "bytes": 24122763,
+    "case": "complex-vbv-8m",
+    "cpu_seconds": 16.923439000000002,
+    "difference": "Output 0 semantic mismatch: video_decoded_sha256",
+    "quality_equal": false,
+    "receipt": {
+      "bytes": 8262,
+      "path": "/root/video_cut/reports/joined-video-20261014/diagnostic-v1/qualification-next/complex-vbv-8m-cabac0/receipt.json",
+      "sha256": "3215acd17dbe8d410610fbace9ee1d77da959acd4ba4f1e2eb01417a1ac573a5"
+    },
+    "scope": "qualification-next",
+    "wall_seconds": 6.938753802096471
+  }
+]

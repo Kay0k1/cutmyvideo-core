@@ -1,0 +1,473 @@
+{
+  "baseline": {
+    "bytes": 19509827,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/baseline-cutmy",
+    "revision": "a9c75df83f965bf1d56e2263ca585ab77aeaf305",
+    "sha256": "38f6d7970283a1e5db83fac92bce92c2a6f2e9bcc53810e38bcecb9191e9c02a",
+    "version": {
+      "arch": "amd64",
+      "build_time": "unknown",
+      "commit": "a9c75df83f965bf1d56e2263ca585ab77aeaf305",
+      "go_version": "go1.27.2",
+      "os": "linux",
+      "version": "perf-baseline"
+    }
+  },
+  "bundle": {
+    "bytes": 124910,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/toolchain.json",
+    "sha256": "f2e30eecb19d599677e5e70fc7a97cfe1bb359f3d6857c3099c408dde5a9a96e"
+  },
+  "candidate": {
+    "bytes": 19746277,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/candidate-cutmy-v6",
+    "sha256": "879581327014b2b7c8bb977a508bb0abd6ba9aa6d5a371a258bd0cd14267697e"
+  },
+  "candidate_execution_receipt": {
+    "bytes": 27254,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/production51-protocol/execution-receipts/cli.json",
+    "sha256": "01073af88e26a7dbb77dbb80f5baf389f32bbe9ca510bd6445f94cdff8849771"
+  },
+  "cases": 2,
+  "cleanup": {
+    "deleted": "Only4new successful qualification MP4/MKV media; whole-file SHA and inode/size/mtime rechecked after immutable PASS and all owned synchronous children reaped.",
+    "failed_or_prior_generation_media_deleted": false,
+    "ledger": {
+      "deleted": [
+        {
+          "bytes": 36239907,
+          "owned_processes_inactive": true,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mp4-baseline/joined.mp4",
+          "sha256": "d0cd9860980f62a35505a9ee033f749e9d44d003599286b33aa24338d4ca1584",
+          "whole_file_sha256_rechecked": true
+        },
+        {
+          "bytes": 36239907,
+          "owned_processes_inactive": true,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mp4-candidate/joined.mp4",
+          "sha256": "d0cd9860980f62a35505a9ee033f749e9d44d003599286b33aa24338d4ca1584",
+          "whole_file_sha256_rechecked": true
+        },
+        {
+          "bytes": 36227523,
+          "owned_processes_inactive": true,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mkv-baseline/joined.mkv",
+          "sha256": "0ed12eefbd804a9e7c36d5ea8e4edebeb96577c860f5b099a478b46b3bab7c50",
+          "whole_file_sha256_rechecked": true
+        },
+        {
+          "bytes": 36227523,
+          "owned_processes_inactive": true,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mkv-candidate/joined.mkv",
+          "sha256": "2734bd29318cc6b3b63d591230b193c6738f105fc35992f050aa8bd1b1814de1",
+          "whole_file_sha256_rechecked": true
+        }
+      ],
+      "free_bytes_after_cleanup": 4532396032,
+      "free_bytes_before_qualification": 4533547008,
+      "raw_fingerprint_and_metadata_preserved": true,
+      "scope": "Only4new successful qualification media after immutable complete/results, no prior-generation media"
+    },
+    "receipt": {
+      "bytes": 1615,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/successful-media-cleanup.json",
+      "sha256": "b51c19d176020c0aacfefb480f7b8b4850354fe563ddc88b6f72add21b4e4586"
+    },
+    "retained": "All four full fingerprint JSONs, ordered packet-clock/payload digests, full decoded video/PCM hashes, plans, exact commands, stdout/stderr, results, complete and qualification receipt. No historical baseline fingerprint reused.",
+    "total_successful_media_bytes_deleted": 144934860
+  },
+  "complete": {
+    "bytes": 316,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/complete.json",
+    "sha256": "69440efc18ea6ad6624da4e4b9465916c31e375d22d6b446ea88ad362aef612b"
+  },
+  "created_utc": "2026-10-14T01:24:24.088958+00:00",
+  "fingerprint_digest_index": [
+    {
+      "baseline": {
+        "command": {
+          "bytes": 393,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mp4-baseline/command.json",
+          "sha256": "5640ebcedfa4e9207702f3a9e2f602c523808e950bc6c515b49efd865f6a2775"
+        },
+        "full_fingerprint_canonical_sha256": "8d43021f1b1e1ab3cfbbccc4bc3e84423787753145966cfeb454699bd145a0da",
+        "full_fingerprint_file": {
+          "bytes": 5870,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mp4-baseline/fingerprints.json",
+          "sha256": "7eaf0dc768c2f8fb03e23956ddc12d060816db7d8c7b11186353c6dce48ff176"
+        },
+        "plan": {
+          "bytes": 1948,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mp4-baseline/plan.json",
+          "sha256": "2f20c690ef6d63ee629e9634ecfcafa07ed30799374576ca9d9ed2a6018dc19c"
+        },
+        "segments_canonical_sha256": "5f91e6289327f5fe8c9c9115bbc7a1bc2889ecd078768d6ba705443f710cf959",
+        "stderr": {
+          "bytes": 0,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mp4-baseline/stderr.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "bytes": 2936,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mp4-baseline/stdout.txt",
+          "sha256": "f5938d6ec19b5f8bd00645c3e53a0ac1a5eb8bf586d611613f20d8cbb7687ecb"
+        },
+        "summary": {
+          "audio_decoded_sha256": "SHA256=07c7ef2cee7e1561c1d8660df7c1680e01a0a0ff84fe5ac6e7db4a0e44b4b01d",
+          "bytes": 36239907,
+          "duration_seconds": 36.202,
+          "file_sha256": "d0cd9860980f62a35505a9ee033f749e9d44d003599286b33aa24338d4ca1584",
+          "packet_clock_sha256_by_stream": {
+            "0": {
+              "packets": 2172,
+              "sha256": "fbdd9884387edf0e79040c5d0de7f5febbce24b573893915cf5f2b54a6f1933a",
+              "time_base": "1/15360"
+            },
+            "1": {
+              "packets": 1701,
+              "sha256": "90ae1c593df80997ae831410fde5655ece8e0bed314ea2e3b0c16e6f4b27fb2d",
+              "time_base": "1/48000"
+            }
+          },
+          "packet_payload_sha256_by_stream": {
+            "0": "dc60641ff9fdfe24efbeaebc45a9dc72bca6d03cca40fb0c2fb15579655464bc",
+            "1": "90ebf6622f849df78c4f93070065853fad7d4a7f5e25ad4f27730f17cdf7a484"
+          },
+          "streams": [
+            {
+              "channels": null,
+              "codec_name": "h264",
+              "codec_type": "video",
+              "height": 1080,
+              "sample_aspect_ratio": "1:1",
+              "sample_rate": null,
+              "width": 1920
+            },
+            {
+              "channels": 1,
+              "codec_name": "aac",
+              "codec_type": "audio",
+              "height": null,
+              "sample_aspect_ratio": null,
+              "sample_rate": "48000",
+              "width": null
+            }
+          ],
+          "video_decoded_sha256": "SHA256=d2e65f9c94fc9827c9fe71a9254b17cc2d27d7e1f9547973aa5f9a3993988734"
+        },
+        "track_manifest_canonical_sha256": "01c7a95c2c8a324cb2341fdf7a699b4455dee1384165ad35303e06830082f3c2"
+      },
+      "candidate": {
+        "command": {
+          "bytes": 399,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mp4-candidate/command.json",
+          "sha256": "1f55d489e5ed6348f67413717e8859dd19e45e21dc12203f373a1bcb1fb2493d"
+        },
+        "full_fingerprint_canonical_sha256": "8d43021f1b1e1ab3cfbbccc4bc3e84423787753145966cfeb454699bd145a0da",
+        "full_fingerprint_file": {
+          "bytes": 5870,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mp4-candidate/fingerprints.json",
+          "sha256": "7eaf0dc768c2f8fb03e23956ddc12d060816db7d8c7b11186353c6dce48ff176"
+        },
+        "plan": {
+          "bytes": 1948,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mp4-candidate/plan.json",
+          "sha256": "2f20c690ef6d63ee629e9634ecfcafa07ed30799374576ca9d9ed2a6018dc19c"
+        },
+        "segments_canonical_sha256": "5f91e6289327f5fe8c9c9115bbc7a1bc2889ecd078768d6ba705443f710cf959",
+        "stderr": {
+          "bytes": 0,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mp4-candidate/stderr.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "bytes": 2937,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mp4-candidate/stdout.txt",
+          "sha256": "6a1073ba3f92522d4574d19415e373efacbbfda229b6f682bef787b73952201a"
+        },
+        "summary": {
+          "audio_decoded_sha256": "SHA256=07c7ef2cee7e1561c1d8660df7c1680e01a0a0ff84fe5ac6e7db4a0e44b4b01d",
+          "bytes": 36239907,
+          "duration_seconds": 36.202,
+          "file_sha256": "d0cd9860980f62a35505a9ee033f749e9d44d003599286b33aa24338d4ca1584",
+          "packet_clock_sha256_by_stream": {
+            "0": {
+              "packets": 2172,
+              "sha256": "fbdd9884387edf0e79040c5d0de7f5febbce24b573893915cf5f2b54a6f1933a",
+              "time_base": "1/15360"
+            },
+            "1": {
+              "packets": 1701,
+              "sha256": "90ae1c593df80997ae831410fde5655ece8e0bed314ea2e3b0c16e6f4b27fb2d",
+              "time_base": "1/48000"
+            }
+          },
+          "packet_payload_sha256_by_stream": {
+            "0": "dc60641ff9fdfe24efbeaebc45a9dc72bca6d03cca40fb0c2fb15579655464bc",
+            "1": "90ebf6622f849df78c4f93070065853fad7d4a7f5e25ad4f27730f17cdf7a484"
+          },
+          "streams": [
+            {
+              "channels": null,
+              "codec_name": "h264",
+              "codec_type": "video",
+              "height": 1080,
+              "sample_aspect_ratio": "1:1",
+              "sample_rate": null,
+              "width": 1920
+            },
+            {
+              "channels": 1,
+              "codec_name": "aac",
+              "codec_type": "audio",
+              "height": null,
+              "sample_aspect_ratio": null,
+              "sample_rate": "48000",
+              "width": null
+            }
+          ],
+          "video_decoded_sha256": "SHA256=d2e65f9c94fc9827c9fe71a9254b17cc2d27d7e1f9547973aa5f9a3993988734"
+        },
+        "track_manifest_canonical_sha256": "01c7a95c2c8a324cb2341fdf7a699b4455dee1384165ad35303e06830082f3c2"
+      },
+      "format": "mp4",
+      "fresh_both_sides": true,
+      "full_file_sha256_equal": true,
+      "scenario": "complex-copy-mp4-joined-20",
+      "verified": true
+    },
+    {
+      "baseline": {
+        "command": {
+          "bytes": 393,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mkv-baseline/command.json",
+          "sha256": "bbeb99ec9305eadfadded085436359fa5b3421dcaf5b0e5e3683e502b2b3cae5"
+        },
+        "full_fingerprint_canonical_sha256": "68c17220033b6eff7a3b25d418ecc880a168bd27ce4f08c727a7f2cc0c4f6364",
+        "full_fingerprint_file": {
+          "bytes": 5868,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mkv-baseline/fingerprints.json",
+          "sha256": "65fb060f2dc199879c6a8be98508d57e8188c110e37829f2b90187f03e7fd7fe"
+        },
+        "plan": {
+          "bytes": 1948,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mkv-baseline/plan.json",
+          "sha256": "3a5eee547a5cc123910d7fadeaf40d6a6cc82d63a72114e716374fd55ddf49da"
+        },
+        "segments_canonical_sha256": "5f91e6289327f5fe8c9c9115bbc7a1bc2889ecd078768d6ba705443f710cf959",
+        "stderr": {
+          "bytes": 0,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mkv-baseline/stderr.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "bytes": 2936,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mkv-baseline/stdout.txt",
+          "sha256": "24f11d9d4b7d4e68fb2b090cd0cb8c7971d4b58bd738283b826d5fb26bbc3d40"
+        },
+        "summary": {
+          "audio_decoded_sha256": "SHA256=07c7ef2cee7e1561c1d8660df7c1680e01a0a0ff84fe5ac6e7db4a0e44b4b01d",
+          "bytes": 36227523,
+          "duration_seconds": 36.206,
+          "file_sha256": "0ed12eefbd804a9e7c36d5ea8e4edebeb96577c860f5b099a478b46b3bab7c50",
+          "packet_clock_sha256_by_stream": {
+            "0": {
+              "packets": 2172,
+              "sha256": "cbede2667d3fb67a00cb419424f651545446a07b11de4a562459bba5a5dbf168",
+              "time_base": "1/1000"
+            },
+            "1": {
+              "packets": 1701,
+              "sha256": "8a1d444f7da87c7b2cc7ca530c512a96c0ef41f7eae79981d11d4da16485fcda",
+              "time_base": "1/1000"
+            }
+          },
+          "packet_payload_sha256_by_stream": {
+            "0": "dc60641ff9fdfe24efbeaebc45a9dc72bca6d03cca40fb0c2fb15579655464bc",
+            "1": "90ebf6622f849df78c4f93070065853fad7d4a7f5e25ad4f27730f17cdf7a484"
+          },
+          "streams": [
+            {
+              "channels": null,
+              "codec_name": "h264",
+              "codec_type": "video",
+              "height": 1080,
+              "sample_aspect_ratio": "1:1",
+              "sample_rate": null,
+              "width": 1920
+            },
+            {
+              "channels": 1,
+              "codec_name": "aac",
+              "codec_type": "audio",
+              "height": null,
+              "sample_aspect_ratio": null,
+              "sample_rate": "48000",
+              "width": null
+            }
+          ],
+          "video_decoded_sha256": "SHA256=d2e65f9c94fc9827c9fe71a9254b17cc2d27d7e1f9547973aa5f9a3993988734"
+        },
+        "track_manifest_canonical_sha256": "01c7a95c2c8a324cb2341fdf7a699b4455dee1384165ad35303e06830082f3c2"
+      },
+      "candidate": {
+        "command": {
+          "bytes": 399,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mkv-candidate/command.json",
+          "sha256": "554c2b7df8248c2723548a839b6ea32fb18852ebabe287851785621c0329009a"
+        },
+        "full_fingerprint_canonical_sha256": "90ce9a32ae75d1f39735533db83ad8a61e90380f4c76d4534eb669cda4218d21",
+        "full_fingerprint_file": {
+          "bytes": 5868,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mkv-candidate/fingerprints.json",
+          "sha256": "2e6365daf675cf784d0a3805141ec7c69ad1f97b7fcd2804909b8a53e9614b63"
+        },
+        "plan": {
+          "bytes": 1948,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mkv-candidate/plan.json",
+          "sha256": "3a5eee547a5cc123910d7fadeaf40d6a6cc82d63a72114e716374fd55ddf49da"
+        },
+        "segments_canonical_sha256": "5f91e6289327f5fe8c9c9115bbc7a1bc2889ecd078768d6ba705443f710cf959",
+        "stderr": {
+          "bytes": 0,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mkv-candidate/stderr.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "bytes": 2937,
+          "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/mkv-candidate/stdout.txt",
+          "sha256": "72fd06d7eaf8d5e56504f8fed1a9bcb67779ae6b0b99c45e58e0459401dc211d"
+        },
+        "summary": {
+          "audio_decoded_sha256": "SHA256=07c7ef2cee7e1561c1d8660df7c1680e01a0a0ff84fe5ac6e7db4a0e44b4b01d",
+          "bytes": 36227523,
+          "duration_seconds": 36.206,
+          "file_sha256": "2734bd29318cc6b3b63d591230b193c6738f105fc35992f050aa8bd1b1814de1",
+          "packet_clock_sha256_by_stream": {
+            "0": {
+              "packets": 2172,
+              "sha256": "cbede2667d3fb67a00cb419424f651545446a07b11de4a562459bba5a5dbf168",
+              "time_base": "1/1000"
+            },
+            "1": {
+              "packets": 1701,
+              "sha256": "8a1d444f7da87c7b2cc7ca530c512a96c0ef41f7eae79981d11d4da16485fcda",
+              "time_base": "1/1000"
+            }
+          },
+          "packet_payload_sha256_by_stream": {
+            "0": "dc60641ff9fdfe24efbeaebc45a9dc72bca6d03cca40fb0c2fb15579655464bc",
+            "1": "90ebf6622f849df78c4f93070065853fad7d4a7f5e25ad4f27730f17cdf7a484"
+          },
+          "streams": [
+            {
+              "channels": null,
+              "codec_name": "h264",
+              "codec_type": "video",
+              "height": 1080,
+              "sample_aspect_ratio": "1:1",
+              "sample_rate": null,
+              "width": 1920
+            },
+            {
+              "channels": 1,
+              "codec_name": "aac",
+              "codec_type": "audio",
+              "height": null,
+              "sample_aspect_ratio": null,
+              "sample_rate": "48000",
+              "width": null
+            }
+          ],
+          "video_decoded_sha256": "SHA256=d2e65f9c94fc9827c9fe71a9254b17cc2d27d7e1f9547973aa5f9a3993988734"
+        },
+        "track_manifest_canonical_sha256": "01c7a95c2c8a324cb2341fdf7a699b4455dee1384165ad35303e06830082f3c2"
+      },
+      "format": "mkv",
+      "fresh_both_sides": true,
+      "full_file_sha256_equal": false,
+      "scenario": "complex-copy-mkv-joined-20",
+      "verified": true
+    }
+  ],
+  "fresh_baseline_and_candidate": true,
+  "harness": {
+    "bytes": 45929,
+    "path": "/root/video_cut/core-go-performance/scripts/core-performance.py",
+    "sha256": "1c547134f902b65b2550a1f312efcf857ab883d8a868e3dff731c59edbaa4e71"
+  },
+  "limits": [
+    "This proves the two selected frozen complex20 copy MP4/MKV requests under the private production5.1 toolchain; it does not add compatibility cases or prove all formats/platforms.",
+    "MP4 files are byte-identical; MKV whole-file hashes differ. Full decoded/payload/packet-clock/duration/shape oracles pass. The differing MKV container metadata was not localized; no UID-specific cause is asserted.",
+    "No speed claim, benchmark timing activation, Go edit, test/build, system/image mutation or production operation.",
+    "Original host-master native stall cause and relationship to earlier candidate P1 stall remain unproved."
+  ],
+  "manifest": {
+    "bytes": 223322,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/production51-protocol/execution-manifest.json",
+    "sha256": "ad92380c9ce478fe778ce030b5e8f30d81b78c8a1ba3cbfc82c85a900260e38b"
+  },
+  "no_compilation": true,
+  "oracle": "Unchanged output_fingerprint full independent decode +verify_shape+copy-mode compare_fingerprints",
+  "outputs": 4,
+  "qualification_script": {
+    "bytes": 8492,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/qualify-production51-complex.py",
+    "sha256": "07d6f44b637a47c5e188ae6cea0585efbc82abcae7fc0416d08190eed6af88c4"
+  },
+  "raw_qualification_receipt": {
+    "bytes": 1801,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/qualification-receipt.json",
+    "sha256": "7fc6f55959db75c6083e265ef9c7cd7f9ed1e1780fbb2196fe91401ba20741bb"
+  },
+  "raw_qualification_receipt_payload": {
+    "bundle": {
+      "bytes": 124910,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/toolchain.json",
+      "sha256": "f2e30eecb19d599677e5e70fc7a97cfe1bb359f3d6857c3099c408dde5a9a96e"
+    },
+    "candidate_receipt": {
+      "bytes": 27254,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/production51-protocol/execution-receipts/cli.json",
+      "sha256": "01073af88e26a7dbb77dbb80f5baf389f32bbe9ca510bd6445f94cdff8849771"
+    },
+    "cases": 2,
+    "complete": {
+      "bytes": 316,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/complete.json",
+      "sha256": "69440efc18ea6ad6624da4e4b9465916c31e375d22d6b446ea88ad362aef612b"
+    },
+    "free_bytes_after_cleanup": 4532396032,
+    "fresh_baseline_and_candidate": true,
+    "manifest": {
+      "bytes": 223322,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/production51-protocol/execution-manifest.json",
+      "sha256": "ad92380c9ce478fe778ce030b5e8f30d81b78c8a1ba3cbfc82c85a900260e38b"
+    },
+    "no_compilation": true,
+    "outputs": 4,
+    "results": {
+      "bytes": 33275,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/results.json",
+      "sha256": "3d2d4b690e057390d5b8414ff83a709a4559873ccb5e0f734c5d05a590803365"
+    },
+    "schema": "production51-fresh-complex-qualification-v1",
+    "source_catalog_sha256": "3503f2bd511ce8fee94b174085fd0a151c7b787ed7e910e1561d32a3a7708e07",
+    "successful_media_cleanup": {
+      "bytes": 1615,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/successful-media-cleanup.json",
+      "sha256": "b51c19d176020c0aacfefb480f7b8b4850354fe563ddc88b6f72add21b4e4586"
+    },
+    "timing_claim": false,
+    "verified": true
+  },
+  "results": {
+    "bytes": 33275,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/production51-complex-qualification-v1/results.json",
+    "sha256": "3d2d4b690e057390d5b8414ff83a709a4559873ccb5e0f734c5d05a590803365"
+  },
+  "schema": "production51-fresh-complex-qualification-proof-compact-v1",
+  "source_catalog_sha256": "3503f2bd511ce8fee94b174085fd0a151c7b787ed7e910e1561d32a3a7708e07",
+  "timing_claim": false,
+  "verified": true
+}

@@ -49,7 +49,7 @@ class AggregateControls(unittest.TestCase):
                          'go_version': f"go version {self.source['toolchain']} linux/amd64",
                          'schema_versions': ['20261005-storage-queue-v3', '20261010-cache-retention-v1',
                                              '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1',
-                                             '20261011-source-retention-v1', '20261012-source-media-cleanup-v1'],
+                                             '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1'],
                          'upgrade_storage_defaults_checked': 3,
                          'artifacts': [{'label': label, 'bytes': 100, 'sha256': 'e' * 64, 'duration_seconds': 1,
                                         'codecs': {'audio': 'mp3'} if label == 'fresh-after-restore-mp3'

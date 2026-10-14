@@ -377,12 +377,17 @@ func stageHLSProgress(ctx context.Context, c Config, g *networkGuard, f platform
 }
 
 func stageHLSGroup(ctx context.Context, c Config, g *networkGuard, f platformFormat, segments []hlsSegment, dir string, index int, downloaded *atomic.Int64, limit, muxLimit int64, progress func(int, int)) (string, int64, error) {
+	path, offset, _, err := stageHLSGroupWithInfo(ctx, c, g, f, segments, dir, index, downloaded, limit, muxLimit, progress)
+	return path, offset, err
+}
+
+func stageHLSGroupWithInfo(ctx context.Context, c Config, g *networkGuard, f platformFormat, segments []hlsSegment, dir string, index int, downloaded *atomic.Int64, limit, muxLimit int64, progress func(int, int)) (string, int64, probeInfo, error) {
 	var e error
 	raw := filepath.Join(dir, fmt.Sprintf("stream-%d.media", index))
 	var out string
 	file, e := os.OpenFile(raw, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if e != nil {
-		return "", 0, e
+		return "", 0, probeInfo{}, e
 	}
 	defer os.Remove(raw)
 	keep := false
@@ -392,27 +397,32 @@ func stageHLSGroup(ctx context.Context, c Config, g *networkGuard, f platformFor
 		}
 	}()
 	if segments[0].MapURL != "" {
-		e = g.fetch(ctx, segments[0].MapURL, f.Headers, &stagingWriter{writer: file, downloaded: downloaded, limit: limit}, limit)
+		e = appendHLSInitialization(ctx, g, f, segments[0].MapURL, dir, index, file, downloaded, limit)
 	}
 	if e == nil {
 		e = fetchHLSSegments(ctx, g, f, segments, dir, index, file, downloaded, limit, progress)
 	}
 	closeErr := file.Close()
 	if e != nil {
-		return "", 0, e
+		return "", 0, probeInfo{}, e
 	}
 	if closeErr != nil {
-		return "", 0, closeErr
+		return "", 0, probeInfo{}, closeErr
 	}
+	release, e := acquireMediaInspection(ctx, Source{}, []platformFormat{f})
+	if e != nil {
+		return "", 0, probeInfo{}, e
+	}
+	defer release()
 	// Restrict protocols/demuxers even after staging. HLS, concat and arbitrary
 	// network or file references are not accepted by FFmpeg.
 	rawInfo, e := probeStreams(ctx, c, raw, false)
 	if e != nil {
-		return "", 0, e
+		return "", 0, probeInfo{}, e
 	}
 	selection := mediaSelection{Video: rawInfo.selectedVideo(), Audio: rawInfo.selectedAudio()}
 	if selection.Video == nil && selection.Audio == nil {
-		return "", 0, errUnsupportedStream
+		return "", 0, probeInfo{}, errUnsupportedStream
 	}
 	// Older Matroska muxers silently discard display matrices. A rotated
 	// selected video uses MP4 so both later rendering and stream copy retain
@@ -425,19 +435,19 @@ func stageHLSGroup(ctx context.Context, c Config, g *networkGuard, f platformFor
 	args = append(args, "-c", "copy", "-avoid_negative_ts", "make_zero", "-map_metadata", "-1", "-fs", strconv.FormatInt(muxLimit, 10), out)
 	_, e = runCommand(ctx, c.FFmpeg, args...)
 	if e != nil {
-		return "", 0, hlsRemuxFailure(e, selection.Video)
+		return "", 0, probeInfo{}, hlsRemuxFailure(e, selection.Video)
 	}
 	info, duration, e := probe(ctx, c, out, false)
 	if e != nil {
-		return "", 0, e
+		return "", 0, probeInfo{}, e
 	}
 	expected := segments[len(segments)-1].EndMS - segments[0].StartMS
 	if math.Abs(float64(duration-expected)) > 1000 || !sameHLSPresentation(rawInfo, info) {
-		return "", 0, errUnsupportedStream
+		return "", 0, probeInfo{}, errUnsupportedStream
 	}
 	stat, e := os.Stat(out)
 	if e != nil || stat.Size() >= muxLimit {
-		return "", 0, errUnsupportedStream
+		return "", 0, probeInfo{}, errUnsupportedStream
 	}
 	// make_zero shifts decoding timestamps (including B-frame reordering).
 	// EXTINF's timeline is anchored to the first video presentation timestamp,
@@ -450,14 +460,14 @@ func stageHLSGroup(ctx context.Context, c Config, g *networkGuard, f platformFor
 	if anchorStream != nil {
 		anchor, e = strconv.ParseFloat(anchorStream.StartTime, 64)
 		if e != nil {
-			return "", 0, errUnsupportedStream
+			return "", 0, probeInfo{}, errUnsupportedStream
 		}
 	}
 	if math.IsNaN(anchor) || math.IsInf(anchor, 0) || anchor < 0 || anchor > 2 {
-		return "", 0, errUnsupportedStream
+		return "", 0, probeInfo{}, errUnsupportedStream
 	}
 	keep = true
-	return out, segments[0].StartMS - int64(math.Round(anchor*1000)), nil
+	return out, segments[0].StartMS - int64(math.Round(anchor*1000)), info, nil
 }
 
 type stagingWriter struct {
@@ -473,66 +483,94 @@ func (w *stagingWriter) Write(data []byte) (int, error) {
 	return w.writer.Write(data)
 }
 
-// Four bounded downloads hide per-segment latency without buffering media in
-// RAM. Files are appended in playlist order and removed after each batch. Raw
-// plus pending segments never exceeds twice the enforced staging allowance;
-// all segment files are gone before remuxing creates the second full copy.
+// Four downloads run continuously inside an eight-segment reorder window.
+// Media stays on disk; a stalled early segment cannot create an unbounded queue
+// of completed later files. Every outstanding file is removed after workers stop.
 func fetchHLSSegments(ctx context.Context, g *networkGuard, format platformFormat, segments []hlsSegment, dir string, stream int, output io.Writer, downloaded *atomic.Int64, limit int64, progress func(int, int)) error {
-	const concurrency = 4
-	for first := 0; first < len(segments); first += concurrency {
-		count := min(concurrency, len(segments)-first)
-		batchCtx, cancel := context.WithCancel(ctx)
-		paths := make([]string, count)
-		failures := make([]error, count)
-		var workers sync.WaitGroup
-		for slot := range count {
-			paths[slot] = filepath.Join(dir, fmt.Sprintf("segment-%d-%d.part", stream, first+slot))
-			workers.Add(1)
-			go func(slot int) {
-				defer workers.Done()
-				file, err := os.OpenFile(paths[slot], os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-				if err == nil {
-					err = g.fetch(batchCtx, segments[first+slot].URL, format.Headers, &stagingWriter{writer: file, downloaded: downloaded, limit: limit}, limit)
-					closeErr := file.Close()
-					if err == nil {
-						err = closeErr
+	const concurrency, window = 4, 8
+	type task struct {
+		index int
+		path  string
+	}
+	type completion struct {
+		index int
+		err   error
+	}
+	fetchCtx, cancel := context.WithCancel(ctx)
+	jobs := make(chan task, window)
+	results := make(chan completion, window)
+	pending := make(map[int]string, window)
+	var workers sync.WaitGroup
+	for range min(concurrency, len(segments)) {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for {
+				select {
+				case <-fetchCtx.Done():
+					return
+				case job, ok := <-jobs:
+					if !ok {
+						return
+					}
+					err := fetchHLSPayload(fetchCtx, g, format, segments[job.index].URL, job.path, downloaded, limit)
+					select {
+					case results <- completion{job.index, err}:
+					case <-fetchCtx.Done():
+						return
 					}
 				}
-				failures[slot] = err
-				if err != nil {
-					cancel()
-				}
-			}(slot)
-		}
-		workers.Wait()
+			}
+		}()
+	}
+	defer func() {
 		cancel()
-		var failure error
-		for _, err := range failures {
-			if err != nil && (failure == nil || errors.Is(failure, context.Canceled)) {
-				failure = err
-			}
+		close(jobs)
+		workers.Wait()
+		for _, path := range pending {
+			_ = os.Remove(path)
 		}
-		for slot, path := range paths {
-			if failure == nil {
-				file, err := os.Open(path)
+	}()
+	next, assigned := 0, 0
+	ready := make(map[int]bool, window)
+	for next < len(segments) {
+		for assigned < len(segments) && assigned-next < window {
+			path := filepath.Join(dir, fmt.Sprintf("segment-%d-%d.part", stream, assigned))
+			pending[assigned] = path
+			jobs <- task{assigned, path}
+			assigned++
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case result := <-results:
+			if result.err != nil {
+				return result.err
+			}
+			ready[result.index] = true
+		}
+		for ready[next] {
+			path := pending[next]
+			file, err := os.Open(path)
+			if err == nil {
+				_, err = io.Copy(output, contextReadSeeker{context: ctx, ReadSeeker: file})
+				closeErr := file.Close()
 				if err == nil {
-					_, err = io.Copy(output, file)
-					closeErr := file.Close()
-					if err == nil {
-						err = closeErr
-					}
-				}
-				failure = err
-				if failure == nil && progress != nil {
-					progress(first+slot+1, len(segments))
+					err = closeErr
 				}
 			}
-			if err := os.Remove(path); err != nil && !os.IsNotExist(err) && failure == nil {
-				failure = err
+			if err != nil {
+				return err
 			}
-		}
-		if failure != nil {
-			return failure
+			if err = os.Remove(path); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+			delete(pending, next)
+			delete(ready, next)
+			next++
+			if progress != nil {
+				progress(next, len(segments))
+			}
 		}
 	}
 	return nil

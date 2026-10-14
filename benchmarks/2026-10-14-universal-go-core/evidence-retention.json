@@ -1,0 +1,449 @@
+{
+  "archive_manifests": [
+    {
+      "bytes": 122154,
+      "path": "archived-go-elfs-v1/manifest.json",
+      "restorable_paths": 120,
+      "selected_original_logical_bytes": 1242645188,
+      "sha256": "4e2afe7fa7e0a466c94b93fc60cb0bb969ee4985390d901b9a870b02028e13b9",
+      "unique_archive_bytes": 363777436,
+      "verification": "Each compressed stream was decompressed and compared by complete original SHA256 and size before original path unlink; mode/uid/gid/timestamps and original paths remain in this manifest.",
+      "verified_net_freed_bytes": 878084096
+    },
+    {
+      "bytes": 10128,
+      "path": "archived-go-elfs-clock-v1/manifest.json",
+      "restorable_paths": 5,
+      "selected_original_logical_bytes": 115011892,
+      "sha256": "4b69b204e45a5534983380a9f949a716d44480fcf7023c2651511800cb4642ab",
+      "unique_archive_bytes": 42742820,
+      "verification": "Each compressed stream was decompressed and compared by complete original SHA256 and size before original path unlink; mode/uid/gid/timestamps and original paths remain in this manifest.",
+      "verified_net_freed_bytes": 72212480
+    }
+  ],
+  "durability_limit": "Full stream restoration and metadata checks were established. Power-loss crash durability and directory-fsync guarantees were not tested.",
+  "operator_artifact_root": "/root/video_cut/reports/universal-go-core-20261014",
+  "recorded_utc": "2026-10-14T01:28:23.114359+00:00",
+  "restore_helpers": [
+    {
+      "bytes": 2867,
+      "command": [
+        "python3",
+        "restore-archived-owned-go-elfs-v1.py",
+        "--path",
+        "ORIGINAL_ABSOLUTE_PATH_FROM_BOUND_MANIFEST"
+      ],
+      "path": "restore-archived-owned-go-elfs-v1.py",
+      "scope": "Restores only a listed original owned path, refuses any existing target or symlink parent, checks compressed/decompressed SHA256 and restores recorded mode/ownership.",
+      "sha256": "8681dd22b9daec1d43b7fda47815f974118f0adcd03c9f1dce9d719804bee62e"
+    },
+    {
+      "bytes": 2873,
+      "command": [
+        "python3",
+        "restore-archived-owned-clock-go-elfs-v1.py",
+        "--path",
+        "ORIGINAL_ABSOLUTE_PATH_FROM_BOUND_MANIFEST"
+      ],
+      "path": "restore-archived-owned-clock-go-elfs-v1.py",
+      "scope": "Restores only a listed original owned path, refuses any existing target or symlink parent, checks compressed/decompressed SHA256 and restores recorded mode/ownership.",
+      "sha256": "2879730851146f3c8bbf02e98b7515eae096204b38a68dcab60628ab793f96d5"
+    }
+  ],
+  "retained_history": [
+    "Original v4 P1 failure, diagnostic repetitions, v5 partial and clock-regression continuation evidence, v6 native-baseline failure and v7 capacity failure remain separate and excluded from final performance acceptance. Failed/unmatched staged media and logs remain; old copied Go observer ELFs may be restorable via the bound archive manifests.",
+    "The125 old ELF paths were deliberately replaced by restorable compressed archives; their original pathname is absent until explicitly restored. This index does not claim those old paths remain directly executable.",
+    "Original clock qualification and fresh production qualification proof JSON, fingerprints and logs remain even where the seven explicitly listed successful media files were removed.",
+    "Current baseline CLI, candidate CLIv6, all current main/server/mixed/pure products and mixed observer, current clock test, debugger and production portable bundle were excluded from archival. Current13binary SHA checks plus current clock SHA passed afterward."
+  ],
+  "schema": "core-performance-retention-provenance-v1",
+  "scope": "Metadata-only index for the explicitly authorized report-artifact compactions. No raw media, packet fingerprints, environment, sampled resources or private configuration copied. No current binary, failed/unmatched media, original records, production data, unrelated global cache or tmp directory was deleted by these compactions.",
+  "storage_scope": "Archived bytes remain in the same owned report filesystem. Compression/hardlink recovery did not deploy or mutate a production runtime.",
+  "successful_media_output_counts_removed": {
+    "fresh_production51_qualification": 4,
+    "old_clock_qualification": 3
+  },
+  "successful_qualification_media_cleanup": [
+    {
+      "bytes": 3269,
+      "disposition": "Only explicitly authorized successful qualification media outputs removed after full semantic/hash/stat/owned-process proof; proof metadata/directories remain.",
+      "path": "owned-disk-audit-and-passed-qualification-cleanup-v1.json",
+      "sha256": "afed51e3e012d067545bd7c50ad2dd6b1a9dc06b0450dee8d112037d02a10b1d"
+    },
+    {
+      "bytes": 1615,
+      "disposition": "Only explicitly authorized successful qualification media outputs removed after full semantic/hash/stat/owned-process proof; proof metadata/directories remain.",
+      "path": "production51-complex-qualification-v1/successful-media-cleanup.json",
+      "sha256": "b51c19d176020c0aacfefb480f7b8b4850354fe563ddc88b6f72add21b4e4586"
+    }
+  ],
+  "totals": {
+    "restorable_original_paths": 125,
+    "selected_original_logical_bytes": 1357657080,
+    "unique_compressed_archives": 40,
+    "unique_compressed_bytes": 406520256,
+    "verified_net_freed_bytes": 950296576
+  },
+  "unique_compressed_archives": [
+    {
+      "bytes": 11227268,
+      "original_byte_sha256": "f459065e3531bb7de0f0ea361c5475e582abd81fb84c55235798cb4dd2236690",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/f459065e3531bb7de0f0ea361c5475e582abd81fb84c55235798cb4dd2236690-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "9c9f6a9fcdaf567c22864c4a05140e96aeaa4ebd3c9585219e774a35cc14ee07",
+      "single_original_bytes": 25090829
+    },
+    {
+      "bytes": 11227316,
+      "original_byte_sha256": "0d56bbe3cbeb51ce4d427f70242e30df77688c615d9c9a56a35f24a3657d80f0",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/0d56bbe3cbeb51ce4d427f70242e30df77688c615d9c9a56a35f24a3657d80f0-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "7462c76ae191dbe4cb5788ba0cded82d8f75bbe45ade47a8575a61677084573c",
+      "single_original_bytes": 25090349
+    },
+    {
+      "bytes": 11224136,
+      "original_byte_sha256": "6138e30ef0f010666403e56802b4fc4d72b6b8f6a7732ef6dbdaceb9bf864041",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/6138e30ef0f010666403e56802b4fc4d72b6b8f6a7732ef6dbdaceb9bf864041-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "830894569de55acbd843b2164a7fd482416c97cff78dff4078cc7fa4ed45565e",
+      "single_original_bytes": 25089037
+    },
+    {
+      "bytes": 11189732,
+      "original_byte_sha256": "edea54126372cc458e59a0fea3e4730da7a0282ab77718b15f518fe86aacb527",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/edea54126372cc458e59a0fea3e4730da7a0282ab77718b15f518fe86aacb527-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "6f69f2904bcf5d7bd7a573fceec0330eb33b0fcd6397e81b47f93443a9b5f2e2",
+      "single_original_bytes": 25008355
+    },
+    {
+      "bytes": 8971092,
+      "original_byte_sha256": "b1987de9faf8e8f71ca0afbf52609a1d0452ccf765874c105a5be32feb18b2b0",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/b1987de9faf8e8f71ca0afbf52609a1d0452ccf765874c105a5be32feb18b2b0-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "5b90360d6384358b8fb572c8f2916439c3b8050ee3cba6cf3ba904e0ac5c71df",
+      "single_original_bytes": 19736632
+    },
+    {
+      "bytes": 8971088,
+      "original_byte_sha256": "d1aeb239f312defd2ee4daf0bbdbd3fbac18dc0bccfd21be3a7039849cc520ad",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/d1aeb239f312defd2ee4daf0bbdbd3fbac18dc0bccfd21be3a7039849cc520ad-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "d150c5473432c9c9dd4fb7043b176cbb5d20a04ab8a3d034de1253b2f199eaf0",
+      "single_original_bytes": 19736632
+    },
+    {
+      "bytes": 8970768,
+      "original_byte_sha256": "a9d9b691d10810b4c23e4cd92ab545fdc20ca6ef3a1b1be76d4ca769f9508812",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/a9d9b691d10810b4c23e4cd92ab545fdc20ca6ef3a1b1be76d4ca769f9508812-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "a634e162d3d5a7e69172afc95501488e47b758259b26d6069c5915f71dd8c044",
+      "single_original_bytes": 19740307
+    },
+    {
+      "bytes": 8973328,
+      "original_byte_sha256": "4db4aa1cb179032756a784941b635bb29df0c2ac6c582850430b71d80157338b",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/4db4aa1cb179032756a784941b635bb29df0c2ac6c582850430b71d80157338b-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "bcbc35e79565a66fbd8879328bcf2b36af7f3ce1eb4973d437d9288a30045f04",
+      "single_original_bytes": 19746877
+    },
+    {
+      "bytes": 8973324,
+      "original_byte_sha256": "3ba8237842b7230b37427536566f66c7bff3dc0b372706592bd73e809e48597b",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/3ba8237842b7230b37427536566f66c7bff3dc0b372706592bd73e809e48597b-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "ec8de1c6899ff0035c1a64e416a56a6f3e5be19bd6b08e43281c5406fbdce659",
+      "single_original_bytes": 19746877
+    },
+    {
+      "bytes": 2373576,
+      "original_byte_sha256": "e79c0ebe03d817d0f0bc7ba9f95eabd602a2f2c525763a28b08956ec016ee93e",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/e79c0ebe03d817d0f0bc7ba9f95eabd602a2f2c525763a28b08956ec016ee93e-m755.xz",
+      "restorable_original_path_count": 80,
+      "sha256": "7185ff18cedf8627621ff0a8b55769f1521b6a150b995a54ddb5106dc15a8b8e",
+      "single_original_bytes": 4343443
+    },
+    {
+      "bytes": 11394460,
+      "original_byte_sha256": "e0250946b3f397c5023da5eda77cc947649c39213257c15565450c456fa429f3",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/e0250946b3f397c5023da5eda77cc947649c39213257c15565450c456fa429f3-m755.xz",
+      "restorable_original_path_count": 2,
+      "sha256": "c96a127c5822d10db2c51476626f5a3fb9d3b68f78b0b3f7fcf0b5f3642abef1",
+      "single_original_bytes": 25474771
+    },
+    {
+      "bytes": 11401300,
+      "original_byte_sha256": "3c6413959277f3f5bae8b8cfebc314fe5e2086e432f1b78afea9727120441974",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/3c6413959277f3f5bae8b8cfebc314fe5e2086e432f1b78afea9727120441974-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "2b2a146d4c5542ded68eb0d82f057886a22e6abf600c0cc61e3be0fb94ace5e3",
+      "single_original_bytes": 25491122
+    },
+    {
+      "bytes": 11405736,
+      "original_byte_sha256": "2c1567b5471d949a2dd95fb4dc0fc37658fb3d45249fd4fcc1e5d820ef52d196",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/2c1567b5471d949a2dd95fb4dc0fc37658fb3d45249fd4fcc1e5d820ef52d196-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "6ffa6642caf07dd7804fbaf7b2d3a9f053f226e793e3aa0ad5b8e5b7ac5dc31f",
+      "single_original_bytes": 25502434
+    },
+    {
+      "bytes": 11407524,
+      "original_byte_sha256": "87302217fca8ef51df98f562b72d61d4bcad2831b0adbcedc37bdbbc903a7b1c",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/87302217fca8ef51df98f562b72d61d4bcad2831b0adbcedc37bdbbc903a7b1c-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "5ca13cba8b47966613ea38e7edac93c35b2cbbfb7e000a2335bfdd011d26a9ea",
+      "single_original_bytes": 25503837
+    },
+    {
+      "bytes": 4614504,
+      "original_byte_sha256": "a65b4d98bf84dd247e59ab901d603a9eb61747914b05e3c8466ffc7c4879b016",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/a65b4d98bf84dd247e59ab901d603a9eb61747914b05e3c8466ffc7c4879b016-m755.xz",
+      "restorable_original_path_count": 2,
+      "sha256": "387a4a135f309b075bf7c5174aa94b9101bb97abf3549524d8f7f590581a05e6",
+      "single_original_bytes": 8846416
+    },
+    {
+      "bytes": 11287516,
+      "original_byte_sha256": "e845e26d30308628f30149f7ef237df6e820c3ba7cbf5ae5a470398546a1d659",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/e845e26d30308628f30149f7ef237df6e820c3ba7cbf5ae5a470398546a1d659-m755.xz",
+      "restorable_original_path_count": 2,
+      "sha256": "532e2f982017e0cf7eb7e3c6afebd5880999ceb95e7b54faa409356c6a189380",
+      "single_original_bytes": 25234336
+    },
+    {
+      "bytes": 4614504,
+      "original_byte_sha256": "9b8cc76fafce329b95b0f984179b2f8e07042c190b5fc54914f1a05f85e7f3cd",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/9b8cc76fafce329b95b0f984179b2f8e07042c190b5fc54914f1a05f85e7f3cd-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "39209891423835e476bc1376edfdc8dce86e54dc4907cc60c7795e11685c4abd",
+      "single_original_bytes": 8846416
+    },
+    {
+      "bytes": 11291848,
+      "original_byte_sha256": "1baefc4de1d47ea2953e8870286fa3467555ed73104df832aa6756c727353305",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/1baefc4de1d47ea2953e8870286fa3467555ed73104df832aa6756c727353305-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "4bf57dc9c66a1e3d471c03674957819239e0040f04f7776b7a551de19748af92",
+      "single_original_bytes": 25244527
+    },
+    {
+      "bytes": 4614504,
+      "original_byte_sha256": "76dca7bca979ff5e2bd7cea1e9d2dd6ebbbc204d74b23943b5717f2375e89623",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/76dca7bca979ff5e2bd7cea1e9d2dd6ebbbc204d74b23943b5717f2375e89623-m755.xz",
+      "restorable_original_path_count": 2,
+      "sha256": "0ebea547139742450e49a072caea6a359004e77ace578e2ef944c89b73db9819",
+      "single_original_bytes": 8846416
+    },
+    {
+      "bytes": 11295780,
+      "original_byte_sha256": "b24dcd4f344a77e497aead89d3ca8d201c7e9baa8c1c537aee571fd3e0863d89",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/b24dcd4f344a77e497aead89d3ca8d201c7e9baa8c1c537aee571fd3e0863d89-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "9659c84a17331ad182d63e0c92896cca35bbf00225206a6702b88257fb180104",
+      "single_original_bytes": 25254271
+    },
+    {
+      "bytes": 11298592,
+      "original_byte_sha256": "6b97cc0de6e9b50479b44a0ce9defea6490be598af87d6923769d63d0f7c3580",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/6b97cc0de6e9b50479b44a0ce9defea6490be598af87d6923769d63d0f7c3580-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "7e0fb9e668d58c9688b7211994ca3fcf6d1836740dd5fb9c7bd4fbc384666907",
+      "single_original_bytes": 25260858
+    },
+    {
+      "bytes": 11335988,
+      "original_byte_sha256": "bea7384ed1c036ce622d9b2b3492ce0bcfeaf034e299547ad6fdc91e1a718166",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/bea7384ed1c036ce622d9b2b3492ce0bcfeaf034e299547ad6fdc91e1a718166-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "7495ec2dbe7d47d79f82e57023c298ba3d2b3efb71a382a89e80fbd04ba4dd82",
+      "single_original_bytes": 25354289
+    },
+    {
+      "bytes": 11325932,
+      "original_byte_sha256": "f2b8ed3bcfca8d7fbcc1ccc2de20daa79c3a7377c469cc312b8c0d426eaa675c",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/f2b8ed3bcfca8d7fbcc1ccc2de20daa79c3a7377c469cc312b8c0d426eaa675c-m755.xz",
+      "restorable_original_path_count": 2,
+      "sha256": "8daf0ba0c26a3bca4087f064459325279daaf9cf9fba57aa628c52952b74779f",
+      "single_original_bytes": 25329363
+    },
+    {
+      "bytes": 11329536,
+      "original_byte_sha256": "498bc8095c4b4d53c18cc8b40b69b8e762807e3d8707eedee6f80523addf8f73",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/498bc8095c4b4d53c18cc8b40b69b8e762807e3d8707eedee6f80523addf8f73-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "1995f5095f6b270b4a07ac11396ad8307315a1feb3c299cc7d40875b645dfcbd",
+      "single_original_bytes": 25341818
+    },
+    {
+      "bytes": 11335396,
+      "original_byte_sha256": "cd099211851028c372be7c400816e121a17f3d254a5a9809d97a12f0df0a862f",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/cd099211851028c372be7c400816e121a17f3d254a5a9809d97a12f0df0a862f-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "149617a3d248ca1d8296ae210c091ac3db2cb6b7d91205c2b8e1473f82c83d66",
+      "single_original_bytes": 25354178
+    },
+    {
+      "bytes": 11339608,
+      "original_byte_sha256": "7673a10b8ed2e51d81cdc4cc22d6782a224fc75334f383ef3ed689255fcf2a38",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/7673a10b8ed2e51d81cdc4cc22d6782a224fc75334f383ef3ed689255fcf2a38-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "d9448b55dca59a6f23b0c4b3a7aece7a46364f9cc4e0906a31b85815724a8bce",
+      "single_original_bytes": 25361261
+    },
+    {
+      "bytes": 11091480,
+      "original_byte_sha256": "cf81427cb3718dc65363d9c44c77f2bb11c2074fc7b85118260b54340f59468e",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/cf81427cb3718dc65363d9c44c77f2bb11c2074fc7b85118260b54340f59468e-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "55671512fe3dc72dfdc76a43e6224bcec599a09ec3eedc9bf0b8b5c99717e254",
+      "single_original_bytes": 24681192
+    },
+    {
+      "bytes": 11324304,
+      "original_byte_sha256": "ec84d2b553f014328947fb9300a3a2cef481c8b0c021132bb384b260f2b0f7f3",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/ec84d2b553f014328947fb9300a3a2cef481c8b0c021132bb384b260f2b0f7f3-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "07f741b9776886e6a3bc392f3a8df8d06134bcc0796c27304ec3e07ae5efb3d2",
+      "single_original_bytes": 25327035
+    },
+    {
+      "bytes": 11287820,
+      "original_byte_sha256": "a2a1f8e6f52929add6f4d979daa76e061230408046bde0d5389a415277bab21b",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/a2a1f8e6f52929add6f4d979daa76e061230408046bde0d5389a415277bab21b-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "4a31b965004a6aa288c521d930c1458745a026c76a6bc746ec2b632343bf2e55",
+      "single_original_bytes": 25226654
+    },
+    {
+      "bytes": 11291188,
+      "original_byte_sha256": "ba31b588ae33def34e1da7e48d75082544644758c501bfa775553bdb8e6c766b",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/ba31b588ae33def34e1da7e48d75082544644758c501bfa775553bdb8e6c766b-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "a334ade37770e78808c0ead4c940f0b88088a8dba0ec8e37bb8db89ac7e7aeb7",
+      "single_original_bytes": 25236838
+    },
+    {
+      "bytes": 11292268,
+      "original_byte_sha256": "87e686aaa91732b344fe7fb43cde790ae6689c9c25bc0a82f6b04f12e99bef6a",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/87e686aaa91732b344fe7fb43cde790ae6689c9c25bc0a82f6b04f12e99bef6a-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "ef7a33862309f4000478cbb19da58acfdaf3988fdfeedeb33c48280761e9674f",
+      "single_original_bytes": 25245473
+    },
+    {
+      "bytes": 11279624,
+      "original_byte_sha256": "34db708c284b9e2a4dbe30c2a0dcd676ae9df577bc2e7e022bf5558f03c7b163",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/34db708c284b9e2a4dbe30c2a0dcd676ae9df577bc2e7e022bf5558f03c7b163-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "5ea5edfc88460ee939fab6b68539687f4807b203812b3abc980a04bb1924c1bc",
+      "single_original_bytes": 25212359
+    },
+    {
+      "bytes": 8970552,
+      "original_byte_sha256": "1c9a770b7bb2367a8c886d8602cc2ded2b9098284a5d13f91918edc433948ed0",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/1c9a770b7bb2367a8c886d8602cc2ded2b9098284a5d13f91918edc433948ed0-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "06b96ba57343cc762bb644e799144221a0570c74f57358bd8c8083283a58d98e",
+      "single_original_bytes": 19736046
+    },
+    {
+      "bytes": 11387640,
+      "original_byte_sha256": "95278c6ff089062b5e9f1ea43c95c0fbe77ee4cabbe4cf20ba22c48b78725cd8",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/95278c6ff089062b5e9f1ea43c95c0fbe77ee4cabbe4cf20ba22c48b78725cd8-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "5345101e6f6843fd1119397a27279fb79941774cf3e542541ea61c78514447ed",
+      "single_original_bytes": 25454080
+    },
+    {
+      "bytes": 11134860,
+      "original_byte_sha256": "1549214dd779375e22aa6ff302f4202d337a26693776f3253758f04160491bbf",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/1549214dd779375e22aa6ff302f4202d337a26693776f3253758f04160491bbf-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "e6cd237c1dceae7f2d19911f19e4f5c6ccf3fef06fb141e45c52c9bf5dff09c4",
+      "single_original_bytes": 24776536
+    },
+    {
+      "bytes": 11323344,
+      "original_byte_sha256": "035b4fa3627f92056e7c0c7429e79799a3d9f9177ab372bf9479a5ee633f58c9",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-v1/035b4fa3627f92056e7c0c7429e79799a3d9f9177ab372bf9479a5ee633f58c9-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "844b10c17d344fab60ade9a75743fd95154d88f1e58f9729dbb4c7e751ebf11b",
+      "single_original_bytes": 25310025
+    },
+    {
+      "bytes": 11257420,
+      "original_byte_sha256": "f37628dbbb42a47ff2e1c381f716426935b10c3221c1038154ab3a61a0ab2bc0",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-clock-v1/f37628dbbb42a47ff2e1c381f716426935b10c3221c1038154ab3a61a0ab2bc0-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "d1d624b14d6fbff848d432d626d5863e4f4fc2b08340652bacd410d40b6476c8",
+      "single_original_bytes": 25175076
+    },
+    {
+      "bytes": 11257216,
+      "original_byte_sha256": "946b287a696f7954ca45bccd3c7a7002ba5974695d292f6e7c5d891a61e3b580",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-clock-v1/946b287a696f7954ca45bccd3c7a7002ba5974695d292f6e7c5d891a61e3b580-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "eec6181e8431207f7927b84db3db45f5cbd8c90b37e04fba8c2be8b6d6271609",
+      "single_original_bytes": 25174676
+    },
+    {
+      "bytes": 11255140,
+      "original_byte_sha256": "14592accd80d5bea761fc58e052d2116f88e5b440b70b6830bd39196d27c9319",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-clock-v1/14592accd80d5bea761fc58e052d2116f88e5b440b70b6830bd39196d27c9319-m755.xz",
+      "restorable_original_path_count": 1,
+      "sha256": "732d2b4d7ddce9c8a2868fd86cd4386b1bb6da2d18f1d2e4666f8b8f4c261948",
+      "single_original_bytes": 25169748
+    },
+    {
+      "bytes": 8973044,
+      "original_byte_sha256": "2aedbdeebda125fcef0ae7e9ddf14f8164e6d7c85e015c8bc066d820650d6060",
+      "original_mode": "0o755",
+      "path": "archived-go-elfs-clock-v1/2aedbdeebda125fcef0ae7e9ddf14f8164e6d7c85e015c8bc066d820650d6060-m755.xz",
+      "restorable_original_path_count": 2,
+      "sha256": "cb6b2dc5bc40c5eb4a27113bb54ef50e0fb0e0ec5cf63e99629c8d443ffc0f63",
+      "single_original_bytes": 19746196
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "bindings": {
+    "final-generation-v7.json": {
+      "bytes": 6881,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-generation-v7.json",
+      "sha256": "d68f167d9ee5cb9ee966394740f19b845fa546b8941a92d79cd843cdb129c8b9"
+    },
+    "final-run-plan-v7-all.json": {
+      "bytes": 10314,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-run-plan-v7-all.json",
+      "sha256": "50de79e647129c61fd4460d5259b68b70c6ff3af558c52c174d1ff448d75ca8c"
+    },
+    "final-v7-attempt.json": {
+      "bytes": 988,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v7-attempt.json",
+      "sha256": "a4dc4ad8d13f478eaaeae140ae9cc3f68bacf25fe2523b3d40520d81c5dbb1f3"
+    },
+    "final-v7-coordinator.log": {
+      "bytes": 113969,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v7-coordinator.log",
+      "sha256": "2066b9293589f5e7e3e5b1a06c57a45b95476f1321ceb8e91dd6baa38f1ed010"
+    },
+    "final-v7-server-p0/records.json": {
+      "bytes": 419658,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v7-server-p0/records.json",
+      "sha256": "2cc7404fdcde99deb80bacf04b6f19844b8c07f6c945ee52cca9f791de043ab3"
+    },
+    "final-v7-server-p0/server-accurate-mp4-4-p01-baseline/metrics.json": {
+      "bytes": 88682,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v7-server-p0/server-accurate-mp4-4-p01-baseline/metrics.json",
+      "sha256": "26713c96ac332bb9e70601114396c9f535c5ef15dad1c8eebe99f57bfc55ad1d"
+    },
+    "final-v7-terminal-failure.json": {
+      "bytes": 1279,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v7-terminal-failure.json",
+      "sha256": "2eb250ba484426471cfb8253e38704a435611e8fc8b2104d2efe750a491966ef"
+    },
+    "owned-disk-audit-and-passed-qualification-cleanup-v1.json": {
+      "bytes": 3269,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/owned-disk-audit-and-passed-qualification-cleanup-v1.json",
+      "sha256": "afed51e3e012d067545bd7c50ad2dd6b1a9dc06b0450dee8d112037d02a10b1d"
+    }
+  },
+  "cause": "Operator capacity margin was insufficient for retaining a four-owner baseline while admitting the candidate. The guard ran before case creation and measured child launch; no media semantic failure or native timeout occurred in this abort. Passed server workspaces were already cleaned; the prior hypothesis of accumulated successful upload copies was disproved.",
+  "disk_guard": {
+    "free_bytes": 3730829312,
+    "guard_unchanged": true,
+    "minimum_free_bytes": 3221225472,
+    "planned_bytes": 536870912,
+    "shortfall_bytes": 27267072
+  },
+  "failed_and_unmatched_media_preserved": true,
+  "policy": "No v7 continuation or second same-tools full retry. A distinct production-5.1 toolchain may be separately registered; no pooling of master and production timing.",
+  "schema": "core-performance-capacity-preflight-failure-v1",
+  "scope": {
+    "completed_main_cases": 65,
+    "completed_main_files": 3186,
+    "completed_main_operations": 494,
+    "completed_one_owner_server_files": 80,
+    "completed_one_owner_server_operations": 10,
+    "failed_candidate_measured_process_started": false,
+    "unmatched_four_owner_baseline_files": 32,
+    "unmatched_four_owner_baseline_operations": 1,
+    "unmatched_record_scope": "Saved in its own metrics.json; records.json contains only ten paired one-owner observations."
+  },
+  "source_catalog_sha256": "3503f2bd511ce8fee94b174085fd0a151c7b787ed7e910e1561d32a3a7708e07",
+  "source_ci_commit": "865e4afd072f77206ba674e7922a2d31de6d3c99",
+  "status": "terminal; all v7 timings excluded under its preregistered policy",
+  "utc": "2026-10-14T01:12:31.406499+00:00"
+}

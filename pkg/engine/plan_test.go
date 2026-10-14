@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,60 @@ import (
 
 	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
 )
+
+func TestPlanRepeatedIntervalsProduceIndependentFilesAndPreserveLabels(t *testing.T) {
+	input := fixture(t)
+	e := New(Config{MaxOutputBytes: 10 << 20, FFmpegThreads: 1})
+	plan := Plan{Version: 1, Input: input, Ranges: []NamedRange{
+		{Label: "first", StartMS: 200, EndMS: 1000},
+		{Label: "different", StartMS: 2200, EndMS: 3200},
+		{Label: "repeat", StartMS: 200, EndMS: 1000},
+	}, Options: AdvancedOptions{Options: Options{Format: "mp4", CutMode: "copy"}}}
+	result, err := e.ExecutePlan(context.Background(), plan, t.TempDir())
+	if err != nil || len(result.Outputs) != 3 {
+		t.Fatalf("outputs=%+v err=%v", result, err)
+	}
+	first, err := os.ReadFile(result.Outputs[0].Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repeat, err := os.ReadFile(result.Outputs[2].Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _ := os.Stat(result.Outputs[0].Path)
+	b, _ := os.Stat(result.Outputs[2].Path)
+	if !bytes.Equal(first, repeat) || os.SameFile(a, b) || result.Outputs[2].Label != "repeat" || result.Outputs[2].Segments[0].Index != 2 || result.Outputs[0].ActualStartMS != result.Outputs[2].ActualStartMS || result.Outputs[0].ActualEndMS != result.Outputs[2].ActualEndMS {
+		t.Fatal("repeated results changed bytes, bounds, labels or share an inode")
+	}
+}
+
+func TestPlanRepeatedIntervalRegeneratesChangedPublishedResult(t *testing.T) {
+	input := fixture(t)
+	e := New(Config{MaxOutputBytes: 10 << 20, FFmpegThreads: 1})
+	var original []byte
+	calls := 0
+	e.publish = func(ctx context.Context, temporary, output string) (os.FileInfo, error) {
+		info, err := fsdurable.Publish(ctx, temporary, output)
+		calls++
+		if err == nil && calls == 1 {
+			original, err = os.ReadFile(output)
+			if err == nil {
+				err = os.WriteFile(output, []byte("edited by caller"), 0600)
+			}
+		}
+		return info, err
+	}
+	plan := Plan{Version: 1, Input: input, Ranges: []NamedRange{{StartMS: 200, EndMS: 1000}, {StartMS: 200, EndMS: 1000}}, Options: AdvancedOptions{Options: Options{Format: "mp4", CutMode: "copy"}}}
+	result, err := e.ExecutePlan(context.Background(), plan, t.TempDir())
+	if err != nil || len(result.Outputs) != 2 {
+		t.Fatalf("outputs=%+v err=%v", result, err)
+	}
+	repeated, err := os.ReadFile(result.Outputs[1].Path)
+	if err != nil || !bytes.Equal(original, repeated) {
+		t.Fatal("changed published file was trusted", err)
+	}
+}
 
 // Keep 1.x positional literals and comparable result/inspection contracts.
 var _ = Options{"mp4", "best", "accurate"}

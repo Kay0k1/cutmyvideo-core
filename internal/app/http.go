@@ -240,6 +240,12 @@ func (s *Server) beginSource(ctx context.Context, owner string, thumbnails ...bo
 }
 
 func (s *Server) beginSourceWithBytes(ctx context.Context, owner string, bytes int64, thumbnails ...bool) error {
+	return s.beginSourceReservation(ctx, owner, func(dbCtx context.Context) error {
+		return s.Store.reserveSource(dbCtx, s.Config, owner, s.sourceToken(owner), len(thumbnails) > 0 && thumbnails[0], bytes)
+	})
+}
+
+func (s *Server) beginSourceReservation(ctx context.Context, owner string, reserve func(context.Context) error) error {
 	// Reserve the owner's preparation slot before reading quota state. A second
 	// request must not carry an old count/size past the first request's completion.
 	s.mu.Lock()
@@ -262,9 +268,7 @@ func (s *Server) beginSourceWithBytes(ctx context.Context, owner string, bytes i
 			s.endSource(owner)
 		}
 	}()
-	if err := apiDatabaseExec(ctx, func(dbCtx context.Context) error {
-		return s.Store.reserveSource(dbCtx, s.Config, owner, s.sourceToken(owner), len(thumbnails) > 0 && thumbnails[0], bytes)
-	}); err != nil {
+	if err := apiDatabaseExec(ctx, reserve); err != nil {
 		return err
 	}
 	accepted = true
@@ -493,7 +497,12 @@ func (s *Server) addSourceWithClient(w http.ResponseWriter, r *http.Request, own
 			v.EmbedURL = &embed
 		}
 		v.Width, v.Height = platformSourceDimensions(info)
-		v.ThumbnailPath, _ = fetchThumbnail(ctx, s.Config, v.ID, info.Thumbnail)
+		// Image transfer is optional and may be slow. The authenticated endpoint
+		// prepares it on demand after this metadata-only import has committed.
+		if _, err := validateURL(info.Thumbnail); err == nil {
+			thumbnail := "/api/v1/sources/" + v.ID + "/thumbnail"
+			v.ThumbnailURL = &thumbnail
+		}
 		completeSourcePresentation(&v)
 		if e = s.databaseAddSource(ctx, v); e != nil {
 			if errors.Is(e, ErrSourceCommitUncertain) {

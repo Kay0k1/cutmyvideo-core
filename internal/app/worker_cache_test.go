@@ -148,3 +148,103 @@ func TestWorkerCachedDenialRefreshesOnceAndKeepsFreshFailuresTerminal(t *testing
 func workerFixtureQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
+
+func TestWorkerReusesLocalProbeAcrossJobsAndStillVerifiesEachOutput(t *testing.T) {
+	s := testStore(t)
+	c := mediaConfig(t)
+	c.MaxStorageBytes, c.JobTimeout, c.SourceTimeout = 100<<20, 20*time.Second, 5*time.Second
+	ctx := context.Background()
+	source := workerSourceFixture(t, s, c)
+	commands := countMediaCommands(t, &c)
+	for range 2 {
+		if _, err := s.CreateJob(ctx, source.Owner, requestFor(source), ""); err != nil {
+			t.Fatal(err)
+		}
+		j, token, err := s.Claim(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		processJob(ctx, c, s, j, token)
+		finished, err := s.Job(ctx, j.ID, j.Owner)
+		if err != nil || finished.Status != "succeeded" || finished.Items[0].Artifact == nil {
+			t.Fatalf("local export failed: %+v %v", finished, err)
+		}
+	}
+	sourceProbes, outputProbes := 0, 0
+	for _, line := range commands() {
+		if !strings.HasPrefix(line, "ffprobe ") {
+			continue
+		}
+		if strings.HasSuffix(line, " "+source.Path) {
+			sourceProbes++
+		} else {
+			outputProbes++
+		}
+	}
+	if sourceProbes != 1 || outputProbes != 2 {
+		t.Fatal("source reuse or independent output verification changed", sourceProbes, outputProbes)
+	}
+}
+
+func TestWorkerRepeatedLocalRangesReuseOwnedPublicationWithIndependentFiles(t *testing.T) {
+	s := testStore(t)
+	c := mediaConfig(t)
+	c.MaxStorageBytes, c.JobTimeout, c.SourceTimeout = 100<<20, 20*time.Second, 5*time.Second
+	ctx := context.Background()
+	source := workerSourceFixture(t, s, c)
+	actualEncoder, err := exec.LookPath(c.FFmpeg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commands := countMediaCommands(t, &c)
+	request := requestFor(source)
+	request.Ranges = []Range{{StartMS: 1000, EndMS: 3000, Label: "First"}, {StartMS: 1000, EndMS: 3000, Label: "Again"}}
+	if _, err := s.CreateJob(ctx, source.Owner, request, ""); err != nil {
+		t.Fatal(err)
+	}
+	j, token, err := s.Claim(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	processJob(ctx, c, s, j, token)
+	finished, err := s.Job(ctx, j.ID, j.Owner)
+	if err != nil || finished.Status != "succeeded" || len(finished.Items) != 2 || finished.Items[0].Artifact == nil || finished.Items[1].Artifact == nil {
+		t.Fatalf("repeated local batch failed: %+v %v", finished, err)
+	}
+	encodes := 0
+	for _, line := range commands() {
+		if strings.HasPrefix(line, "ffmpeg ") {
+			encodes++
+		}
+	}
+	if encodes != 1 {
+		t.Fatal("repeated range was encoded again", encodes)
+	}
+	first, _, err := s.ArtifactPath(ctx, finished.Items[0].Artifact.ID, j.Owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, _, err := s.ArtifactPath(ctx, finished.Items[1].Artifact.ID, j.Owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstInfo, err := os.Stat(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondInfo, err := os.Stat(second)
+	if err != nil || os.SameFile(firstInfo, secondInfo) || firstInfo.Size() != secondInfo.Size() || finished.Items[0].Artifact.ActualStartMS != finished.Items[1].Artifact.ActualStartMS || finished.Items[0].Artifact.ActualEndMS != finished.Items[1].Artifact.ActualEndMS || finished.Items[1].ProgressMS != 2000 {
+		t.Fatal("duplicate result shared its file or changed bounds", err)
+	}
+	firstBytes, err := os.ReadFile(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondBytes, err := os.ReadFile(second)
+	if err != nil || string(firstBytes) != string(secondBytes) {
+		t.Fatal("duplicate output bytes changed", err)
+	}
+	if _, err := runCommand(ctx, actualEncoder, "-v", "error", "-i", second, "-f", "null", "-"); err != nil {
+		t.Fatal("reused result failed independent decode", err)
+	}
+}

@@ -105,3 +105,57 @@ func TestRefreshedInputUpgradesBudgetAndCanceledUpgradeReleasesOldSlot(t *testin
 	}
 	permit.Release()
 }
+
+func TestPipelineInspectionSharesDecoderBudgetAndLegacyInspectionDoesNotReacquire(t *testing.T) {
+	for _, preparation := range []int{0, 1} {
+		ctx := withWorkerMediaBudget(context.Background(), Config{WorkerConcurrency: 2, WorkerPreparationConcurrency: preparation})
+		release, err := acquireMediaProcessing(ctx, Source{Path: "large", Width: 7680, Height: 4320}, nil, ExportRequest{Format: "mp4", CutMode: "accurate"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		bounded, cancel := context.WithTimeout(ctx, 20*time.Millisecond)
+		inspected, err := acquireMediaInspection(bounded, Source{}, nil)
+		cancel()
+		if inspected != nil {
+			inspected()
+		}
+		if preparation == 0 && err != nil || preparation > 0 && !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatal("inspection bypassed or reacquired the wrong budget", preparation, err)
+		}
+		release()
+	}
+	ctx := withWorkerMediaBudget(context.Background(), Config{WorkerConcurrency: 2, WorkerPreparationConcurrency: 1})
+	release, err := acquireMediaInspection(ctx, Source{}, []platformFormat{{Width: 7680, Height: 4320, VCodec: "h264"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	bounded, cancel := context.WithTimeout(ctx, 20*time.Millisecond)
+	defer cancel()
+	other, err := acquireMediaProcessing(bounded, Source{Path: "low", Width: 160, Height: 90}, nil, ExportRequest{Format: "mp4"})
+	if other != nil {
+		other()
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("8K preparation did not exclude another decoder", err)
+	}
+}
+
+func TestCopyExportsRetainDecoderBudgetForCompositeVerification(t *testing.T) {
+	ctx := withMediaBudget(context.Background(), 2)
+	source := Source{Path: "large", Width: 7680, Height: 4320}
+	first, err := acquireMediaProcessing(ctx, source, nil, ExportRequest{Format: "mkv", CutMode: "copy"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first()
+	bounded, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+	second, err := acquireMediaProcessing(bounded, source, nil, ExportRequest{Format: "mkv", CutMode: "copy"})
+	if second != nil {
+		second()
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("copy export bypassed its source/output probe decoder budget", err)
+	}
+}

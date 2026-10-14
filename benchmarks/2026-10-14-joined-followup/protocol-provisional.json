@@ -1,0 +1,117 @@
+{
+  "schema": "joined-final-provisional-v2",
+  "status": "SOURCE_ONLY_FINAL_FIXED_CANDIDATE_AND_EXECUTION_FREEZE_PENDING",
+  "purpose": "Final MP3-only runtime change after rejecting latency-adverse video configuration; full old and intermediate cohorts retained separately.",
+  "cases": [
+    "local-accurate-mp4-joined-02",
+    "local-accurate-mp4-joined-20",
+    "local-accurate-mp4-joined-32",
+    "complex-accurate-mp4-joined-20",
+    "embedded-accurate-mp4-32",
+    "local-mp3-joined-02",
+    "local-mp3-joined-20",
+    "local-mp3-joined-32",
+    "local-accurate-mp4-joined-01",
+    "local-mp3-joined-01",
+    "complex-mp3-joined-20",
+    "local-copy-mkv-joined-01"
+  ],
+  "direct_cases": [
+    "embedded-accurate-mp4-32",
+    "local-mp3-joined-20"
+  ],
+  "orders": [
+    [
+      "original",
+      "before",
+      "fixed"
+    ],
+    [
+      "fixed",
+      "before",
+      "original"
+    ],
+    [
+      "before",
+      "fixed",
+      "original"
+    ],
+    [
+      "original",
+      "fixed",
+      "before"
+    ],
+    [
+      "before",
+      "original",
+      "fixed"
+    ],
+    [
+      "fixed",
+      "original",
+      "before"
+    ]
+  ],
+  "balance": "All six permutations once per case. Before/fixed relative order alternates; every version occupies first/middle/last position twice. Three matched comparisons share only the same predeclared triad observation; no new observation is called two independent measurements.",
+  "primary_operations": 216,
+  "primary_outputs": 216,
+  "optional_direct_control_operations": 36,
+  "optional_direct_control_outputs": 36,
+  "versions": {
+    "original": "Immutable originala9 CLI and main6 baseline-engine",
+    "before": "Exact PRbeforecc3eb26 code, existing CLI6/main6 products, Go compiled-input catalog3503; original compile revision865/UTC retained",
+    "fixed": "New immutable CLI/engine with one matching compiled-input catalog, original baseline-equivalent build flags, receipt and version identities frozen before timing"
+  },
+  "tools": "Exact already-qualified production5.1.9 private ELF bundle; all214 library/loader and two executable hashes verified before/after each cohort. No fixture regeneration.",
+  "manifest_path": "/root/video_cut/reports/joined-followup-20261014/final-v1/execution-manifest.json",
+  "manifest_sha256": "PENDING_NEW_FIXED_BINARY_FREEZE; exact effective SHA must be pinned in final build receipt before activation",
+  "original_manifest_path": "/root/video_cut/reports/universal-go-core-20261014/production51-protocol/execution-manifest.json",
+  "original_manifest_sha256": "ad92380c9ce478fe778ce030b5e8f30d81b78c8a1ba3cbfc82c85a900260e38b",
+  "manifest_substitution": "Deep-copy the complete historical payload unchanged, append joined_followup containing original_manifest metadata and all three exact versions matching the build receipt, then freeze a new execution-manifest.json plus SHA sidecar. Historical candidate3503/build/qualification fields retain their original scope; only joined_followup identifies the new fixed code. No old manifest mutation or claim that its original preregistration covered the new candidate.",
+  "harness_sha256": "1c547134f902b65b2550a1f312efcf857ab883d8a868e3dff731c59edbaa4e71",
+  "context": "Primary uses low-overhead C toolspy in DEFAULT mode only: no argv/concat mutation and no LD_PRELOAD/native trace. Original measured_process/run_sample/full independent verification remain unchanged. Native wait4 CPU and spy SELF CPU are reported separately from whole-helper CPU and never added again. Optional direct-tool control uses own symlinks and records unobserved subprocess counts as null.",
+  "oracles": "Full independent probe and complete audio/video decode for every output after timing. Exact duration, PTS/DTS/duration/timebase/count hashes, stream/track selection, segment labels/order/source/output bounds across A/B/C. Copy also exact packet payloads. Original comparator exclusions for file bytes and accurate compressed payload only; no tolerance relaxation, decoder memoization or old timing/fingerprint reuse.",
+  "resources": {
+    "profile": "fast",
+    "threads": 2,
+    "gomaxprocs": 2,
+    "gomemlimit": "128MiB",
+    "sample_seconds": 0.02,
+    "sample_timeout_seconds": 180,
+    "termination_grace_seconds": 5,
+    "reserve_bytes": 3221225472,
+    "sample_headroom_bytes": 536870912
+  },
+  "capacity": "Initial free>=3GiB+512MiB+128MiB=3892314112B before activation; original3GiB reserve+512MiB every-sample preflight unchanged. Existing qualification largest output39285314B; complete three-output triad117855942B<128MiB. No simultaneous local test/build/media workload; delete accepted triad media after full three-way decode/clock equivalence, retain every failure.",
+  "observer_stop_marker": "/root/video_cut/reports/joined-followup-20261014/final-v2/stop-after-stage",
+  "acceptance": "Six paired ratios/range/raw wins for BEFORE\u2192FIXED and ORIGINAL\u2192FIXED per case, plus ORIGINAL\u2192BEFORE to show fresh reproduction context. No cross-case global average or statistical significance claim. Material remaining regressions must be retained. Native/instrumented prototype evidence is separate from this final untraced cohort.",
+  "failure_policy": "One preregistered complete targeted cohort per context; failure terminal, no replacement/resume/continuation. All failed media and partial observations remain visible and excluded from a completed speed verdict.",
+  "source_build_receipt_schema": "joined-final-build-v1",
+  "source_build_receipt_fields": [
+    "runner",
+    "protocol",
+    "harness",
+    "manifest",
+    "toolspy",
+    "versions",
+    "fixed_cli_receipt",
+    "fixed_engine_receipt"
+  ],
+  "fixed_engine_receipt_shape": "binary metadata plus source_sha256 map exactly matching fixed_cli_receipt; preserve actual build command, helper identity and compilation UTC separately",
+  "activation": "No build or execution occurred during this authoring. Parent must inspect code, freeze candidate/spy/source/protocol/observer identities and actual UTC, then grant exclusive runtime window. This provisional source declaration is not a claim that final measured binaries already exist.",
+  "capacity_adjustment_before_activation": {
+    "utc": "2026-10-14T09:22:50.046745+00:00",
+    "reason": "Completed native Go checks increased build cache use; available3995611136B before final two-product build. Exact finite corpus bounds support128MiB complete-triad surplus beyond unchanged3.5GiB sample gate. No final attempt or timing had been activated.",
+    "previous_initial_floor": 4026531840,
+    "new_initial_floor": 3892314112,
+    "unchanged_sample_gate": 3758096384
+  },
+  "rejected_video_candidate": {
+    "source_revision": "b588c82de649d17146ec0c35b127e39f514e1e32",
+    "compiled_input_catalog": "0f1e41535792d90d71caf211e57c39656a48ec806569cb13405806906e750530",
+    "primary_operations": 216,
+    "direct_control_operations": 36,
+    "whole_report": "/root/video_cut/reports/joined-followup-20261014/final-report-v1",
+    "reason": "Input1/nofind loweredCPU on small pictures but worsened paired elapsed time for multiple accurate-video cases.48operation4arm attribution did not qualify either video toggle as a consistent latency gain. Both are removed; encoder/input/filter settings restored."
+  }
+}

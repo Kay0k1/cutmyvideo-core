@@ -1,0 +1,23 @@
+{
+  "before_only": true,
+  "completion": {
+    "all_original_quality_differences_retained": true,
+    "distinct_before_decoded_video_hashes": 4,
+    "no_speed_acceptance": true,
+    "source_fields_and_parameters_unchanged": true,
+    "verified_decode_operations": 3
+  },
+  "completion_receipt": {
+    "bytes": 217,
+    "path": "/root/video_cut/reports/joined-video-20261014/capped-before-reproducibility/complete.json",
+    "sha256": "077bffec752c9d382c309744cd7ded0e62c81e3ab4e113705fd1c51a86956998"
+  },
+  "decoded_hashes": [
+    "SHA256=b816d1b5a6e0164387afb23e19a6030f1b41f4bc4e39583ca78d3647d8585f9a",
+    "SHA256=8ad47139636bd6b81a43527d853661c34615e5e545359b78bbd085bd349b493a",
+    "SHA256=7a93e75d684f93cb2c70e7a52ba556e21afaefdd55187370337662ff7acebf13"
+  ],
+  "original_failed_pair_retained": true,
+  "quality_tolerance_changed": false,
+  "scope": "Exact capped pixel-hash equality is not reproduced by the unchanged before encoder either. No speed or exact pixel equality claim is accepted for this fixture."
+}

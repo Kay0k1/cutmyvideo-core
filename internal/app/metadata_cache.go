@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/binary"
 	"errors"
 	"math"
 	"net"
@@ -18,6 +16,7 @@ const platformMetadataCacheTTL = 5 * time.Minute
 const platformMetadataCacheLimit = 1 << 20
 const platformMetadataExpiryMargin = 30 * time.Second
 const platformMetadataDBTimeout = 2 * time.Second
+const platformMetadataResolutionLeaseTTL = 3 * time.Minute
 
 const platformMetadataCacheSchema = `
 CREATE TABLE IF NOT EXISTS source_metadata_cache (
@@ -42,6 +41,12 @@ func (s *Store) ResolvePlatformMetadata(ctx context.Context, c Config, source So
 // ForceFreshPlatformMetadata bypasses cache reads after an upstream rejection.
 // The original guard still owns the transfer budget for both attempts.
 func (s *Store) ForceFreshPlatformMetadata(ctx context.Context, c Config, source Source, g *networkGuard) (platformInfo, error) {
+	return s.forceFreshPlatformMetadata(ctx, source, func() (platformInfo, error) {
+		return platformMetadata(ctx, c, source.URL, g)
+	})
+}
+
+func (s *Store) forceFreshPlatformMetadata(ctx context.Context, source Source, resolve func() (platformInfo, error)) (platformInfo, error) {
 	authCtx, cancelAuth := context.WithTimeout(ctx, platformMetadataDBTimeout)
 	err := s.authorizePlatformMetadataSource(authCtx, source)
 	cancelAuth()
@@ -49,9 +54,18 @@ func (s *Store) ForceFreshPlatformMetadata(ctx context.Context, c Config, source
 		return platformInfo{}, err
 	}
 	_ = s.InvalidatePlatformMetadata(ctx, source)
-	info, err := forceFreshPlatformMetadata(ctx, c, source, g)
-	if err == nil {
-		_ = s.CachePlatformMetadata(ctx, source, info)
+	claimCtx, cancelClaim := context.WithTimeout(ctx, platformMetadataDBTimeout)
+	token := newID("metadata")
+	claimed, _ := s.claimPlatformMetadataResolution(claimCtx, source, token)
+	cancelClaim()
+	if claimed {
+		defer s.releasePlatformMetadataResolution(source, token)
+	}
+	// A force refresh always obtains fresh upstream data. Cache coordination is
+	// optional, but only a claimed token may publish after this network phase.
+	info, err := freshPlatformMetadata(source, resolve)
+	if err == nil && claimed {
+		_ = s.cacheResolvedPlatformMetadata(ctx, source, token, info)
 	}
 	return info, err
 }
@@ -106,44 +120,85 @@ func (s *Store) resolvePlatformMetadata(ctx context.Context, source Source, reso
 	if info, ok := readPlatformMetadataCache(cacheCtx, s.DB, source); ok {
 		return info, true, nil
 	}
-	// Serialize cache misses across worker processes, without a global lock or
-	// holding an extra pool connection while writing the resolved metadata.
-	tx, err := s.DB.Begin(cacheCtx)
+	// A persisted, expiring claim coordinates processes while every SQL call
+	// releases its connection before upstream work. Lease heartbeats and queue
+	// claims must remain able to use the small shared pool during slow extraction.
+	token := newID("metadata")
+	for {
+		claimed, err := s.claimPlatformMetadataResolution(cacheCtx, source, token)
+		if err != nil || cacheCtx.Err() != nil {
+			if ctx.Err() != nil {
+				return platformInfo{}, false, ctx.Err()
+			}
+			// Cache coordination remains optional. A bounded wait preserves the
+			// previous independent-resolution fallback during outages/slow peers.
+			info, err := resolve()
+			return info, false, err
+		}
+		if claimed {
+			defer s.releasePlatformMetadataResolution(source, token)
+			if info, ok := readPlatformMetadataCache(cacheCtx, s.DB, source); ok {
+				return info, true, nil
+			}
+			cancelCache()
+			info, err := resolve()
+			if err == nil {
+				_ = s.cacheResolvedPlatformMetadata(ctx, source, token, info)
+			}
+			return info, false, err
+		}
+		if info, ok := readPlatformMetadataCache(cacheCtx, s.DB, source); ok {
+			return info, true, nil
+		}
+		timer := time.NewTimer(50 * time.Millisecond)
+		select {
+		case <-cacheCtx.Done():
+			timer.Stop()
+		case <-timer.C:
+		}
+	}
+}
+
+func (s *Store) claimPlatformMetadataResolution(ctx context.Context, source Source, token string) (bool, error) {
+	var claimed string
+	err := s.DB.QueryRow(ctx, `INSERT INTO source_metadata_resolutions(source_id,owner,token,expires_at)
+ SELECT id,owner,$3,clock_timestamp()+($7*interval '1 second') FROM sources
+ WHERE id=$1 AND owner=$2 AND url=$4 AND path='' AND provider_id=$5 AND duration_ms=$6 AND NOT media_removed
+ ON CONFLICT(source_id) DO UPDATE SET token=EXCLUDED.token,expires_at=EXCLUDED.expires_at
+ WHERE source_metadata_resolutions.owner=EXCLUDED.owner AND source_metadata_resolutions.expires_at<=clock_timestamp()
+ RETURNING token`, source.ID, source.Owner, token, source.URL, source.ProviderID, source.DurationMS, platformMetadataResolutionLeaseTTL.Seconds()).Scan(&claimed)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil && claimed == token, err
+}
+
+func (s *Store) releasePlatformMetadataResolution(source Source, token string) {
+	ctx, cancel := context.WithTimeout(context.Background(), platformMetadataDBTimeout)
+	defer cancel()
+	_, _ = s.DB.Exec(ctx, `DELETE FROM source_metadata_resolutions WHERE source_id=$1 AND owner=$2 AND token=$3`, source.ID, source.Owner, token)
+}
+
+func (s *Store) cacheResolvedPlatformMetadata(parent context.Context, source Source, token string, info platformInfo) error {
+	ctx, cancel := context.WithTimeout(parent, platformMetadataDBTimeout)
+	defer cancel()
+	tx, err := s.DB.Begin(ctx)
 	if err != nil {
-		info, err := resolve()
-		return info, false, err
+		return err
 	}
-	rollback := func() {
-		rollbackCtx, cancelRollback := context.WithTimeout(context.WithoutCancel(ctx), platformMetadataDBTimeout)
-		defer cancelRollback()
-		_ = tx.Rollback(rollbackCtx)
+	defer rollbackStorage(tx)
+	var owned bool
+	err = tx.QueryRow(ctx, `SELECT expires_at>clock_timestamp() FROM source_metadata_resolutions WHERE source_id=$1 AND owner=$2 AND token=$3 FOR UPDATE`, source.ID, source.Owner, token).Scan(&owned)
+	if err != nil || !owned {
+		return err
 	}
-	defer rollback()
-	key := sha256.Sum256([]byte("cutmy:metadata\x00" + source.Owner + "\x00" + source.ID))
-	_, err = tx.Exec(cacheCtx, `SELECT pg_advisory_xact_lock($1)`, int64(binary.BigEndian.Uint64(key[:8])))
-	if err != nil {
-		rollback()
-		info, err := resolve()
-		return info, false, err
+	if err = writePlatformMetadataCache(ctx, tx, source, info, time.Now()); err != nil {
+		return err
 	}
-	if info, ok := readPlatformMetadataCache(cacheCtx, tx, source); ok {
-		_ = tx.Commit(cacheCtx)
-		return info, true, nil
+	if _, err = tx.Exec(ctx, `DELETE FROM source_metadata_resolutions WHERE source_id=$1 AND owner=$2 AND token=$3`, source.ID, source.Owner, token); err != nil {
+		return err
 	}
-	// Begin's context does not own the transaction lifetime in pgx. Upstream
-	// resolution uses the original job context; only cache work has this budget.
-	cancelCache()
-	info, err := resolve()
-	if err != nil {
-		return info, false, err
-	}
-	// Cache persistence is optional: an unavailable cache must not fail export.
-	writeCtx, cancelWrite := context.WithTimeout(ctx, platformMetadataDBTimeout)
-	defer cancelWrite()
-	if writePlatformMetadataCache(writeCtx, tx, source, info, time.Now()) == nil {
-		_ = tx.Commit(writeCtx)
-	}
-	return info, false, nil
+	return tx.Commit(ctx)
 }
 
 func (s *Store) CachePlatformMetadata(ctx context.Context, source Source, info platformInfo) error {
@@ -178,15 +233,37 @@ func (s *Store) RecentPlatformMetadata(ctx context.Context, owner, raw string) (
 func (s *Store) InvalidatePlatformMetadata(ctx context.Context, source Source) error {
 	ctx, cancel := context.WithTimeout(ctx, platformMetadataDBTimeout)
 	defer cancel()
-	_, err := s.DB.Exec(ctx, `DELETE FROM source_metadata_cache WHERE source_id=$1 AND owner=$2`, source.ID, source.Owner)
-	return err
+	return s.invalidatePlatformMetadataRows(ctx,
+		`DELETE FROM source_metadata_resolutions WHERE source_id=$1 AND owner=$2`,
+		`DELETE FROM source_metadata_cache WHERE source_id=$1 AND owner=$2`, source.ID, source.Owner)
 }
 
 func (s *Store) invalidateRecentPlatformMetadata(ctx context.Context, owner, raw string) {
 	ctx, cancel := context.WithTimeout(ctx, platformMetadataDBTimeout)
 	defer cancel()
-	_, _ = s.DB.Exec(ctx, `DELETE FROM source_metadata_cache cache USING sources source
+	_ = s.invalidatePlatformMetadataRows(ctx,
+		`DELETE FROM source_metadata_resolutions resolution USING sources source
+ WHERE resolution.source_id=source.id AND resolution.owner=$1 AND source.owner=$1 AND source.url=$2`,
+		`DELETE FROM source_metadata_cache cache USING sources source
  WHERE cache.source_id=source.id AND cache.owner=$1 AND source.owner=$1 AND source.url=$2`, owner, raw)
+}
+
+func (s *Store) invalidatePlatformMetadataRows(ctx context.Context, leaseSQL, cacheSQL string, args ...any) error {
+	tx, err := s.DB.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		return err
+	}
+	defer rollbackStorage(tx)
+	// A publisher may hold the lease while inserting a previously absent cache.
+	// Wait for that transaction first, then use a fresh READ COMMITTED statement
+	// snapshot so its newly committed cache is visible to the second DELETE.
+	if _, err = tx.Exec(ctx, leaseSQL, args...); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, cacheSQL, args...); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func readPlatformMetadataCache(ctx context.Context, db dbExecutor, source Source) (platformInfo, bool) {

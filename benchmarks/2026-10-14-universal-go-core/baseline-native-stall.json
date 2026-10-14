@@ -1,0 +1,262 @@
+{
+  "capture": {
+    "input": {
+      "bytes": 30217,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v6-long-tool-diagnostics/stall-2783107-153074056-cc68d0f0c3/input-0.bin",
+      "sha256": "f3560e736a7fd53f9cb6d227a653ec120326749063d858859e5b3d96797f5348"
+    },
+    "io": {
+      "bytes": 99,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v6-long-tool-diagnostics/stall-2783107-153074056-cc68d0f0c3/io",
+      "sha256": "789920e372b52d1e1d8e67eed38d99f8c2dd136add5d55dbc34477d834f05448"
+    },
+    "maps": {
+      "bytes": 8970,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v6-long-tool-diagnostics/stall-2783107-153074056-cc68d0f0c3/maps",
+      "sha256": "85a6cf3bfde485b83d5daed8448f30710f34c4932f52327a44bb0fda460a6ff9"
+    },
+    "raw_thread_files": "Each thread stat,wchan,kernel stack remains in the same capture directory.",
+    "receipt": {
+      "bytes": 2324,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v6-long-tool-diagnostics/stall-2783107-153074056-cc68d0f0c3/receipt.json",
+      "sha256": "767fd98cd92d019c396e9a322804db17b2cc41323b2941b7ef9a35b1c16763c2"
+    },
+    "stat": {
+      "bytes": 335,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v6-long-tool-diagnostics/stall-2783107-153074056-cc68d0f0c3/stat",
+      "sha256": "a3e66b70ad8d3a00e05fc04835fcbef7c9be904493d4869adde9ee590c30dc11"
+    },
+    "status": {
+      "bytes": 1400,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v6-long-tool-diagnostics/stall-2783107-153074056-cc68d0f0c3/status",
+      "sha256": "b40335d0635eea6b4e843fb0613e37bd1c008890e1a0030fb99f6df801b5439d"
+    },
+    "strace": {
+      "bytes": 8258,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v6-long-tool-diagnostics/stall-2783107-153074056-cc68d0f0c3/strace.txt",
+      "sha256": "8b7f19c4f5b465989de34be0ae0babdf123c744b36dcbfddcf39ff170bccdb79"
+    },
+    "strace_scope": "3seconds bounded wait/scheduler syscall capture with -f -k; strace detached after own SIGINT (exit-2), native tool not killed by observer. Instrumented sample is tainted/excluded.",
+    "threads": [
+      {
+        "name": "ffmpeg",
+        "state": "S",
+        "system_ticks": 1,
+        "tid": 2783107,
+        "user_ticks": 0,
+        "wchan": "futex_wait_queue_me"
+      },
+      {
+        "name": "av:h264:df0",
+        "state": "S",
+        "system_ticks": 0,
+        "tid": 2783108,
+        "user_ticks": 0,
+        "wchan": "futex_wait_queue_me"
+      },
+      {
+        "name": "av:h264:df1",
+        "state": "S",
+        "system_ticks": 0,
+        "tid": 2783109,
+        "user_ticks": 0,
+        "wchan": "futex_wait_queue_me"
+      },
+      {
+        "name": "enc0:1:aac",
+        "state": "S",
+        "system_ticks": 0,
+        "tid": 2783111,
+        "user_ticks": 1,
+        "wchan": "futex_wait_queue_me"
+      },
+      {
+        "name": "vf#0:0",
+        "state": "S",
+        "system_ticks": 0,
+        "tid": 2783112,
+        "user_ticks": 0,
+        "wchan": "futex_wait_queue_me"
+      },
+      {
+        "name": "dec0:0:h264",
+        "state": "S",
+        "system_ticks": 0,
+        "tid": 2783114,
+        "user_ticks": 0,
+        "wchan": "futex_wait_queue_me"
+      },
+      {
+        "name": "vf#0:0",
+        "state": "S",
+        "system_ticks": 0,
+        "tid": 2783118,
+        "user_ticks": 0,
+        "wchan": "futex_wait_queue_me"
+      },
+      {
+        "name": "vf#0:0",
+        "state": "S",
+        "system_ticks": 0,
+        "tid": 2783119,
+        "user_ticks": 0,
+        "wchan": "futex_wait_queue_me"
+      },
+      {
+        "name": "vf#0:0",
+        "state": "S",
+        "system_ticks": 0,
+        "tid": 2783120,
+        "user_ticks": 0,
+        "wchan": "futex_wait_queue_me"
+      },
+      {
+        "name": "vf#0:0",
+        "state": "S",
+        "system_ticks": 0,
+        "tid": 2783121,
+        "user_ticks": 0,
+        "wchan": "futex_wait_queue_me"
+      },
+      {
+        "name": "mux0:mp4",
+        "state": "S",
+        "system_ticks": 0,
+        "tid": 2783123,
+        "user_ticks": 0,
+        "wchan": "futex_wait_queue_me"
+      }
+    ]
+  },
+  "evidence_files": [
+    {
+      "bytes": 4410,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-run-v6-hls.log",
+      "sha256": "6e313535e4f5e34dd135dca4d9030e55af92310509a6925022eb3704661bd4e0"
+    },
+    {
+      "bytes": 6329,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v6-coordinator.log",
+      "sha256": "e8734b0dd9495348d965a4a983e59339a9baea60bfb1b5ae6795d0bb776bdabb"
+    },
+    {
+      "bytes": 908,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v6-main-hls/hls-accurate-mp4-separate-straggler-p01-baseline/plan.json",
+      "sha256": "2b801f427b6431a576f617e4eb2502adb343b11551bf1844952583adbdb7b3f2"
+    },
+    {
+      "bytes": 1075,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v6-main-hls/hls-accurate-mp4-separate-straggler-p01-baseline/hls-scenario.json",
+      "sha256": "f675d2a8468831742f649874c842704706a4453fb1c8f67deb64d3f570cfccf3"
+    },
+    {
+      "bytes": 4074,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-generation-v6.json",
+      "sha256": "901e3854e361b785003a322964461c6e6ad3dc1ff15ccd622eaf3c2567deb96e"
+    }
+  ],
+  "failure": {
+    "case_stderr": {
+      "bytes": 0,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v6-main-hls/hls-accurate-mp4-separate-straggler-p01-baseline/stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "helper_context_deadline_seconds": 170,
+    "helper_pid": 2782976,
+    "helper_start_ticks": 153073927,
+    "helper_stdout": {
+      "bytes": 131,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v6-main-hls/hls-accurate-mp4-separate-straggler-p01-baseline/stdout.txt",
+      "sha256": "3b72283bf6d6d66a45b432c79cc032ab3acc805ed4febb74da1da6d8c0cd9312"
+    },
+    "input_bytes": 30217,
+    "item_index_zero_based": 2,
+    "native_pid": 2783107,
+    "native_start_ticks": 153074056,
+    "observed_termination": "Helper printed FAIL after170.00s, context deadline exceeded at exportInputs error check line140, exited1. No outer180s timeout was needed.",
+    "outer_measurement_timeout_seconds": 180,
+    "pair": 1,
+    "range_ms": [
+      3650,
+      4750
+    ],
+    "scenario": "hls-accurate-mp4-separate-straggler",
+    "side": "baseline",
+    "watcher_threshold_seconds": 15
+  },
+  "generation": "final-v6",
+  "limits": [
+    "Saved /proc thread stack files contain kernel futex stacks, not all-thread userspace backtraces.",
+    "gdb unavailable; target gone after helper deadline before an authorized debugger capture could be made.",
+    "Range3650\u20134750 matches the earlier final-v4 P1 stalled item, but that original native process/input capture is absent; shared cause remains unproved.",
+    "No replay, media decode/probe, tests/builds, source edit or production operation was performed to author this evidence."
+  ],
+  "measurement_disposition": "Entire generation6 excluded from final performance cohort. Preserve all raw evidence. Generation7, if run, must be a separately registered finite whole cohort, not replacement samples.",
+  "observed_native_state": {
+    "all_threads_futex_wait": true,
+    "inference": "Captured native threads wait internally; no captured tool pipe write/read wait, network syscall wait, or active CPU-bound encode. Exact native dependency cycle is unproved.",
+    "input_fd": 3,
+    "main_behavior": "Repeating500ms condition timeouts and scheduler wait loop during3second capture.",
+    "main_userspace_stack": "pthread_cond_timedwait -> sch_wait+0xd1 -> main+0x479",
+    "output": "piece-c.mp4",
+    "output_fd": 4,
+    "process_cpu_ticks": 5,
+    "rchar_bytes": 44791,
+    "rss_kib": 45560,
+    "thread_count": 11,
+    "ticks_per_second": 100,
+    "wchar_bytes": 56,
+    "worker_behavior": "Ten native worker futex calls remained unfinished for the capture. No worker userspace backtrace was obtained.",
+    "write_bytes": 4096
+  },
+  "plumbing_scope": {
+    "absent_from_this_witness": [
+      "SQL/Store",
+      "worker scheduling",
+      "optional preparationP1",
+      "weighted worker admission",
+      "persisted progress callback"
+    ],
+    "conclusion": "This baseline native stall exists without the candidate worker/cache/preparation/DB changes. It does not establish an upstream defect independent of the exact input/FFmpeg arguments, and does not prove that the earlier final-v4 candidate P1 stall had the same cause.",
+    "helper_behavior": "Loads fixed guarded HTTPS fixture through in-memory local transport, stages all8inputs before sequential exportInputs calls. The captured FFmpeg opens already completed local stream-2.mkv."
+  },
+  "provenance": {
+    "baseline_hls_helper": {
+      "bytes": 24576058,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/baseline-hls.test",
+      "sha256": "9d8a3e6b8b5d758f53117f9f44bb44de3313f67c32c66c92afbff7fe802fbf96"
+    },
+    "baseline_hls_source_receipt": {
+      "bytes": 53261,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/provenance.json",
+      "sha256": "f70e9032521bfcf3a572ebd2411ec5a07233f5c8803a26c688a8b27697ceff81"
+    },
+    "baseline_revision": "a9c75df83f965bf1d56e2263ca585ab77aeaf305",
+    "counting_shell": {
+      "bytes": 193,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v6-main-hls/hls-accurate-mp4-separate-straggler-p01-baseline/tools/ffmpeg",
+      "sha256": "a7a65d3d150b2edd6d8964007b5be2a03ad73501328a7c1e0cc59ac8043d68ac"
+    },
+    "counting_shell_semantics": "POSIX shell appends its PID then execs the frozen real FFmpeg with unchanged argv. Native PID retains shell PID. This is not the mixed-cohort Go tool wrapper.",
+    "native_identity_scope": "Watcher selected /proc/exe by frozen FFmpeg device/inode; maps confirms /usr/local/bin/ffmpeg. Tool SHA/version are frozen manifest provenance, not an all-thread userspace symbol/debug proof.",
+    "native_tool": {
+      "bytes": 175103784,
+      "path": "/usr/local/bin/ffmpeg",
+      "sha256": "8ebf553fe2f604c2fef17c8681eb477de22bb523eca415f83cb64878061b1189",
+      "version": "ffmpeg version N-127083-g65a3870462-20261001 Copyright (c) 2000-2026 the FFmpeg developers"
+    },
+    "overlay_helper": {
+      "bytes": 6090,
+      "path": "/root/video_cut/core-go-performance/scripts/testdata/core-performance-hls_test.go",
+      "sha256": "cde405916c1fe8b771f341e3771c5c9e3af491105e114af19dbd3fbf19954af3"
+    },
+    "overlay_scope_adapter": {
+      "bytes": 156,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/baseline-hls-scope_test.go",
+      "sha256": "c94bb6c790bf0da0cfc25c6f6f45daa4b247e98c955ac1ef8e043c797ea867f0"
+    },
+    "source_catalog_sha256": "3503f2bd511ce8fee94b174085fd0a151c7b787ed7e910e1561d32a3a7708e07"
+  },
+  "recorded_utc": "2026-10-14T00:30:23.885984+00:00",
+  "schema": "core-performance-native-failure-evidence-v1"
+}

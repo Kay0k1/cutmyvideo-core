@@ -16,6 +16,7 @@ func ExportJoinedLocal(ctx context.Context, c Config, path, out string, ranges [
 		var session *LocalExportSession
 		ctx, session = BeginLocalExport(ctx, path)
 		session.SetWorkspace(filepath.Dir(out))
+		session.SetRanges(ranges)
 		defer session.Close()
 	}
 	return exportJoinedInputsProgress(ctx, c, []mediaInput{{Path: path}}, ranges, request, out, nil)
@@ -86,9 +87,9 @@ func exportJoinedSegmentInputsProgress(ctx context.Context, c Config, inputs [][
 	}
 	var segments []ArtifactSegment
 	if request.CutMode == "copy" {
-		segments, e = joinCopy(ctx, c, inputs, ranges, request, media, dir, limit, report)
+		segments, e = joinCopyMode(ctx, c, inputs, ranges, request, media, dir, limit, report, media == out)
 	} else {
-		segments, e = joinAccurate(ctx, c, inputs, ranges, request, media, dir, limit, selections[0], report)
+		segments, e = joinAccurateMode(ctx, c, inputs, ranges, request, media, dir, limit, selections[0], report, media == out)
 	}
 	if e != nil {
 		return nil, e
@@ -106,55 +107,104 @@ func ffconcatFile(path string) string {
 	return "file '" + strings.ReplaceAll(path, "'", "'\\''") + "'\n"
 }
 func joinCopy(ctx context.Context, c Config, inputs [][]mediaInput, ranges []Range, request ExportRequest, out, dir string, limit int64, report func(int64)) ([]ArtifactSegment, error) {
+	return joinCopyMode(ctx, c, inputs, ranges, request, out, dir, limit, report, true)
+}
+
+type copyJoinRange struct{ start, end int64 }
+type copyJoinSegment struct {
+	name       string
+	start, end int64
+	info       probeInfo
+	file       os.FileInfo
+}
+
+func joinCopyMode(ctx context.Context, c Config, inputs [][]mediaInput, ranges []Range, request ExportRequest, out, dir string, limit int64, report func(int64), finalOutput bool) ([]ArtifactSegment, error) {
 	var manifest strings.Builder
 	manifest.WriteString("ffconcat version 1.0\n")
 	var result []ArtifactSegment
 	var elapsed int64
 	var fingerprint probeInfo
 	var aggregate int64
+	// Exact repeats from the pinned original local source can reference one
+	// verified segment in the concat plan. Labels and output positions remain
+	// independent; remote and separately staged inputs are never reused here.
+	reused := make(map[copyJoinRange]copyJoinSegment)
 	for i, r := range ranges {
 		if e := ctx.Err(); e != nil {
 			return nil, e
 		}
 		name := fmt.Sprintf("segment-%d.%s", i, request.Format)
 		path := filepath.Join(dir, name)
-		progress := func(ms int64) {
-			if report != nil {
-				report(elapsed + ms)
+		var session *LocalExportSession
+		if len(inputs[i]) == 1 {
+			session = localExportSession(ctx, inputs[i][0].Path, inputs[i][0].Remote)
+		}
+		var start, end int64
+		var p probeInfo
+		var stat os.FileInfo
+		cached, hit := reused[copyJoinRange{r.StartMS, r.EndMS}]
+		if hit && session != nil {
+			session.mu.Lock()
+			_, e := session.unchanged()
+			session.mu.Unlock()
+			if e != nil {
+				return nil, e
 			}
-		}
-		videoRequest := request
-		if !request.NoAudio {
-			videoRequest.NoAudio = true
-			videoRequest.AudioTrack = nil
-		}
-		videoPath := filepath.Join(dir, fmt.Sprintf("video-%d.%s", i, request.Format))
-		start, end, e := exportInputsCoreProgress(ctx, c, inputs[i], r, videoRequest, videoPath, progress)
-		if e == nil {
-			selection, selectErr := probeInputSelectionOptions(ctx, c, inputs[i], request)
-			if selectErr != nil {
-				e = selectErr
-			} else if selection.Audio != nil {
-				e = joinCopyAudio(ctx, c, inputs[i], selection, start, end, videoPath, path, request, min(limit, outputBudget(c, r, request)))
-			} else {
-				e = os.Rename(videoPath, path)
+			name, start, end, p = cached.name, cached.start, cached.end, cached.info
+			stat, e = os.Stat(filepath.Join(dir, name))
+			if e != nil {
+				return nil, e
 			}
-		}
-		_ = os.Remove(videoPath)
-		if e != nil {
-			return nil, e
-		}
-		stat, e := os.Stat(path)
-		if e != nil {
-			return nil, e
+			if !os.SameFile(cached.file, stat) || cached.file.Size() != stat.Size() || !cached.file.ModTime().Equal(stat.ModTime()) {
+				return nil, &sourceProblem{"source_changed", "A copied interval changed before joining; try exporting again"}
+			}
+		} else {
+			progress := func(ms int64) {
+				if report != nil {
+					report(elapsed + ms)
+				}
+			}
+			videoRequest := request
+			if !request.NoAudio {
+				videoRequest.NoAudio = true
+				videoRequest.AudioTrack = nil
+			}
+			videoPath := filepath.Join(dir, fmt.Sprintf("video-%d.%s", i, request.Format))
+			var e error
+			start, end, e = exportInputsCoreVerifiedProgress(ctx, c, inputs[i], r, videoRequest, videoPath, progress, false, &p)
+			remuxed := false
+			if e == nil {
+				selection, selectErr := probeInputSelectionOptions(ctx, c, inputs[i], request)
+				if selectErr != nil {
+					e = selectErr
+				} else if selection.Audio != nil {
+					remuxed = true
+					e = joinCopyAudio(ctx, c, inputs[i], selection, start, end, videoPath, path, request, min(limit, outputBudget(c, r, request)))
+				} else {
+					e = os.Rename(videoPath, path)
+				}
+			}
+			_ = os.Remove(videoPath)
+			if e != nil {
+				return nil, e
+			}
+			stat, e = os.Stat(path)
+			if e != nil {
+				return nil, e
+			}
+			if remuxed {
+				p, _, e = probe(ctx, c, path, false)
+				if e != nil {
+					return nil, e
+				}
+			}
+			if session != nil && len(reused) < 128 {
+				reused[copyJoinRange{r.StartMS, r.EndMS}] = copyJoinSegment{name: name, start: start, end: end, info: p, file: stat}
+			}
 		}
 		aggregate += stat.Size()
 		if aggregate >= limit {
 			return nil, errOutputLimit
-		}
-		p, _, e := probe(ctx, c, path, false)
-		if e != nil {
-			return nil, e
 		}
 		if i == 0 {
 			fingerprint = p
@@ -175,7 +225,7 @@ func joinCopy(ctx context.Context, c Config, inputs [][]mediaInput, ranges []Ran
 	args = append(args, mediaInputBounds(c)...)
 	args = append(args, "-i", path, "-map", "0", "-c", "copy", "-map_metadata", "-1", "-map_chapters", "-1", "-avoid_negative_ts", "disabled", "-fs", strconv.FormatInt(limit, 10))
 	args = append(args, audioMetadataArgs(fingerprint.selectedAudio())...)
-	if request.Format == "mp4" {
+	if request.Format == "mp4" && finalOutput {
 		args = append(args, "-movflags", "+faststart")
 	}
 	args = append(args, out)
@@ -195,6 +245,10 @@ func joinCopy(ctx context.Context, c Config, inputs [][]mediaInput, ranges []Ran
 // using its frame metadata, and the source frame cadence survives one encode.
 // This avoids opening one decoder per range or encoding a lossy intermediate.
 func joinAccurate(ctx context.Context, c Config, inputs [][]mediaInput, ranges []Range, request ExportRequest, out, dir string, limit int64, selection mediaSelection, report func(int64)) ([]ArtifactSegment, error) {
+	return joinAccurateMode(ctx, c, inputs, ranges, request, out, dir, limit, selection, report, true)
+}
+
+func joinAccurateMode(ctx context.Context, c Config, inputs [][]mediaInput, ranges []Range, request ExportRequest, out, dir string, limit int64, selection mediaSelection, report func(int64), finalOutput bool) ([]ArtifactSegment, error) {
 	threads := c.FFmpegThreads
 	if threads < 1 || threads > 32 {
 		threads = 2
@@ -286,7 +340,7 @@ func joinAccurate(ctx context.Context, c Config, inputs [][]mediaInput, ranges [
 	}
 	args = append(args, audioMetadataArgs(selection.Audio)...)
 	args = append(args, "-threads", strconv.Itoa(threads), "-map_metadata", "-1", "-map_chapters", "-1", "-fs", strconv.FormatInt(limit, 10))
-	if request.Format == "mp4" {
+	if request.Format == "mp4" && finalOutput {
 		args = append(args, "-movflags", "+faststart")
 	}
 	args = append(args, out)
@@ -299,7 +353,12 @@ func joinAccurate(ctx context.Context, c Config, inputs [][]mediaInput, ranges [
 	if e != nil {
 		return nil, e
 	}
-	final, e := verifyJoined(ctx, c, out, request, elapsed, limit)
+	var final probeInfo
+	if request.Format == "mp4" && c.FFmpegProfile != "compact" {
+		final, e = verifyJoinedOwnedMP4(ctx, c, out, request, elapsed, limit, selection)
+	} else {
+		final, e = verifyJoinedOwnedMP3(ctx, c, out, request, elapsed, limit, selection.mp3DurationMode)
+	}
 	if e != nil {
 		return nil, e
 	}
@@ -346,6 +405,82 @@ func verifyJoined(ctx context.Context, c Config, path string, request ExportRequ
 // frames after the requested endpoint while audio stops earlier. Copy audio to
 // the measured video endpoint so concat does not create a gap at every boundary.
 func joinCopyAudio(ctx context.Context, c Config, inputs []mediaInput, selection mediaSelection, start, end int64, video, out string, request ExportRequest, limit int64) error {
+	if copyAudioPacketTrimEligible(selection, request) {
+		available, err := supportsAudioPacketDrop(ctx, c)
+		if err != nil {
+			return err
+		}
+		if available {
+			return joinCopyAudioDirect(ctx, c, inputs, selection, start, end, video, out, request, limit)
+		}
+	}
+	return joinCopyAudioStaged(ctx, c, inputs, selection, start, end, video, out, request, limit)
+}
+
+func copyAudioPacketTrimEligible(selection mediaSelection, request ExportRequest) bool {
+	if selection.Audio == nil || request.Format != "mkv" {
+		return false
+	}
+	// The established audio.mka stage normalizes packet clocks to milliseconds.
+	// Bypassing it for a finer source clock changes copied PTS/durations even
+	// when payloads and decoded samples agree. Keep that stage unless the source
+	// already uses its time base and the output keeps it too. Older MP4 muxers
+	// also adjust packet durations after that stage. Exact packet-clock witnesses
+	// cover only the Matroska-to-Matroska AAC/MP3/FLAC subset.
+	parts := strings.Split(selection.Audio.TimeBase, "/")
+	if len(parts) != 2 {
+		return false
+	}
+	numerator, numeratorErr := strconv.ParseInt(parts[0], 10, 32)
+	denominator, denominatorErr := strconv.ParseInt(parts[1], 10, 32)
+	if numeratorErr != nil || denominatorErr != nil || numerator <= 0 || denominator <= 0 || numerator*1000 != denominator {
+		return false
+	}
+	clock, err := strconv.ParseFloat(selection.Audio.StartTime, 64)
+	if err != nil || math.IsNaN(clock) || math.IsInf(clock, 0) {
+		return false
+	}
+	switch selection.Audio.CodecName {
+	case "aac", "mp3", "flac":
+		return true
+	default:
+		// Preserve the established path until the codec's decoder-delay and
+		// container clocks have an independent packet and decoded-audio witness.
+		return false
+	}
+}
+
+func joinCopyAudioDirect(ctx context.Context, c Config, inputs []mediaInput, selection mediaSelection, start, end int64, video, out string, request ExportRequest, limit int64) error {
+	input := inputs[selection.AudioInput]
+	protocols := "file"
+	if input.Remote {
+		protocols = "http,tcp"
+	}
+	args := []string{"-hide_banner", "-v", "error", "-nostdin", "-y", "-max_alloc", "268435456", "-copyts", "-protocol_whitelist", "file", "-format_whitelist", mediaFormats}
+	args = append(args, mediaInputBounds(c)...)
+	args = append(args, "-i", video, "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats)
+	args = append(args, mediaInputBounds(c)...)
+	seek := start - input.OffsetMS
+	args = append(args, "-itsoffset", seconds(-seek), "-seek_timestamp", "1", "-ss", seconds(seek), "-i", input.Path,
+		"-map", "0:v:0", "-map", fmt.Sprintf("1:%d", selection.Audio.Index), "-c", "copy",
+		"-bsf:a", "noise=amount=0:drop=lt(pts\\,0)*not(eq(pts\\,nopts))", "-t", seconds(end-start),
+		"-avoid_negative_ts", "disabled", "-map_metadata", "-1", "-map_chapters", "-1", "-fs", strconv.FormatInt(limit, 10))
+	args = append(args, audioMetadataArgs(selection.Audio)...)
+	args = append(args, out)
+	if _, err := runCommand(ctx, c.FFmpeg, args...); err != nil {
+		return copyExportDiagnostic(err, request.Format)
+	}
+	stat, err := os.Stat(out)
+	if err != nil {
+		return err
+	}
+	if stat.Size() >= limit {
+		return errOutputLimit
+	}
+	return nil
+}
+
+func joinCopyAudioStaged(ctx context.Context, c Config, inputs []mediaInput, selection mediaSelection, start, end int64, video, out string, request ExportRequest, limit int64) error {
 	audioInput := inputs[selection.AudioInput]
 	protocols := "file"
 	if audioInput.Remote {
@@ -374,9 +509,6 @@ func joinCopyAudio(ctx context.Context, c Config, inputs []mediaInput, selection
 	}
 	args = append(args, "-map", "0:v:0", "-map", "1:a:0", "-c", "copy", "-t", seconds(end-start), "-avoid_negative_ts", "disabled", "-map_metadata", "-1", "-map_chapters", "-1", "-fs", strconv.FormatInt(limit, 10))
 	args = append(args, audioMetadataArgs(selection.Audio)...)
-	if request.Format == "mp4" {
-		args = append(args, "-movflags", "+faststart")
-	}
 	args = append(args, out)
 	if _, err := runCommand(ctx, c.FFmpeg, args...); err != nil {
 		return copyExportDiagnostic(err, request.Format)

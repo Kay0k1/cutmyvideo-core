@@ -1,0 +1,85 @@
+{
+  "fixed_cli_receipt": {
+    "bytes": 26678,
+    "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/fixed-cli-receipt.json",
+    "sha256": "ce2878932bf27b1ed7d5024d65629408c0fb0d450994189ce5b3de0641cf0f9a"
+  },
+  "fixed_engine_receipt": {
+    "bytes": 26761,
+    "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/fixed-engine-receipt.json",
+    "sha256": "f6b2bc66a854d20cba96d5ddd71f0984cb07e660b5650e4de923e525ef278b09"
+  },
+  "harness": {
+    "bytes": 45929,
+    "path": "/root/video_cut/core-go-performance/scripts/core-performance.py",
+    "sha256": "1c547134f902b65b2550a1f312efcf857ab883d8a868e3dff731c59edbaa4e71"
+  },
+  "initial_free_bytes": 3857960960,
+  "manifest": {
+    "bytes": 225971,
+    "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/execution-manifest.json",
+    "sha256": "59050da5a71062767d6e3c9aee32cfc9cdadecd8d2a13fbab53871a2059ea9d7"
+  },
+  "protocol": {
+    "bytes": 7284,
+    "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/protocol-provisional.json",
+    "sha256": "55c7341c7a92f98ed2c329e836f661919762c4d879dc97d4906136fa52f6adc7"
+  },
+  "runner": {
+    "bytes": 16773,
+    "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/runner.py",
+    "sha256": "5c62908f112abecfff9dd27c6065e673b9f103e563046a17845165067ef47f0a"
+  },
+  "schema": "joined-final-build-v1",
+  "toolspy": {
+    "bytes": 22056,
+    "path": "/root/video_cut/reports/joined-followup-20261014/prototype-v1/toolspy",
+    "sha256": "82724297add2a29852c518bdbefdcc2ae3a79b9ccf09f69770df7b5b921e8bf4"
+  },
+  "utc": "2026-10-14T09:55:40.161378+00:00",
+  "versions": {
+    "before": {
+      "actual_compile_revision": "865e4afd072f77206ba674e7922a2d31de6d3c99",
+      "cli": {
+        "bytes": 19746277,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/candidate-cutmy-v6",
+        "sha256": "879581327014b2b7c8bb977a508bb0abd6ba9aa6d5a371a258bd0cd14267697e"
+      },
+      "engine": {
+        "bytes": 8846344,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/candidate-engine",
+        "sha256": "448f7f6b3aabb36938223e020fcff0727e97abb6425ee26ff84ad1155308d69b"
+      },
+      "revision": "cc3eb26b32c4c1fdf15a0c5361c69a8cebfdab33",
+      "source_catalog_sha256": "3503f2bd511ce8fee94b174085fd0a151c7b787ed7e910e1561d32a3a7708e07"
+    },
+    "fixed": {
+      "cli": {
+        "bytes": 19769307,
+        "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/fixed-cutmy",
+        "sha256": "2e9496ece88226450ce002d7c9eb290002e9d84922bd654f4b4c946de778e82b"
+      },
+      "engine": {
+        "bytes": 8876206,
+        "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/fixed-engine",
+        "sha256": "3ddc2ebf536c5594eb64adcc9414838f19b3d7758f8904b7bbc303ce6bb3aeb7"
+      },
+      "revision": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "source_catalog_sha256": "dd860c8e1516201e6818b99c0a70773356fab2870bad16a78bfa71b38d9e9b1b"
+    },
+    "original": {
+      "cli": {
+        "bytes": 19509827,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/baseline-cutmy",
+        "sha256": "38f6d7970283a1e5db83fac92bce92c2a6f2e9bcc53810e38bcecb9191e9c02a"
+      },
+      "engine": {
+        "bytes": 8678702,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/baseline-engine",
+        "sha256": "027a925df1dbeff2a110ff93f0a568dbfc9d1ce6f5a51dfa33426c6c867824e3"
+      },
+      "revision": "a9c75df83f965bf1d56e2263ca585ab77aeaf305",
+      "source_catalog_sha256": "a7e75103f44e3e47acbdf26355205d79aa29072df73ec43d828865545186ef4e"
+    }
+  }
+}

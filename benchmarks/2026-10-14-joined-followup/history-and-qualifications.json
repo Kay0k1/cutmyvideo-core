@@ -1,0 +1,151 @@
+{
+  "artifacts": [
+    {
+      "artifact": {
+        "bytes": 606,
+        "path": "/root/video_cut/reports/joined-followup-20261014/prototype-v1/results-traced/complete.json",
+        "sha256": "601774a0f622e28f628881bf9093f2c6223f8e11bd55342e86663761dacffd17"
+      },
+      "scope": "28 instrumented qualification operations/outputs; outer trace misses internally bound child calls; no final speed claim"
+    },
+    {
+      "artifact": {
+        "bytes": 5832,
+        "path": "/root/video_cut/reports/joined-followup-20261014/gdb-native-v1/events.jsonl",
+        "sha256": "8e202279ba1203be3e84722d39015c88c44a5dd07050ebe583b69e56648db875"
+      },
+      "scope": "21 instrumented stream-discovery entry/returns; ptrace CPU windows are not clean performance"
+    },
+    {
+      "artifact": {
+        "bytes": 585,
+        "path": "/root/video_cut/reports/joined-followup-20261014/sampler-control-v1/results/complete.json",
+        "sha256": "e4f2d2c9c4040e292d757709a31a74fe4b871e70751845356d8c42cb3ce117eb"
+      },
+      "scope": "32 sampler-control operations/outputs; separate from final and original627"
+    },
+    {
+      "artifact": {
+        "bytes": 1006,
+        "path": "/root/video_cut/reports/joined-followup-20261014/prototype-decoder-v1/results/completion-reconciled.json",
+        "sha256": "c21df0410c80daf33a17888a2103540f03a20cf30939f147d2712f4fae2c01c2"
+      },
+      "scope": "24 actual qualification operations/outputs; preserved original authoring literal28, reconciled explicitly"
+    },
+    {
+      "artifact": {
+        "bytes": 340,
+        "path": "/root/video_cut/reports/joined-followup-20261014/decoder-boundary-v2/results/complete.json",
+        "sha256": "72f1be31832a20d960d814251ca9ec3490674587e62f2749bfe2fd80ad1098c6"
+      },
+      "scope": "8 QVGA boundary qualification operations/outputs"
+    },
+    {
+      "artifact": {
+        "bytes": 608,
+        "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/primary-run/complete.json",
+        "sha256": "8eef25ee03ed0f114fa4078895b0e3673f2fcf464fd885cb40c347e7f6209aef"
+      },
+      "scope": "216 complete rejected-video-candidate operations/outputs; accurate-video adverse cases retained"
+    },
+    {
+      "artifact": {
+        "bytes": 607,
+        "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/direct-run/complete.json",
+        "sha256": "c5035947ebce865b91dc5ce0e45450ed67ded00a0edc19d1dea6b9335a5a2943"
+      },
+      "scope": "36 complete rejected-video-candidate direct-control operations/outputs"
+    },
+    {
+      "artifact": {
+        "bytes": 348,
+        "path": "/root/video_cut/reports/joined-followup-20261014/video-attribution-v1/results/complete.json",
+        "sha256": "6fc52daad219cadd6c79e42e2bc33868b162b423354dbe829993168d7de71d5f"
+      },
+      "scope": "48 complete four-arm configuration attribution operations/outputs"
+    },
+    {
+      "artifact": {
+        "bytes": 1000,
+        "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/preactivation-sidecar-format-failure.json",
+        "sha256": "991aa192e4ea0128525f403d6c1cf1da2c1aae654fc4eb05cc379681b6355cfb"
+      },
+      "scope": "Zero timed operations; checksum sidecar authoring-format failure retained, fixed before attempt activation"
+    },
+    {
+      "artifact": {
+        "bytes": 413,
+        "path": "/root/video_cut/reports/joined-followup-20261014/video-attribution-v1/preactivation-failure.json",
+        "sha256": "ee881fff55f8b18322d7ef1e8ea15a520e195a67b71ffe1b4dd56b7cb8748fbc"
+      },
+      "scope": "Zero timed operations; metadata-key authoring failure retained, fixed before registration"
+    },
+    {
+      "artifact": {
+        "bytes": 214767,
+        "path": "/root/video_cut/reports/joined-followup-20261014/focused-production51-tests.jsonl",
+        "sha256": "364848f5441f8067c0ec054cd588fe25b3d576c09451dcea49c49b273da70942"
+      },
+      "scope": "Earlier unaligned dual-input expectation failed; optional prototype explicitly skipped. Legacy control reproduces the same fixture failure"
+    },
+    {
+      "artifact": {
+        "bytes": 4116,
+        "path": "/root/video_cut/reports/joined-followup-20261014/dual-legacy-controls-v1/original-unaligned-tests.jsonl",
+        "sha256": "62524be644b1e61bde4e483da85c604fd3ad10f522fd9e33f2180c72fecf77ec"
+      },
+      "scope": "Previous code also fails unaligned PCM expectation; retained negative control"
+    },
+    {
+      "artifact": {
+        "bytes": 3433,
+        "path": "/root/video_cut/reports/joined-followup-20261014/dual-legacy-controls-v1/aligned-tests.jsonl",
+        "sha256": "187dec224ccfa83d7f7f7ffcf15bb39545349f7a8b196340f09ee58cfafd97ba"
+      },
+      "scope": "Legacy code passes512ms packet-aligned fixture with unchanged1ms chirp clock gate"
+    },
+    {
+      "artifact": {
+        "bytes": 34276,
+        "path": "/root/video_cut/reports/joined-followup-20261014/new-required-default-tools-tests.jsonl",
+        "sha256": "f879be3d6176cb48760b8000ba07ceb28f79beb3797911de10fefdd7aed3ea58"
+      },
+      "scope": "Earlier raw-only MP3 duration failed against gapless modern FFprobe; corrected with actual-family policy"
+    },
+    {
+      "artifact": {
+        "bytes": 2386,
+        "path": "/root/video_cut/reports/joined-followup-20261014/duration-mode-production51-tests.jsonl",
+        "sha256": "79b1084587e1a5ea11bf2a7a00c25698c9567954090916b38f27524c5429b335"
+      },
+      "scope": "Earlier source-only test callsite compile error retained; no native samples"
+    },
+    {
+      "artifact": {
+        "bytes": 151,
+        "path": "/root/video_cut/reports/joined-followup-20261014/runtime-compatibility-v2/complete.json",
+        "sha256": "f0768a8a92e8a589a61688bb53699c62a5ad507cc8c4e0e4d91fe0febc6f1e47"
+      },
+      "scope": "Final MP3 policy+half-ms rounding:9 mandatory native tests in each of4 independent encoder/probe families, all unskipped withrace"
+    },
+    {
+      "artifact": {
+        "bytes": 37851,
+        "path": "/root/video_cut/reports/joined-followup-20261014/final2-required-production51-tests.jsonl",
+        "sha256": "50ea2e0c059ec5cd4775e2e9d45c3b8101471a2d38c0cc43a326b6031a768407"
+      },
+      "scope": "Final source after video restoration:9 mandatory new tests+remote whitelist gate passed withrace"
+    },
+    {
+      "artifact": {
+        "bytes": 1889,
+        "path": "/root/video_cut/reports/joined-followup-20261014/decoder-boundary-v1/registration.json",
+        "sha256": "d2a91f00d6c99645c066f51d3e1961dfe5b857b64549ac7f27d9ff3f2fb1a577"
+      },
+      "scope": "Original QVGA harness failed KeyError _sha256 after first timed native operation; zero accepted rows, media retained; fresh generation2 is separatequalification"
+    }
+  ],
+  "final252_separate": true,
+  "original627_4792_unchanged": true,
+  "schema": "joined-followup-retained-histories-v1"
+}

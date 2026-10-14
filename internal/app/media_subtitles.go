@@ -81,10 +81,14 @@ func subtitleTimestamp(ms int64) string {
 	return fmt.Sprintf("%02d:%02d:%02d,%03d", ms/3600000, ms/60000%60, ms/1000%60, ms%1000)
 }
 func rebaseSubtitles(cues []subtitleCue, segments []ArtifactSegment) ([]byte, error) {
+	return rebaseIndexedSubtitles(newSubtitleIndex(cues), segments)
+}
+
+func rebaseIndexedSubtitles(index *subtitleIndex, segments []ArtifactSegment) ([]byte, error) {
 	var out strings.Builder
 	number := 0
 	for _, segment := range segments {
-		for _, cue := range cues {
+		for _, cue := range index.intersecting(segment.SourceStartMS, segment.SourceEndMS) {
 			start, end := max(cue.StartMS, segment.SourceStartMS), min(cue.EndMS, segment.SourceEndMS)
 			if end <= start {
 				continue
@@ -131,7 +135,7 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 	}
 	defer os.RemoveAll(dir)
 	media := filepath.Join(dir, "media."+request.Format)
-	start, end, e := exportInputsCoreProgress(ctx, c, inputs, r, request, media, report)
+	start, end, e := exportInputsCoreProgressMode(ctx, c, inputs, r, request, media, report, false)
 	if e != nil {
 		return 0, 0, e
 	}
@@ -208,15 +212,11 @@ func muxTextSubtitles(ctx context.Context, c Config, source string, p probeInfo,
 		if !subtitleTextSupported(stream.CodecName) {
 			return &sourceProblem{"subtitle_unsupported", "This subtitle format is not supported; choose omit"}
 		}
-		data, e := extractTextSubtitles(ctx, c, source, stream)
+		index, e := sourceSubtitleIndex(ctx, c, source, stream)
 		if e != nil {
 			return e
 		}
-		cues, e := parseSRT(data)
-		if e != nil {
-			return &sourceProblem{"subtitle_unsupported", "Source text subtitles contain unsupported timestamps"}
-		}
-		data, e = rebaseSubtitles(cues, segments)
+		data, e := rebaseIndexedSubtitles(index, segments)
 		if e != nil {
 			return e
 		}

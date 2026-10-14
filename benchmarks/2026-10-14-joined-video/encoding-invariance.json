@@ -1,0 +1,242 @@
+[
+  {
+    "pair": 0,
+    "scenario": "local-accurate-mp4-joined-02",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 1,
+    "scenario": "local-accurate-mp4-joined-02",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 2,
+    "scenario": "local-accurate-mp4-joined-02",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 3,
+    "scenario": "local-accurate-mp4-joined-02",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 4,
+    "scenario": "local-accurate-mp4-joined-02",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 5,
+    "scenario": "local-accurate-mp4-joined-02",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 0,
+    "scenario": "local-accurate-mp4-joined-20",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 1,
+    "scenario": "local-accurate-mp4-joined-20",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 2,
+    "scenario": "local-accurate-mp4-joined-20",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 3,
+    "scenario": "local-accurate-mp4-joined-20",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 4,
+    "scenario": "local-accurate-mp4-joined-20",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 5,
+    "scenario": "local-accurate-mp4-joined-20",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 0,
+    "scenario": "local-accurate-mp4-joined-32",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 1,
+    "scenario": "local-accurate-mp4-joined-32",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 2,
+    "scenario": "local-accurate-mp4-joined-32",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 3,
+    "scenario": "local-accurate-mp4-joined-32",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 4,
+    "scenario": "local-accurate-mp4-joined-32",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 5,
+    "scenario": "local-accurate-mp4-joined-32",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 0,
+    "scenario": "complex-accurate-mp4-joined-20",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 1,
+    "scenario": "complex-accurate-mp4-joined-20",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 2,
+    "scenario": "complex-accurate-mp4-joined-20",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 3,
+    "scenario": "complex-accurate-mp4-joined-20",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 4,
+    "scenario": "complex-accurate-mp4-joined-20",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 5,
+    "scenario": "complex-accurate-mp4-joined-20",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 0,
+    "scenario": "embedded-accurate-mp4-32",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 1,
+    "scenario": "embedded-accurate-mp4-32",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 2,
+    "scenario": "embedded-accurate-mp4-32",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 3,
+    "scenario": "embedded-accurate-mp4-32",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 4,
+    "scenario": "embedded-accurate-mp4-32",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 5,
+    "scenario": "embedded-accurate-mp4-32",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 0,
+    "scenario": "local-accurate-mp4-joined-01",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 1,
+    "scenario": "local-accurate-mp4-joined-01",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 2,
+    "scenario": "local-accurate-mp4-joined-01",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 3,
+    "scenario": "local-accurate-mp4-joined-01",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 4,
+    "scenario": "local-accurate-mp4-joined-01",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 5,
+    "scenario": "local-accurate-mp4-joined-01",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 0,
+    "scenario": "local-mp3-joined-20",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 1,
+    "scenario": "local-mp3-joined-20",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 2,
+    "scenario": "local-mp3-joined-20",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 3,
+    "scenario": "local-mp3-joined-20",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 4,
+    "scenario": "local-mp3-joined-20",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 5,
+    "scenario": "local-mp3-joined-20",
+    "unchanged_encoding_arguments_and_concat": true
+  },
+  {
+    "pair": 0,
+    "scenario": "local-copy-mkv-joined-01",
+    "unchanged_encoding_arguments_and_concat": "copy payload oracle"
+  },
+  {
+    "pair": 1,
+    "scenario": "local-copy-mkv-joined-01",
+    "unchanged_encoding_arguments_and_concat": "copy payload oracle"
+  },
+  {
+    "pair": 2,
+    "scenario": "local-copy-mkv-joined-01",
+    "unchanged_encoding_arguments_and_concat": "copy payload oracle"
+  },
+  {
+    "pair": 3,
+    "scenario": "local-copy-mkv-joined-01",
+    "unchanged_encoding_arguments_and_concat": "copy payload oracle"
+  },
+  {
+    "pair": 4,
+    "scenario": "local-copy-mkv-joined-01",
+    "unchanged_encoding_arguments_and_concat": "copy payload oracle"
+  },
+  {
+    "pair": 5,
+    "scenario": "local-copy-mkv-joined-01",
+    "unchanged_encoding_arguments_and_concat": "copy payload oracle"
+  }
+]

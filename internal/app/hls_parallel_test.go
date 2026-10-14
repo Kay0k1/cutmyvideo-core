@@ -7,11 +7,80 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestParallelHLSAdvancesPastStragglerInsideBoundedWindow(t *testing.T) {
+	guard, err := newNetworkGuard(1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer guard.Close()
+	head := make(chan struct{})
+	var release sync.Once
+	defer release.Do(func() { close(head) })
+	seen := make(chan int, 16)
+	guard.client.Transport = hlsTestTransport(func(r *http.Request) (*http.Response, error) {
+		index, _ := strconv.Atoi(strings.TrimPrefix(r.URL.Path, "/"))
+		if index == 0 {
+			select {
+			case <-head:
+			case <-r.Context().Done():
+				return nil, r.Context().Err()
+			}
+		} else {
+			seen <- index
+		}
+		body := fmt.Sprintf("%02d", index)
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), ContentLength: 2, Header: http.Header{}}, nil
+	})
+	segments := make([]hlsSegment, 12)
+	for i := range segments {
+		segments[i].URL = fmt.Sprintf("https://media.example/%d", i)
+	}
+	dir := t.TempDir()
+	var output bytes.Buffer
+	var downloaded atomic.Int64
+	done := make(chan error, 1)
+	go func() {
+		done <- fetchHLSSegments(context.Background(), guard, platformFormat{}, segments, dir, 0, &output, &downloaded, 1024, nil)
+	}()
+	for range 7 {
+		select {
+		case index := <-seen:
+			if index >= 8 {
+				t.Fatalf("unbounded lookahead fetched segment %d", index)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("freed downloads waited for the first straggler")
+		}
+	}
+	files, err := os.ReadDir(dir)
+	if err != nil || len(files) > 8 {
+		t.Fatal("reorder window exceeded eight disk files", err, len(files))
+	}
+	release.Do(func() { close(head) })
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("download workers did not finish")
+	}
+	if output.String() != "000102030405060708091011" {
+		t.Fatal("straggler changed segment order", output.String())
+	}
+	files, _ = os.ReadDir(dir)
+	if len(files) != 0 {
+		t.Fatal("straggler left pending files")
+	}
+}
 
 func TestParallelHLSMaintainsOrderAndBoundsConcurrency(t *testing.T) {
 	g, err := newNetworkGuard(1 << 20)

@@ -46,27 +46,55 @@ type pcmPeaks struct {
 
 func (p *pcmPeaks) Write(data []byte) (int, error) {
 	length := len(data)
-	for _, b := range data {
-		if !p.hasPending {
-			p.pending, p.hasPending = b, true
-			continue
+	channels, rate := max(int64(1), p.channels), p.sampleRate
+	if rate <= 0 {
+		rate = waveformSampleRate
+	}
+	for len(data) > 0 {
+		if !p.hasPending && len(data) == 1 {
+			p.pending, p.hasPending = data[0], true
+			break
 		}
 		if p.samples >= p.maxSamples {
 			return 0, errors.New("waveform decode exceeded its interval")
 		}
-		value := int16(uint16(p.pending) | uint16(b)<<8)
-		amplitude := math.Abs(float64(value)) / 32768
-		frame := p.samples / max(1, p.channels)
-		rate := p.sampleRate
-		if rate <= 0 {
-			rate = waveformSampleRate
+		// A bin boundary is rounded up in whole frames, then includes every
+		// channel. This preserves non-integral rates such as 11025 Hz without
+		// dividing and normalizing every individual PCM sample.
+		index := (p.samples / channels) * 1000 / (rate * waveformStepMS)
+		boundary := ((index+1)*rate*waveformStepMS + 999) / 1000 * channels
+		available := int64(len(data) / 2)
+		if p.hasPending {
+			available = int64((len(data) + 1) / 2)
 		}
-		index := frame * 1000 / (rate * waveformStepMS)
-		if index < int64(len(p.peaks)) && amplitude > p.peaks[index] {
-			p.peaks[index] = amplitude
+		count := min(available, boundary-p.samples, p.maxSamples-p.samples)
+		var peak int32
+		if index < int64(len(p.peaks)) {
+			peak = int32(p.peaks[index] * 32768)
 		}
-		p.samples++
-		p.hasPending = false
+		remaining := count
+		if p.hasPending {
+			value := int32(int16(uint16(p.pending) | uint16(data[0])<<8))
+			if value < 0 {
+				value = -value
+			}
+			peak = max(peak, value)
+			data, p.hasPending = data[1:], false
+			remaining--
+		}
+		end := int(remaining * 2)
+		for offset := 0; offset < end; offset += 2 {
+			value := int32(int16(uint16(data[offset]) | uint16(data[offset+1])<<8))
+			if value < 0 {
+				value = -value
+			}
+			peak = max(peak, value)
+		}
+		data = data[end:]
+		p.samples += count
+		if index < int64(len(p.peaks)) {
+			p.peaks[index] = float64(peak) / 32768
+		}
 	}
 	return length, nil
 }

@@ -1,0 +1,182 @@
+{
+  "schema": 1,
+  "status": "fixed and correctness-qualified; allGo frozen, no more local tests pending from media agent",
+  "source_catalog_sha256": "3503f2bd511ce8fee94b174085fd0a151c7b787ed7e910e1561d32a3a7708e07",
+  "changed_files": [
+    "internal/app/media_join.go",
+    "internal/app/copy_join_audio_prototype_test.go",
+    "internal/app/media_capabilities_test.go",
+    "internal/app/media_optimization_test.go"
+  ],
+  "runtime_changed_files": [
+    "internal/app/media_join.go"
+  ],
+  "diff": {
+    "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/final-clock-fix.diff",
+    "bytes": 19739,
+    "sha256": "171581afe043d0b26a18722c19abad9c3b04df2c7062121e49e0f38f40a4ea16"
+  },
+  "root_cause": "One-process source-audio mux skipped legacy audio.mka millisecond normalization. Payload/fullPCM/video equality did not imply exact copied clocks; complex20MP4 changed1009/1701 audio packet clocks and formatduration36.206167\u219236.206666.",
+  "final_eligibility": "OnlyMKVoutput + selectedAAC/MP3/FLAC source with exactpositive1/1000 rational timebase and finite origin; allMP4, allOpus, finer/unknown/unprovedclocks/codecs and unsupportedcapability use legacytwo-stage audio path.",
+  "rational_guard": "Positive32bit numerator/denominator, int64 n*1000==d, bounded and overflow-safe; noncanonical2/2000 accepted.",
+  "rejected_source_only_guard": "Host84PASS but5.1.9 exposed7MP4 clock/duration failures (AACcoarse sources andOpus); failedbinary/logs retained.",
+  "matrix_proof": {
+    "host": {
+      "passed": 84,
+      "failed": 0,
+      "skipped": 0
+    },
+    "production5_1_9_full": {
+      "passed": 81,
+      "failed": 3,
+      "failed_case_names": [
+        "opus-mp4-start0",
+        "opus-mp4-start100",
+        "opus-mp4-start3500"
+      ],
+      "skipped": 0,
+      "failure_kind": "Baseline-relative clocks/payload/timebase/duration alreadyexact; existing source-relative OpusMP4 error6.5ms hit formeroptimized-source gate."
+    },
+    "final_test_only_compatibility_and_pcm_affected_rerun": {
+      "host_passed": 6,
+      "production_passed": 6,
+      "cases": [
+        "opus-mp4-start0",
+        "opus-mp4-start100",
+        "opus-mp4-start3500",
+        "opus-mkv-start0",
+        "opus-mkv-start100",
+        "opus-mkv-start3500"
+      ],
+      "runtime_go_changed_after_full_matrices": false,
+      "all_packet_payload_clock_timebase_format_duration_assertions_retained": true,
+      "all_legacy_opus_cases_assert2oldstages": true,
+      "baseline_candidate_full_decoded_PCM_sha256_equal": true,
+      "baseline_candidate_alignment_tolerance_ms": 1,
+      "optimized_eligible_absolute_source_tolerance_ms": 1
+    },
+    "precision": "Production evidence is81full-runPASS+3knownlegacy-sourceFAIL plus affected6finalPCM/compatPASS, not a one-shot84greenrun; finalCI will execute wholecurrentmatrix.",
+    "expected_unsupported_flac_mp4_diagnostics": 3,
+    "absolute_source_1ms_nonlegacy_output_cases": 75
+  },
+  "legacy_source_lag": {
+    "sample_rate": 48000,
+    "host": {
+      "mp4_baseline_and_candidate_samples": 24,
+      "mkv_baseline_and_candidate_samples": 48
+    },
+    "production5_1_9": {
+      "mp4_baseline_and_candidate_samples": -312,
+      "mp4_error_ms": 6.5,
+      "mkv_baseline_and_candidate_samples": -624,
+      "mkv_error_ms": 13
+    },
+    "scope": "Baseline quirks preserved only onexplicitnonoptimizedOpusfallback. No global tolerance change."
+  },
+  "focused_gates": "Fine60fpsMP4/AAC48k exactpacket/timescale/duration +actual2stages +directnegativecontrol; NOPTS; eligibility/capabilitynegative; repeatreuse +MP4finalfaststart andMKVdirectcount allPASShostand5.1.9.",
+  "exact_frozen_complex_qualification": {
+    "cases": [
+      "complex-copy-mp4-joined-20",
+      "complex-copy-mkv-joined-20"
+    ],
+    "oracle": "unchanged core-performance.py output_fingerprint/fullindependentdecode+copy-awarecompare_fingerprints",
+    "mp4": {
+      "duration_seconds": 36.206167,
+      "bytes": 36239898,
+      "byte_identical_to_baseline": true,
+      "clock_payload_video_pcm_equal": true
+    },
+    "mkv": {
+      "duration_seconds": 36.227,
+      "bytes": 36227552,
+      "byte_identical_to_baseline": false,
+      "clock_payload_video_pcm_equal": true,
+      "file_hash_difference": "File hash differs; all semantic fields identical under the unchanged oracle. Container-byte differences were not further localized."
+    },
+    "timing_claim": false,
+    "final_cli_byte_identical_to_qualified_cli": true
+  },
+  "unresolved_original_v4_p1_stall": "Unchanged and unresolved; this clock guard is unrelated.",
+  "artifacts": {
+    "clock-diff.json": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/clock-diff.json",
+      "bytes": 9580,
+      "sha256": "1dd682183c8c1b777beacb67527154320ab245f21bdab0750d2dfb895fc74a4a"
+    },
+    "strict-clock-build-receipt.json": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/strict-clock-build-receipt.json",
+      "bytes": 25531,
+      "sha256": "9682e365131d368f8721d9b2e74345de85e43963421833b7c2b460139f5f6066"
+    },
+    "strict-output-mkv-build-receipt.json": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/strict-output-mkv-build-receipt.json",
+      "bytes": 25592,
+      "sha256": "5f1c3039735c22afccb0fec786877f6f2914d0a594328f92128fcf5d6f13b00b"
+    },
+    "final-clock-proof-build-receipt.json": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/final-clock-proof-build-receipt.json",
+      "bytes": 26511,
+      "sha256": "d71fff52a72903ba6137a97d179e0a8654f00f90475c49ea45ea5b8b6502ccaa"
+    },
+    "strict-matrix-host-initial.txt": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/strict-matrix-host-initial.txt",
+      "bytes": 15085,
+      "sha256": "b9fd42085de9d59ad4ca021447a9bcb43ea5b23f1db6436f2745acb1944311e9"
+    },
+    "strict-bookworm-final.txt": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/strict-bookworm-final.txt",
+      "bytes": 18053,
+      "sha256": "5d72139799a62f99dbb6778f5302dce36bbd42f24d13ffba5a59baafcce2e26a"
+    },
+    "strict-output-mkv-host-84.txt": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/strict-output-mkv-host-84.txt",
+      "bytes": 15025,
+      "sha256": "9180cb7c046a7b99c6fd1da7ad5db1d4c1e027975b8e2f981641eec6ce291d2d"
+    },
+    "strict-output-mkv-bookworm-84.txt": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/strict-output-mkv-bookworm-84.txt",
+      "bytes": 15812,
+      "sha256": "5fc93d42ca1db2d8cc929de1de72112a43ecacf96c14ed74af6faeb7cf6c6c05"
+    },
+    "focused-output-guard-host.txt": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/focused-output-guard-host.txt",
+      "bytes": 746,
+      "sha256": "6b1b647e6dba0fd04afa2070e9c67db4685465d23522d9ad8ea40420b2e66e4f"
+    },
+    "focused-output-mkv-bookworm.txt": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/focused-output-mkv-bookworm.txt",
+      "bytes": 687,
+      "sha256": "db45074b37f07142cd9739011331c82ca55e43593bbaf082f67c3cdfac35b78b"
+    },
+    "opus-all-pcm-host.txt": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/opus-all-pcm-host.txt",
+      "bytes": 3583,
+      "sha256": "2a12377bccebc87071e7be2d90d6d9c4fca9d4575d87a57115b9259ce29a5dba"
+    },
+    "opus-all-pcm-bookworm.txt": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/opus-all-pcm-bookworm.txt",
+      "bytes": 3608,
+      "sha256": "3f914ce589b4195cd776dd568549e0fe6efed276d87402713290679bfb5fb5be"
+    },
+    "exact-frozen-complex-qualification/complete.json": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/exact-frozen-complex-qualification/complete.json",
+      "bytes": 927,
+      "sha256": "7d79b6a5efcccfb90a15372d8a70680e3daf0f9a253047eaeeec8515e3993af5"
+    },
+    "exact-frozen-complex-qualification/results.json": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/exact-frozen-complex-qualification/results.json",
+      "bytes": 34398,
+      "sha256": "b55c0480e7d2cd185a49ec689038d629966d4f37cdc39aeff26869c9a792614d"
+    },
+    "qualification-cli-receipt.json": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/qualification-cli-receipt.json",
+      "bytes": 25634,
+      "sha256": "124263dab71befa3bfa9934257662959fecb6eeeab897d36acf43fdcbc548728"
+    },
+    "final-clock-fix.diff": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/final-clock-fix.diff",
+      "bytes": 19739,
+      "sha256": "171581afe043d0b26a18722c19abad9c3b04df2c7062121e49e0f38f40a4ea16"
+    }
+  }
+}

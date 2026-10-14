@@ -1,0 +1,85 @@
+{
+  "bindings": {
+    "direct": {
+      "completion": {
+        "bytes": 612,
+        "path": "/root/video_cut/reports/joined-video-20261014/final-v3/direct-run/complete.json",
+        "sha256": "ade5d5b536f42f1ed65a3ef462262dea5ece1c743a22ff729c8ab884c2bedbc4"
+      },
+      "operations": 36,
+      "outputs": 36,
+      "pairs": 18,
+      "raw_results": {
+        "bytes": 341519,
+        "path": "/root/video_cut/reports/joined-video-20261014/final-v3/direct-run/raw-results.json",
+        "sha256": "8f16636e821570ebd5601267eee6baf6fdc3615b01b12c8bb04af02bfa846864"
+      }
+    },
+    "primary": {
+      "completion": {
+        "bytes": 613,
+        "path": "/root/video_cut/reports/joined-video-20261014/final-v3/primary-run/complete.json",
+        "sha256": "9d470c4d4bc90b30c20dbabb706909fc0086501d78d8b5b55d49fd57ee78b109"
+      },
+      "operations": 96,
+      "outputs": 96,
+      "pairs": 48,
+      "raw_results": {
+        "bytes": 1894465,
+        "path": "/root/video_cut/reports/joined-video-20261014/final-v3/primary-run/raw-results.json",
+        "sha256": "0ffeb61430ca73e0a7f4ba759aa0f9960c7f2b0d81b32c25674d4b47f47d9941"
+      }
+    }
+  },
+  "build_receipt": {
+    "bytes": 28300,
+    "path": "/root/video_cut/reports/joined-video-20261014/final-v3/final/build-receipt.json",
+    "sha256": "5f25cf9f6e6538eced652b56b0492600af6ec94eafe640bbd0151d98401f565e"
+  },
+  "created_utc": "2026-10-14T12:43:53.675716+00:00",
+  "extractor": {
+    "bytes": 11274,
+    "path": "/root/video_cut/reports/joined-video-20261014/assemble.py",
+    "sha256": "0aa4c5b02410b21e0a2a1ae9c6a48433a74b23466859f940468bd98f3a0ddfba"
+  },
+  "fully_matched_pairs": 66,
+  "manifest": {
+    "bytes": 227381,
+    "path": "/root/video_cut/reports/joined-video-20261014/final-v3/final/execution-manifest.json",
+    "sha256": "408f765b3a3b4987e9c485abb3ff7b5d8037e8cdb88ed40c2c66d4b924faf25f"
+  },
+  "observations": 132,
+  "outputs": 132,
+  "prior_cohort_pooled": false,
+  "schema": "joined-video-extraction-v1",
+  "shards": [
+    {
+      "bytes": 59425,
+      "path": "/root/video_cut/core-go-performance/benchmarks/2026-10-14-joined-video/observations-01.csv",
+      "sha256": "dbbb75cb28aee950b3b78a5dc7f4d2e6aa5e3c3cbce9e94ac8a6d54de4a303ae"
+    },
+    {
+      "bytes": 29456,
+      "path": "/root/video_cut/core-go-performance/benchmarks/2026-10-14-joined-video/observations-02.csv",
+      "sha256": "8df252227d7183a318eee94ddef3698086d2947510736f0878918dfe84194857"
+    },
+    {
+      "bytes": 59818,
+      "path": "/root/video_cut/core-go-performance/benchmarks/2026-10-14-joined-video/output-proofs-01.csv",
+      "sha256": "62defbb6ab02886d220a5f422d1856db2461449c488d740b79f5200ce9809643"
+    },
+    {
+      "bytes": 18010,
+      "path": "/root/video_cut/core-go-performance/benchmarks/2026-10-14-joined-video/output-proofs-02.csv",
+      "sha256": "0a0f7c2845130a9a9438b34494aeec79622d60b0f9ce6ba9c4b54f2e2faca083"
+    },
+    {
+      "bytes": 9058,
+      "path": "/root/video_cut/core-go-performance/benchmarks/2026-10-14-joined-video/pairs-01.csv",
+      "sha256": "cd5638919b95ebcffee1ac6f21883b19014df626400c1286283fa9e34dee3d18"
+    }
+  ],
+  "source_catalog_sha256": "91ea5191af278a299712cad1efc21bf055bde6bba23f750f62e8f5e455e4b037",
+  "source_entries": 234,
+  "source_revision": "9d02a0e23dc2754407599ccd41e2da84c4ad7323"
+}

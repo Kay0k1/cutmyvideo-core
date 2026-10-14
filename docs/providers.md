@@ -50,7 +50,22 @@ Encrypted keys, HLS byte ranges, low-latency parts, gap segments, incompatible c
 
 Uploaded/direct sources use `preview_kind:native` and an owner-protected original-file endpoint. YouTube uses `preview_kind:youtube` with a validated embed ID. Other platform sources use `preview_kind:window`: clients request `/sources/{id}/preview?start_ms=…` for a bounded 30-second H.264/AAC MP4 interval. HLS requests download only the intersecting segments plus decoder context. The same endpoint provides a fallback for unavailable YouTube embeds or staged codecs unsupported by the browser. Upstream access restrictions still apply. Positions are aligned to 30-second windows. Completed MP4 windows are reused from a private, owner-checked cache (512 MiB / 64 entries globally, 128 MiB / 16 entries per owner; 30-minute idle expiry). Only the final MP4 is retained and its actual size remains charged to the storage ledger. Source deletion removes its cached windows. Repeated concurrent requests for the same window share one render; at most two windows render globally, and optional `priority=background` prefetch uses only an otherwise idle renderer. Staged inputs are deleted before publication; abandoned requests expire through maintenance.
 
-`thumbnail_url` is a same-origin owner-protected endpoint. The server stages at most 2 MiB of a public JPEG/PNG and checks its dimensions; unsupported/unavailable images become null. Signed CDN image/media URLs are never returned as visible preview links. Media and thumbnails require the session cookie and expire under the source retention policy.
+`thumbnail_url` is a same-origin owner-protected endpoint, or null when no valid
+private image address is known. Platform import advertises the canonical endpoint
+without downloading its image. The first authorized GET prepares a complete
+PNG/JPEG within a two-second preparation budget, validates its dimensions and
+contents, and stages at most 2 MiB or the remaining enabled storage allowance.
+Concurrent GETs can reuse the same completed image; there is no detached image
+task. Expired private metadata can be refreshed during that bounded GET, including
+after an API restart. An advertised endpoint can return `404 preview_unavailable`
+when its optional upstream image is unavailable, unsupported or too large; clients
+should keep playback and editing usable without it. Foreign/expired source IDs
+return 404, and removed original media returns `410 source_removed`. Signed CDN
+image/media URLs never become visible preview links. Media and thumbnails require
+the session cookie and follow source retention; reader pins protect an image
+preparation/read from concurrent deletion. Imports retain the legacy transient
+2 MiB admission reservation; the lazy GET separately reserves its bounded image
+allowance and converts it to the actual completed-file charge.
 
 For timeline search, `/sources/{id}/storyboard?start_ms=…` returns a private
 960×90 JPEG strip for the visible aligned 30-second interval: six 160×90 cells at

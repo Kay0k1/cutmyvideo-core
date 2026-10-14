@@ -209,6 +209,18 @@ func (s *Store) ReleaseSource(ctx context.Context, owner string, tokens ...strin
 }
 
 func remainingJobReserve(c Config, j Job, platform bool) (int64, error) {
+	size, err := remainingJobMediaReserve(c, j, platform)
+	if err != nil || size == 0 || !platform {
+		return size, err
+	}
+	cache := hlsJobCacheBudget(c)
+	if cache > math.MaxInt64-size {
+		return 0, errStorageUnavailable
+	}
+	return size + cache, nil
+}
+
+func remainingJobMediaReserve(c Config, j Job, platform bool) (int64, error) {
 	if j.Request.OutputMode == "joined" {
 		for _, item := range j.Items {
 			if item.Status != "succeeded" || item.Artifact == nil {

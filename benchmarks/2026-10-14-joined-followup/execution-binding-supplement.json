@@ -1,0 +1,17 @@
+{
+  "actual_source_catalog_sha256": "dd860c8e1516201e6818b99c0a70773356fab2870bad16a78bfa71b38d9e9b1b",
+  "actual_source_revision": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+  "descriptive_protocol_manifest_path": "Cloned provisional manifest_path names final-v1; executable runner and build receipt explicitly bind final-v2. Frozen protocol stays unchanged.",
+  "operative_build_receipt": {
+    "bytes": 3673,
+    "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/build-receipt.json",
+    "sha256": "ad16914db4cd4ac16ac5e03c7b19332175db87a8c096512aff79ec7412bc8b91"
+  },
+  "operative_manifest": {
+    "bytes": 225971,
+    "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/execution-manifest.json",
+    "sha256": "59050da5a71062767d6e3c9aee32cfc9cdadecd8d2a13fbab53871a2059ea9d7"
+  },
+  "previous_cohorts_reused": false,
+  "schema": "joined-final-execution-binding-supplement-v1"
+}
