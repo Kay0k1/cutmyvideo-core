@@ -1,65 +1,79 @@
 # cutmyvideo-core
 
-[Python and TypeScript SDKs: local cutting and HTTP API](docs/sdk.md).
-
-[Check a job before starting](docs/batch-cutting.md#check-a-job-before-starting) through Go, CLI or HTTP without rendering or creating output files.
-
-[Saved batch plans, joined output, audio tracks and MKV/subtitles](docs/batch-cutting.md).
-
-**English** · [Русский](README.md)
-
-An open tool for manually trimming video and audio: choose a source and intervals, get separate files or one joined result in MP4, MP3 or MKV. Use the local CLI, Go library, or HTTP API with a durable job queue. [cutmy.video](https://cutmy.video) uses this engine; the open product UI lives in [cutmyvideo-web](https://github.com/Kay0k1/cutmyvideo-web). The core runs and can be hosted independently.
+**Video and audio clipping for applications, scripts and automation.**
 
 [![Core checks](https://github.com/Kay0k1/cutmyvideo-core/actions/workflows/ci.yml/badge.svg)](https://github.com/Kay0k1/cutmyvideo-core/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Kay0k1/cutmyvideo-core)](https://github.com/Kay0k1/cutmyvideo-core/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**The 1.x line** stabilizes the documented Go library, CLI and `/api/v1` contracts: error codes, limits, idempotency and recovery. Local trimming, bounded previews and long exports are implemented; individual providers can restrict access. Releases require real media, durable publication, process cancellation and API/worker operation on Linux, macOS and Windows across all five shipped architectures, plus native execution of every extracted CLI archive. Historical v0.2.1 was runtime-tested on Linux and predates these guarantees. See [platform support](docs/platforms.md), the [changelog](CHANGELOG.md) and [source catalogue](docs/providers.md).
+[Русский](README.md) · **English** · [Documentation](docs/README.md) · [Releases](https://github.com/Kay0k1/cutmyvideo-core/releases) · [Website](https://cutmy.video)
 
-## Features
+Choose intervals from a recording and receive separate clips or one joined file. The engine is written in Go and uses FFmpeg to process media. Embed it in a Go application, invoke the CLI or connect over HTTP. [cutmyvideo-web](https://github.com/Kay0k1/cutmyvideo-web) is the separate browser editor built on this core.
 
-- Local files, API uploads, direct HTTPS files and accessible public recordings through yt-dlp.
-- Named intervals in one job, with separate files or one result in selected order; saved JSON plans for the CLI and Go.
-- Accurate H.264/AAC MP4, MP3 and original-stream MP4/MKV copy; selected audio, silent video and compatible text subtitles.
-- Upright normalized crop for accurate MP4, including rotation and sample aspect ratio; bounded selected-audio waveform windows.
-- Optional successful-export original-media cleanup preserves metadata and finished clips under their existing retention policy.
-- Original-file playback, YouTube embeds and short server-rendered MP4 windows for platforms or browser codec fallback.
-- PostgreSQL queue, history, cancellation, idempotency, restart recovery and stale-worker fencing.
-- Configurable byte/time/storage/concurrency budgets, retention cleanup and explicit source deletion.
-- Session-cookie ownership for sources, previews and outputs; HTTP Range downloads.
+<a id="architecture"></a>
 
-## Local trimming
+## Choose an interface
 
-Install **FFmpeg and ffprobe** with libx264, AAC and libmp3lame. Download your OS/architecture archive from [GitHub Releases](https://github.com/Kay0k1/cutmyvideo-core/releases), verify it against `SHA256SUMS`, and extract it. FFmpeg is external. Building from source requires Go 1.26.9+; CI and releases use Go 1.27.2.
+| Task | Interface | Runtime requirements |
+| --- | --- | --- |
+| Cut local files | [CLI](docs/usage.md#cli) | `cutmy`, FFmpeg and ffprobe |
+| Embed the engine in Go | [`pkg/engine`](docs/usage.md#go-library) | Your Go application, FFmpeg and ffprobe |
+| Call from Python or TypeScript | [SDK](docs/sdk.md) | Local: CLI and media tools; HTTP: a server URL |
+| Provide an API with a durable job queue | [Self-hosted server](docs/self-hosting.md) | API, worker, PostgreSQL and media storage |
 
-The 1.x release archives include [provenance and dependency composition verification](docs/releases.md#consumer-verification-of-a-new-signed-release), binding tested hashes to the reviewed source commit and release workflow. Downloaded signed assets are checked on all five targets before publication. Follow the instructions to verify the complete 13-file set; historical v0.2.1 does not contain this protocol.
+Local cutting works without a database, accounts or an HTTP server. SQL belongs to server job persistence; TypeScript belongs to the client SDK. See [architecture](docs/architecture.md) for component boundaries and dependencies.
+
+## Versions
+
+The published CLI version is [v1.2.0](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.2.0). Archives support Linux and macOS (amd64/arm64), and Windows (amd64); install FFmpeg separately. Follow [signed-release verification](docs/releases.md#consumer-verification-of-a-new-signed-release) before installation.
+
+`main` additionally contains job preflight and Python/TypeScript SDKs in preparation for **1.3.0**. These are absent from the v1.2.0 binary. SDKs currently use development versions and install from source; PyPI/npm publication is pending. The [changelog](CHANGELOG.md) separates published changes from `Unreleased`.
+
+<a id="local-trimming"></a>
+
+## Quick start: a local file
+
+Install FFmpeg/ffprobe with libx264, AAC and libmp3lame. Use a verified release binary or build current sources with Go 1.26.9+ (CI and releases use 1.27.2):
 
 ```sh
 git clone https://github.com/Kay0k1/cutmyvideo-core.git
 cd cutmyvideo-core
 go build -trimpath -o cutmy ./cmd/cutmy
-./cutmy --help
 ./cutmy version
 ./cutmy inspect --input interview.mp4
-
 ./cutmy clip --input interview.mp4 \
-  --start 01:23:10 --end 01:23:40 --output moment.mp4
-./cutmy clip --input interview.mp4 \
-  --start 4990 --end 5020 --output moment.mp3
-./cutmy clip --input interview.mp4 \
-  --start 01:23:10 --end 01:23:40 --mode copy --output original.mp4
+  --start 00:00:05 --end 00:00:15 --output quote.mp4
 ```
 
-Output is JSON with path, byte size and actual bounds. Existing outputs are never overwritten. Options include `--quality best|1080p|720p`, `--profile fast|compact`, `--threads 1..32` and `--timeout 30m`. Accurate mode re-encodes; copy begins at a preceding keyframe and preserves resolution. MP3 requires accurate mode. Local intervals can span up to 24 hours; default limits are 10 GiB per output and 30 minutes per export. The library can change byte/deadline limits. See the [user and library guide](docs/usage.md).
+The result is JSON containing the path, size and actual boundaries. Existing files are preserved. Accurate mode re-encodes the interval; `--mode copy` preserves compatible original streams and may start at the preceding keyframe. On Windows, run `cutmy.exe`. See [options, errors and limits](docs/usage.md).
 
-Builds from the current source include public library error codes and optional
-`cutmy --json-errors clip …` diagnostics. The output directory must support hard
-links and synchronization to storage; these capabilities are checked before
-encoding. Local export success follows synchronization of the file and directory
-entry. See the [guide](docs/usage.md) for the contract and limits.
+### Multiple clips and preflight
 
-## Self-hosting
+For a current build from `main`:
 
-Docker Compose runs PostgreSQL, API and worker with shared media storage. The example listens only on `127.0.0.1:8080` and deliberately uses lower budgets than the server defaults.
+```sh
+cp examples/cuts.json cuts.json
+# Adjust input and intervals in cuts.json for your recording.
+mkdir clips
+./cutmy preflight --plan cuts.json --output clips
+./cutmy batch --plan cuts.json --output clips
+```
+
+Plan `input` paths resolve relative to the plan file. For a joined result, set `"output_mode": "joined"` and pass an output filename instead of a directory. Preflight reports passed and deferred checks; it writes no media and cannot guarantee payload decoding or final size. See [plans, preflight and joining](docs/batch-cutting.md).
+
+## Python and TypeScript
+
+Both SDKs support **check a job → run it → retrieve results**, locally and over HTTP. They provide typed errors, partial results, cancellation, waiting and streaming file transfers. Neither has third-party runtime library dependencies; video processing remains in Go/FFmpeg.
+
+Plans are ordinary JSON for editors, services or automated assistants. For HTTP jobs, callers persist an idempotency key before submission so they can recover after a lost connection.
+
+[Installation and examples](docs/sdk.md) · [Python](sdk/python/README.md) · [TypeScript](sdk/typescript/README.md)
+
+<a id="self-hosting"></a>
+
+## Run an HTTP server
+
+The local example starts PostgreSQL, API and a worker sharing media storage:
 
 ```sh
 umask 077
@@ -68,80 +82,34 @@ docker compose --env-file .env -f deploy/compose.example.yml up --build -d
 curl --fail http://localhost:8080/readyz
 ```
 
-Keep `.env` private. Public hosting needs HTTPS, an exact `PUBLIC_ORIGIN`, `COOKIE_SECURE=true`, resource limits and network isolation. Use `TRUST_PROXY=true` only when the API is reachable solely through a trusted proxy that normalizes `X-Forwarded-For`. The current boundary is one API instance: its IP limiter lives in the process. Queue leases and disk reservations are shared through PostgreSQL. A worker can process 1–8 jobs; start with one.
+The API listens on `127.0.0.1:8080`. This example uses reduced development limits. For a public installation, use the [HTTPS hosting guide](docs/self-hosting.md); the [documentation index](docs/README.md#hosting-and-operations) covers configuration, backups and upgrades.
 
-[Independent HTTPS hosting](docs/operations.md#https-with-caddy) · [Operations, upgrades and backups](docs/operations.md) · [All configuration](docs/configuration.md) · [Security model](docs/security-model.md)
+[HTTP API](docs/api.md) · [OpenAPI](api/openapi.yaml) · [Upload-to-download example](docs/usage.md#http-api)
 
-A separate [prepared public hosting profile](docs/self-hosting.md) supplies HTTPS, distinct database roles, container limits, verified scoped egress rules, upgrades and coordinated database/media backups on Linux amd64. Required installation acceptance runs on a disposable CI host; local refusal controls do not establish an installation result. Native Linux, macOS and Windows CLI archives have separate execution checks.
+<a id="features"></a>
+<a id="sources-and-boundaries"></a>
 
-### Minimal API request
+## Capabilities and boundaries
 
-```sh
-curl --fail -c /tmp/cutmy.cookies http://localhost:8080/api/v1/session
-curl --fail -b /tmp/cutmy.cookies \
-  -F file=@interview.mp4 http://localhost:8080/api/v1/uploads
-```
+- Named intervals, separate files and ordered joins, including repeated intervals.
+- MP4 H.264/AAC, MP3, compatible stream copy in MP4/MKV; audio and text-subtitle selection.
+- Cropping for accurate MP4, display rotation and pixel aspect ratio handling, bounded previews and waveforms.
+- Local files, API uploads, direct HTTPS files and supported public recordings through yt-dlp.
+- Server: durable queue, private sessions, idempotency, cancellation, recovery and resource limits.
 
-Replace the source `id` in this request:
+Accurate exports retain the requested quality settings, but re-encoding does not imply byte-identical original media. Copy preserves compatible streams with actual packet/keyframe boundaries. The [media policy](docs/media.md) covers tracks, geometry and color.
 
-```sh
-curl --fail -b /tmp/cutmy.cookies \
-  -H 'Content-Type: application/json' -H 'Idempotency-Key: first-export' \
-  -d '{"source_id":"src_REPLACE","ranges":[{"start_ms":10000,"end_ms":40000,"label":"Quote"}],"format":"mp4","quality":"1080p","cut_mode":"accurate"}' \
-  http://localhost:8080/api/v1/jobs
-```
+Recognizing a platform does not guarantee access to every recording. Direct HTTPS files download in full; supported progressive and completed HLS recordings can read selected portions. Live streams, DRM and private recordings are rejected. See [providers and limitations](docs/providers.md).
 
-The job ID is returned as `id`. Poll `GET /api/v1/jobs/{id}`; download `items[].artifact.download_url` using the same cookie when ready. A failed interval does not hide successful outputs. See the [OpenAPI contract](api/openapi.yaml), [API details](docs/api.md), and [complete upload-to-download example](docs/usage.md#http-api).
+Measured improvements apply to specific reproducible workloads: [methods and results](docs/performance.md). See [platform support](docs/platforms.md) for tested operating systems and required release checks.
 
-## Sources and boundaries
+<a id="development"></a>
+<a id="license"></a>
 
-| Source | Reading and limits |
-|---|---|
-| Local file | Processed on your computer; no PostgreSQL |
-| API upload | Saved on the server within the byte limit |
-| Direct HTTPS file | The **entire file is downloaded** before trimming |
-| Public progressive recording/clip | Verified media uses a guarded HTTP Range relay |
-| Completed HLS recording | Only selected segments and decoder context are staged |
-| Current live broadcast, DRM, private recording | Explicit errors; no account authentication or access bypass |
+## Development and license
 
-The catalogue recognizes **15 platforms**: YouTube, Twitch, Rutube, TikTok, Instagram, Vimeo, Dailymotion, VK, Facebook, X, Reddit, OK, Bilibili, Streamable and Rumble. Real imports/exports were checked for YouTube, Twitch VOD/clip and Rutube; Streamable metadata was checked. These are observations, not guarantees for every video. Accepted link forms, evidence and other adapters are listed in the [provider catalogue](docs/providers.md).
+Start with [CONTRIBUTING](CONTRIBUTING.md). `make check` runs fast checks; `make check-full` requires media tools, pinned yt-dlp and isolated test PostgreSQL. The contributor guide covers separate installed SDK acceptance.
 
-HLS requires a finite unencrypted `ENDLIST`. MPEG-TS/fMP4 and up to 64 compatible continuity periods with initialization-map changes or timestamp resets preserve the original timeline. Byte ranges, low-latency parts, separate HLS audio/video, incompatible codec changes and DASH fragments are refused. Compatible separate progressive HTTPS streams are supported.
+[Issues](https://github.com/Kay0k1/cutmyvideo-core/issues) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md) · [Support the project](https://cutmy.video/?panel=support&lang=en)
 
-Window previews return up to 30 seconds of 480p H.264/AAC MP4, capped at 16 MiB and aligned to 30-second positions. Completed windows have a private 30-minute idle cache: up to 512 MiB/64 files globally and 128 MiB/16 files per session. Every request checks ownership; source deletion removes its windows. At most two windows render concurrently; background prefetch yields to foreground seeks. The source still describes the entire recording.
-
-Server defaults permit 12 hours per fragment and 24 hours total, subject to deadlines, output size, shared transfer budget and disk headroom. Long accurate exports use bounded bitrates to fit output budgets; copy keeps the original stream and can exceed its budget. `best` preserves resolution; copy with a lower explicit resolution limit returns `copy_quality_unsupported`. See [configuration](docs/configuration.md).
-
-## Architecture
-
-```mermaid
-flowchart LR
-    CLI[Local CLI] --> Engine[Go engine]
-    API[HTTP API] --> DB[(PostgreSQL)]
-    DB --> Worker[Worker]
-    Worker --> Engine
-    Engine --> FF[FFmpeg / ffprobe]
-    Worker --> Guard[Address checks / relay]
-    Guard --> Source[yt-dlp / public streams]
-    Worker --> Disk[(Media)]
-    API --> Disk
-```
-
-`pkg/engine` provides local `Inspect` and `Export` without HTTP or a database. Server jobs retain immutable inputs and publication verifies the current lease. Direct library calls do not use server quotas. Public hosting needs CPU/RAM/PID/disk limits in addition to application budgets. Measurements and before/after methodology are in [performance](docs/performance.md).
-
-## Development
-
-```sh
-make check
-# With FFmpeg, ffprobe, pinned yt-dlp and dedicated PostgreSQL:
-TEST_DATABASE_URL=postgres://user:password@localhost:5432/test_db?sslmode=disable \
-  make check-full
-```
-
-Fast checks can skip media/database tests without their tools. Full checks require all dependencies, run race tests, check documentation/workflows and scan reachable vulnerabilities. CI uses synthetic media and temporary PostgreSQL schemas, with no requests to public platforms. [CONTRIBUTING](CONTRIBUTING.md) covers setup and changes; [releases](docs/releases.md) covers five CLI archives and reproducibility checks.
-
-Problems and ideas: [GitHub Issues](https://github.com/Kay0k1/cutmyvideo-core/issues). Vulnerabilities: [SECURITY](SECURITY.md). Fund development: [cutmy.video](https://cutmy.video/?panel=support).
-
-## License
-
-[MIT](LICENSE). FFmpeg, yt-dlp, Node.js, PostgreSQL and Go dependencies retain their own licenses; the engine license does not replace their terms.
+Core and SDK code use [MIT](LICENSE). FFmpeg, yt-dlp, Node.js, PostgreSQL and other dependencies retain their own licenses: [third-party notices](THIRD_PARTY_NOTICES.md).

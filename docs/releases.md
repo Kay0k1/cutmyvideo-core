@@ -14,6 +14,26 @@ change requires a migration note and explicit review of the
 [contract baseline](../api/COMPATIBILITY.md); passing its conservative structural
 checks is not proof of every semantic behavior or platform combination.
 
+## Release page conventions
+
+The [latest release](https://github.com/Kay0k1/cutmyvideo-core/releases/latest)
+is the installation entry point for published CLI binaries. Product releases
+use immutable `vX.Y.Z` tags; `main` may contain newer, unreleased features. SDK
+development versions do not imply publication to PyPI/npm.
+
+The two historical `bench-inputs-*` and `bench-results-*` releases retain public
+datasets and reproducibility evidence used by benchmark tooling. Their titles
+start with `Benchmark data:` or `Benchmark evidence:` and they are marked
+prerelease to distinguish these auxiliary downloads from installable product
+versions. Keep their existing asset URLs and checksums intact.
+
+Draft releases are staging records for the signed-consumer publication checks
+below. Keep the current candidate until publication or a decision to abandon it.
+For an abandoned draft superseded by a published version, retain its metadata
+and assets in operator evidence before removing the GitHub draft. Preserve the
+original tag and record the outcome in the changelog; do not publish a failed
+candidate just to fill a version-number gap.
+
 ## Prepare
 
 1. Run `make check-full` with pinned tools and isolated PostgreSQL. Verify CLI and
