@@ -74,6 +74,27 @@ func TestPreflightCapabilitiesParseExactLists(t *testing.T) {
 	if entries, ok := parsePreflightCapabilityList("filters", []byte("Filters:\n ------\n TSC scale V->V Legacy three flags\n")); !ok || !entries["scale"] {
 		t.Fatal("legacy three-flag filter list was rejected")
 	}
+	legacyFilters := "Filters:\n  T.. = Timeline support\n  .S. = Slice threading\n  ..C = Command support\n  A = Audio input/output\n  V = Video input/output\n  N = Dynamic number and/or type of input/output\n  | = Source or sink filter\n ... scale V->V Scale video; description mentions tonemap\n ... setsar V->V Set SAR\n"
+	entries, ok := parsePreflightCapabilityList("filters", []byte(legacyFilters))
+	if !ok || !entries["scale"] || !entries["setsar"] || entries["tonemap"] || entries["A"] || entries["T.."] {
+		t.Fatalf("FFmpeg 5.1 filter table or legend/descriptive name isolation failed: %v %v", entries, ok)
+	}
+	for _, malformed := range []string{
+		"Filters:\n T.. = Timeline support\n ... scale V->V Missing the rest of the legacy legend\n",
+		strings.Replace(legacyFilters, "| = Source or sink filter", "unrecognized legend mentioning scale", 1),
+		legacyFilters + "description only mentioning crop\n",
+	} {
+		if _, ok := parsePreflightCapabilityList("filters", []byte(malformed)); ok {
+			t.Fatalf("malformed separator-free table passed: %q", malformed)
+		}
+	}
+	entries, ok = parsePreflightCapabilityList("demuxers", []byte("File formats:\n D. = Demuxing supported\n .E = Muxing supported\n --\n D concat Virtual concatenation\n D libcdio\n"))
+	if !ok || !entries["concat"] || !entries["libcdio"] {
+		t.Fatalf("FFmpeg 5.1 demuxer with no description failed: %v %v", entries, ok)
+	}
+	if _, ok := parsePreflightCapabilityList("demuxers", []byte("File formats:\n --\n D\n")); ok {
+		t.Fatal("demuxer row with no name passed")
+	}
 	if _, ok := parsePreflightCapabilityList("encoders", []byte(strings.Repeat("x", preflightCapabilityBytes+1))); ok {
 		t.Fatal("oversized list passed")
 	}
@@ -326,6 +347,21 @@ func TestPreflightLocalChecksMediaWithoutRendering(t *testing.T) {
 		}
 		if copied != (format == "mkv") {
 			t.Fatalf("copy compatibility was incorrectly promised: %+v", result)
+		}
+		expected := []string{"tool_muxers", "tool_demuxers"}
+		if format != "mkv" {
+			expected = append(expected, "tool_encoders", "tool_filters")
+		}
+		for _, name := range expected {
+			passed := false
+			for _, check := range result.Checks {
+				if check.Name == name && check.Status == "passed" {
+					passed = true
+				}
+			}
+			if !passed {
+				t.Fatalf("native %s prerequisite %s was not verified: %+v", format, name, result.Checks)
+			}
 		}
 	}
 	request := preflightTestRequest()

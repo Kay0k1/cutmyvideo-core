@@ -346,6 +346,7 @@ func parsePreflightCapabilityList(kind string, data []byte) (map[string]bool, bo
 	}
 	entries := make(map[string]bool)
 	rows := kind == "bsfs"
+	var filterLegend uint8
 	for _, raw := range lines[1:] {
 		line := strings.TrimSpace(raw)
 		if line == "" {
@@ -354,8 +355,34 @@ func parsePreflightCapabilityList(kind string, data []byte) (map[string]bool, bo
 		if !rows {
 			if strings.Trim(line, "-") == "" {
 				rows = true
+				continue
 			}
-			continue
+			if kind == "filters" {
+				// FFmpeg 5.1 starts rows directly after this complete legend;
+				// newer versions also place a dashed separator after it.
+				legend := []string{"T.. = Timeline support", ".S. = Slice threading", "..C = Command support", "A = Audio input/output", "V = Video input/output", "N = Dynamic number and/or type of input/output", "| = Source or sink filter"}
+				matched := false
+				for i, entry := range legend {
+					if strings.Join(strings.Fields(line), " ") == entry {
+						filterLegend |= 1 << i
+						matched = true
+						break
+					}
+				}
+				if matched {
+					continue
+				}
+				if filterLegend != 127 {
+					return nil, false
+				}
+				rows = true
+			} else {
+				fields := strings.Fields(line)
+				if len(fields) < 3 || fields[1] != "=" {
+					return nil, false
+				}
+				continue
+			}
 		}
 		fields := strings.Fields(line)
 		if kind == "bsfs" {
@@ -365,7 +392,13 @@ func parsePreflightCapabilityList(kind string, data []byte) (map[string]bool, bo
 			entries[fields[0]] = true
 			continue
 		}
-		if len(fields) < 3 {
+		// Muxer/demuxer descriptions are optional. FFmpeg 5.1's libcdio
+		// demuxer, for example, has only its flags and exact name.
+		minimumFields := 3
+		if kind == "muxers" || kind == "demuxers" {
+			minimumFields = 2
+		}
+		if len(fields) < minimumFields {
 			return nil, false
 		}
 		flags := fields[0]
