@@ -1,9 +1,12 @@
+import errno
 import os
 import pathlib
+import signal
 import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import Mock, patch
 
 from cutmyvideo import LocalCutmy, LocalError
 
@@ -74,6 +77,35 @@ class LocalTests(unittest.TestCase):
         with self.assertRaises(LocalError) as unavailable:
             LocalCutmy("cutmy-does-not-exist-sdk-fixture").inspect("input")
         self.assertEqual(unavailable.exception.code, "tool_unavailable")
+
+    @unittest.skipUnless(os.name == "posix", "POSIX process-group shutdown")
+    def test_darwin_exited_group_permission_error_keeps_timeout(self):
+        original = os.killpg
+        signals = []
+
+        def signal_group(pid, signum):
+            signals.append(signum)
+            if signum == signal.SIGKILL:
+                raise PermissionError(errno.EPERM, "No live group members")
+            return original(pid, signum)
+
+        with tempfile.TemporaryDirectory() as directory:
+            pidfile = pathlib.Path(directory) / "pid"
+            with patch("sys.platform", "darwin"), patch("os.killpg", side_effect=signal_group):
+                with self.assertRaises(LocalError) as failed:
+                    self.client("sleep", env={"SDK_TEST_PID": str(pidfile)}).inspect("input", timeout=0.2)
+            self.assertEqual(failed.exception.code, "timeout")
+            self.assertEqual(signals, [signal.SIGTERM, signal.SIGKILL])
+
+        leader = Mock()
+        leader.poll.return_value = None
+        with patch("sys.platform", "darwin"), patch("os.killpg", side_effect=PermissionError(errno.EPERM, "Denied")):
+            with self.assertRaises(PermissionError):
+                LocalCutmy._signal_group(leader, signal.SIGKILL)
+        leader.poll.return_value = 0
+        with patch("sys.platform", "linux"), patch("os.killpg", side_effect=PermissionError(errno.EPERM, "Denied")):
+            with self.assertRaises(PermissionError):
+                LocalCutmy._signal_group(leader, signal.SIGKILL)
 
 
 if __name__ == "__main__":

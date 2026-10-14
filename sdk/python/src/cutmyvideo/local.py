@@ -6,6 +6,7 @@ import json
 import os
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -77,12 +78,23 @@ class LocalCutmy:
                                       "--profile", self.profile, "--threads", str(self.threads)], timeout)
 
     @staticmethod
+    def _signal_group(process: subprocess.Popen[bytes], signum: int) -> None:
+        try:
+            os.killpg(process.pid, signum)
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            # Darwin skips zombies when signalling a group and can report
+            # EPERM once no live members remain. A reaped leader must not
+            # turn successful shutdown into an unrelated permission failure.
+            # Preserve permission failures for a live leader or other OSes.
+            if sys.platform != "darwin" or process.poll() is None:
+                raise
+
+    @staticmethod
     def _stop(process: subprocess.Popen[bytes]) -> None:
         if os.name == "posix":
-            try:
-                os.killpg(process.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
+            LocalCutmy._signal_group(process, signal.SIGTERM)
         else:
             try:
                 process.send_signal(getattr(signal, "CTRL_BREAK_EVENT"))
@@ -94,10 +106,7 @@ class LocalCutmy:
             pass
         # The leader may already have exited while descendants hold a pipe.
         if os.name == "posix":
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            LocalCutmy._signal_group(process, signal.SIGKILL)
         else:
             try:
                 subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
