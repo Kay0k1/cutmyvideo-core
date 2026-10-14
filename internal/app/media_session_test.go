@@ -98,8 +98,18 @@ func TestLocalExportSessionReusesOriginalAndVerifiesEveryJoinedResult(t *testing
 			probes[fields[len(fields)-1]]++
 		}
 	}
-	if probes[input] != 1 || probes[outputs[0]] != 1 || probes[outputs[1]] != 1 || len(probes) != 3 {
+	if probes[input] != 1 || probes[outputs[0]] > 1 || probes[outputs[1]] > 1 {
 		t.Fatalf("source reuse or required final verification changed: %+v", probes)
+	}
+	for _, out := range outputs {
+		stat, err := os.Stat(out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p, duration, supported, err := probeOwnedMP4(ctx, out, stat)
+		if probes[out] == 0 && (err != nil || !supported || p.selectedVideo() == nil || duration <= 0) {
+			t.Fatalf("result omitted native verification without fresh supported structure: %v/%v", supported, err)
+		}
 	}
 	// Outputs cannot inherit the source cache, including when a previously
 	// verified result is damaged later in the same operation.

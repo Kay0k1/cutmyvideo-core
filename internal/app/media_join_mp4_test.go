@@ -214,6 +214,10 @@ func TestOwnedMP4FreshIdentityBoundsAndCancellation(t *testing.T) {
 	if err := os.Chtimes(replacement, before.ModTime(), before.ModTime()); err != nil {
 		t.Fatal(err)
 	}
+	// Windows does not replace an existing destination with Rename.
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Rename(replacement, path); err != nil {
 		t.Fatal(err)
 	}
@@ -248,4 +252,55 @@ func TestOwnedMP4FreshIdentityBoundsAndCancellation(t *testing.T) {
 	if _, _, supported, err := probeOwnedMP4(ctx, path, large); err != nil || supported {
 		t.Fatalf("oversize file admitted: %v/%v", supported, err)
 	}
+}
+
+func TestOwnedMP4TrackAndEditRoundingMatchesFFprobe(t *testing.T) {
+	c, ctx := mcConfig(t)
+	path := filepath.Join(c.DataDir, "fractional-audio.mp4")
+	mcRun(t, ctx, c, "-f", "lavfi", "-i", "testsrc2=duration=1.503:size=160x96:rate=25", "-f", "lavfi", "-i", "sine=frequency=733:sample_rate=44100:duration=1.503", "-c:v", "libx264", "-threads", "2", "-preset", "ultrafast", "-crf", "18", "-coder", "1", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", path)
+	stat, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ms, supported, err := probeOwnedMP4(ctx, path, stat)
+	want, nativeMS, nativeErr := probe(ctx, c, path, false)
+	if err != nil || nativeErr != nil || !supported || got.Format.Duration != want.Format.Duration || ms != nativeMS {
+		t.Fatalf("fractional track rounding differs: %+v/%d/%v/%v versus %+v/%d/%v", got, ms, supported, err, want, nativeMS, nativeErr)
+	}
+	input := path
+	wrapped := c
+	commands := countMediaCommands(t, &wrapped)
+	wrapped.FFmpegThreads = 2
+	var ranges []Range
+	for i := 0; i < 32; i++ {
+		start := int64(200)
+		if i%2 != 0 {
+			start = 320
+		}
+		ranges = append(ranges, Range{StartMS: start, EndMS: start + 1100, Label: fmt.Sprint(i)})
+	}
+	out := filepath.Join(c.DataDir, "joined32.mp4")
+	request := ExportRequest{Format: "mp4", Quality: "best", CutMode: "accurate", OutputMode: "joined"}
+	if _, err := ExportJoinedLocal(ctx, wrapped, input, out, ranges, request); err != nil {
+		t.Fatal(err)
+	}
+	probes := 0
+	for _, command := range commands() {
+		if strings.HasPrefix(command, "ffprobe ") {
+			probes++
+		}
+	}
+	if probes != 1 {
+		t.Fatalf("reordered32 intervals fell back to a probe: %d", probes)
+	}
+	stat, err = os.Stat(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ms, supported, err = probeOwnedMP4(ctx, out, stat)
+	want, nativeMS, nativeErr = probe(ctx, c, out, false)
+	if err != nil || nativeErr != nil || !supported || ms != nativeMS || got.Format.Duration != want.Format.Duration {
+		t.Fatalf("reordered32 duration differs: %d/%v/%v versus %d/%v", ms, supported, err, nativeMS, nativeErr)
+	}
+	mcRun(t, ctx, c, "-xerror", "-i", out, "-f", "null", "-")
 }

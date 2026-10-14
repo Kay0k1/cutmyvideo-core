@@ -212,7 +212,7 @@ func (r *ownedMP4Reader) inspect() (p probeInfo, duration int64, supported bool)
 		return p, 0, false
 	}
 	movieScale := int64(binary.BigEndian.Uint32(mvhd[12:]))
-	if movieScale < 1 || movieScale > 1000000 {
+	if movieScale < 1 || movieScale > 60000000 {
 		return p, 0, false
 	}
 	movieTicks := int64(binary.BigEndian.Uint32(mvhd[16:]))
@@ -228,7 +228,7 @@ func (r *ownedMP4Reader) inspect() (p probeInfo, duration int64, supported bool)
 			if len(p.Streams) >= 2 {
 				return p, 0, false
 			}
-			s, trackDuration, chunks, ok := r.track(box.data, mdat)
+			s, trackDuration, chunks, ok := r.track(box.data, mdat, movieScale)
 			if !ok || trackDuration > movieTicks {
 				return p, 0, false
 			}
@@ -267,7 +267,7 @@ func (r *ownedMP4Reader) inspect() (p probeInfo, duration int64, supported bool)
 		return p, 0, false
 	}
 	// MOV's format clock is rescaled to AV_TIME_BASE before FFprobe prints
-	// six decimal places. Newer muxers can use the audio clock for mvhd,
+	// six decimal places. Newer muxers can use a common encoder clock for mvhd,
 	// so preserve native microsecond and subsequent float/MS rounding.
 	micros := (movieTicks*1000000 + movieScale/2) / movieScale
 	p.Format.Duration = fmt.Sprintf("%d.%06d", micros/1000000, micros%1000000)
@@ -280,7 +280,7 @@ func (r *ownedMP4Reader) inspect() (p probeInfo, duration int64, supported bool)
 	return p, duration, true
 }
 
-func (r *ownedMP4Reader) track(data []byte, mdat mp4Span) (s probeStream, duration int64, spans []mp4Span, ok bool) {
+func (r *ownedMP4Reader) track(data []byte, mdat mp4Span, movieScale int64) (s probeStream, duration int64, spans []mp4Span, ok bool) {
 	tkhd, good := mp4Child(data, "tkhd")
 	if !good || len(tkhd) != 84 || binary.BigEndian.Uint32(tkhd) != 3 {
 		return
@@ -294,9 +294,10 @@ func (r *ownedMP4Reader) track(data []byte, mdat mp4Span) (s probeStream, durati
 		return
 	}
 	elst, good := mp4Child(edts, "elst")
-	if !good || len(elst) != 20 || binary.BigEndian.Uint32(elst) != 0 || binary.BigEndian.Uint32(elst[4:]) != 1 || int64(binary.BigEndian.Uint32(elst[8:])) != duration || binary.BigEndian.Uint32(elst[16:]) != 0x10000 {
+	if !good || len(elst) != 20 || binary.BigEndian.Uint32(elst) != 0 || binary.BigEndian.Uint32(elst[4:]) != 1 || binary.BigEndian.Uint32(elst[16:]) != 0x10000 {
 		return
 	}
+	editDuration := int64(binary.BigEndian.Uint32(elst[8:]))
 	mediaStart := int64(int32(binary.BigEndian.Uint32(elst[12:])))
 	if mediaStart < 0 {
 		return
@@ -313,6 +314,24 @@ func (r *ownedMP4Reader) track(data []byte, mdat mp4Span) (s probeStream, durati
 	ticks := binary.BigEndian.Uint32(mdhd[16:])
 	if scale == 0 || scale > 1000000 || ticks == 0 {
 		return
+	}
+	if mediaStart >= int64(ticks) {
+		return
+	}
+	// The muxer rounds the presentation duration up for tkhd. For elst it
+	// rounds the full media duration up and separately rounds the negative
+	// AAC priming offset down. Those exact expressions can differ by one
+	// movie tick; this is not a duration tolerance or a guessed adjustment.
+	ceil := func(t int64) int64 { return (t*movieScale + int64(scale) - 1) / int64(scale) }
+	legacyDuration := duration == ceil(int64(ticks)-mediaStart) && editDuration == ceil(int64(ticks))-ceil(mediaStart)
+	// New muxers retain full AAC frame durations in mdhd/stts and trim the
+	// last frame in the edit. Admit only an integral audio/movie clock ratio and
+	// less than one AAC frame of trailing padding; all other shapes fall back.
+	fullAACFrames := false
+	if movieScale%int64(scale) == 0 {
+		ratio := movieScale / int64(scale)
+		padding := int64(ticks) - mediaStart - editDuration/ratio
+		fullAACFrames = editDuration%ratio == 0 && duration == editDuration && padding >= 0 && padding < 1024
 	}
 	s.TimeBase = "1/" + strconv.FormatUint(uint64(scale), 10)
 	s.StartTime = "0.000000"
@@ -355,7 +374,7 @@ func (r *ownedMP4Reader) track(data []byte, mdat mp4Span) (s probeStream, durati
 	}
 	switch string(hdlr[8:12]) {
 	case "vide":
-		if mediaStart != 0 {
+		if mediaStart != 0 || !legacyDuration {
 			return
 		}
 		if entry.kind != "avc1" || len(entry.data) < 78 {
@@ -373,7 +392,7 @@ func (r *ownedMP4Reader) track(data []byte, mdat mp4Span) (s probeStream, durati
 			return
 		}
 	case "soun":
-		if mediaStart != 1024 {
+		if mediaStart != 1024 || (!legacyDuration && !fullAACFrames) {
 			return
 		}
 		if entry.kind != "mp4a" || len(entry.data) < 28 || binary.BigEndian.Uint16(entry.data[8:]) != 0 {

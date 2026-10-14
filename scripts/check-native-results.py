@@ -92,6 +92,7 @@ UNIVERSAL_MEDIA_REQUIRED = {
     "TestOwnedMP4UnknownAndCorruptShapesKeepNativeVerification",
     "TestOwnedMP4FreshIdentityBoundsAndCancellation",
     "TestOwnedMP4ValidUnsupportedShapesUseFreshFallback",
+    "TestOwnedMP4TrackAndEditRoundingMatchesFFprobe",
     "TestOwnedMP3UnknownProbeFamilyKeepsFreshVerification",
     "TestOwnedMP3FreshScanRejectsReplacedPathIdentity",
     "TestOwnedMP3MetadataMatchesFreshFFprobe",
