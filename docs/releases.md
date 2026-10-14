@@ -118,6 +118,17 @@ checked separately through the tag-only attestations described below.
 
 ## Automation
 
+Pull requests run the complete source CI once, as the reusable `checks` job in
+the archive workflow. The separate Core checks workflow retains main pushes and
+manual runs; it has no direct PR trigger. Both five-platform source/SDK matrices,
+production-family media, full race checks and archive recovery remain required.
+The archive gate still refuses any failed, cancelled or skipped prerequisite.
+
+New commits cancel superseded PR archive and hosting runs. Main source/hosting
+checks also cancel older pushes. Tag signing, publication and manual verification
+are protected from automatic cancellation. Reusable source checks use a distinct
+concurrency group from the archive caller.
+
 The [release workflow](../.github/workflows/release.yml) resolves source once,
 passes that commit to the existing source CI, packages it twice in parallel and uploads one
 sealed bundle. Five native jobs download that exact artifact ID, verify its

@@ -17,8 +17,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: public-self-hosting-${{ github.ref }}
-  cancel-in-progress: false
+  group: public-self-hosting-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
 
 jobs:
   public-profile:

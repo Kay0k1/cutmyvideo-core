@@ -19,6 +19,26 @@ def require(condition, message):
 
 def audit(release, source_ci):
     jobs = release['jobs']
+    # PyYAML's YAML 1.1 loader treats the unquoted Actions key `on` as True.
+    source_events = source_ci.get('on', source_ci.get(True))
+    release_events = release.get('on', release.get(True))
+    require('pull_request' not in source_events and 'workflow_call' in source_events
+            and 'pull_request' in release_events, 'PR source checks must run exactly once through the archive workflow')
+    require(jobs['checks']['uses'] == './.github/workflows/ci.yml', 'Archive admission requires the complete source workflow')
+    require({'sdk', 'sdk-http', 'artifact-policy', 'native', 'bookworm-media', 'test'} <= set(source_ci['jobs']),
+            'All source, SDK, production-media and artifact checks remain required')
+    targets = {'ubuntu-24.04', 'ubuntu-24.04-arm', 'macos-15', 'macos-15-intel', 'windows-2025'}
+    for name in ('sdk', 'native'):
+        strategy = source_ci['jobs'][name]['strategy']
+        require(set(strategy['matrix']['runner']) == targets and len(strategy['matrix']['runner']) == len(targets)
+                and strategy['fail-fast'] is False and 'if' not in source_ci['jobs'][name],
+                'Both five-platform matrices must run completely')
+    require(release['concurrency']['cancel-in-progress'] == "${{ github.event_name == 'pull_request' }}",
+            'Superseded PRs must cancel without interrupting tag/manual verification')
+    require(source_ci['concurrency']['cancel-in-progress'] == "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}"
+            and source_ci['concurrency']['group'].startswith('core-checks-')
+            and release['concurrency']['group'].startswith('cli-archives-'),
+            'Main checks may cancel stale pushes without cancelling their reusable caller')
     require(release['permissions'] == {'contents': 'read', 'actions': 'read'}, 'Builders require read-only permissions')
     require(jobs['checks']['with']['ref'] == COMMIT and jobs['checks']['needs'] == 'resolve',
             'Source CI must use the single immutable resolver output')
@@ -84,6 +104,32 @@ class WorkflowControls(unittest.TestCase):
 
     def test_current_source_archive_and_permission_graph(self):
         audit(self.release, self.source_ci)
+
+    def test_duplicate_or_missing_pr_source_checks_are_rejected(self):
+        for mutation in ('duplicate', 'missing_caller', 'wrong_callee'):
+            release, source = deepcopy(self.release), deepcopy(self.source_ci)
+            source_events = source.get('on', source.get(True))
+            release_events = release.get('on', release.get(True))
+            if mutation == 'duplicate': source_events['pull_request'] = None
+            elif mutation == 'missing_caller': release_events.pop('pull_request')
+            else: release['jobs']['checks']['uses'] = './.github/workflows/partial.yml'
+            with self.assertRaises(ValueError): audit(release, source)
+
+    def test_reduced_source_coverage_is_rejected(self):
+        for mutation in ('missing_sdk_http', 'missing_platform', 'fail_fast', 'skipped_matrix'):
+            source = deepcopy(self.source_ci)
+            if mutation == 'missing_sdk_http': source['jobs'].pop('sdk-http')
+            elif mutation == 'missing_platform': source['jobs']['native']['strategy']['matrix']['runner'].pop()
+            elif mutation == 'fail_fast': source['jobs']['sdk']['strategy']['fail-fast'] = True
+            else: source['jobs']['native']['if'] = 'false'
+            with self.assertRaises(ValueError): audit(self.release, source)
+
+    def test_tag_or_manual_cancellation_and_shared_caller_group_are_rejected(self):
+        for mutation in ('tag', 'callee_group'):
+            release, source = deepcopy(self.release), deepcopy(self.source_ci)
+            if mutation == 'tag': release['concurrency']['cancel-in-progress'] = True
+            else: source['concurrency']['group'] = release['concurrency']['group']
+            with self.assertRaises(ValueError): audit(release, source)
 
     def test_missing_source_native_or_recovery_prerequisite(self):
         for job in ('checks', 'native', 'archive-recovery'):

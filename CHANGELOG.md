@@ -4,6 +4,10 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
+### Changed
+- Run complete PR source checks once through the immutable archive resolver instead of starting a duplicate standalone workflow. Preserve all five native/SDK targets, production-family media, race checks and archive recovery.
+- Cancel superseded PR archive/hosting runs and stale main source/hosting pushes; retain tag publication and manual verification runs.
+
 ## 1.3.0 - 2026-10-15
 
 ### Added
