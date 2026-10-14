@@ -12,6 +12,8 @@ Choose an interface in the README, then follow the relevant guide. The project o
 | --- | --- |
 | [CLI and Go library](usage.md) | Installation, inspect/export, errors, local limits and a complete HTTP example |
 | [Plans, preflight and joined outputs](batch-cutting.md) | Saved JSON plans, checking before execution, output order, audio and subtitles |
+| [Editable clip collections](clip-collections.md) | Independent clips, ordered fragments, draft/final exports, crop and selected IDs |
+| [Agent workflow](agent-workflow.md) | A reproducible interview-to-clips scenario and safe revisions/retries |
 | [Python and TypeScript SDKs](sdk.md) | Source installation, local/API workflows, waiting, recovery and downloads |
 | [Python reference](../sdk/python/README.md) | Python client options and typed results |
 | [TypeScript reference](../sdk/typescript/README.md) | HTTP/browser and Node local entry points |
@@ -24,7 +26,7 @@ Choose an interface in the README, then follow the relevant guide. The project o
 
 | Guide | Covers |
 | --- | --- |
-| [HTTP API](api.md) · [OpenAPI](../api/openapi.yaml) | Sessions, sources, jobs, preflight, errors and artifact downloads |
+| [HTTP API](api.md) · [OpenAPI](../api/openapi.yaml) | Sessions, sources, jobs, collections, preflight, errors and artifact downloads |
 | [Public self-hosting](self-hosting.md) | Linux HTTPS installation and required acceptance |
 | [Configuration](configuration.md) | Environment settings, concurrency, timeouts and quotas |
 | [Operations](operations.md) | HTTPS, maintenance, deployment, upgrade and recovery |

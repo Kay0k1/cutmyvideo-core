@@ -4,9 +4,18 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
+## 1.3.0 - 2026-10-15
+
 ### Added
+- Editable one-source clip collections with stable IDs, independent ordered assemblies, per-clip crop/audio overrides, read-only validation, selected-ID exports and actual source/output mappings in Go and CLI.
+- Explicit assembled draft MP4 renditions share final edit decisions while using a 720p height cap and lower-quality H.264 encoding; draft and final filenames remain separate and existing outputs are preserved.
+- Owner-protected collection validation/submission adapts to existing durable jobs, with partial queue admission and per-clip request-aware idempotency for safe retries and revisions.
+- Reproducible 15-clip agent workflow, independent full-media acceptance and required collection execution of extracted archives on all five native release targets.
 - Dependency-free Python and TypeScript SDK candidates for local CLI plans and owner-scoped HTTP workflows: inspection, preflight, explicit idempotent submission, bounded waiting/cancellation and streamed artifact downloads. Typed errors preserve partial results and recovery context. Installed wheel/sdist/npm consumers exercise real media and the API/worker; SDK registry publication remains separate.
 - Read-only job preflight through Go `Engine.PreflightPlan`, CLI `cutmy preflight` and owner-protected `POST /api/v1/jobs/preflight`. Shared reports expose normalized settings, selected tracks, output geometry/count and explicit deferred checks; local plans also predict output names without writing files. Inspection checks fresh media and bounded configured-tool capabilities, with independent HTTP rate/admission limits and temporary reader protection.
+
+### Fixed
+- Pin SDK distribution tooling to patched setuptools 83.0.0 and wheel 0.46.2 with verified SHA256 hashes; isolated package builds and CI use matching versions. The SDK clients retain no third-party runtime dependencies.
 
 ## 1.2.0 - 2026-10-14
 

@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "input": "interview.mp4",
+  "options": {
+    "format": "mp4",
+    "quality": "best",
+    "cut_mode": "accurate"
+  },
+  "clips": [
+    {
+      "id": "opening",
+      "label": "Question and answer",
+      "ranges": [
+        {"start_ms": 1000, "end_ms": 2500, "label": "Question"},
+        {"start_ms": 4000, "end_ms": 6500, "label": "Answer"}
+      ]
+    },
+    {
+      "id": "portrait",
+      "label": "Portrait selection",
+      "ranges": [
+        {"start_ms": 7000, "end_ms": 9500, "label": "Selected answer"}
+      ],
+      "options": {
+        "crop": {"x": 0.341796875, "y": 0, "width": 0.31640625, "height": 1}
+      }
+    }
+  ]
+}

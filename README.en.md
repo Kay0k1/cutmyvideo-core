@@ -8,7 +8,7 @@
 
 [Русский](README.md) · **English** · [Documentation](docs/README.md) · [Releases](https://github.com/Kay0k1/cutmyvideo-core/releases) · [Website](https://cutmy.video)
 
-Choose intervals from a recording and receive separate clips or one joined file. The engine is written in Go and uses FFmpeg to process media. Embed it in a Go application, invoke the CLI or connect over HTTP. [cutmyvideo-web](https://github.com/Kay0k1/cutmyvideo-web) is the separate browser editor built on this core.
+Choose intervals from a recording and receive separate clips, one joined file or a collection of independent assembled clips. The engine is written in Go and uses FFmpeg to process media. Embed it in a Go application, invoke the CLI or connect over HTTP. [cutmyvideo-web](https://github.com/Kay0k1/cutmyvideo-web) is the separate browser editor built on this core.
 
 <a id="architecture"></a>
 
@@ -25,9 +25,9 @@ Local cutting works without a database, accounts or an HTTP server. SQL belongs 
 
 ## Versions
 
-The published CLI version is [v1.2.0](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.2.0). Archives support Linux and macOS (amd64/arm64), and Windows (amd64); install FFmpeg separately. Follow [signed-release verification](docs/releases.md#consumer-verification-of-a-new-signed-release) before installation.
+Install CLI archives from the [latest published release](https://github.com/Kay0k1/cutmyvideo-core/releases/latest). Archives support Linux and macOS (amd64/arm64), and Windows (amd64); install FFmpeg separately. Follow [signed-release verification](docs/releases.md#consumer-verification-of-a-new-signed-release) before installation.
 
-`main` additionally contains job preflight and Python/TypeScript SDKs in preparation for **1.3.0**. These are absent from the v1.2.0 binary. SDKs currently use development versions and install from source; PyPI/npm publication is pending. The [changelog](CHANGELOG.md) separates published changes from `Unreleased`.
+**1.3.0** adds editable clip collections, draft assemblies, job preflight and the Python/TypeScript SDK foundation. These are absent from the v1.2.0 binary. SDKs currently use development versions and install from source; PyPI/npm publication is pending. The [changelog](CHANGELOG.md) separates published changes from `Unreleased`.
 
 <a id="local-trimming"></a>
 
@@ -49,7 +49,7 @@ The result is JSON containing the path, size and actual boundaries. Existing fil
 
 ### Multiple clips and preflight
 
-For a current build from `main`:
+With core 1.3.0 or a current source build:
 
 ```sh
 cp examples/cuts.json cuts.json
@@ -60,6 +60,12 @@ mkdir clips
 ```
 
 Plan `input` paths resolve relative to the plan file. For a joined result, set `"output_mode": "joined"` and pass an output filename instead of a directory. Preflight reports passed and deferred checks; it writes no media and cannot guarantee payload decoding or final size. See [plans, preflight and joining](docs/batch-cutting.md).
+
+### Independent clips and drafts
+
+Save one collection with stable clip IDs and ordered fragments per clip. Validate the plan, export a lower-quality MP4 draft, then render selected IDs after revisions. Per-clip crop and audio options follow the same edits into final exports. Go, CLI and HTTP return source/output mappings.
+
+[Collection guide](docs/clip-collections.md) · [Agent workflow](docs/agent-workflow.md)
 
 ## Python and TypeScript
 
@@ -92,6 +98,7 @@ The API listens on `127.0.0.1:8080`. This example uses reduced development limit
 ## Capabilities and boundaries
 
 - Named intervals, separate files and ordered joins, including repeated intervals.
+- Editable clip collections, assembled MP4 drafts, per-clip crop and selected-ID re-exports.
 - MP4 H.264/AAC, MP3, compatible stream copy in MP4/MKV; audio and text-subtitle selection.
 - Cropping for accurate MP4, display rotation and pixel aspect ratio handling, bounded previews and waveforms.
 - Local files, API uploads, direct HTTPS files and supported public recordings through yt-dlp.

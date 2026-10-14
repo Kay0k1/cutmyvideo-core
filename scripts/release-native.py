@@ -30,6 +30,11 @@ import release_manifest as m
 
 REQUIRED_GROUPS = ('archive', 'version', 'cli', 'media', 'process', 'service', 'deletion')
 PROCESS_CHECKS = ('timeout', 'descendants_observed', 'descendants_closed_before_cleanup')
+COLLECTION_MEDIA_CHECKS = (
+    'collection_read_only_preflight', 'collection_draft_sequence_and_maps',
+    'collection_selected_final_edit', 'collection_exclusive_output_preserved',
+    'collection_partial_outputs_and_budget', 'collection_draft_final_crop_consistency',
+)
 REQUIRED_CHECKS = {
     'archive': ('external_source_and_manifest_hash', 'full_five_archive_bundle', 'safe_exact_native_six_files',
                 'embedded_go_and_documents'),
@@ -37,7 +42,7 @@ REQUIRED_CHECKS = {
     'cli': ('help', 'invalid_argument_single_json', 'missing_input_single_json', 'no_database_for_local_cli'),
     'media': ('real_fixture_oracles', 'inspect_coded_and_display_geometry', 'accurate_mp4', 'copy_mp4', 'mp3',
               'full_decode', 'default_audio_880hz', 'rotated_corners', 'existing_output_preserved',
-              'cropped_accurate_mp4', 'crop_copy_refused', 'cropped_saved_plan_joined'),
+              'cropped_accurate_mp4', 'crop_copy_refused', 'cropped_saved_plan_joined') + COLLECTION_MEDIA_CHECKS,
     'process': PROCESS_CHECKS,
     'service': ('real_server_and_worker', 'session_upload_exact_bytes', 'preview_miss_and_hit', 'queued_job_completion',
                 'download_decode_geometry_audio', 'ownership_404', 'range_206', 'same_binary_healthchecks',
@@ -439,8 +444,8 @@ class Native:
         require(selected, 'Decoded fixture/output has no playable video')
         return selected[0]
 
-    def frame(self, path, width, height, order):
-        raw = self.ff('-i', path, '-map', '0:v:0', '-frames:v', '1', '-pix_fmt', 'rgb24', '-f', 'rawvideo', '-')
+    def frame(self, path, width, height, order, at=0):
+        raw = self.ff('-ss', str(at), '-i', path, '-map', '0:v:0', '-frames:v', '1', '-pix_fmt', 'rgb24', '-f', 'rawvideo', '-')
         require(len(raw) == width * height * 3, 'Decoded video display geometry mismatch')
         actual = []
         for index, (x, y) in enumerate(((width // 4, height // 4), (3 * width // 4, height // 4),
@@ -581,10 +586,142 @@ class Native:
         self.tone(joined)
         outputs['cropped'] = {'sha256': file_hash(cropped), 'probe': self.probe(cropped)}
         outputs['cropped_joined'] = {'sha256': file_hash(joined), 'probe': self.probe(joined)}
+        collection = self.collection_media(env)
         return ['real_fixture_oracles', 'inspect_coded_and_display_geometry', 'accurate_mp4', 'copy_mp4',
                 'mp3', 'full_decode', 'default_audio_880hz', 'rotated_corners', 'existing_output_preserved',
-                'cropped_accurate_mp4', 'crop_copy_refused', 'cropped_saved_plan_joined'], {
-                    'fixture': fixture, 'inspect': info, 'outputs': outputs}
+                'cropped_accurate_mp4', 'crop_copy_refused', 'cropped_saved_plan_joined', *COLLECTION_MEDIA_CHECKS], {
+                    'fixture': fixture, 'inspect': info, 'outputs': outputs, 'collection': collection}
+
+    def collection_media(self, env):
+        # Authored temporal colors are independent of the reported segment map:
+        # a reversed/corrupt assembly cannot pass by returning plausible JSON.
+        source = self.work / 'collection-source.mp4'
+        self.ff('-f', 'lavfi', '-i', 'color=c=0x1414f0:s=960x1440:r=25:d=4',
+                '-f', 'lavfi', '-i', 'sine=frequency=880:sample_rate=48000:duration=4',
+                '-vf', "drawbox=color=0xf01414:t=fill:enable='lt(t,2)'",
+                '-c:v', 'libx264', '-preset', 'ultrafast', '-threads', '1', '-g', '25', '-bf', '0',
+                '-c:a', 'aac', '-b:a', '96k', source)
+        self.frame(source, 960, 1440, (0, 0, 0, 0), at=.5)
+        self.frame(source, 960, 1440, (2, 2, 2, 2), at=2.5)
+        self.tone(source)
+        root = self.work / 'collection'
+        root.mkdir()
+        plan_path = root / 'plan.json'
+        destination = root / 'outputs'
+        destination.mkdir()
+        plan = {'version': 1, 'input': str(source),
+                'options': {'format': 'mp4', 'quality': 'best', 'cut_mode': 'accurate'},
+                'clips': [
+                    {'id': 'assembled', 'label': 'Blue then red',
+                     'ranges': [{'start_ms': 2500, 'end_ms': 3000, 'label': 'Blue'},
+                                {'start_ms': 500, 'end_ms': 1000, 'label': 'Red'}],
+                     'options': {'crop': {'x': 0, 'y': 0, 'width': .5, 'height': 1}}},
+                    {'id': 'single', 'label': 'Red', 'ranges': [{'start_ms': 500, 'end_ms': 1500}]},
+                ]}
+        plan_path.write_bytes(m.canonical(plan))
+        source_sha = file_hash(source)
+        common = ('--plan', plan_path, '--output', destination, '--threads', '1', '--timeout', '30s')
+        out, err, _ = self.app('collection', 'validate', *common, '--rendition', 'draft', env=env)
+        validation = json.loads(out)
+        require(not err and validation.get('version') == 1 and validation.get('valid') is True
+                and validation.get('rendition') == 'draft'
+                and [clip['id'] for clip in validation['clips']] == ['assembled', 'single']
+                and all(clip['requested_duration_ms'] == 1000 for clip in validation['clips'])
+                and not list(destination.iterdir()) and file_hash(source) == source_sha,
+                'Collection preflight rendered media, changed input or returned the wrong plan')
+
+        def verify_output(output, path, width, height, ranges, colors):
+            require(Path(output['path']) == path and output['size_bytes'] == path.stat().st_size > 0,
+                    'Collection output acknowledgement does not identify the real file')
+            require([(segment['source_start_ms'], segment['source_end_ms']) for segment in output['segments']] == ranges,
+                    'Collection segment map changed source order or accurate boundaries')
+            require([(item['start_ms'], item['end_ms']) for item in output['requested_ranges']] == ranges,
+                    'Collection output lost its requested source map')
+            elapsed = 0
+            for segment in output['segments']:
+                require(segment['output_start_ms'] == elapsed
+                        and segment['output_end_ms'] > elapsed
+                        and segment['output_end_ms'] - elapsed == segment['source_end_ms'] - segment['source_start_ms'],
+                        'Collection segment map has gaps, overlap or altered accurate boundaries')
+                elapsed = segment['output_end_ms']
+            self.decode(path)
+            probe = self.probe(path)
+            require(abs(float(probe['format']['duration']) - elapsed / 1000) <= .2,
+                    'Collection independently decoded duration disagrees with its source map')
+            video = self.video(path)
+            require((video['width'], video['height']) == (width, height), 'Collection crop or rendition geometry changed')
+            for at, color in colors:
+                self.frame(path, width, height, (color,) * 4, at=at)
+            return {'sha256': file_hash(path), 'probe': probe, 'tone': self.tone(path), 'segments': output['segments']}
+
+        out, err, _ = self.app('collection', 'export', *common, '--rendition', 'draft', env=env)
+        draft = json.loads(out)
+        require(not err and draft.get('version') == 1 and draft.get('rendition') == 'draft'
+                and [output['id'] for output in draft['outputs']] == ['assembled', 'single'],
+                'Collection draft returned the wrong independent clips')
+        files = {}
+        files['assembled_draft'] = verify_output(draft['outputs'][0], destination / 'assembled.draft.mp4',
+                                                 240, 720, [(2500, 3000), (500, 1000)], [(.2, 2), (.7, 0)])
+        files['single_draft'] = verify_output(draft['outputs'][1], destination / 'single.draft.mp4',
+                                              480, 720, [(500, 1500)], [(.2, 0)])
+        draft_hashes = {path.name: file_hash(path) for path in destination.iterdir()}
+
+        plan['clips'][0]['label'] = 'Edited red then blue'
+        plan['clips'][0]['ranges'] = [{'start_ms': 500, 'end_ms': 1000, 'label': 'Red'},
+                                     {'start_ms': 2500, 'end_ms': 3000, 'label': 'Blue'}]
+        plan_path.write_bytes(m.canonical(plan))
+        out, err, _ = self.app('collection', 'export', *common, '--clips', 'assembled', env=env)
+        final = json.loads(out)
+        require(not err and final.get('rendition') == 'final'
+                and [output['id'] for output in final['outputs']] == ['assembled']
+                and not (destination / 'single.final.mp4').exists()
+                and all(file_hash(destination / name) == sha for name, sha in draft_hashes.items()),
+                'Selected collection edit re-exported or modified an unselected/previous result')
+        files['assembled_final'] = verify_output(final['outputs'][0], destination / 'assembled.final.mp4',
+                                                 480, 1440, [(500, 1000), (2500, 3000)], [(.2, 0), (.7, 2)])
+        protected = {path.name: file_hash(path) for path in destination.iterdir()}
+        out, err, code = self.app('--json-errors', 'collection', 'export', *common, '--clips', 'assembled',
+                                  env=env, expected=None)
+        refusal = json.loads(err)
+        require(code == 1 and not out and refusal.get('error', {}).get('code') == 'output_exists'
+                and refusal['error'].get('clip_id') == 'assembled'
+                and {path.name: file_hash(path) for path in destination.iterdir()} == protected,
+                'Collection collision overwrote or acknowledged an existing output')
+
+        # Measure a one-fragment output first, then leave only 128 bytes for the
+        # next clip. This verifies actual partial publication, not a preflight
+        # collision that must refuse the complete selection before rendering.
+        partial_plan = {'version': 1, 'input': str(source), 'options': {'quality': '720p'},
+                        'clips': [{'id': 'short', 'ranges': [{'start_ms': 500, 'end_ms': 1500}]},
+                                  {'id': 'long', 'ranges': [{'start_ms': 0, 'end_ms': 4000}]}]}
+        partial_path = root / 'partial-plan.json'
+        partial_path.write_bytes(m.canonical(partial_plan))
+        reference = root / 'reference'
+        reference.mkdir()
+        out, err, _ = self.app('collection', 'export', '--plan', partial_path, '--output', reference,
+                               '--clips', 'short', '--threads', '1', '--timeout', '30s', env=env)
+        reference_result = json.loads(out)
+        require(not err and [output['id'] for output in reference_result['outputs']] == ['short'],
+                'Collection budget reference did not finish its selected clip')
+        budget = (reference / 'short.final.mp4').stat().st_size + 128
+        partial_destination = root / 'partial'
+        partial_destination.mkdir()
+        out, err, code = self.app('--json-errors', 'collection', 'export', '--plan', partial_path,
+                                  '--output', partial_destination, '--max-output-bytes', str(budget),
+                                  '--threads', '1', '--timeout', '30s', env=env, expected=None)
+        partial, failure = json.loads(out), json.loads(err)
+        require(code == 1 and partial.get('incomplete') is True
+                and [output['id'] for output in partial['outputs']] == ['short']
+                and failure.get('error', {}).get('code') == 'output_limit'
+                and failure['error'].get('clip_id') == 'long'
+                and sorted(path.name for path in partial_destination.iterdir()) == ['short.final.mp4']
+                and (partial_destination / 'short.final.mp4').stat().st_size <= budget,
+                'Collection byte-limit failure lost its completed output or published an unfinished clip')
+        files['partial_short'] = verify_output(partial['outputs'][0], partial_destination / 'short.final.mp4',
+                                               480, 720, [(500, 1500)], [(.2, 0)])
+        require(file_hash(source) == source_sha, 'Collection exports altered the source')
+        return {'fixture_sha256': source_sha, 'validation': validation, 'draft': draft, 'selected_final': final,
+                'collision': refusal, 'partial': partial, 'partial_error': failure, 'output_budget': budget, 'files': files}
 
     def listener(self, address):
         host, port = address.rsplit(':', 1)

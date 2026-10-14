@@ -183,6 +183,8 @@ type ExportRequest struct {
 	SubtitleMode  string  `json:"subtitle_mode,omitempty"`
 	Crop          *Crop   `json:"crop,omitempty"`
 	CleanupSource bool    `json:"cleanup_source,omitempty"`
+	// Rendition selects a draft without changing the edit plan.
+	Rendition string `json:"rendition,omitempty"`
 }
 
 func (r *ExportRequest) Validate(c Config, s Source) error {
@@ -203,6 +205,17 @@ func (r *ExportRequest) Validate(c Config, s Source) error {
 	}
 	if r.CutMode != "accurate" && r.CutMode != "copy" {
 		return errors.New("cut_mode must be accurate or copy")
+	}
+	if r.Rendition != "" && r.Rendition != "final" && r.Rendition != "draft" {
+		return errors.New("rendition must be final or draft")
+	}
+	if r.Rendition == "draft" {
+		if r.Format != "mp4" || r.CutMode != "accurate" {
+			return errors.New("draft rendition requires accurate MP4; choose final to preserve original streams")
+		}
+		r.Quality = "720p"
+	} else {
+		r.Rendition = ""
 	}
 	if r.Format == "mp3" && r.CutMode == "copy" {
 		return errors.New("MP3 export requires accurate mode; preserving arbitrary input audio as MP3 is not possible")

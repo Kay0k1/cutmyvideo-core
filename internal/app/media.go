@@ -628,7 +628,9 @@ func exportInputsCoreVerifiedProgress(ctx context.Context, c Config, inputs []me
 		} else {
 			rate := exportVideoBitrate(c, r, request)
 			args = append(args, "-c:v", "libx264", "-maxrate", strconv.FormatInt(rate, 10), "-bufsize", strconv.FormatInt(rate*2, 10))
-			if c.FFmpegProfile == "compact" {
+			if CollectionDraft(ctx) {
+				args = append(args, "-preset", "ultrafast", "-crf", "28", "-coder", "1")
+			} else if c.FFmpegProfile == "compact" {
 				args = append(args, "-preset", "veryfast", "-crf", "20")
 			} else {
 				// CABAC recovers much of ultrafast's size overhead with little

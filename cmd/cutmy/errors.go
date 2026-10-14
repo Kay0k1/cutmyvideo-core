@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"os"
@@ -31,15 +32,24 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	}
 	code := engine.CodeOf(err)
 	if jsonErrors {
+		var fieldError *engine.CollectionFieldError
+		var clipID, field string
+		if errors.As(err, &fieldError) {
+			clipID, field = fieldError.ClipID, fieldError.Field
+		}
 		_ = json.NewEncoder(stderr).Encode(struct {
 			Error struct {
 				Code    engine.ErrorCode `json:"code"`
 				Message string           `json:"message"`
+				ClipID  string           `json:"clip_id,omitempty"`
+				Field   string           `json:"field,omitempty"`
 			} `json:"error"`
 		}{Error: struct {
 			Code    engine.ErrorCode `json:"code"`
 			Message string           `json:"message"`
-		}{code, err.Error()}})
+			ClipID  string           `json:"clip_id,omitempty"`
+			Field   string           `json:"field,omitempty"`
+		}{code, err.Error(), clipID, field}})
 	} else if stderr == os.Stderr {
 		slog.Error("cutmy stopped", "error", err)
 	} else {
