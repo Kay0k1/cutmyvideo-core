@@ -1,0 +1,315 @@
+{
+  "head": "865e4afd072f77206ba674e7922a2d31de6d3c99",
+  "observed_at": "2026-10-14T00:53:20.351408+00:00",
+  "latest_status_snapshot": "/root/video_cut/reports/universal-go-core-20261014/ci-pr44-865e4af-status-20261014T005320351408Z.json",
+  "current_checks": {
+    "total": 29,
+    "success": 27,
+    "intentional_pr_skips": 2,
+    "failure": 0
+  },
+  "workflows": [
+    {
+      "id": 38489583358,
+      "name": "Public self-hosting acceptance",
+      "attempt": 1,
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583358"
+    },
+    {
+      "id": 38489583356,
+      "name": "Core checks",
+      "attempt": 1,
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583356"
+    },
+    {
+      "id": 38489583357,
+      "name": "Verified CLI archives",
+      "attempt": 3,
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357"
+    }
+  ],
+  "checks": [
+    {
+      "id": 115621269508,
+      "name": "Draft from verified archives",
+      "conclusion": "skipped",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115621269508"
+    },
+    {
+      "id": 115621268727,
+      "name": "Attest the tested release archives",
+      "conclusion": "skipped",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115621268727"
+    },
+    {
+      "id": 115621144636,
+      "name": "SPDX from verified executable bytes",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115621144636"
+    },
+    {
+      "id": 115620988608,
+      "name": "Verified archive gate",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115620988608"
+    },
+    {
+      "id": 115619904924,
+      "name": "Archived CLI (linux/amd64)",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115619904924"
+    },
+    {
+      "id": 115619904877,
+      "name": "Archived CLI (windows/amd64)",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115619904877"
+    },
+    {
+      "id": 115619904831,
+      "name": "Archived CLI (darwin/arm64)",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115619904831"
+    },
+    {
+      "id": 115619904819,
+      "name": "Archived CLI (linux/arm64)",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115619904819"
+    },
+    {
+      "id": 115619904817,
+      "name": "Archived CLI (darwin/amd64)",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115619904817"
+    },
+    {
+      "id": 115619904741,
+      "name": "Archived Linux upgrade and restore",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115619904741"
+    },
+    {
+      "id": 115619279813,
+      "name": "checks / Native media (ubuntu-24.04-arm)",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115619279813"
+    },
+    {
+      "id": 115619277297,
+      "name": "checks / Native media (macos-15-intel)",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115619277297"
+    },
+    {
+      "id": 115619276092,
+      "name": "checks / artifact-policy",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115619276092"
+    },
+    {
+      "id": 115619274935,
+      "name": "checks / Native media (macos-15)",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115619274935"
+    },
+    {
+      "id": 115619274441,
+      "name": "checks / Native media (ubuntu-24.04)",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115619274441"
+    },
+    {
+      "id": 115619234525,
+      "name": "checks / bookworm-media",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115619234525"
+    },
+    {
+      "id": 115619234422,
+      "name": "checks / Native media (windows-2025)",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115619234422"
+    },
+    {
+      "id": 115619234016,
+      "name": "checks / test",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115619234016"
+    },
+    {
+      "id": 115619233638,
+      "name": "resolve",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115619233638"
+    },
+    {
+      "id": 115619231907,
+      "name": "packages",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583357/job/115619231907"
+    },
+    {
+      "id": 115611352929,
+      "name": "test",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583356/job/115611352929"
+    },
+    {
+      "id": 115611352909,
+      "name": "Native media (ubuntu-24.04-arm)",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583356/job/115611352909"
+    },
+    {
+      "id": 115611352879,
+      "name": "Native media (windows-2025)",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583356/job/115611352879"
+    },
+    {
+      "id": 115611352864,
+      "name": "Native media (macos-15)",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583356/job/115611352864"
+    },
+    {
+      "id": 115611352841,
+      "name": "bookworm-media",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583356/job/115611352841"
+    },
+    {
+      "id": 115611352799,
+      "name": "Native media (ubuntu-24.04)",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583356/job/115611352799"
+    },
+    {
+      "id": 115611352737,
+      "name": "Native media (macos-15-intel)",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583356/job/115611352737"
+    },
+    {
+      "id": 115611352448,
+      "name": "artifact-policy",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583356/job/115611352448"
+    },
+    {
+      "id": 115611351804,
+      "name": "Disposable Linux public profile, upgrade and restoration",
+      "conclusion": "success",
+      "url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38489583358/job/115611351804"
+    }
+  ],
+  "history": [
+    {
+      "attempt": 1,
+      "event": "Reusable Windows native Python normal-output/descendant control failed while cleaning its private temporary directory. Cause unresolved; original OSError details were redacted. Direct identical-head Windows native passed.",
+      "job": 115611400824,
+      "log": "/root/video_cut/reports/universal-go-core-20261014/ci-pr44-865e4af-windows-reusable-115611400824-20261014T002308911699Z.log"
+    },
+    {
+      "attempt": 2,
+      "event": "One root-authorized selective Windows rerun passed all four Python controls and all native media gates without source changes.",
+      "job": 115615987534,
+      "log": "/root/video_cut/reports/universal-go-core-20261014/ci-pr44-865e4af-windows-reusable-attempt2-115615987534-20261014T004433805974Z.log"
+    },
+    {
+      "attempt": 2,
+      "event": "Dependent archive gate failed because previous producers were reused, leaving current-attempt archive-recovery artifact absent. No media/runtime failure.",
+      "job": 115618173260,
+      "log": "/root/video_cut/reports/universal-go-core-20261014/ci-pr44-865e4af-archive-gate-attempt2-115618173260-20261014T004435722368Z.log"
+    },
+    {
+      "attempt": 3,
+      "event": "One root-authorized packages producer regeneration and automatic five archived CLI/recovery/gate/trust closure passed with fresh same-attempt bundle and reports. Strict attempt fences retained. Immutable source resolution and successful source CI reused; no source Windows/full-source-check rerun."
+    }
+  ],
+  "same_attempt3_artifacts": [
+    {
+      "id": 11862765359,
+      "name": "archive-recovery-38489583357-3",
+      "size_in_bytes": 3193,
+      "expired": false
+    },
+    {
+      "id": 11862735133,
+      "name": "archive-native-linux-arm64-38489583357-3",
+      "size_in_bytes": 697211,
+      "expired": false
+    },
+    {
+      "id": 11862375636,
+      "name": "release-trust-prepared-38489583357-3",
+      "size_in_bytes": 5121,
+      "expired": false
+    },
+    {
+      "id": 11862268705,
+      "name": "archive-verdict-38489583357-3",
+      "size_in_bytes": 1875,
+      "expired": false
+    },
+    {
+      "id": 11862268222,
+      "name": "archive-native-linux-amd64-38489583357-3",
+      "size_in_bytes": 696143,
+      "expired": false
+    },
+    {
+      "id": 11862168292,
+      "name": "archive-native-darwin-arm64-38489583357-3",
+      "size_in_bytes": 692289,
+      "expired": false
+    },
+    {
+      "id": 11862073364,
+      "name": "archive-native-windows-amd64-38489583357-3",
+      "size_in_bytes": 691004,
+      "expired": false
+    },
+    {
+      "id": 11862018724,
+      "name": "archive-native-darwin-amd64-38489583357-3",
+      "size_in_bytes": 697091,
+      "expired": false
+    },
+    {
+      "id": 11861784635,
+      "name": "release-bundle-38489583357-3",
+      "size_in_bytes": 24264206,
+      "expired": false
+    }
+  ],
+  "artifact_inventory": "/root/video_cut/reports/universal-go-core-20261014/ci-pr44-865e4af-package-artifacts-attempt3-20261014T005347046168Z.json",
+  "reused_immutable_resolution_artifact_id": 11860918126,
+  "saved_success_logs": [
+    {
+      "name": "Verified archive gate",
+      "job": 115620988608,
+      "log": "/root/video_cut/reports/universal-go-core-20261014/ci-pr44-865e4af-archive-gate-attempt3-115620988608-20261014T005347046168Z.log",
+      "metadata": "/root/video_cut/reports/universal-go-core-20261014/ci-pr44-865e4af-archive-gate-attempt3-115620988608-20261014T005347046168Z.json"
+    },
+    {
+      "name": "SPDX from verified executable bytes",
+      "job": 115621144636,
+      "log": "/root/video_cut/reports/universal-go-core-20261014/ci-pr44-865e4af-trust-attempt3-115621144636-20261014T005347046168Z.log",
+      "metadata": "/root/video_cut/reports/universal-go-core-20261014/ci-pr44-865e4af-trust-attempt3-115621144636-20261014T005347046168Z.json"
+    },
+    {
+      "name": "Archived Linux upgrade and restore",
+      "job": 115619904741,
+      "log": "/root/video_cut/reports/universal-go-core-20261014/ci-pr44-865e4af-archive-recovery-attempt3-115619904741-20261014T005347046168Z.log",
+      "metadata": "/root/video_cut/reports/universal-go-core-20261014/ci-pr44-865e4af-archive-recovery-attempt3-115619904741-20261014T005347046168Z.json"
+    }
+  ],
+  "source_or_go_changes": false,
+  "local_build_test_media_db_workloads": false,
+  "limitations": "Current green includes the documented Windows retest and coherent archive regeneration; it is not first-pass green and does not establish a fix for the original private-directory cleanup failure."
+}

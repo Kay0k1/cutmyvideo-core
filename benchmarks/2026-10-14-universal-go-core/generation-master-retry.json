@@ -1,0 +1,142 @@
+{
+  "aggregator": {
+    "bytes": 39615,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/aggregate-core-performance.py",
+    "sha256": "1aaaeb7f75f56a77a8d5345fa46c7188e393ac1e062ac4be2400498e4788c9c0"
+  },
+  "attempt": {
+    "complete": "/root/video_cut/reports/universal-go-core-20261014/final-v7-complete.json",
+    "started": "/root/video_cut/reports/universal-go-core-20261014/final-v7-attempt.json",
+    "terminal_failure": "/root/video_cut/reports/universal-go-core-20261014/final-v7-terminal-failure.json"
+  },
+  "baseline_revision": "a9c75df83f965bf1d56e2263ca585ab77aeaf305",
+  "boundary": {
+    "bytes": 1448,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/run-with-watch-boundary.py",
+    "sha256": "b94404ec18d6825f6474cb2b7d8bd228e49baf28f3f5b999ce426118d574e608"
+  },
+  "candidate_source_catalog_sha256": "3503f2bd511ce8fee94b174085fd0a151c7b787ed7e910e1561d32a3a7708e07",
+  "coordinator": {
+    "bytes": 19630,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/run-final-suite-v7.py",
+    "sha256": "2bc8a80443259e7e8eb40951fa6f060dffc081949d0378268919977ff6e32711"
+  },
+  "files": {
+    "primary": 4542,
+    "unwrapped_control": 250
+  },
+  "manifest": {
+    "bytes": 148005,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/frozen-protocol.json",
+    "sha256": "660f1007db49c49ad01c6f1c2aa4bf564709823689342c9c26decf3b61091ba9"
+  },
+  "operations": {
+    "primary": 567,
+    "primary_case_comparisons": 72,
+    "pure_rows": 20,
+    "unwrapped_control": 60
+  },
+  "pair_protocol": {
+    "bytes": 2999,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/protocol-pairs-supplement.json",
+    "sha256": "ffe65435394fa26ce8cbdccff9fa49c899c457a0b274d1591647c6fc6f65c07d"
+  },
+  "prefix": "final-v7",
+  "prior_v6": {
+    "failed_stderr": {
+      "bytes": 0,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v6-main-hls/hls-accurate-mp4-separate-straggler-p01-baseline/stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "failed_stdout": {
+      "bytes": 131,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v6-main-hls/hls-accurate-mp4-separate-straggler-p01-baseline/stdout.txt",
+      "sha256": "3b72283bf6d6d66a45b432c79cc032ab3acc805ed4febb74da1da6d8c0cd9312"
+    },
+    "failure_proof": {
+      "bytes": 11218,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v6-native-baseline-failure.json",
+      "sha256": "170711421c4fe5c0e0184cdbf335a353fa1c9472f86d3f1ba68ff961e3fb71a4"
+    },
+    "generation": {
+      "bytes": 4074,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-generation-v6.json",
+      "sha256": "901e3854e361b785003a322964461c6e6ad3dc1ff15ccd622eaf3c2567deb96e"
+    },
+    "native_diagnostic": {
+      "bytes": 2324,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v6-long-tool-diagnostics/stall-2783107-153074056-cc68d0f0c3/receipt.json",
+      "sha256": "767fd98cd92d019c396e9a322804db17b2cc41323b2941b7ef9a35b1c16763c2"
+    },
+    "saved_hls_records": {
+      "bytes": 306627,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v6-main-hls/raw-results.json",
+      "sha256": "cad6d9a9558994242bbf807299b819ef6e95806a2f81d179730b0f1e5361fd41"
+    }
+  },
+  "pure_directory": "/root/video_cut/reports/universal-go-core-20261014/final-v7-pure",
+  "receipts": {
+    "cli": {
+      "bytes": 26216,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/candidate-cli-receipt-v6.json",
+      "sha256": "89d51bd52b7e0d644f24247ca07e043df008d3d096c2d73e60887f11cd8892b3"
+    },
+    "main": {
+      "bytes": 53261,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/provenance.json",
+      "sha256": "f70e9032521bfcf3a572ebd2411ec5a07233f5c8803a26c688a8b27697ceff81"
+    },
+    "mixed": {
+      "bytes": 53903,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/mixed-witnesses-final-v7/provenance.json",
+      "sha256": "4f35d5f2550469aee28d094da5e68005d3715f1aa01290b6cb0062052f79a567"
+    },
+    "pure": {
+      "bytes": 51494,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/pure-function-witnesses-final-v6/provenance.json",
+      "sha256": "2b29b3db4a633bf9a19d6387a92ba0a7d0f46e41bd6046300e64d7a246f25003"
+    },
+    "server": {
+      "bytes": 54792,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-server-witnesses-v6/provenance.json",
+      "sha256": "329b1515a1734fca3a05e56511fdcef6da86407b12d667f906e08fda805bdd69"
+    }
+  },
+  "renderer": {
+    "bytes": 36489,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/render-core-performance-v7.py",
+    "sha256": "9614f23d50fd634a9c4840deed5021fd4c54b31828189da56ced8dcf01bdc3f7"
+  },
+  "restart_policy": {
+    "excluded_generations": [
+      "v6"
+    ],
+    "max_full_attempts_after_baseline_stall": 1,
+    "natural_failure": "terminal; preserve evidence and exclude the incomplete generation",
+    "observer_tainted_sample": "terminal; never admit or replace the affected sample",
+    "partial_continuation": false,
+    "prior_failure_scope": "Baseline HLS native FFmpeg stall ended at the helper170.00s context deadline with exit1, before the outer180s watchdog. The observer attached strace, so this is reliability evidence, not an uninstrumented speed observation. Distinct from the earlier candidate P1 stall.",
+    "sample_replacement": false,
+    "second_same_tools_retry": false
+  },
+  "schema": "core-performance-final-generation-v1",
+  "scope": "Exactly one fresh full cohort after the baseline native stall, using unchanged3503 Go catalog and the exact generation6 CLI/helpers/tools. All generation6 timing is excluded, including completed cases and pure rows. Frozen65main+6server+mixed13 corpus with original registered pair counts/order/oracles and separate60-operation shell control. No replacement samples, partial continuation or second same-tools retry. All earlier failure/history files remain preserved.",
+  "unwrapped": {
+    "output": "/root/video_cut/reports/universal-go-core-20261014/unwrapped-control-v3",
+    "registration": {
+      "bytes": 23415,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/unwrapped-control-preregistration-v3.json",
+      "sha256": "5827e4b4791b75e2d3fa4de06476b5ba37ad4995249dfc1bde5efc1906170034"
+    },
+    "runner": {
+      "bytes": 12353,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/unwrapped-control-v3.py",
+      "sha256": "1eb17c1dcf135d413dce57f0589db99bd75407eb75bb0eede9ac362374dbea46"
+    }
+  },
+  "watcher": {
+    "bytes": 12857,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/long-tool-watch-v7.py",
+    "sha256": "d64d9cf23eaff54348413977d6ad628e8403855de10980b1514eaca6aa630a6a"
+  }
+}

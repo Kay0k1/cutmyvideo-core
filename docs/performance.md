@@ -2,7 +2,8 @@
 
 The current universal-core pass is tracked in the
 [implementation and measurement report](../benchmarks/2026-10-14-universal-go-core/README.md).
-Its in-progress observations are separate from the completed historical results below.
+Its completed 627-operation comparison and limits are separate from the
+historical results below; it establishes no single speed ratio across workloads.
 
 Responsive preview evidence: [five identical-tool cold/warm observations and
 bounded search-strip design, 2026-10-12](../benchmarks/2026-10-12-responsive-preview/README.md).
@@ -47,15 +48,18 @@ The library and CLI share one verified local-export session per operation.
 Singleton exports reuse their initial input inspection, and batches reuse exact
 repeated ranges while producing separate output files with independent inodes.
 The source and previously published file identities are checked before reuse;
-changed outputs regenerate from the verified source. Output probes and publication
-remain independent. No database is required by `pkg/engine`.
+changed outputs regenerate from the verified source. Fresh media outputs receive
+fresh probes. Exact repeated byte copies inherit the prior semantic verification,
+with new file/byte-count checks and independent publication. No database is
+required by `pkg/engine`.
 
 Copy batches plan bounded keyframe windows (at most 16 windows and 4,096 retained
 keyframes), extending only across nearby requested starts. An unsuccessful
 optional lookahead falls back to the original scan. Temporary MP4 join components
 skip faststart; only the final MP4 pays the relocation cost. Extracted source
 subtitles retain at most one bounded parsed track, with indexed overlap searches
-and a disk-backed fallback for larger or unsorted data. PCM waveform aggregation
+for sorted cues. Small unsorted tracks use a cached linear scan; larger tracks
+fall back to the disk path. PCM waveform aggregation
 uses integer per-bin peaks before normalization, preserving source-rate clocks,
 multichannel peaks and split sample handling.
 
@@ -71,7 +75,11 @@ job workspace until acknowledged cleanup.
 `WORKER_PREPARATION_CONCURRENCY=0` retains the existing scheduling default.
 An explicit positive value permits bounded preparation overlap with the shared,
 weighted decoder/export budget; publication can proceed after releasing that
-budget. Stream-copy operations keep conservative dimension weights because
+budget. Treat this as experimental: the controlled mixed fixture improves
+1.062× in five pairs, but does not establish production throughput or reliability.
+A preserved long-running media invocation remains unresolved. See the report's
+[limits](../benchmarks/2026-10-14-universal-go-core/README.md#deferred-changes-and-limits).
+Stream-copy operations keep conservative dimension weights because
 output inspection and subtitles can still decode. Progress persistence updates
 only the affected item/stage under its lease fence, reducing application work;
 PostgreSQL can still rewrite the JSONB value, so this is not a claim of reduced WAL.
@@ -473,9 +481,11 @@ checks file identity, size and modification time before reuse. A replacement or
 changed input fails with `source_changed` instead of silently keeping old track
 or geometry metadata. This is an operation cache, not a persistent file cache.
 
-Remote inputs, independently staged HLS files and output files remain uncached.
-HLS offsets are still applied per interval, and copy mode still probes each
-requested keyframe boundary. Accurate joined output performs one fresh final
+This source-inspection cache excludes remote inputs, independently staged HLS
+files and output files. HLS segment reuse and exact result-byte reuse have their
+own bounds described above. HLS offsets are still applied per interval, and copy
+mode validates each requested keyframe boundary, reusing successful bounded
+search windows where applicable. Accurate joined output performs one fresh final
 probe and uses that result for duration, geometry and audio validation; it no
 longer runs the identical final probe twice.
 

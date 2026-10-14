@@ -1,0 +1,269 @@
+{
+  "capacity_review": {
+    "bytes": 6238,
+    "operator_artifact": "capacity-and-cleanup-review-production51-v1.json",
+    "sha256": "950e76debce3134d7c9fa55525d3b4d41eed674f515a60a098c845d87437e210"
+  },
+  "claim_limits": [
+    "Paired ratios/range/wins are descriptive; no global overall speedup, competitor comparison or public-network/production SLA.",
+    "Server source cuts are2\u00d71.1s; mixed local cuts2\u00d76s are a separate workload.",
+    "Sampled memory/workspace/I/O peaks are lower bounds; PG endpoint/lifetime scopes are distinct.",
+    "Unwrapped control covers selected CLI/embedding cases, not concurrent server calibration or mixed Go-observer cost."
+  ],
+  "compact_existing_proofs": {
+    "accurate-join-regression.json": {
+      "bytes": 11032,
+      "sha256": "adb640662df5bc3a4597370b0af85a80644ec6fea9ba23bf76a6fa8002545ff8"
+    },
+    "baseline-native-stall.json": {
+      "bytes": 11218,
+      "sha256": "170711421c4fe5c0e0184cdbf335a353fa1c9472f86d3f1ba68ff961e3fb71a4"
+    },
+    "build-provenance.json": {
+      "bytes": 38991,
+      "sha256": "ce667a0600d3ff06694dba95993c7a0683a63e123c2635630ce6645bb685a529"
+    },
+    "clock-regression-proof.json": {
+      "bytes": 9124,
+      "sha256": "b09d17f1958216ba464287d95287d5f6b060d996471cddd32442f293e24cef4e"
+    },
+    "corpus.json": {
+      "bytes": 57887,
+      "sha256": "48e78cdc1b5aefdf92c68accbe598d1fad8775b1fee6e01e0881eac6a5145802"
+    },
+    "evidence-retention.json": {
+      "bytes": 23148,
+      "sha256": "6aa5229d3f1c939514cce3223dd38974c597c674ee1e5de0c6d3d6ab431fc854"
+    },
+    "execution-rebinding.json": {
+      "bytes": 8881,
+      "sha256": "05dd781c68a4116f45b60c7f09d2cc775569c6401168d6c801f9560bd5cbda18"
+    },
+    "generation-master-retry.json": {
+      "bytes": 6881,
+      "sha256": "d68f167d9ee5cb9ee966394740f19b845fa546b8941a92d79cd843cdb129c8b9"
+    },
+    "generation.json": {
+      "bytes": 7686,
+      "sha256": "a187b287d393e822423067742bff39c72f8631f1c6aeb3176aa95c80bd049b82"
+    },
+    "joined-cpu-diagnostic.json": {
+      "bytes": 54857,
+      "sha256": "a24f469adebaf016b1b1ac37ccad616342100b471453c15d6ae685cab1f22d83"
+    },
+    "master-retry-capacity-failure.json": {
+      "bytes": 3733,
+      "sha256": "c48e3f30fbbe51f1b0fe04e5b437196ac3ca66a6eb8fb2c2c10cbc19e6803c3d"
+    },
+    "media-decisions.json": {
+      "bytes": 29616,
+      "sha256": "58ad2e4cf86208fc31da86c7b15f229fa1f8bcf293d2b7836edc7800f16dcddd"
+    },
+    "media-qualification.json": {
+      "bytes": 22314,
+      "sha256": "82daa86a03112c884f793d328a2aafc0d610d01b085f142b2efee5b02d22894f"
+    },
+    "media-toolchain.json": {
+      "bytes": 46952,
+      "sha256": "ae682ee2da9e4f487ab87365f3b4b98a195aa470e817f1bdd0e964073195d96e"
+    },
+    "source-verification.json": {
+      "bytes": 11774,
+      "sha256": "ed255154220a4f62d222019181913097c2addf54b75adf6342b0efcfad2a42a4"
+    }
+  },
+  "completion": {
+    "bytes": 869,
+    "operator_artifact": "final-production51-complete.json",
+    "sha256": "c208db22dae424a9d51cd1b02ba8b15b94157e6b71e4b664fa721b47df551ccd"
+  },
+  "diagnostic_attribution": {
+    "bytes": 54857,
+    "file": "joined-cpu-diagnostic.json",
+    "scope": "The referenced proof describes its own acceptance status and observation count. Presence is not an assertion of a successful diagnostic. No diagnostic observations are added to567primary operations,60control operations or their combined627operations/4792files.",
+    "sha256": "a24f469adebaf016b1b1ac37ccad616342100b471453c15d6ae685cab1f22d83",
+    "status": "separate_post_cohort_compact_proof_present",
+    "status_at_staging": "absent_at_staging"
+  },
+  "execution_manifest": {
+    "bytes": 223322,
+    "operator_artifact": "production51-protocol/execution-manifest.json",
+    "sha256": "ad92380c9ce478fe778ce030b5e8f30d81b78c8a1ba3cbfc82c85a900260e38b"
+  },
+  "execution_rebinding": {
+    "bytes": 8881,
+    "operator_artifact": "production51-protocol/rebinding-receipt.json",
+    "sha256": "05dd781c68a4116f45b60c7f09d2cc775569c6401168d6c801f9560bd5cbda18"
+  },
+  "execution_receipts": {
+    "cli": {
+      "bytes": 27254,
+      "operator_artifact": "production51-protocol/execution-receipts/cli.json",
+      "sha256": "01073af88e26a7dbb77dbb80f5baf389f32bbe9ca510bd6445f94cdff8849771"
+    },
+    "main": {
+      "bytes": 54309,
+      "operator_artifact": "production51-protocol/execution-receipts/main.json",
+      "sha256": "3a5f9bb6ed8dfac138a68e50b8750115aa61b7391dbe189558d84d7a3dda9f28"
+    },
+    "mixed": {
+      "bytes": 55315,
+      "operator_artifact": "production51-protocol/execution-receipts/mixed.json",
+      "sha256": "6560cb61b5b9328ce00b8030226f8f643cf2df10f317d611d13789bf7a1dd0e0"
+    },
+    "pure": {
+      "bytes": 52551,
+      "operator_artifact": "production51-protocol/execution-receipts/pure.json",
+      "sha256": "1812844aabde9ccfa5d415c4b7b056e9db9d7c07bea608887b9215f3fd1c3502"
+    },
+    "server": {
+      "bytes": 55842,
+      "operator_artifact": "production51-protocol/execution-receipts/server.json",
+      "sha256": "de9a7244960bc8fc3e856cdc6f8b887986f1d814b0fe9ef15b2cd6ccd2be280c"
+    }
+  },
+  "frozen_report_implementation": {
+    "aggregator": {
+      "bytes": 40948,
+      "operator_artifact": "aggregate-core-performance-production51.py",
+      "sha256": "8e833d4b87e75fa10ed6ec273372614cc2ea0a511fa30265bc483f2cefef9fc2"
+    },
+    "binding_validator": {
+      "bytes": 4591,
+      "operator_artifact": "production51-bindings.py",
+      "sha256": "8dee11a524879feebfe9f5d20067e51b56968cf18fab8f749dad6173ed6ee16a"
+    },
+    "renderer": {
+      "bytes": 38473,
+      "operator_artifact": "render-core-performance-production51.py",
+      "sha256": "ba2de6158405ca648ace6fcfe18624799e5e56df10581e5e549021e724505861"
+    }
+  },
+  "full_aggregate_outside_git": {
+    "bytes": 560250,
+    "operator_artifact": "final-production51-publication-v1-aggregate/summary.json",
+    "sha256": "bb3314020b82234f1fd96593f6ba898c8e2a5c375ff4f1d04940bf322d59c8b5"
+  },
+  "generated_utc": "2026-10-14T03:04:46.834087+00:00",
+  "generation": {
+    "bytes": 7686,
+    "operator_artifact": "production51-protocol/generation-production51.json",
+    "sha256": "a187b287d393e822423067742bff39c72f8631f1c6aeb3176aa95c80bd049b82"
+  },
+  "history": {
+    "excluded_timing_generations": [
+      "v3",
+      "v4",
+      "v5",
+      "v6",
+      "v7"
+    ],
+    "media_decisions_scope": "Version2 is a pre-final authorship/decision record; its historical final_v6_timings field is not acceptance of the production5.1 cohort.",
+    "native_failures": "Master native stalls remain unresolved; a passing separate5.1cohort does not prove an upstream fix. No prior timing is admitted.",
+    "retained_compact_files": [
+      "accurate-join-regression.json",
+      "baseline-native-stall.json",
+      "clock-regression-proof.json",
+      "generation-master-retry.json",
+      "master-retry-capacity-failure.json",
+      "media-decisions.json"
+    ]
+  },
+  "method": {
+    "combined": {
+      "files": 4792,
+      "operations": 627
+    },
+    "main": {
+      "files": 3186,
+      "operations": 494
+    },
+    "mixed": {
+      "files": 156,
+      "operations": 13
+    },
+    "primary": {
+      "case_comparisons": 72,
+      "independently_decoded_files": 4542,
+      "operations": 567
+    },
+    "pure": {
+      "cpu": 1,
+      "internal_benchtime_ms": 100,
+      "internal_samples_per_row": 5,
+      "process_rows": 20,
+      "row_value": "Median per process; no flattening of internal repeats"
+    },
+    "separate_qualification_files_not_in_timing_counts": 4,
+    "server_p0": {
+      "files": 1200,
+      "operations": 60
+    },
+    "unwrapped_control": {
+      "files": 250,
+      "operations": 60
+    }
+  },
+  "postinstall_refresh": {
+    "docs_checkout_head_observed": "865e4afd072f77206ba674e7922a2d31de6d3c99",
+    "previous_index": {
+      "bytes": 9621,
+      "operator_artifact": "/root/video_cut/core-go-performance/benchmarks/2026-10-14-universal-go-core/proof-index.json",
+      "sha256": "149fd6ec65b68bfff0a908d7756117b379f7a54a84e2a405106d25f57d53b669"
+    },
+    "scope": "Content-addressed proof data only; README/docs and this index are excluded. Primary CSVs, metrics, tables and pure process rows remain byte-identical to the installed publication.",
+    "utc": "2026-10-14T03:04:46.835273+00:00"
+  },
+  "published_files": {
+    "cases.csv": {
+      "bytes": 19135,
+      "rows": 72,
+      "sha256": "e9869e605311027662e82bc3c271df199f1f7b820549498eb6978522a8ec435b"
+    },
+    "isolated-go.csv": {
+      "bytes": 1197,
+      "rows": 20,
+      "sha256": "1ded30f4a6320955063c655f29d6df0bfc92ea563ee1928427fb4e860c0c39a2"
+    },
+    "metrics-summary.json": {
+      "bytes": 60820,
+      "rows": null,
+      "sha256": "b7ab69cf58d15f01e730370d91e1c2e0bf4ee0c28c6da4421dc63330acd87437"
+    },
+    "observations.csv": {
+      "bytes": 47554,
+      "rows": 567,
+      "sha256": "8e475947e0bb0bf8f6ad4c1b6bce2e925424bd87e668a63ec9185ebf6e1d7987"
+    },
+    "results.md": {
+      "bytes": 10970,
+      "rows": null,
+      "sha256": "fb1e110be845b7f6f3b60d76e7d42b2006e178f540de1fb9d7292aa19ef67665"
+    }
+  },
+  "qualification": {
+    "bytes": 1801,
+    "operator_artifact": "production51-complex-qualification-v1/qualification-receipt.json",
+    "sha256": "7fc6f55959db75c6083e265ef9c7cd7f9ed1e1780fbb2196fe91401ba20741bb"
+  },
+  "retention": {
+    "compact_index": {
+      "bytes": 23148,
+      "file": "evidence-retention.json",
+      "sha256": "6aa5229d3f1c939514cce3223dd38974c597c674ee1e5de0c6d3d6ab431fc854"
+    },
+    "full_operator_index_outside_git": "retention-provenance-compact.json",
+    "original_compile_manifest_and_utc": "Preserved in build-provenance; effective new execution binding performs no compilation.",
+    "raw_fingerprints_resources_commands_or_media_copied": false,
+    "raw_proofs_outside_git": true
+  },
+  "schema": "core-performance-final-proof-index-v1",
+  "sources": {
+    "baseline_revision": "a9c75df83f965bf1d56e2263ca585ab77aeaf305",
+    "compiled_input_entries": 227,
+    "compiled_inputs_catalog_sha256": "3503f2bd511ce8fee94b174085fd0a151c7b787ed7e910e1561d32a3a7708e07",
+    "docs_checkout_head_at_staging": "865e4afd072f77206ba674e7922a2d31de6d3c99",
+    "docs_scope": "The source CI receipt belongs to865e4af, including its recorded reruns. A later report-only commit is not asserted to be that CI-tested commit. Current227compiled inputs were checked against unchanged3503 binaries; doc-only files are outside that catalog.",
+    "source_ci_revision": "865e4afd072f77206ba674e7922a2d31de6d3c99"
+  }
+}

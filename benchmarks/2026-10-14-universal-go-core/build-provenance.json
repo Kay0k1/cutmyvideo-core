@@ -1,0 +1,618 @@
+{
+ "baseline": {
+  "bytes": 19509827,
+  "path": "/root/video_cut/reports/universal-go-core-20261014/baseline-cutmy",
+  "revision": "a9c75df83f965bf1d56e2263ca585ab77aeaf305",
+  "sha256": "38f6d7970283a1e5db83fac92bce92c2a6f2e9bcc53810e38bcecb9191e9c02a",
+  "version": {
+   "arch": "amd64",
+   "build_time": "unknown",
+   "commit": "a9c75df83f965bf1d56e2263ca585ab77aeaf305",
+   "go_version": "go1.27.2",
+   "os": "linux",
+   "version": "perf-baseline"
+  }
+ },
+ "candidate": {
+  "binary": {
+   "bytes": 19746277,
+   "path": "/root/video_cut/reports/universal-go-core-20261014/candidate-cutmy-v6",
+   "sha256": "879581327014b2b7c8bb977a508bb0abd6ba9aa6d5a371a258bd0cd14267697e"
+  },
+  "build_command": [
+   "go",
+   "build",
+   "-p=2",
+   "-trimpath",
+   "-buildvcs=false",
+   "-ldflags",
+   "-X main.version=perf-candidate -X main.commit=source-sha256-3503f2bd511ce8fee94b174085fd0a151c7b787ed7e910e1561d32a3a7708e07",
+   "-o",
+   "/root/video_cut/reports/universal-go-core-20261014/candidate-cutmy-v6",
+   "./cmd/cutmy"
+  ],
+  "checkout_revision": "865e4afd072f77206ba674e7922a2d31de6d3c99",
+  "checkout_revision_after_cli_build": "865e4afd072f77206ba674e7922a2d31de6d3c99",
+  "environment": {
+   "GOFLAGS": "-p=2",
+   "GOMAXPROCS": "2",
+   "GOMEMLIMIT": "128MiB",
+   "GOTOOLCHAIN": "go1.27.2"
+  },
+  "go": "go version go1.27.2 linux/amd64",
+  "manifest_sha256": "660f1007db49c49ad01c6f1c2aa4bf564709823689342c9c26decf3b61091ba9",
+  "schema": "core-performance-candidate-cli-v1",
+  "source_catalog_sha256": "3503f2bd511ce8fee94b174085fd0a151c7b787ed7e910e1561d32a3a7708e07",
+  "source_sha256": {
+   "cmd/cutmy/batch.go": "3cbb49d33217b07ffaef3120cda23f8d9c6c98eb23e8c240b2734ba2f736f5f5",
+   "cmd/cutmy/batch_test.go": "615419a9d7189d27570848bf3bc109f6b3a441fe7096ead4a02a7ef15889acea",
+   "cmd/cutmy/cli_test.go": "36366ba16602f4e9a79a86b679147b217f9c0ebc27c0ffb7d3a3a12cb46ce22d",
+   "cmd/cutmy/clip.go": "cfa37f01ff53383742c6f4c71d413a7be822a81e1c4fa0e3fac2a4350b28232a",
+   "cmd/cutmy/clip_unix_test.go": "a2d01cf230faf06b71635d01e1a33ff48be059ecfe7014c6221786179c51e5bf",
+   "cmd/cutmy/crop_test.go": "85f4842cf6b9f284ee96013d11e15b0c36d5f3a09c998fbc536904ab4dc8f459",
+   "cmd/cutmy/errors.go": "9f68813bec0e4c3cf142866041e6c45fcf936583163e18e5fed28a25a98e1aa8",
+   "cmd/cutmy/errors_test.go": "7926f931fae37cb98314e5bc819f5034fd15c965ef17621879d445715d7ad352",
+   "cmd/cutmy/healthcheck.go": "77fbfc00cad5236522c028391ed56f602759d80f0aa7c89ac093d074b8f8e1c0",
+   "cmd/cutmy/healthcheck_test.go": "09baec5ee13dff50fec888cd73f0f0a303c23f05ed8bc2a600bb08a90da4c1be",
+   "cmd/cutmy/inspect.go": "0e315b2a5483cdc5393aab8247538bed15d9ae262be3479368e408816cc4e2a2",
+   "cmd/cutmy/main.go": "626b9742c093e229b46947bdf0f5126798d503a450902d09cba718d6ca9f9e81",
+   "cmd/cutmy/server_test.go": "1a92b58f1360ac49bfe955dc5ea7038117daab84cafc274b22919a16b0e0299d",
+   "cmd/cutmy/version.go": "39af31995c7829b97a3123662a1eb42585d0e6138ec260a267a892edacf7c12b",
+   "go.mod": "d200d8c9e25d6b64ef8cda6bbfdb4fda8e6dcf774b847bd3ce8f1627148e0eb9",
+   "go.sum": "33e140fee2bda380c73cc0be9314c676ccc848e864fc0f4741907283459994ba",
+   "internal/app/archive.go": "79387b1f8d2f1fff39e2437c0dc2b2fdd390c837281294b9469f4c5191ed4f62",
+   "internal/app/archive_test.go": "74f4d2da405c0d984dc42ab5aaf654abf8642399386dbb8eae655cc6ae0f5855",
+   "internal/app/artifact_durability_test.go": "6b1a000386e1b06c9cdb2e4eb1aff4c11247dd77d276d6b0be17fba62a4f7d46",
+   "internal/app/artifact_publish.go": "b7eff23cc3b27b6271865d46525b995b6e07b417ca78d6d4860918e98a8d3c2e",
+   "internal/app/artifact_publish_test.go": "6d4ce5dca6290337e5e7386fc8f7061b9a2ee49cf809217a9b34214137997930",
+   "internal/app/batch_api_test.go": "ee596eb589805c2eea55e58f6d5a212bc044a2cfe1b354ef9a9e6c137164cc73",
+   "internal/app/batch_media_test.go": "317481a97a648e849b31731eaf63085814e10fd9f1eb77ee866af5ee90aa2b11",
+   "internal/app/copy_join_audio_prototype_test.go": "f62f6f29600f7045f18d27625f10d997ce454e63284175c26b399ded8e632546",
+   "internal/app/copy_timeline_test.go": "5f1e51614032bf30f82e386a7d32fa9865e80bad3e69ddbe287368e05afd73e3",
+   "internal/app/cutting_workflow_test.go": "eb5780952ac44306c1636f1c12f0e73f681fc386e1e9144e65d3aabe379aff33",
+   "internal/app/diagnostic_sqlstate_test.go": "331453e241ce82d4bf58265986d7be3ae24e5cce0ad9ce2a7c62b693dec4d683",
+   "internal/app/encoder_config_test.go": "2886d78bdae5c044fe42f6fd946d5ce3eae711729221472259aeecc3d3429979",
+   "internal/app/export_budget.go": "62cb67cd10a70ccaff4133ef63c196aa9d7c5cfa09acc3c10d3861ea20fbb43a",
+   "internal/app/export_budget_test.go": "79f98e9b20e38040949b7604fb17849b4fe3e8faeb77798cbecbb60ad2cbad35",
+   "internal/app/failures.go": "28888e67ec79e23c11dda06c93e18de719822c9351d04cf13a48121f9d649f4d",
+   "internal/app/failures_test.go": "b8d36013e80e0e404f7becd6ddabf4a22a02c7cc594e775a7045a685be487736",
+   "internal/app/geometry_errors_test.go": "0668dac513431b24fcbf5d65c411897abd4ca33fbff0eedbf3817c95274e4564",
+   "internal/app/hls.go": "761df35c4ee2d903d4c034cedec2701855c192d3ad03e6e391979d5e36a8478d",
+   "internal/app/hls_cache.go": "2eb264abd96a969bb7285bfaa0f4b3153a77c24709b4f189d0507029acc94605",
+   "internal/app/hls_cache_test.go": "862a13924d2d3dc5d6f8b3fa273dee5deb36cca82074d0dcb439cf2d7deb9d80",
+   "internal/app/hls_continuity.go": "61c7ed1a6b75a055a388e4722e3213cdadbf2a55eaf55feb9b3ed8faf9a3c6a5",
+   "internal/app/hls_continuity_test.go": "3594b0f518c6fa4267a445dedb4592539de8053229344b7f1492c8447217560c",
+   "internal/app/hls_media_contract_test.go": "3935895e10396fdc5b252ba4aabc98aaf6eaae0ed67c62f3fe88b4e17b089673",
+   "internal/app/hls_parallel_test.go": "9ca7c3771f7a6231d7a7120e17acb5d2492daa6196cf6621e69491390f42a1a7",
+   "internal/app/hls_test.go": "7f7f4e4cb42786f4a6c6e175486e9cdad92e7db99aa202d8f539e383f42947ab",
+   "internal/app/http.go": "52a328bd74a010d661d6231e4593a4382d2de72d244e5e58e5ac747030c11e3d",
+   "internal/app/http_bench_test.go": "d1b7399446bbc9e7f4dcd5ca7a00bda920ffba72b58d92b524af0873dd064ca5",
+   "internal/app/http_body.go": "d0160057f71b4f21c14b90e118cb847129e83d03eea9ecc4f124ce34f1ec0629",
+   "internal/app/http_contract_test.go": "e373d0948321d1b82a40618d2b56e09c7bcc2ddc30c541a71630d30011d3fe4f",
+   "internal/app/http_database.go": "d454d8d3250ec1aa67678ff9aa6b28ff049a485f05e54571ee28498c857cdb66",
+   "internal/app/http_database_test.go": "af15f4d28f0442dbfc991f9436ae524c48ed1862742340ab1ca840eb6d1dbca1",
+   "internal/app/http_recovery_test.go": "09679b6980dc50e53b6dec87465bef9b6b900ab777361badfce92cd8021ff782",
+   "internal/app/http_test.go": "8ab3dfd787f7d9678d5f27345bd7994ed0e03ce3cdc5d95d61f1279bd751c7f3",
+   "internal/app/jobs_list.go": "804b6b4548337e44fad66fcc522558de482fea0c6e13f1a37cd9067368494a03",
+   "internal/app/jobs_list_test.go": "6437fe3ccb70631067e4a1df697ad9f849219585ea60b2d1add54a67c096126c",
+   "internal/app/lease_test.go": "0582248eddfa8fc4f7a6235eee0879d785fd8ea76916a8da8474f5095aea6a46",
+   "internal/app/local.go": "f6e7d5b753c138df90d23e351dd19c7c4e3ebd0b000bd43f7af5b7d2390f96db",
+   "internal/app/local_errors.go": "2bf20f5ce7a59fc24922d2951a198fe1ef5cba1612a4ecfb232764222133bb95",
+   "internal/app/local_probe_cache.go": "acfedb90b1cbf9339e0828e2b2ccd7edaf2b006af77d43b7950edc06a041c075",
+   "internal/app/local_probe_cache_test.go": "357c17af59959398308965b0003ee2fbf67f7d0f77115fcc17fe0993dbe6e078",
+   "internal/app/media.go": "d26bb01e2dc5201c4cc0fcd9b3e80bd890ea6d52d5d67066578255f9721204c8",
+   "internal/app/media_budget.go": "b80345e08621c9592519d32ecfa1e6b06d7b0cb2936794d666f064df20dcf070",
+   "internal/app/media_budget_test.go": "ebddf3cb4f01768207ffd36e63945da7f3eaa50a84bffb939b35b314e483b860",
+   "internal/app/media_capabilities.go": "496141eaf2643b060d39d2529b138756027f47150d5b38c0528887fd6fe5c473",
+   "internal/app/media_capabilities_test.go": "40866404a4f831432a3e51694a7eaa098fc0ff6ef08002e494d1fde555eec699",
+   "internal/app/media_contract_test.go": "edeb4a86e63ea71a883b707a8bcd75e4fd5de5549e0d5e9b1f480b5ed7b27329",
+   "internal/app/media_crop.go": "21f9a91d628bc537d3a521946489999580f55e650c457c7fcfe7b4fd62f48743",
+   "internal/app/media_crop_test.go": "8c80735909ea8caeed95b501b165ef8204f90c0cc1b58b6b3d03878e61e9a39c",
+   "internal/app/media_diagnostics.go": "2eab5fcff2589d8e1c61779b70e11fb08b3a81f9be743fb7adb9649b52fbd678",
+   "internal/app/media_geometry.go": "0e4ba32899598bbbb7a1c57672e40a10e10cc85662a9590b7da3806f2ba93e75",
+   "internal/app/media_http_cache.go": "28f609665eeabecf554aef7208dfc9595972f1687451302de09afd4a874c2ab8",
+   "internal/app/media_http_cache_bench_test.go": "d0d351c3665970cb8e6a08985d7168408b3f6c5b6fa925adde616a71ef5f49ee",
+   "internal/app/media_http_cache_test.go": "c838154c750218f05bbb057c738b662237baa49aedb31ebc0c16ec053e58938a",
+   "internal/app/media_join.go": "7fe929aae72e8ef7c17936c82e2b52f11bceeb7d5d4d0f436e96425044146294",
+   "internal/app/media_join_security_test.go": "257df7993d3e81a185ac020a7941b435d841744ef91b0a1c17994f30524715d7",
+   "internal/app/media_optimization_test.go": "9ed2293ffc81f7a148c72f466c8409e2b5da54e4e6cc68e7035eacb033a80ce7",
+   "internal/app/media_progress.go": "5a16987ee84761f77139228bc4019fbfb0355a075ac12767a73c65aaab81b1da",
+   "internal/app/media_progress_test.go": "a91dbbc937c1c197f4ad50291ddea73cd6f1c0e371c0bf994d3d47a0d87f04fb",
+   "internal/app/media_resource_test.go": "fce9abd9bf9d4bfa795b1e7cb0f39150480f17b824ae2f9185faa8a06d927582",
+   "internal/app/media_session.go": "aa1be9da6760c4905cff9d4fde032512961582fb9838b212c06e24469dc4b21d",
+   "internal/app/media_session_test.go": "6f80139e7d0836a68f9e28f28abca3ff6d4af8cc223bd5558c9c5cadd284a8a4",
+   "internal/app/media_source.go": "90438808097ec811fd683c18f8e5c52131f9430d4f2ab4291d6731aa85d2460b",
+   "internal/app/media_source_test.go": "363dc0aa547469ec543ee4ed84db5ba5acff38a7dd8f28ade57d306f4b98b10f",
+   "internal/app/media_subtitle_index.go": "cfd5592c96dd3e6f6e81e7136b0804833b79d3a6cdf49f38aaaa71a7191a1ce1",
+   "internal/app/media_subtitles.go": "8c8d7f063a34670e47a1cd9168ccfd64c07f5407dc8c11d22b8178c5cb031913",
+   "internal/app/media_test.go": "a99fcf40a1183f6f06bb77797886700afcc1cd50d4b89fc57c91a2e3d958c2ab",
+   "internal/app/media_tracks.go": "a0baa41d9a59179d0002bdf78feb3b75f20b6159f30f5f150f691c837e1d17bd",
+   "internal/app/metadata_cache.go": "e3b29bd4b444087b1814d3abc99e5acfc3296e8a532ebcd7ba3702a01a9af0a5",
+   "internal/app/metadata_cache_bench_test.go": "62ec0315c66879989ece76d8ff3fe8cb22a5efc1c3339cd9e80e28dd0bd52706",
+   "internal/app/metadata_cache_test.go": "ac5a0b2102642ae42f35f02c8caf1710e4e2f8af940e807bda52e82244353e4d",
+   "internal/app/metadata_payload.go": "6e5609307b3ef13b3bd2bac7bae2b4ca92b95610c8bf9e6e0103c832ad733f0c",
+   "internal/app/metadata_payload_bench_test.go": "c5e173c936d58c4d98303a58416ce5571de059dd702271866dc06fe85b446e40",
+   "internal/app/metadata_payload_test.go": "97c3d4557999f9917cf3d057c4b6b101a5ab80e72472150c87505c6fe5b07690",
+   "internal/app/metadata_resolution_recovery_test.go": "38176ce62d4c06dddb55c9d58ae705d88e469f5752c89a0d0f980d9d5788c1cd",
+   "internal/app/metadata_retention_test.go": "5c7e90a9bf882ec3ed7ecbb145febf219df4f2550b272b3974b376149dc185e2",
+   "internal/app/metadata_test.go": "8b1b8a401cdcba1d8eb14f9ef4a7a5d8d35a94878e1bebdf18e9f418805d704b",
+   "internal/app/migration_catalog.go": "cc6df7434e8e9dd5dd3fdd11ac2e1a18e224098438ad9652f1044a71c49eb233",
+   "internal/app/migrations.go": "114080fdc59a38a5b421f6eedec440cfd60e6287660cd5b00d6ca8a0dbeee68c",
+   "internal/app/migrations/001_20261005_storage_queue_v3.sql": "8630cebd9bf2bb2c038519d807f75456a60d8dea24cc1114304551270b3e949f",
+   "internal/app/migrations/001_schema.json": "25a46cbf6886a9fed17c14c110f84502ebafb3817dd820947543001692193ca4",
+   "internal/app/migrations/002_20261010_ordered_migrations_v1.sql": "17caf6f352044a62dd4bbfee154d02965d9c411ca6783422b96db5eed6b40e57",
+   "internal/app/migrations/002_schema.json": "43d6ba754067e497ef12e0455334d1ac16d1331ebd7346015bae34646aee2718",
+   "internal/app/migrations/003_20261010_storage_maintenance_v1.sql": "1c06b5c041a45201496d20655078515b5ca4b7896e2a43c3c848d51b2aa00627",
+   "internal/app/migrations/003_schema.json": "0f7fc148437544984569c3b24cd698476e0a3825549ab9eaa5541c9168452ca9",
+   "internal/app/migrations/004_20261010_cache_retention_v1.sql": "d7654c6a981edea4506d7265057e9349ab9fee85cd3ce3a63412384374e4709a",
+   "internal/app/migrations/004_schema.json": "4c5c907e01f11a0810739d614fed44f9c14b6d640b5f07f4f9eec79b6dc3425c",
+   "internal/app/migrations/005_20261011_source_retention_v1.sql": "b460686dc29fa1a156cbf74ca73da8afd2e4394cc7f2a3d6465f72e047b7c0e0",
+   "internal/app/migrations/005_schema.json": "da0357d73e4697ddf656211cda0a6d9c6f0b0bda905673a0041dcd641664d4ae",
+   "internal/app/migrations/006_20261012_source_media_cleanup_v1.sql": "e2d36a97a35a158dead1ed47519209ca67eb92fe0a9fffef4ceb9ad50c34d7bb",
+   "internal/app/migrations/006_schema.json": "38d124b607dd66daa79a5157cb010480bb759d1345b4b2a8ebed35266cc0d8db",
+   "internal/app/migrations/007_20261014_metadata_resolution_leases_v1.sql": "01f421ef7efdf02386f7d284491ccf1bccee2dc3014a24f24b85bcd356dcbc0f",
+   "internal/app/migrations/007_schema.json": "caf5aa640b9003dfd2538b43001a994c8153fa35ea3f6541d6bd9f6e53335df0",
+   "internal/app/migrations_test.go": "e033f3ef1a184b98851fb60c70009dc81d630cc64322cb50762887c439e5528d",
+   "internal/app/native_service_test.go": "dc12186f23b086dbd0af9fd95f1159b953ebfeac93520d1aa7122d772ead754c",
+   "internal/app/network.go": "052ca0524c47ddb55a169239b90d99f3f8f531a81a66b7f6d7f0993d4755e746",
+   "internal/app/network_bench_test.go": "ea72469db5cb826a3fcf7dc4bbafacd00e970b9437ff7e178900b631f0144b60",
+   "internal/app/network_edges_test.go": "a0c7aae5909bc1c486012386a539713653883c9cd4035ccef4cfa3a0e7fa4b99",
+   "internal/app/network_test.go": "5ba70bbffea08bfb989f8b477235bc9794d1070eb7c11cef0a8f0521ee348a04",
+   "internal/app/performance_bench_test.go": "7d4e9e34c987fac587287e5e2d2404d9b5edcde8dff53d504ba321c908f956c8",
+   "internal/app/platform_twitch_test.go": "85548183a225036d080b05b6a294ad5d6ce492c6a8018e846851c0bd7022f64a",
+   "internal/app/preview.go": "ad628bbe3256f8a211caffd944e7c01de6bc581215b3a022dce424c141ed9381",
+   "internal/app/preview_admission_cleanup_test.go": "07665dc8e484811af38ffcc549e9d052110d31a9e797dd9961d4740dc5e70e54",
+   "internal/app/preview_export_pressure_test.go": "134b19a0e7e4fc7b46ffd6cb347f90228e9a07c8b7fa95d419b72a06ed0c5cb1",
+   "internal/app/preview_geometry.go": "f3574fe719468daaa3279bef3bf83f446934eab37f60436053d7a5ea91ec0adf",
+   "internal/app/preview_geometry_test.go": "7508f1b09e1393106a3f6431446efe0a1ec284792c1f5ebb4ccdcca4ccd68765",
+   "internal/app/preview_media_upgrade_test.go": "c42b31c4a11505e9a5ab1a0f40a67490f7442b53369c0b7a64ddbb4f8ebba8bd",
+   "internal/app/preview_observations_test.go": "bb2bbda324ab63d1ebd0fa8a7ce77f91104c6ac1ac1f2d1c5be4393d23c46dba",
+   "internal/app/preview_quick_test.go": "9fbe8e85988147583d3bb367749b54095e59d630f1640ebdfdccf8d00452815e",
+   "internal/app/preview_test.go": "2b9529516a237c3e71adfec4827574fd08a8c95bbd64fd212d7b7b1445847c25",
+   "internal/app/process_bounds_test.go": "8b80e58f5b8fa4d2e8a5c10cba420deeb1ac6a5e5f759f38b06bf780d4b60048",
+   "internal/app/process_tree_test.go": "2f18dccf894e9e87eb87a7dc65424845abdd12424be45fec02278ddae2a4dc47",
+   "internal/app/process_unix.go": "46a9b6f0e22cd79c712039c666d31aba500f4aad85d502cee640094f958cf20b",
+   "internal/app/process_windows.go": "83a932d20549fac9bbebb8a18524f7b943dd5809de6aee864be677a57acec381",
+   "internal/app/providers.go": "04de6dcd318baf4ac03bd78c7b02c49e310810a6cd4412d851d4334d86b41a8a",
+   "internal/app/providers_test.go": "d631dfea5cbeba21be7028ea66a32d91f96d82ecadad8a53329345754be9cae0",
+   "internal/app/result_reuse.go": "9a85f0d2aa3c9d9d8e43c1af3c25bdb3c45413cf8712cedfc6563377f2ca77c4",
+   "internal/app/retention_test.go": "89e1e12ea67bc1f6ce28cab8e637dbf30ec44fa32e662525a6b1afdc3db113d8",
+   "internal/app/source_admission_test.go": "6b36c40eb7f976081df7bfb99761a3a22e0355dac0ccdb9c228cfa66cc33e4f2",
+   "internal/app/source_audit_budget_test.go": "567fab1a731811fddb10b9abcf9a8951798e6639034b1959e800ef7f20bf72fa",
+   "internal/app/source_inspection.go": "af7129a4f7e8392344952b94f66a4aaebc4bc57748c6b7ac0d23ecabdf3e19fa",
+   "internal/app/source_media_backup_test.go": "5a4cfb5ef6c19378ecd38ce5d068ec00fe988184d791e7893da2aaefa1a214da",
+   "internal/app/source_media_cleanup.go": "6cfaf61c7d7a6a78f8ac22709f03fea67c8cb84bf2d8468dc82ade31cfe698e9",
+   "internal/app/source_media_cleanup_test.go": "5dc800c8f1c20c25a193a7d778cdfd9f741f69d565b2076e94755181a17e48b6",
+   "internal/app/source_media_reader_test.go": "c6cdb8689a4ff1b125de1ab53b7863f724b5b86482460f195aceb746314b65a6",
+   "internal/app/source_preview_durability_test.go": "1843308ced1a556c8d2add68115502170bddebf7cf810aac94b0e54accb7cec9",
+   "internal/app/source_publish.go": "26a2d2a7e4bdde644599e1d5bc5dd6970b5b5a4e9afbce50614b6dcfd08bee84",
+   "internal/app/source_retention.go": "2c73068ea1c2c29e9ddf8baecf769721d8ec3711692d4497e4e88345272edac6",
+   "internal/app/source_retention_test.go": "fc07dc146487ef538de70e766418da347ecd2765a5f1a073797c1fb575793d74",
+   "internal/app/storage_capacity_test.go": "5cadbc74d2d4bc9853268be0e82acab54911ec48f8a218cf14cc6a20487f0590",
+   "internal/app/storage_darwin.go": "ac469472fcbd61b6278af71b1adda894a1114a6d83daeb14302f0cb74045af63",
+   "internal/app/storage_delete.go": "67ae1fee4ef09725dde778ec95962f83cf89fba5eff8578f7dd992e19bee3adf",
+   "internal/app/storage_delete_test.go": "a7c6b812a4304419003f21cae0c2b3a43b35181853e34c1735cc025405faf947",
+   "internal/app/storage_ledger.go": "f3657bc6cda3ab5a6c2c8425eb93426ac2fe4031def3699dbf130ff6914f3cbe",
+   "internal/app/storage_ledger_bench_test.go": "451213260b63833805604f5e598020b0177f120ea2761591662bd692124d8b28",
+   "internal/app/storage_ledger_test.go": "129ad1058611e90f3e8a380ca15045e5429f56bbae24ea0d5e3f1909e8ee4ca3",
+   "internal/app/storage_lifecycle.go": "5a14cfb076641248ef3c0f41e1c39d105c72c217bee0d3b2fc4acb0239afd8ab",
+   "internal/app/storage_linux.go": "25c60823f1ea706acc128b871a884e4b56d6580cc9ef267dcb67f889a78b42b9",
+   "internal/app/storage_other.go": "d3fe3c0847ad34458102240e416172453284e17592c46e4ef04b0b965ac4ed41",
+   "internal/app/storage_progress.go": "c4c152b054590d6a9a496e76b3c492e9606e97b9957e6382a1d47b50a8e76d74",
+   "internal/app/storage_progress_test.go": "98203b28cbcf909eeeca8f0b23f3d4a094c81ccbeee533f1b55947b4c82c796a",
+   "internal/app/storage_queue.go": "c49949eec17a59d3f150a6f72ed2a474d4ca4a19d46c362ea7e909dada8a08e0",
+   "internal/app/storage_scan.go": "d2cedb64be977cdaef805c81c628aee2b00ddf5c25f554af0e265bd74a6a51bc",
+   "internal/app/storage_scan_latency_benchmark_test.go": "3e407b0d34d53c204083fdb38d552e53615a1dff0750873c870c874cd461c6b5",
+   "internal/app/storage_scan_session.go": "5648e368886045562c68a0f70f96c5ae0cc2fc64ed58393aedf79304d74197dd",
+   "internal/app/storage_scan_session_test.go": "926734c5197656e9e8eb329a2130a197ca80b9d99466e92c9ef2e57362c1c3bb",
+   "internal/app/storage_scan_test.go": "169f7ab444f39f7c923acb018f3c00ee176f43d28f42ef0698187b7b574347b5",
+   "internal/app/storage_space_test.go": "bb0fdd8235992292df8936c139b4938c4e708d1833ccfff26575b12bc360c150",
+   "internal/app/storage_windows.go": "d26cc3ade9457afac4b94e37fe6eab395a4de175195951dcdd428258c2efb734",
+   "internal/app/storage_work_progress.go": "75c68d8507a3b844d02c311eb9c64372e697ce37676e0c498f06f1612cc6e5f5",
+   "internal/app/store.go": "28392699eab2707d352d3c530b28e5fd22ae183d99a5901cc246a49fc7378bd9",
+   "internal/app/store_pool_test.go": "fcffc44034acf95d0916c50edbe99635bbbf33da2d805dfb2b485074e9a9d3a7",
+   "internal/app/store_test.go": "a992aa10973aa7db0b64898ca0fcb94180ee77eeaa8aa7a2c22f7e5716407d51",
+   "internal/app/storyboard.go": "77877cae370e219ccae263025c38bde5270aa3cfd359952e47584a1363b16bc7",
+   "internal/app/storyboard_test.go": "a9040174d0a59855d29bf6a35e2c77aec046c25813d8d2f70711651019df319e",
+   "internal/app/thumbnail.go": "f52f01319c912c94c487504033997cbb6e48d46c0ec108c46cf9fa73a5e3f4a9",
+   "internal/app/thumbnail_lazy.go": "0c01338d317b2bc049af6f20d8427578693d90bf25d50a4448091225562a87b6",
+   "internal/app/thumbnail_lazy_test.go": "7d08120b44a3e445fb024f84ca2f668247eefceb54552bbed099a8af635e942d",
+   "internal/app/title_bounds_test.go": "65dd8d947fd9d843763ace432b0c16d7ce0277f1392136e21bc9130013bb4fae",
+   "internal/app/types.go": "8e0e32225929172184f1d9477500de2cf723a7d7c8c84c1f6dde7ad1c5eae21b",
+   "internal/app/upload_timeout_test.go": "ac73a318911ed9f750ee34883668e4b6b4ee2ab6c489c1c1c5ec46600d2453aa",
+   "internal/app/waveform.go": "373937e3cd675ba667a5d215977cdb07aac3e3f5bf3dac1b6dd7626b9225e74a",
+   "internal/app/waveform_test.go": "c5c32bd60e8eff964eb6938880a909eb7e0d11e0403a54fe0a79f0d85cdf38c5",
+   "internal/app/window_cancellation_unix_test.go": "6e713d3218ca5d84608bd7c0e6d22d9895a4bc838fd1b66c2a06cf7e57b89e9a",
+   "internal/app/worker.go": "9765942ec4b1afd20c26919ac9a13c3dcb802cc259c0db324e9ea335e7719f8d",
+   "internal/app/worker_cache_test.go": "afec616d9b9e08017d3597058832e86a0699e4cd897a759f408afb67ec97bb35",
+   "internal/app/worker_durability_test.go": "863320f086035e1d7fc9afb660b6cfaedc7d3c320dcfd9a45d2850ad7bfbfd1c",
+   "internal/app/worker_health.go": "7091a7d16876d0d39824e5b6539dcd34e37946eb1191f4ea367c08b2db0247b6",
+   "internal/app/worker_health_test.go": "42113f87f94c4d0ff43dcc149b2255b7452115232ca47bfe30ba5ad4518ac6c0",
+   "internal/app/worker_inputs.go": "1f8301e3cf1b11af369e156067887a3248eda255fb1dda4f14101ef04b0e835e",
+   "internal/app/worker_maintenance.go": "77c8055bec23fb6443cf1ce8358e4a247504c275a663d2744f4154a21f340066",
+   "internal/app/worker_maintenance_test.go": "cf054caba5696b8dc13f4c38ae27d591a21c280a62fe462d09c424cd5ebd2d32",
+   "internal/app/worker_pool.go": "3936c9be829542adb55fd35ab8a6483c4850ed17c2578aca5c9dc1dbea481904",
+   "internal/app/worker_pool_integration_test.go": "d2e7c1d87f3deb729955036b4e3527d2a6bfd4a7215173ead386d52c8fb7a101",
+   "internal/app/worker_pool_test.go": "7d3441d869e08a08705786f05d2d8f83b6180e1b7d04ae13bad991da361e28f3",
+   "internal/app/worker_progress_test.go": "3526dbf193c7b1ea1c5fa1ae9dfe04ab1db5931d02548eca41ea326e08da14ee",
+   "internal/app/worker_staging.go": "24a7796bc46785efbc4de8fa1b242b97f7d2db809b2e99d1684c066353c1832f",
+   "internal/app/worker_staging_test.go": "f935b7596c503d975c7804f5caf3363f37c9ef57138ec22288039ed1d465dc04",
+   "internal/app/worker_test.go": "1096706bbbb4c0ba6b5e05216e25325b3e9c1a39ae9ca91c97221d49f98e6b28",
+   "internal/app/worker_wakeup.go": "1973c697e183443627be39b693a5d9232a5defe8c99b401fad6b445d5ac58b42",
+   "internal/app/worker_wakeup_test.go": "d6095430deb9f17064eeb2ad92bcf41abf68da02f03e5e35dd25835e60da66ad",
+   "internal/app/youtube.go": "b3fa09103a3d0865cdd14350c0a854630e7aee2cdab070686a4b34ffd177b85f",
+   "internal/app/youtube_test.go": "0a6be43baaa6cb86a486da7ae20dbda2b97fab65438cbf7eb6d48c02eaa2a9af",
+   "internal/fsdurable/directory.go": "a530aa08275495fa63996a59779493021eeee1f61a31c1e5919ba764bdcc15d7",
+   "internal/fsdurable/directory_test.go": "fca5236b9a53c5a1dca621ec77c6970e999cc2b35d1728b69f3fdb3b043379c2",
+   "internal/fsdurable/directory_unix.go": "e2d7769332d5d9e3bb70230f1eb872135b3abac8417e6904b9736441297ceff9",
+   "internal/fsdurable/directory_windows.go": "83e772b1a23e0a88405eb94b320ad5ab7367e67ab255b99440c16efbc8822489",
+   "internal/fsdurable/publish.go": "93dd3ba344dae3d0066417791860caaeee25827510a311affe355df702fd62c2",
+   "internal/fsdurable/publish_test.go": "5361a50d96b0dc6e02ff70516c8ec8e66724d114b4d848bf0d057c2d5415eb29",
+   "internal/fsdurable/unsupported_unix.go": "3461f6e6edf4f3ad0324311f65a3baa2c8fecdbddfeedefcda3a6dbf77bdefb5",
+   "internal/fsdurable/unsupported_windows.go": "18564dc170dd3a16f94ff5ce75d61da21ca9eb244be98c10659fd1c8570966fd",
+   "pkg/engine/copy_compatibility_test.go": "7cad43c19f916d3636a529a3556fafef4deed92aeda2c1dbca03540934786ed4",
+   "pkg/engine/crop_test.go": "9a3927bb6432af90333b1e61f02ade9a48b0f603b9ef2eab18a6ad6932f95082",
+   "pkg/engine/durability_test.go": "8f01475ac3807d00c985f1c8d283cf6253965a1a2a5fc21b77cc3eb72248ded5",
+   "pkg/engine/engine.go": "f9ce27df86589168acf8ef1f761404d8ed4253057a98afe4139267fb2cb789de",
+   "pkg/engine/engine_test.go": "ac69ce20887f909a4596a50fed55961fe9ff4d376873edfa37f4d532c34bbefa",
+   "pkg/engine/errors.go": "f3476262d42e53d9948f446630af776a64b80b57efecf3c95827cb266e3440c2",
+   "pkg/engine/errors_test.go": "35027e8d514857c80aa97f5156056c58f42a98aea4c8b3cdb94c1e506396bdbc",
+   "pkg/engine/geometry_test.go": "a346193c958874d6c16d6c0d6219660f358f7eb289067f46269e1d5f529fadde",
+   "pkg/engine/plan.go": "e6f24d973cec81188f77e2f8503a1e49bd90eff63dbc404120c6f1017343c824",
+   "pkg/engine/plan_test.go": "50ac4d678c9ee1f16e8b660f8c68c67d394830d9b1efb33ed00d71f9fbaae42f",
+   "scripts/testdata/core-performance-copy_test.go": "1e22b3d1f62bdf3ac04e59129390348395aaeaaadbc2dc39b5f06f17c0f76d4a",
+   "scripts/testdata/core-performance-engine.go": "296b98043170d5c1c628d27070520c9a897bd6459ccdfe8bc7eab4a77a173e75",
+   "scripts/testdata/core-performance-hls_test.go": "cde405916c1fe8b771f341e3771c5c9e3af491105e114af19dbd3fbf19954af3",
+   "scripts/testdata/core-performance-mixed_test.go": "eb0ec3c4ccdf8ac76f1e4d88c784a94dd32f625d5dd6b74a9855fc58d7852de9",
+   "scripts/testdata/core-performance-pure_test.go": "5bdec9925be4929b55ad74161192f774b35a4eb9010e6e17779d41222cd41f8e",
+   "scripts/testdata/core-performance-roles_test.go": "bdb028b06736781e42baf9d9fbda233e48cd2f16c852c8886f1bdbd6813d34b3",
+   "scripts/testdata/core-performance-server_test.go": "a6b105acc3271b152abf20a6e053af942a8a6c83bdbf1e2c6b5e9607a49bc848",
+   "scripts/testdata/core-performance-storage_test.go": "f8818d4107859eb98d283504607c66cda85567603190fc88228206e2d8f2d9b5",
+   "scripts/testdata/core-performance-tool.go": "e79d9afc138ef6c595ead731e2bda157dbf70e077de0399269641b24c19bbc60",
+   "scripts/testdata/media-command-witness.go": "42e411acbe32d5603605f917c59a9413461de2cea149aaee9f62a23feb2fdf26",
+   "scripts/testdata/release-process-helper.go": "bf454a2ede63638247f7787d52f091f41075fab0be9040febfed20a9e1d75c6d"
+  },
+  "utc": "2026-10-14T00:20:13.872776+00:00",
+  "version_smoke": {
+   "arch": "amd64",
+   "build_time": "unknown",
+   "commit": "source-sha256-3503f2bd511ce8fee94b174085fd0a151c7b787ed7e910e1561d32a3a7708e07",
+   "go_version": "go1.27.2",
+   "os": "linux",
+   "version": "perf-candidate"
+  }
+ },
+ "candidate_execution_receipt": {
+  "bytes": 27254,
+  "path": "/root/video_cut/reports/universal-go-core-20261014/production51-protocol/execution-receipts/cli.json",
+  "sha256": "01073af88e26a7dbb77dbb80f5baf389f32bbe9ca510bd6445f94cdff8849771"
+ },
+ "compilation_performed_for_toolchain_rebinding": false,
+ "execution_binding_scope": "The original candidate/witness compilation records below retain their actual manifest, UTC and commands. Execution-only receipts bind the same unchanged binary bytes to production5.1.9 tools. No new compilation is claimed.",
+ "execution_manifest": {
+  "bytes": 223322,
+  "path": "/root/video_cut/reports/universal-go-core-20261014/production51-protocol/execution-manifest.json",
+  "sha256": "ad92380c9ce478fe778ce030b5e8f30d81b78c8a1ba3cbfc82c85a900260e38b"
+ },
+ "execution_rebinding_receipt": {
+  "bytes": 8881,
+  "path": "/root/video_cut/reports/universal-go-core-20261014/production51-protocol/rebinding-receipt.json",
+  "sha256": "05dd781c68a4116f45b60c7f09d2cc775569c6401168d6c801f9560bd5cbda18"
+ },
+ "load_only_smokes": [
+  {
+   "command": [
+    "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/baseline-engine",
+    "--help"
+   ],
+   "exit_code": 0,
+   "group": "main-witnesses-final-v6",
+   "product": "baseline_engine",
+   "stderr": "Usage of /root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/baseline-engine:\n  -output string\n    \towned output\n  -plan string\n    \tfrozen cutting plan\n",
+   "stdout": ""
+  },
+  {
+   "command": [
+    "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/baseline-hls.test",
+    "-test.run",
+    "^$"
+   ],
+   "exit_code": 0,
+   "group": "main-witnesses-final-v6",
+   "product": "baseline_hls",
+   "stderr": "testing: warning: no tests to run\n",
+   "stdout": "PASS\n"
+  },
+  {
+   "command": [
+    "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/candidate-engine",
+    "--help"
+   ],
+   "exit_code": 0,
+   "group": "main-witnesses-final-v6",
+   "product": "candidate_engine",
+   "stderr": "Usage of /root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/candidate-engine:\n  -output string\n    \towned output\n  -plan string\n    \tfrozen cutting plan\n",
+   "stdout": ""
+  },
+  {
+   "command": [
+    "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/candidate-hls.test",
+    "-test.run",
+    "^$"
+   ],
+   "exit_code": 0,
+   "group": "main-witnesses-final-v6",
+   "product": "candidate_hls",
+   "stderr": "testing: warning: no tests to run\n",
+   "stdout": "PASS\n"
+  },
+  {
+   "command": [
+    "/root/video_cut/reports/universal-go-core-20261014/mixed-witnesses-final-v7/baseline-mixed.test",
+    "-test.run",
+    "^$"
+   ],
+   "exit_code": 0,
+   "group": "mixed-witnesses-final-v7",
+   "product": "baseline",
+   "stderr": "testing: warning: no tests to run\n",
+   "stdout": "PASS\n"
+  },
+  {
+   "command": [
+    "/root/video_cut/reports/universal-go-core-20261014/mixed-witnesses-final-v7/candidate-mixed.test",
+    "-test.run",
+    "^$"
+   ],
+   "exit_code": 0,
+   "group": "mixed-witnesses-final-v7",
+   "product": "candidate",
+   "stderr": "testing: warning: no tests to run\n",
+   "stdout": "PASS\n"
+  },
+  {
+   "command": [
+    "/root/video_cut/reports/universal-go-core-20261014/pure-function-witnesses-final-v6/baseline-pure.test",
+    "-test.run",
+    "^$"
+   ],
+   "exit_code": 0,
+   "group": "pure-function-witnesses-final-v6",
+   "product": "baseline_pure",
+   "stderr": "testing: warning: no tests to run\n",
+   "stdout": "PASS\n"
+  },
+  {
+   "command": [
+    "/root/video_cut/reports/universal-go-core-20261014/pure-function-witnesses-final-v6/candidate-pure.test",
+    "-test.run",
+    "^$"
+   ],
+   "exit_code": 0,
+   "group": "pure-function-witnesses-final-v6",
+   "product": "candidate_pure",
+   "stderr": "testing: warning: no tests to run\n",
+   "stdout": "PASS\n"
+  },
+  {
+   "command": [
+    "/root/video_cut/reports/universal-go-core-20261014/final-server-witnesses-v6/baseline-server.test",
+    "-test.run",
+    "^$"
+   ],
+   "exit_code": 0,
+   "group": "final-server-witnesses-v6",
+   "product": "baseline",
+   "stderr": "testing: warning: no tests to run\n",
+   "stdout": "PASS\n"
+  },
+  {
+   "command": [
+    "/root/video_cut/reports/universal-go-core-20261014/final-server-witnesses-v6/candidate-server.test",
+    "-test.run",
+    "^$"
+   ],
+   "exit_code": 0,
+   "group": "final-server-witnesses-v6",
+   "product": "candidate",
+   "stderr": "testing: warning: no tests to run\n",
+   "stdout": "PASS\n"
+  }
+ ],
+ "original_build_summary": {
+  "bytes": 58576,
+  "path": "/root/video_cut/reports/universal-go-core-20261014/provenance-summary-v6.json",
+  "sha256": "852f61d34c0231a1dd1a2469ce16dfbbe1b6d3a42bdd440f034957dc047fc685"
+ },
+ "original_compile_manifest": {
+  "bytes": 148005,
+  "path": "/root/video_cut/reports/universal-go-core-20261014/frozen-protocol.json",
+  "sha256": "660f1007db49c49ad01c6f1c2aa4bf564709823689342c9c26decf3b61091ba9"
+ },
+ "report_only_changes": "Final documentation and result artifacts do not change this catalog or the measured executable bytes.",
+ "schema": "core-performance-review-build-provenance-v1",
+ "source_catalog_scope": "All Go files (including tests), module files and embedded migration SQL/JSON. A broad input catalog, not a linked-file claim.",
+ "toolchain": {
+  "environment": {
+   "GOFLAGS": "-p=2",
+   "GOMAXPROCS": "2",
+   "GOMEMLIMIT": "128MiB",
+   "GOTOOLCHAIN": "go1.27.2"
+  },
+  "go": "go version go1.27.2 linux/amd64"
+ },
+ "witness_groups": [
+  {
+   "baseline_sha_reproduced": true,
+   "command": [
+    "/usr/bin/python3",
+    "/root/video_cut/core-go-performance/scripts/core-performance.py",
+    "build-witnesses",
+    "--manifest",
+    "/root/video_cut/reports/universal-go-core-20261014/frozen-protocol.json",
+    "--baseline-root",
+    "/root/video_cut/core",
+    "--candidate-root",
+    "/root/video_cut/core-go-performance",
+    "--output",
+    "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6"
+   ],
+   "execution_receipt": {
+    "bytes": 54309,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/production51-protocol/execution-receipts/main.json",
+    "sha256": "3a5f9bb6ed8dfac138a68e50b8750115aa61b7391dbe189558d84d7a3dda9f28"
+   },
+   "group": "main-witnesses-final-v6",
+   "products": {
+    "baseline_engine": {
+     "bytes": 8678702,
+     "path": "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/baseline-engine",
+     "sha256": "027a925df1dbeff2a110ff93f0a568dbfc9d1ce6f5a51dfa33426c6c867824e3"
+    },
+    "baseline_hls": {
+     "bytes": 24576058,
+     "path": "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/baseline-hls.test",
+     "sha256": "9d8a3e6b8b5d758f53117f9f44bb44de3313f67c32c66c92afbff7fe802fbf96"
+    },
+    "candidate_engine": {
+     "bytes": 8846344,
+     "path": "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/candidate-engine",
+     "sha256": "448f7f6b3aabb36938223e020fcff0727e97abb6425ee26ff84ad1155308d69b"
+    },
+    "candidate_hls": {
+     "bytes": 25282105,
+     "path": "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/candidate-hls.test",
+     "sha256": "7a0a7bc3e065e8724f7b6d6e5cbace319945a471c6e45b2ade5abb4199923f39"
+    }
+   },
+   "receipt": {
+    "bytes": 53261,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/provenance.json",
+    "sha256": "f70e9032521bfcf3a572ebd2411ec5a07233f5c8803a26c688a8b27697ceff81"
+   }
+  },
+  {
+   "baseline_sha_reproduced": true,
+   "command": [
+    "/usr/bin/python3",
+    "/root/video_cut/core-go-performance/scripts/core-performance-mixed.py",
+    "build",
+    "--manifest",
+    "/root/video_cut/reports/universal-go-core-20261014/frozen-protocol.json",
+    "--baseline-root",
+    "/root/video_cut/core",
+    "--candidate-root",
+    "/root/video_cut/core-go-performance",
+    "--supplement",
+    "/root/video_cut/reports/universal-go-core-20261014/mixed-pipeline-supplement-v3.json",
+    "--output",
+    "/root/video_cut/reports/universal-go-core-20261014/mixed-witnesses-final-v7"
+   ],
+   "execution_receipt": {
+    "bytes": 55842,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/production51-protocol/execution-receipts/server.json",
+    "sha256": "de9a7244960bc8fc3e856cdc6f8b887986f1d814b0fe9ef15b2cd6ccd2be280c"
+   },
+   "group": "mixed-witnesses-final-v7",
+   "products": {
+    "baseline": {
+     "bytes": 24681064,
+     "path": "/root/video_cut/reports/universal-go-core-20261014/mixed-witnesses-final-v7/baseline-mixed.test",
+     "sha256": "5789abe68dd253250ec76c78e90e75fc79bfc7f3b77103dae0f0b18380e5d698"
+    },
+    "candidate": {
+     "bytes": 25378916,
+     "path": "/root/video_cut/reports/universal-go-core-20261014/mixed-witnesses-final-v7/candidate-mixed.test",
+     "sha256": "a93c748c665bd02d05c9eb71f4544f6a8442981b90815a381631e3208b92f9c3"
+    }
+   },
+   "receipt": {
+    "bytes": 53903,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/mixed-witnesses-final-v7/provenance.json",
+    "sha256": "4f35d5f2550469aee28d094da5e68005d3715f1aa01290b6cb0062052f79a567"
+   }
+  },
+  {
+   "baseline_sha_reproduced": true,
+   "command": [
+    "/usr/bin/python3",
+    "/root/video_cut/core-go-performance/scripts/core-performance.py",
+    "build-pure-witnesses",
+    "--manifest",
+    "/root/video_cut/reports/universal-go-core-20261014/frozen-protocol.json",
+    "--baseline-root",
+    "/root/video_cut/core",
+    "--candidate-root",
+    "/root/video_cut/core-go-performance",
+    "--output",
+    "/root/video_cut/reports/universal-go-core-20261014/pure-function-witnesses-final-v6"
+   ],
+   "execution_receipt": {
+    "bytes": 55315,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/production51-protocol/execution-receipts/mixed.json",
+    "sha256": "6560cb61b5b9328ce00b8030226f8f643cf2df10f317d611d13789bf7a1dd0e0"
+   },
+   "group": "pure-function-witnesses-final-v6",
+   "products": {
+    "baseline_pure": {
+     "bytes": 24560948,
+     "path": "/root/video_cut/reports/universal-go-core-20261014/pure-function-witnesses-final-v6/baseline-pure.test",
+     "sha256": "4bd7f716f2c599e28a74e6d8f650f088d7ada2fe99ff1fb39b812c4abdb39fdf"
+    },
+    "candidate_pure": {
+     "bytes": 25260680,
+     "path": "/root/video_cut/reports/universal-go-core-20261014/pure-function-witnesses-final-v6/candidate-pure.test",
+     "sha256": "ddb1be65edb4dcd4a7a9f76f2d53c796243150d34748dcb82f5505d6820f7efa"
+    }
+   },
+   "receipt": {
+    "bytes": 51494,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/pure-function-witnesses-final-v6/provenance.json",
+    "sha256": "2b29b3db4a633bf9a19d6387a92ba0a7d0f46e41bd6046300e64d7a246f25003"
+   }
+  },
+  {
+   "baseline_sha_reproduced": true,
+   "command": [
+    "/usr/bin/python3",
+    "/root/video_cut/core-go-performance/scripts/core-performance-server.py",
+    "build",
+    "--manifest",
+    "/root/video_cut/reports/universal-go-core-20261014/frozen-protocol.json",
+    "--baseline-core",
+    "/root/video_cut/core",
+    "--candidate-core",
+    "/root/video_cut/core-go-performance",
+    "--candidate-cli",
+    "/root/video_cut/reports/universal-go-core-20261014/candidate-cutmy-v6",
+    "--candidate-cli-receipt",
+    "/root/video_cut/reports/universal-go-core-20261014/candidate-cli-receipt-v6.json",
+    "--output",
+    "/root/video_cut/reports/universal-go-core-20261014/final-server-witnesses-v6"
+   ],
+   "execution_receipt": {
+    "bytes": 52551,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/production51-protocol/execution-receipts/pure.json",
+    "sha256": "1812844aabde9ccfa5d415c4b7b056e9db9d7c07bea608887b9215f3fd1c3502"
+   },
+   "group": "final-server-witnesses-v6",
+   "products": {
+    "baseline": {
+     "bytes": 24823453,
+     "path": "/root/video_cut/reports/universal-go-core-20261014/final-server-witnesses-v6/baseline-server.test",
+     "sha256": "ff1a9d55cac0c5c7309390318f5be419ed713f07773bab27cc872dafed931531"
+    },
+    "candidate": {
+     "bytes": 25528396,
+     "path": "/root/video_cut/reports/universal-go-core-20261014/final-server-witnesses-v6/candidate-server.test",
+     "sha256": "4abd44420616e99d238b8c481fd3e164a266193ab8e8a443b36b4a48a1cedf19"
+    }
+   },
+   "receipt": {
+    "bytes": 54792,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/final-server-witnesses-v6/provenance.json",
+    "sha256": "329b1515a1734fca3a05e56511fdcef6da86407b12d667f906e08fda805bdd69"
+   }
+  }
+ ]
+}

@@ -1,0 +1,2407 @@
+{
+ "baseline": {
+  "bytes": 19509827,
+  "path": "/root/video_cut/reports/universal-go-core-20261014/baseline-cutmy",
+  "revision": "a9c75df83f965bf1d56e2263ca585ab77aeaf305",
+  "sha256": "38f6d7970283a1e5db83fac92bce92c2a6f2e9bcc53810e38bcecb9191e9c02a",
+  "version": {
+   "arch": "amd64",
+   "build_time": "unknown",
+   "commit": "a9c75df83f965bf1d56e2263ca585ab77aeaf305",
+   "go_version": "go1.27.2",
+   "os": "linux",
+   "version": "perf-baseline"
+  }
+ },
+ "derivation": "Exact original case fields and ranges, deduplicated by canonical range-array SHA256; fixture probes summarized with full-probe canonical digests. The original_manifest is immutable corpus history; execution_manifest is the distinct production5.1.9 protocol. Tools below are the final execution tools, not a claim that fixtures were regenerated.",
+ "execution_manifest": {
+  "bytes": 223322,
+  "path": "/root/video_cut/reports/universal-go-core-20261014/production51-protocol/execution-manifest.json",
+  "sha256": "ad92380c9ce478fe778ce030b5e8f30d81b78c8a1ba3cbfc82c85a900260e38b"
+ },
+ "execution_rebinding_receipt": {
+  "bytes": 8881,
+  "path": "/root/video_cut/reports/universal-go-core-20261014/production51-protocol/rebinding-receipt.json",
+  "sha256": "05dd781c68a4116f45b60c7f09d2cc775569c6401168d6c801f9560bd5cbda18"
+ },
+ "fixture_probe_origin": "Fixture generation commands and summarized probes retain their original master-build provenance. All final outputs are freshly probed/decoded with production5.1.9 tools; no original output fingerprint is reused.",
+ "fixtures": {
+  "complex": {
+   "bytes": 35739982,
+   "full_probe_canonical_sha256": "74eb44b17e5cc6347f8e1dae9f6276c622924d81ec6ae79a5d941dd326ccc5ee",
+   "path": "/root/video_cut/preview-evidence-20261012/source-1080p60.mp4",
+   "probe_summary": {
+    "format": {
+     "bit_rate": "7942218",
+     "duration": "36.000000",
+     "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+     "size": "35739982",
+     "start_time": "0.000000"
+    },
+    "streams": [
+     {
+      "avg_frame_rate": "60/1",
+      "codec_name": "h264",
+      "codec_type": "video",
+      "display_aspect_ratio": "16:9",
+      "disposition": {
+       "attached_pic": 0,
+       "captions": 0,
+       "clean_effects": 0,
+       "comment": 0,
+       "default": 1,
+       "dependent": 0,
+       "descriptions": 0,
+       "dub": 0,
+       "forced": 0,
+       "hearing_impaired": 0,
+       "karaoke": 0,
+       "lyrics": 0,
+       "metadata": 0,
+       "multilayer": 0,
+       "non_diegetic": 0,
+       "original": 0,
+       "still_image": 0,
+       "timed_thumbnails": 0,
+       "visual_impaired": 0
+      },
+      "duration": "36.000000",
+      "height": 1080,
+      "index": 0,
+      "nb_frames": "2160",
+      "pix_fmt": "yuv420p",
+      "r_frame_rate": "60/1",
+      "sample_aspect_ratio": "1:1",
+      "start_time": "0.000000",
+      "tags": {
+       "encoder": "Lavc63.16.100 libx264",
+       "handler_name": "VideoHandler",
+       "language": "und"
+      },
+      "time_base": "1/15360",
+      "width": 1920
+     },
+     {
+      "avg_frame_rate": "0/0",
+      "channels": 1,
+      "codec_name": "aac",
+      "codec_type": "audio",
+      "disposition": {
+       "attached_pic": 0,
+       "captions": 0,
+       "clean_effects": 0,
+       "comment": 0,
+       "default": 1,
+       "dependent": 0,
+       "descriptions": 0,
+       "dub": 0,
+       "forced": 0,
+       "hearing_impaired": 0,
+       "karaoke": 0,
+       "lyrics": 0,
+       "metadata": 0,
+       "multilayer": 0,
+       "non_diegetic": 0,
+       "original": 0,
+       "still_image": 0,
+       "timed_thumbnails": 0,
+       "visual_impaired": 0
+      },
+      "duration": "36.000000",
+      "index": 1,
+      "nb_frames": "1689",
+      "r_frame_rate": "0/0",
+      "sample_rate": "48000",
+      "start_time": "0.000000",
+      "tags": {
+       "handler_name": "SoundHandler",
+       "language": "und"
+      },
+      "time_base": "1/48000"
+     }
+    ]
+   },
+   "sha256": "10e6bbbb94ac9bcfac48e4d66c7392426a9874fe18ca33e5546ccb87fe4f15fe"
+  },
+  "hls": {
+   "files": [
+    {
+     "bytes": 509,
+     "path": "/root/.cache/cutmy-stage/universal-go-core-20261014/hls/index.m3u8",
+     "sha256": "b8a987f91c87b752ab92f0b51d9fb39196105200734ed8e3dbe634c466cfe404"
+    },
+    {
+     "bytes": 10716,
+     "path": "/root/.cache/cutmy-stage/universal-go-core-20261014/hls/segment-000.ts",
+     "sha256": "d32cb34d917069131bd4737f64bcd958940393366befdfdf3002ccd944d6ada2"
+    },
+    {
+     "bytes": 12972,
+     "path": "/root/.cache/cutmy-stage/universal-go-core-20261014/hls/segment-001.ts",
+     "sha256": "d6f604fd41aae05723fde360491ec4a77ccac2c03e30350e86d878e48546c33c"
+    },
+    {
+     "bytes": 14664,
+     "path": "/root/.cache/cutmy-stage/universal-go-core-20261014/hls/segment-002.ts",
+     "sha256": "2c208ed17ca77ecc4fa2b64ba068be2f3c912e7c64508aa68bd6cdbf8aa7e297"
+    },
+    {
+     "bytes": 14664,
+     "path": "/root/.cache/cutmy-stage/universal-go-core-20261014/hls/segment-003.ts",
+     "sha256": "f275c02f694306ce42b4fd64720890588570ff228116d9c6a8eae428480aba02"
+    },
+    {
+     "bytes": 14664,
+     "path": "/root/.cache/cutmy-stage/universal-go-core-20261014/hls/segment-004.ts",
+     "sha256": "c4e1f84683ba4b8c5e99c42ee1df14e523b20f4069c21ee4d7dd018128294c74"
+    },
+    {
+     "bytes": 14664,
+     "path": "/root/.cache/cutmy-stage/universal-go-core-20261014/hls/segment-005.ts",
+     "sha256": "ab9f4db2761f1081b167baf13467fceabba13180a097ae977e386dd8140a5520"
+    },
+    {
+     "bytes": 15040,
+     "path": "/root/.cache/cutmy-stage/universal-go-core-20261014/hls/segment-006.ts",
+     "sha256": "8b27813e0a9e801a0dbb81c1c9ffd7e46d90a8e0f2381ea6c5a6dcfcfa017e37"
+    },
+    {
+     "bytes": 14664,
+     "path": "/root/.cache/cutmy-stage/universal-go-core-20261014/hls/segment-007.ts",
+     "sha256": "66fa8cf3fe89057dd02e35dcae5b91cc78b62c0397fe32e048ce7b15a2eb9f16"
+    },
+    {
+     "bytes": 14664,
+     "path": "/root/.cache/cutmy-stage/universal-go-core-20261014/hls/segment-008.ts",
+     "sha256": "ed8c00daadae142b7413216abc168facb92cbed77752522cf210ca8fa7977816"
+    },
+    {
+     "bytes": 14664,
+     "path": "/root/.cache/cutmy-stage/universal-go-core-20261014/hls/segment-009.ts",
+     "sha256": "9d9185d38a37d9f6c7e8716519c9325de738046283d702ddac0ce4927ed79941"
+    },
+    {
+     "bytes": 14664,
+     "path": "/root/.cache/cutmy-stage/universal-go-core-20261014/hls/segment-010.ts",
+     "sha256": "e0ade9d01c2894f571e989a2d56c789192c04d78e4c12208865a2f41c00abb95"
+    },
+    {
+     "bytes": 15416,
+     "path": "/root/.cache/cutmy-stage/universal-go-core-20261014/hls/segment-011.ts",
+     "sha256": "de18965e340727009598134df701e43caa5816ad55e33a46e400c77eba7bf9e9"
+    }
+   ],
+   "generation_command": [
+    "/usr/local/bin/ffmpeg",
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-nostdin",
+    "-i",
+    "/root/.cache/cutmy-stage/acceptance-final-0fe726e/ordinary.mp4",
+    "-map",
+    "0:v:0",
+    "-map",
+    "0:a:0",
+    "-c",
+    "copy",
+    "-f",
+    "hls",
+    "-hls_time",
+    "1",
+    "-hls_playlist_type",
+    "vod",
+    "-hls_segment_filename",
+    "/root/.cache/cutmy-stage/universal-go-core-20261014/hls/segment-%03d.ts",
+    "/root/.cache/cutmy-stage/universal-go-core-20261014/hls/index.m3u8"
+   ],
+   "parent": {
+    "bytes": 115581,
+    "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/ordinary.mp4",
+    "sha256": "b3fe0874335e5ac4297770f69dcef46ddbab69952b4c97d55ab35c88ccaf86a7"
+   },
+   "path": "/root/.cache/cutmy-stage/universal-go-core-20261014/hls"
+  },
+  "long": {
+   "bytes": 32882514,
+   "full_probe_canonical_sha256": "0f21daf36933bddebb59262e8f9ea94b62454760b656f3f1deae61f3db32ee15",
+   "generation_command": [
+    "/usr/local/bin/ffmpeg",
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-nostdin",
+    "-stream_loop",
+    "299",
+    "-i",
+    "/root/.cache/cutmy-stage/acceptance-final-0fe726e/ordinary.mp4",
+    "-map",
+    "0:v:0",
+    "-map",
+    "0:a:0",
+    "-t",
+    "3600",
+    "-c",
+    "copy",
+    "/root/.cache/cutmy-stage/universal-go-core-20261014/hour-ordinary.mkv"
+   ],
+   "parent": {
+    "bytes": 115581,
+    "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/ordinary.mp4",
+    "sha256": "b3fe0874335e5ac4297770f69dcef46ddbab69952b4c97d55ab35c88ccaf86a7"
+   },
+   "path": "/root/.cache/cutmy-stage/universal-go-core-20261014/hour-ordinary.mkv",
+   "probe_summary": {
+    "format": {
+     "bit_rate": "73068",
+     "duration": "3600.193000",
+     "format_name": "matroska,webm",
+     "size": "32882514",
+     "start_time": "0.000000"
+    },
+    "streams": [
+     {
+      "avg_frame_rate": "25/1",
+      "codec_name": "h264",
+      "codec_type": "video",
+      "display_aspect_ratio": "4:3",
+      "disposition": {
+       "attached_pic": 0,
+       "captions": 0,
+       "clean_effects": 0,
+       "comment": 0,
+       "default": 1,
+       "dependent": 0,
+       "descriptions": 0,
+       "dub": 0,
+       "forced": 0,
+       "hearing_impaired": 0,
+       "karaoke": 0,
+       "lyrics": 0,
+       "metadata": 0,
+       "multilayer": 0,
+       "non_diegetic": 0,
+       "original": 0,
+       "still_image": 0,
+       "timed_thumbnails": 0,
+       "visual_impaired": 0
+      },
+      "height": 240,
+      "index": 0,
+      "pix_fmt": "yuv420p",
+      "r_frame_rate": "25/1",
+      "sample_aspect_ratio": "1:1",
+      "start_time": "0.000000",
+      "tags": {
+       "DURATION": "01:00:00.193000000",
+       "ENCODER": "Lavc63.16.100 libx264",
+       "HANDLER_NAME": "VideoHandler"
+      },
+      "time_base": "1/1000",
+      "width": 320
+     },
+     {
+      "avg_frame_rate": "0/0",
+      "channels": 1,
+      "codec_name": "aac",
+      "codec_type": "audio",
+      "disposition": {
+       "attached_pic": 0,
+       "captions": 0,
+       "clean_effects": 0,
+       "comment": 0,
+       "default": 1,
+       "dependent": 0,
+       "descriptions": 0,
+       "dub": 0,
+       "forced": 0,
+       "hearing_impaired": 0,
+       "karaoke": 0,
+       "lyrics": 0,
+       "metadata": 0,
+       "multilayer": 0,
+       "non_diegetic": 0,
+       "original": 0,
+       "still_image": 0,
+       "timed_thumbnails": 0,
+       "visual_impaired": 0
+      },
+      "index": 1,
+      "r_frame_rate": "0/0",
+      "sample_rate": "44100",
+      "start_time": "0.000000",
+      "tags": {
+       "DURATION": "01:00:00.045000000",
+       "HANDLER_NAME": "SoundHandler",
+       "language": "eng"
+      },
+      "time_base": "1/1000"
+     }
+    ]
+   },
+   "sha256": "94329fc370e4fa1dda7d6eed9a10ebe4a8b2b77ba5161dd7db5076b9256e76ca"
+  },
+  "multi": {
+   "bytes": 218052,
+   "full_probe_canonical_sha256": "ad1711582054a6f1ea9fb2909a97cf887d97f67e53cd9ada7fe881f06108fdb8",
+   "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/multi.mp4",
+   "probe_summary": {
+    "format": {
+     "bit_rate": "145368",
+     "duration": "12.000000",
+     "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+     "size": "218052",
+     "start_time": "0.000000"
+    },
+    "streams": [
+     {
+      "avg_frame_rate": "25/1",
+      "codec_name": "h264",
+      "codec_type": "video",
+      "display_aspect_ratio": "4:3",
+      "disposition": {
+       "attached_pic": 0,
+       "captions": 0,
+       "clean_effects": 0,
+       "comment": 0,
+       "default": 1,
+       "dependent": 0,
+       "descriptions": 0,
+       "dub": 0,
+       "forced": 0,
+       "hearing_impaired": 0,
+       "karaoke": 0,
+       "lyrics": 0,
+       "metadata": 0,
+       "multilayer": 0,
+       "non_diegetic": 0,
+       "original": 0,
+       "still_image": 0,
+       "timed_thumbnails": 0,
+       "visual_impaired": 0
+      },
+      "duration": "12.000000",
+      "height": 240,
+      "index": 0,
+      "nb_frames": "300",
+      "pix_fmt": "yuv420p",
+      "r_frame_rate": "25/1",
+      "sample_aspect_ratio": "1:1",
+      "start_time": "0.000000",
+      "tags": {
+       "encoder": "Lavc63.16.100 libx264",
+       "handler_name": "VideoHandler",
+       "language": "und"
+      },
+      "time_base": "1/12800",
+      "width": 320
+     },
+     {
+      "avg_frame_rate": "0/0",
+      "channels": 1,
+      "codec_name": "aac",
+      "codec_type": "audio",
+      "disposition": {
+       "attached_pic": 0,
+       "captions": 0,
+       "clean_effects": 0,
+       "comment": 0,
+       "default": 1,
+       "dependent": 0,
+       "descriptions": 0,
+       "dub": 0,
+       "forced": 0,
+       "hearing_impaired": 0,
+       "karaoke": 0,
+       "lyrics": 0,
+       "metadata": 0,
+       "multilayer": 0,
+       "non_diegetic": 0,
+       "original": 0,
+       "still_image": 0,
+       "timed_thumbnails": 0,
+       "visual_impaired": 0
+      },
+      "duration": "12.000000",
+      "index": 1,
+      "nb_frames": "518",
+      "r_frame_rate": "0/0",
+      "sample_rate": "44100",
+      "start_time": "0.000000",
+      "tags": {
+       "handler_name": "SoundHandler",
+       "language": "eng",
+       "name": "English 440 Hz"
+      },
+      "time_base": "1/44100"
+     },
+     {
+      "avg_frame_rate": "0/0",
+      "channels": 1,
+      "codec_name": "aac",
+      "codec_type": "audio",
+      "disposition": {
+       "attached_pic": 0,
+       "captions": 0,
+       "clean_effects": 0,
+       "comment": 0,
+       "default": 0,
+       "dependent": 0,
+       "descriptions": 0,
+       "dub": 0,
+       "forced": 0,
+       "hearing_impaired": 0,
+       "karaoke": 0,
+       "lyrics": 0,
+       "metadata": 0,
+       "multilayer": 0,
+       "non_diegetic": 0,
+       "original": 0,
+       "still_image": 0,
+       "timed_thumbnails": 0,
+       "visual_impaired": 0
+      },
+      "duration": "12.000000",
+      "index": 2,
+      "nb_frames": "518",
+      "r_frame_rate": "0/0",
+      "sample_rate": "44100",
+      "start_time": "0.000000",
+      "tags": {
+       "handler_name": "SoundHandler",
+       "language": "rus",
+       "name": "Russian 880 Hz"
+      },
+      "time_base": "1/44100"
+     },
+     {
+      "avg_frame_rate": "0/0",
+      "codec_name": "mov_text",
+      "codec_type": "subtitle",
+      "disposition": {
+       "attached_pic": 0,
+       "captions": 0,
+       "clean_effects": 0,
+       "comment": 0,
+       "default": 1,
+       "dependent": 0,
+       "descriptions": 0,
+       "dub": 0,
+       "forced": 0,
+       "hearing_impaired": 0,
+       "karaoke": 0,
+       "lyrics": 0,
+       "metadata": 0,
+       "multilayer": 0,
+       "non_diegetic": 0,
+       "original": 0,
+       "still_image": 0,
+       "timed_thumbnails": 0,
+       "visual_impaired": 0
+      },
+      "duration": "11.000000",
+      "index": 3,
+      "nb_frames": "7",
+      "r_frame_rate": "0/0",
+      "start_time": "0.000000",
+      "tags": {
+       "handler_name": "SubtitleHandler",
+       "language": "und"
+      },
+      "time_base": "1/1000000"
+     }
+    ]
+   },
+   "sha256": "6d7be13f9edc279999e5520c5fabf295164e87200c5d779547529d4479ba579c"
+  },
+  "rotated": {
+   "bytes": 115581,
+   "full_probe_canonical_sha256": "b7081cbf43cc4131addc2d44dd138c7311d124371517369e2a11bcd9b9c8f688",
+   "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/rotated.mp4",
+   "probe_summary": {
+    "format": {
+     "bit_rate": "77054",
+     "duration": "12.000000",
+     "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+     "size": "115581",
+     "start_time": "0.000000"
+    },
+    "streams": [
+     {
+      "avg_frame_rate": "25/1",
+      "codec_name": "h264",
+      "codec_type": "video",
+      "display_aspect_ratio": "4:3",
+      "disposition": {
+       "attached_pic": 0,
+       "captions": 0,
+       "clean_effects": 0,
+       "comment": 0,
+       "default": 1,
+       "dependent": 0,
+       "descriptions": 0,
+       "dub": 0,
+       "forced": 0,
+       "hearing_impaired": 0,
+       "karaoke": 0,
+       "lyrics": 0,
+       "metadata": 0,
+       "multilayer": 0,
+       "non_diegetic": 0,
+       "original": 0,
+       "still_image": 0,
+       "timed_thumbnails": 0,
+       "visual_impaired": 0
+      },
+      "duration": "12.000000",
+      "height": 240,
+      "index": 0,
+      "nb_frames": "300",
+      "pix_fmt": "yuv420p",
+      "r_frame_rate": "25/1",
+      "sample_aspect_ratio": "1:1",
+      "side_data_list": [
+       {
+        "displaymatrix": "\n00000000:            0      -65536           0\n00000001:        65536           0           0\n00000002:            0           0  1073741824\n",
+        "rotation": 90,
+        "side_data_type": "Display Matrix"
+       }
+      ],
+      "start_time": "0.000000",
+      "tags": {
+       "encoder": "Lavc63.16.100 libx264",
+       "handler_name": "VideoHandler",
+       "language": "und"
+      },
+      "time_base": "1/12800",
+      "width": 320
+     },
+     {
+      "avg_frame_rate": "0/0",
+      "channels": 1,
+      "codec_name": "aac",
+      "codec_type": "audio",
+      "disposition": {
+       "attached_pic": 0,
+       "captions": 0,
+       "clean_effects": 0,
+       "comment": 0,
+       "default": 1,
+       "dependent": 0,
+       "descriptions": 0,
+       "dub": 0,
+       "forced": 0,
+       "hearing_impaired": 0,
+       "karaoke": 0,
+       "lyrics": 0,
+       "metadata": 0,
+       "multilayer": 0,
+       "non_diegetic": 0,
+       "original": 0,
+       "still_image": 0,
+       "timed_thumbnails": 0,
+       "visual_impaired": 0
+      },
+      "duration": "12.000000",
+      "index": 1,
+      "nb_frames": "518",
+      "r_frame_rate": "0/0",
+      "sample_rate": "44100",
+      "start_time": "0.000000",
+      "tags": {
+       "handler_name": "SoundHandler",
+       "language": "eng"
+      },
+      "time_base": "1/44100"
+     }
+    ]
+   },
+   "sha256": "e3e0315782a74ec117f096d5148fe901107f1cc012b520943e116371f79cd7ca"
+  },
+  "vfr": {
+   "bytes": 110025,
+   "full_probe_canonical_sha256": "361bdc29fa2b0fa4742633dd106c165a223ac90a6d720b9b6e94a29a21b8bd58",
+   "path": "/root/.cache/cutmy-stage/acceptance-final-0fe726e/vfr.mp4",
+   "probe_summary": {
+    "format": {
+     "bit_rate": "73350",
+     "duration": "12.000000",
+     "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+     "size": "110025",
+     "start_time": "0.000000"
+    },
+    "streams": [
+     {
+      "avg_frame_rate": "3125/296",
+      "codec_name": "h264",
+      "codec_type": "video",
+      "display_aspect_ratio": "4:3",
+      "disposition": {
+       "attached_pic": 0,
+       "captions": 0,
+       "clean_effects": 0,
+       "comment": 0,
+       "default": 1,
+       "dependent": 0,
+       "descriptions": 0,
+       "dub": 0,
+       "forced": 0,
+       "hearing_impaired": 0,
+       "karaoke": 0,
+       "lyrics": 0,
+       "metadata": 0,
+       "multilayer": 0,
+       "non_diegetic": 0,
+       "original": 0,
+       "still_image": 0,
+       "timed_thumbnails": 0,
+       "visual_impaired": 0
+      },
+      "duration": "11.840000",
+      "height": 240,
+      "index": 0,
+      "nb_frames": "125",
+      "pix_fmt": "yuv420p",
+      "r_frame_rate": "25/1",
+      "sample_aspect_ratio": "1:1",
+      "start_time": "0.000000",
+      "tags": {
+       "encoder": "Lavc63.16.100 libx264",
+       "handler_name": "VideoHandler",
+       "language": "und"
+      },
+      "time_base": "1/12800",
+      "width": 320
+     },
+     {
+      "avg_frame_rate": "0/0",
+      "channels": 1,
+      "codec_name": "aac",
+      "codec_type": "audio",
+      "disposition": {
+       "attached_pic": 0,
+       "captions": 0,
+       "clean_effects": 0,
+       "comment": 0,
+       "default": 1,
+       "dependent": 0,
+       "descriptions": 0,
+       "dub": 0,
+       "forced": 0,
+       "hearing_impaired": 0,
+       "karaoke": 0,
+       "lyrics": 0,
+       "metadata": 0,
+       "multilayer": 0,
+       "non_diegetic": 0,
+       "original": 0,
+       "still_image": 0,
+       "timed_thumbnails": 0,
+       "visual_impaired": 0
+      },
+      "duration": "12.000000",
+      "index": 1,
+      "nb_frames": "518",
+      "r_frame_rate": "0/0",
+      "sample_rate": "44100",
+      "start_time": "0.000000",
+      "tags": {
+       "handler_name": "SoundHandler",
+       "language": "eng"
+      },
+      "time_base": "1/44100"
+     }
+    ]
+   },
+   "sha256": "30d34bdd81f80769c9af1ac5f4fd64e159faabf1c2ea93d8f480375c759dba0e"
+  }
+ },
+ "frozen_utc": "2026-10-13T21:34:12.519830+00:00",
+ "limitations": [
+  "No public-platform/network SLA or competitor speed claim.",
+  "HLS uses a fixed HTTPS test transport, not production network bypass.",
+  "Sampled tree RSS can double-count shared pages and miss transient peaks.",
+  "wait4 max RSS is the largest waited process peak, not simultaneous tree RSS.",
+  "Sampled process I/O totals are lower bounds; wait4 block counters are counts, not bytes.",
+  "Warm HLS operation time excludes prefill; outer CPU/RSS/I/O include prefill."
+ ],
+ "original_manifest": {
+  "bytes": 148005,
+  "path": "/root/video_cut/reports/universal-go-core-20261014/frozen-protocol.json",
+  "sha256": "660f1007db49c49ad01c6f1c2aa4bf564709823689342c9c26decf3b61091ba9"
+ },
+ "original_schema": 1,
+ "pair_protocol": {
+  "cache": "warm OS cache, fresh operation workspace/owner; no cache dropping",
+  "exploratory_pairs": 3,
+  "final_key_pairs": 5,
+  "ordering": "AB, BA, AB, BA, AB; fixed manifest scenario order",
+  "timing": "single owned workload; no overlapping tests/builds/media tasks"
+ },
+ "range_sets": {
+  "048be3000ca45a6206b2763b7b42cc7d17261fab53348e05af5384e4f61a1ea0": [
+   {
+    "end_ms": 2550,
+    "label": "piece-01",
+    "start_ms": 1450
+   },
+   {
+    "end_ms": 3050,
+    "label": "piece-02",
+    "start_ms": 1950
+   },
+   {
+    "end_ms": 2550,
+    "label": "piece-03",
+    "start_ms": 1450
+   },
+   {
+    "end_ms": 5550,
+    "label": "piece-04",
+    "start_ms": 4450
+   },
+   {
+    "end_ms": 6050,
+    "label": "piece-05",
+    "start_ms": 4950
+   },
+   {
+    "end_ms": 5550,
+    "label": "piece-06",
+    "start_ms": 4450
+   },
+   {
+    "end_ms": 3050,
+    "label": "piece-07",
+    "start_ms": 1950
+   },
+   {
+    "end_ms": 6050,
+    "label": "piece-08",
+    "start_ms": 4950
+   }
+  ],
+  "2c447037a04ac828fb4c98827189e543f9e19282826dac197bf8c8d21487cfc3": [
+   {
+    "end_ms": 3500,
+    "label": "piece-01",
+    "start_ms": 2400
+   },
+   {
+    "end_ms": 4300,
+    "label": "piece-02",
+    "start_ms": 3200
+   },
+   {
+    "end_ms": 3500,
+    "label": "piece-03",
+    "start_ms": 2400
+   },
+   {
+    "end_ms": 1793500,
+    "label": "piece-04",
+    "start_ms": 1792400
+   },
+   {
+    "end_ms": 3483500,
+    "label": "piece-05",
+    "start_ms": 3482400
+   },
+   {
+    "end_ms": 1213500,
+    "label": "piece-06",
+    "start_ms": 1212400
+   },
+   {
+    "end_ms": 6700,
+    "label": "piece-07",
+    "start_ms": 5600
+   },
+   {
+    "end_ms": 10700,
+    "label": "piece-08",
+    "start_ms": 9600
+   },
+   {
+    "end_ms": 3013500,
+    "label": "piece-09",
+    "start_ms": 3012400
+   },
+   {
+    "end_ms": 793500,
+    "label": "piece-10",
+    "start_ms": 792400
+   },
+   {
+    "end_ms": 2163500,
+    "label": "piece-11",
+    "start_ms": 2162400
+   },
+   {
+    "end_ms": 3533500,
+    "label": "piece-12",
+    "start_ms": 3532400
+   },
+   {
+    "end_ms": 1313500,
+    "label": "piece-13",
+    "start_ms": 1312400
+   },
+   {
+    "end_ms": 2683500,
+    "label": "piece-14",
+    "start_ms": 2682400
+   },
+   {
+    "end_ms": 463500,
+    "label": "piece-15",
+    "start_ms": 462400
+   },
+   {
+    "end_ms": 1833500,
+    "label": "piece-16",
+    "start_ms": 1832400
+   },
+   {
+    "end_ms": 3203500,
+    "label": "piece-17",
+    "start_ms": 3202400
+   },
+   {
+    "end_ms": 983500,
+    "label": "piece-18",
+    "start_ms": 982400
+   },
+   {
+    "end_ms": 2353500,
+    "label": "piece-19",
+    "start_ms": 2352400
+   },
+   {
+    "end_ms": 133500,
+    "label": "piece-20",
+    "start_ms": 132400
+   }
+  ],
+  "37fdf65bb1de5d015c368968e9370a6a14bcaecfe0f815ae9dedb64b7fc102ed": [
+   {
+    "end_ms": 3500,
+    "label": "piece-01",
+    "start_ms": 2400
+   },
+   {
+    "end_ms": 4300,
+    "label": "piece-02",
+    "start_ms": 3200
+   },
+   {
+    "end_ms": 3500,
+    "label": "piece-03",
+    "start_ms": 2400
+   },
+   {
+    "end_ms": 1793500,
+    "label": "piece-04",
+    "start_ms": 1792400
+   },
+   {
+    "end_ms": 3483500,
+    "label": "piece-05",
+    "start_ms": 3482400
+   },
+   {
+    "end_ms": 1213500,
+    "label": "piece-06",
+    "start_ms": 1212400
+   },
+   {
+    "end_ms": 6700,
+    "label": "piece-07",
+    "start_ms": 5600
+   },
+   {
+    "end_ms": 10700,
+    "label": "piece-08",
+    "start_ms": 9600
+   },
+   {
+    "end_ms": 3013500,
+    "label": "piece-09",
+    "start_ms": 3012400
+   },
+   {
+    "end_ms": 793500,
+    "label": "piece-10",
+    "start_ms": 792400
+   }
+  ],
+  "4ada56e3a7bc23cb268cdc3965ff5fcbee65f96193a35c4ed575001fabb2b596": [
+   {
+    "end_ms": 3500,
+    "label": "piece-01",
+    "start_ms": 2400
+   },
+   {
+    "end_ms": 4300,
+    "label": "piece-02",
+    "start_ms": 3200
+   },
+   {
+    "end_ms": 3500,
+    "label": "piece-03",
+    "start_ms": 2400
+   },
+   {
+    "end_ms": 1793500,
+    "label": "piece-04",
+    "start_ms": 1792400
+   },
+   {
+    "end_ms": 3483500,
+    "label": "piece-05",
+    "start_ms": 3482400
+   },
+   {
+    "end_ms": 1213500,
+    "label": "piece-06",
+    "start_ms": 1212400
+   },
+   {
+    "end_ms": 6700,
+    "label": "piece-07",
+    "start_ms": 5600
+   },
+   {
+    "end_ms": 10700,
+    "label": "piece-08",
+    "start_ms": 9600
+   },
+   {
+    "end_ms": 3013500,
+    "label": "piece-09",
+    "start_ms": 3012400
+   },
+   {
+    "end_ms": 793500,
+    "label": "piece-10",
+    "start_ms": 792400
+   },
+   {
+    "end_ms": 2163500,
+    "label": "piece-11",
+    "start_ms": 2162400
+   },
+   {
+    "end_ms": 3533500,
+    "label": "piece-12",
+    "start_ms": 3532400
+   },
+   {
+    "end_ms": 1313500,
+    "label": "piece-13",
+    "start_ms": 1312400
+   },
+   {
+    "end_ms": 2683500,
+    "label": "piece-14",
+    "start_ms": 2682400
+   },
+   {
+    "end_ms": 463500,
+    "label": "piece-15",
+    "start_ms": 462400
+   },
+   {
+    "end_ms": 1833500,
+    "label": "piece-16",
+    "start_ms": 1832400
+   },
+   {
+    "end_ms": 3203500,
+    "label": "piece-17",
+    "start_ms": 3202400
+   },
+   {
+    "end_ms": 983500,
+    "label": "piece-18",
+    "start_ms": 982400
+   },
+   {
+    "end_ms": 2353500,
+    "label": "piece-19",
+    "start_ms": 2352400
+   },
+   {
+    "end_ms": 133500,
+    "label": "piece-20",
+    "start_ms": 132400
+   },
+   {
+    "end_ms": 1503500,
+    "label": "piece-21",
+    "start_ms": 1502400
+   },
+   {
+    "end_ms": 2873500,
+    "label": "piece-22",
+    "start_ms": 2872400
+   },
+   {
+    "end_ms": 653500,
+    "label": "piece-23",
+    "start_ms": 652400
+   },
+   {
+    "end_ms": 2023500,
+    "label": "piece-24",
+    "start_ms": 2022400
+   },
+   {
+    "end_ms": 3393500,
+    "label": "piece-25",
+    "start_ms": 3392400
+   },
+   {
+    "end_ms": 1173500,
+    "label": "piece-26",
+    "start_ms": 1172400
+   },
+   {
+    "end_ms": 2543500,
+    "label": "piece-27",
+    "start_ms": 2542400
+   },
+   {
+    "end_ms": 323500,
+    "label": "piece-28",
+    "start_ms": 322400
+   },
+   {
+    "end_ms": 1693500,
+    "label": "piece-29",
+    "start_ms": 1692400
+   },
+   {
+    "end_ms": 3063500,
+    "label": "piece-30",
+    "start_ms": 3062400
+   },
+   {
+    "end_ms": 843500,
+    "label": "piece-31",
+    "start_ms": 842400
+   },
+   {
+    "end_ms": 2213500,
+    "label": "piece-32",
+    "start_ms": 2212400
+   }
+  ],
+  "5754818ae46b2b5e21463ec85fd77de05455330aec8353bc41eb65789950c133": [
+   {
+    "end_ms": 10500,
+    "label": "Blue first",
+    "start_ms": 8500
+   },
+   {
+    "end_ms": 3500,
+    "label": "Red second",
+    "start_ms": 1500
+   }
+  ],
+  "5eb2c473228b39e517f8aa2d84fa7b20665e671af9793c9ac368177d86137d03": [
+   {
+    "end_ms": 2550,
+    "label": "piece-01",
+    "start_ms": 1450
+   },
+   {
+    "end_ms": 3650,
+    "label": "piece-02",
+    "start_ms": 2550
+   },
+   {
+    "end_ms": 4750,
+    "label": "piece-03",
+    "start_ms": 3650
+   },
+   {
+    "end_ms": 5850,
+    "label": "piece-04",
+    "start_ms": 4750
+   },
+   {
+    "end_ms": 6950,
+    "label": "piece-05",
+    "start_ms": 5850
+   },
+   {
+    "end_ms": 8050,
+    "label": "piece-06",
+    "start_ms": 6950
+   },
+   {
+    "end_ms": 9150,
+    "label": "piece-07",
+    "start_ms": 8050
+   },
+   {
+    "end_ms": 10250,
+    "label": "piece-08",
+    "start_ms": 9150
+   }
+  ],
+  "850a319558203d83269ecf6fdfca425b957041914814d8a514608106ffff79dd": [
+   {
+    "end_ms": 3500,
+    "label": "piece-01",
+    "start_ms": 2400
+   },
+   {
+    "end_ms": 4300,
+    "label": "piece-02",
+    "start_ms": 3200
+   },
+   {
+    "end_ms": 3500,
+    "label": "piece-03",
+    "start_ms": 2400
+   },
+   {
+    "end_ms": 25300,
+    "label": "piece-04",
+    "start_ms": 24200
+   },
+   {
+    "end_ms": 32300,
+    "label": "piece-05",
+    "start_ms": 31200
+   },
+   {
+    "end_ms": 19300,
+    "label": "piece-06",
+    "start_ms": 18200
+   },
+   {
+    "end_ms": 6700,
+    "label": "piece-07",
+    "start_ms": 5600
+   },
+   {
+    "end_ms": 10700,
+    "label": "piece-08",
+    "start_ms": 9600
+   },
+   {
+    "end_ms": 4300,
+    "label": "piece-09",
+    "start_ms": 3200
+   },
+   {
+    "end_ms": 11300,
+    "label": "piece-10",
+    "start_ms": 10200
+   },
+   {
+    "end_ms": 18300,
+    "label": "piece-11",
+    "start_ms": 17200
+   },
+   {
+    "end_ms": 25300,
+    "label": "piece-12",
+    "start_ms": 24200
+   },
+   {
+    "end_ms": 1300,
+    "label": "piece-13",
+    "start_ms": 200
+   },
+   {
+    "end_ms": 8300,
+    "label": "piece-14",
+    "start_ms": 7200
+   },
+   {
+    "end_ms": 15300,
+    "label": "piece-15",
+    "start_ms": 14200
+   },
+   {
+    "end_ms": 22300,
+    "label": "piece-16",
+    "start_ms": 21200
+   },
+   {
+    "end_ms": 29300,
+    "label": "piece-17",
+    "start_ms": 28200
+   },
+   {
+    "end_ms": 5300,
+    "label": "piece-18",
+    "start_ms": 4200
+   },
+   {
+    "end_ms": 12300,
+    "label": "piece-19",
+    "start_ms": 11200
+   },
+   {
+    "end_ms": 19300,
+    "label": "piece-20",
+    "start_ms": 18200
+   }
+  ],
+  "93c204da7b7db8353df5f6a06c5b2020092f531e2675b2fb21c4eb640753ce7d": [
+   {
+    "end_ms": 3500,
+    "label": "piece-01",
+    "start_ms": 2400
+   },
+   {
+    "end_ms": 4300,
+    "label": "piece-02",
+    "start_ms": 3200
+   }
+  ],
+  "c49afe37242ad7228f9335483fa7096759c71456f55d14c23cea252a23444632": [
+   {
+    "end_ms": 3500,
+    "label": "piece-01",
+    "start_ms": 2400
+   }
+  ],
+  "e09664caed027c1e921b0f60426962388b2514b9d446abc624453126237507c8": [
+   {
+    "end_ms": 3100,
+    "label": "first",
+    "start_ms": 2000
+   },
+   {
+    "end_ms": 25100,
+    "label": "second",
+    "start_ms": 24000
+   }
+  ]
+ },
+ "scenarios": [
+  {
+   "count": 1,
+   "final_key": true,
+   "fixture": "long",
+   "id": "local-accurate-mp4-separate-01",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "c49afe37242ad7228f9335483fa7096759c71456f55d14c23cea252a23444632"
+  },
+  {
+   "count": 1,
+   "final_key": true,
+   "fixture": "long",
+   "id": "local-accurate-mp4-joined-01",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "c49afe37242ad7228f9335483fa7096759c71456f55d14c23cea252a23444632"
+  },
+  {
+   "count": 1,
+   "final_key": true,
+   "fixture": "long",
+   "id": "local-copy-mp4-separate-01",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "c49afe37242ad7228f9335483fa7096759c71456f55d14c23cea252a23444632"
+  },
+  {
+   "count": 1,
+   "final_key": true,
+   "fixture": "long",
+   "id": "local-copy-mp4-joined-01",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "c49afe37242ad7228f9335483fa7096759c71456f55d14c23cea252a23444632"
+  },
+  {
+   "count": 1,
+   "final_key": true,
+   "fixture": "long",
+   "id": "local-copy-mkv-separate-01",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mkv",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "c49afe37242ad7228f9335483fa7096759c71456f55d14c23cea252a23444632"
+  },
+  {
+   "count": 1,
+   "final_key": true,
+   "fixture": "long",
+   "id": "local-copy-mkv-joined-01",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mkv",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "c49afe37242ad7228f9335483fa7096759c71456f55d14c23cea252a23444632"
+  },
+  {
+   "count": 1,
+   "final_key": true,
+   "fixture": "long",
+   "id": "local-mp3-separate-01",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp3",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "c49afe37242ad7228f9335483fa7096759c71456f55d14c23cea252a23444632"
+  },
+  {
+   "count": 1,
+   "final_key": true,
+   "fixture": "long",
+   "id": "local-mp3-joined-01",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp3",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "c49afe37242ad7228f9335483fa7096759c71456f55d14c23cea252a23444632"
+  },
+  {
+   "count": 2,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-accurate-mp4-separate-02",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "93c204da7b7db8353df5f6a06c5b2020092f531e2675b2fb21c4eb640753ce7d"
+  },
+  {
+   "count": 2,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-accurate-mp4-joined-02",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "93c204da7b7db8353df5f6a06c5b2020092f531e2675b2fb21c4eb640753ce7d"
+  },
+  {
+   "count": 2,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-copy-mp4-separate-02",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "93c204da7b7db8353df5f6a06c5b2020092f531e2675b2fb21c4eb640753ce7d"
+  },
+  {
+   "count": 2,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-copy-mp4-joined-02",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "93c204da7b7db8353df5f6a06c5b2020092f531e2675b2fb21c4eb640753ce7d"
+  },
+  {
+   "count": 2,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-copy-mkv-separate-02",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mkv",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "93c204da7b7db8353df5f6a06c5b2020092f531e2675b2fb21c4eb640753ce7d"
+  },
+  {
+   "count": 2,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-copy-mkv-joined-02",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mkv",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "93c204da7b7db8353df5f6a06c5b2020092f531e2675b2fb21c4eb640753ce7d"
+  },
+  {
+   "count": 2,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-mp3-separate-02",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp3",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "93c204da7b7db8353df5f6a06c5b2020092f531e2675b2fb21c4eb640753ce7d"
+  },
+  {
+   "count": 2,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-mp3-joined-02",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp3",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "93c204da7b7db8353df5f6a06c5b2020092f531e2675b2fb21c4eb640753ce7d"
+  },
+  {
+   "count": 10,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-accurate-mp4-separate-10",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "37fdf65bb1de5d015c368968e9370a6a14bcaecfe0f815ae9dedb64b7fc102ed"
+  },
+  {
+   "count": 10,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-accurate-mp4-joined-10",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "37fdf65bb1de5d015c368968e9370a6a14bcaecfe0f815ae9dedb64b7fc102ed"
+  },
+  {
+   "count": 10,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-copy-mp4-separate-10",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "37fdf65bb1de5d015c368968e9370a6a14bcaecfe0f815ae9dedb64b7fc102ed"
+  },
+  {
+   "count": 10,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-copy-mp4-joined-10",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "37fdf65bb1de5d015c368968e9370a6a14bcaecfe0f815ae9dedb64b7fc102ed"
+  },
+  {
+   "count": 10,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-copy-mkv-separate-10",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mkv",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "37fdf65bb1de5d015c368968e9370a6a14bcaecfe0f815ae9dedb64b7fc102ed"
+  },
+  {
+   "count": 10,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-copy-mkv-joined-10",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mkv",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "37fdf65bb1de5d015c368968e9370a6a14bcaecfe0f815ae9dedb64b7fc102ed"
+  },
+  {
+   "count": 10,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-mp3-separate-10",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp3",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "37fdf65bb1de5d015c368968e9370a6a14bcaecfe0f815ae9dedb64b7fc102ed"
+  },
+  {
+   "count": 10,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-mp3-joined-10",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp3",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "37fdf65bb1de5d015c368968e9370a6a14bcaecfe0f815ae9dedb64b7fc102ed"
+  },
+  {
+   "count": 20,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-accurate-mp4-separate-20",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "2c447037a04ac828fb4c98827189e543f9e19282826dac197bf8c8d21487cfc3"
+  },
+  {
+   "count": 20,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-accurate-mp4-joined-20",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "2c447037a04ac828fb4c98827189e543f9e19282826dac197bf8c8d21487cfc3"
+  },
+  {
+   "count": 20,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-copy-mp4-separate-20",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "2c447037a04ac828fb4c98827189e543f9e19282826dac197bf8c8d21487cfc3"
+  },
+  {
+   "count": 20,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-copy-mp4-joined-20",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "2c447037a04ac828fb4c98827189e543f9e19282826dac197bf8c8d21487cfc3"
+  },
+  {
+   "count": 20,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-copy-mkv-separate-20",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mkv",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "2c447037a04ac828fb4c98827189e543f9e19282826dac197bf8c8d21487cfc3"
+  },
+  {
+   "count": 20,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-copy-mkv-joined-20",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mkv",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "2c447037a04ac828fb4c98827189e543f9e19282826dac197bf8c8d21487cfc3"
+  },
+  {
+   "count": 20,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-mp3-separate-20",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp3",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "2c447037a04ac828fb4c98827189e543f9e19282826dac197bf8c8d21487cfc3"
+  },
+  {
+   "count": 20,
+   "final_key": false,
+   "fixture": "long",
+   "id": "local-mp3-joined-20",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp3",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "2c447037a04ac828fb4c98827189e543f9e19282826dac197bf8c8d21487cfc3"
+  },
+  {
+   "count": 32,
+   "final_key": true,
+   "fixture": "long",
+   "id": "local-accurate-mp4-separate-32",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "4ada56e3a7bc23cb268cdc3965ff5fcbee65f96193a35c4ed575001fabb2b596"
+  },
+  {
+   "count": 32,
+   "final_key": true,
+   "fixture": "long",
+   "id": "local-accurate-mp4-joined-32",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "4ada56e3a7bc23cb268cdc3965ff5fcbee65f96193a35c4ed575001fabb2b596"
+  },
+  {
+   "count": 32,
+   "final_key": true,
+   "fixture": "long",
+   "id": "local-copy-mp4-separate-32",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "4ada56e3a7bc23cb268cdc3965ff5fcbee65f96193a35c4ed575001fabb2b596"
+  },
+  {
+   "count": 32,
+   "final_key": true,
+   "fixture": "long",
+   "id": "local-copy-mp4-joined-32",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "4ada56e3a7bc23cb268cdc3965ff5fcbee65f96193a35c4ed575001fabb2b596"
+  },
+  {
+   "count": 32,
+   "final_key": true,
+   "fixture": "long",
+   "id": "local-copy-mkv-separate-32",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mkv",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "4ada56e3a7bc23cb268cdc3965ff5fcbee65f96193a35c4ed575001fabb2b596"
+  },
+  {
+   "count": 32,
+   "final_key": true,
+   "fixture": "long",
+   "id": "local-copy-mkv-joined-32",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mkv",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "4ada56e3a7bc23cb268cdc3965ff5fcbee65f96193a35c4ed575001fabb2b596"
+  },
+  {
+   "count": 32,
+   "final_key": true,
+   "fixture": "long",
+   "id": "local-mp3-separate-32",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp3",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "4ada56e3a7bc23cb268cdc3965ff5fcbee65f96193a35c4ed575001fabb2b596"
+  },
+  {
+   "count": 32,
+   "final_key": true,
+   "fixture": "long",
+   "id": "local-mp3-joined-32",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp3",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "4ada56e3a7bc23cb268cdc3965ff5fcbee65f96193a35c4ed575001fabb2b596"
+  },
+  {
+   "count": 20,
+   "final_key": true,
+   "fixture": "complex",
+   "id": "complex-accurate-mp4-separate-20",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "850a319558203d83269ecf6fdfca425b957041914814d8a514608106ffff79dd"
+  },
+  {
+   "count": 20,
+   "final_key": true,
+   "fixture": "complex",
+   "id": "complex-accurate-mp4-joined-20",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "850a319558203d83269ecf6fdfca425b957041914814d8a514608106ffff79dd"
+  },
+  {
+   "count": 20,
+   "final_key": false,
+   "fixture": "complex",
+   "id": "complex-copy-mp4-separate-20",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "850a319558203d83269ecf6fdfca425b957041914814d8a514608106ffff79dd"
+  },
+  {
+   "count": 20,
+   "final_key": false,
+   "fixture": "complex",
+   "id": "complex-copy-mp4-joined-20",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "850a319558203d83269ecf6fdfca425b957041914814d8a514608106ffff79dd"
+  },
+  {
+   "count": 20,
+   "final_key": false,
+   "fixture": "complex",
+   "id": "complex-copy-mkv-separate-20",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mkv",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "850a319558203d83269ecf6fdfca425b957041914814d8a514608106ffff79dd"
+  },
+  {
+   "count": 20,
+   "final_key": false,
+   "fixture": "complex",
+   "id": "complex-copy-mkv-joined-20",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mkv",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "850a319558203d83269ecf6fdfca425b957041914814d8a514608106ffff79dd"
+  },
+  {
+   "count": 20,
+   "final_key": false,
+   "fixture": "complex",
+   "id": "complex-mp3-separate-20",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp3",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "850a319558203d83269ecf6fdfca425b957041914814d8a514608106ffff79dd"
+  },
+  {
+   "count": 20,
+   "final_key": false,
+   "fixture": "complex",
+   "id": "complex-mp3-joined-20",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp3",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "850a319558203d83269ecf6fdfca425b957041914814d8a514608106ffff79dd"
+  },
+  {
+   "count": 2,
+   "final_key": false,
+   "fixture": "vfr",
+   "id": "acceptance-vfr-accurate-mp4-cadence",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "5754818ae46b2b5e21463ec85fd77de05455330aec8353bc41eb65789950c133"
+  },
+  {
+   "count": 2,
+   "final_key": false,
+   "fixture": "rotated",
+   "id": "acceptance-rotated-accurate-mp4-cadence",
+   "kind": "cli",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "5754818ae46b2b5e21463ec85fd77de05455330aec8353bc41eb65789950c133"
+  },
+  {
+   "count": 2,
+   "final_key": false,
+   "fixture": "multi",
+   "id": "acceptance-multi-accurate-mp4-tracks",
+   "kind": "cli",
+   "options": {
+    "audio_track": 2,
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "5754818ae46b2b5e21463ec85fd77de05455330aec8353bc41eb65789950c133"
+  },
+  {
+   "count": 2,
+   "final_key": false,
+   "fixture": "multi",
+   "id": "acceptance-multi-copy-mkv-tracks",
+   "kind": "cli",
+   "options": {
+    "audio_track": 2,
+    "cut_mode": "copy",
+    "format": "mkv",
+    "quality": "best",
+    "subtitle_mode": "preserve"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "5754818ae46b2b5e21463ec85fd77de05455330aec8353bc41eb65789950c133"
+  },
+  {
+   "count": 2,
+   "final_key": false,
+   "fixture": "multi",
+   "id": "acceptance-multi-accurate-mp4-crop",
+   "kind": "cli",
+   "options": {
+    "audio_track": 2,
+    "crop": {
+     "height": 1,
+     "width": 0.5,
+     "x": 0,
+     "y": 0
+    },
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "5754818ae46b2b5e21463ec85fd77de05455330aec8353bc41eb65789950c133"
+  },
+  {
+   "count": 1,
+   "final_key": true,
+   "fixture": "long",
+   "id": "embedded-accurate-mp4-01",
+   "kind": "embedded",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "c49afe37242ad7228f9335483fa7096759c71456f55d14c23cea252a23444632"
+  },
+  {
+   "count": 32,
+   "final_key": true,
+   "fixture": "long",
+   "id": "embedded-accurate-mp4-32",
+   "kind": "embedded",
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "4ada56e3a7bc23cb268cdc3965ff5fcbee65f96193a35c4ed575001fabb2b596"
+  },
+  {
+   "count": 1,
+   "final_key": true,
+   "fixture": "long",
+   "id": "embedded-copy-mkv-01",
+   "kind": "embedded",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mkv",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "c49afe37242ad7228f9335483fa7096759c71456f55d14c23cea252a23444632"
+  },
+  {
+   "count": 32,
+   "final_key": true,
+   "fixture": "long",
+   "id": "embedded-copy-mkv-32",
+   "kind": "embedded",
+   "options": {
+    "cut_mode": "copy",
+    "format": "mkv",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "4ada56e3a7bc23cb268cdc3965ff5fcbee65f96193a35c4ed575001fabb2b596"
+  },
+  {
+   "count": 8,
+   "final_key": false,
+   "fixture": "hls",
+   "id": "hls-accurate-mp4-separate-cold",
+   "kind": "hls",
+   "network": {
+    "base_delay_ms": 15,
+    "straggler_delay_ms": 0,
+    "straggler_path": "segment-001.ts"
+   },
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "5eb2c473228b39e517f8aa2d84fa7b20665e671af9793c9ac368177d86137d03",
+   "warmup": false
+  },
+  {
+   "count": 8,
+   "final_key": false,
+   "fixture": "hls",
+   "id": "hls-accurate-mp4-separate-warm",
+   "kind": "hls",
+   "network": {
+    "base_delay_ms": 15,
+    "straggler_delay_ms": 0,
+    "straggler_path": "segment-001.ts"
+   },
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "048be3000ca45a6206b2763b7b42cc7d17261fab53348e05af5384e4f61a1ea0",
+   "warmup": true
+  },
+  {
+   "count": 8,
+   "final_key": true,
+   "fixture": "hls",
+   "id": "hls-accurate-mp4-separate-straggler",
+   "kind": "hls",
+   "network": {
+    "base_delay_ms": 15,
+    "straggler_delay_ms": 250,
+    "straggler_path": "segment-001.ts"
+   },
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "5eb2c473228b39e517f8aa2d84fa7b20665e671af9793c9ac368177d86137d03",
+   "warmup": false
+  },
+  {
+   "count": 8,
+   "final_key": true,
+   "fixture": "hls",
+   "id": "hls-accurate-mp4-separate-overlap",
+   "kind": "hls",
+   "network": {
+    "base_delay_ms": 15,
+    "straggler_delay_ms": 0,
+    "straggler_path": "segment-001.ts"
+   },
+   "options": {
+    "cut_mode": "accurate",
+    "format": "mp4",
+    "quality": "best"
+   },
+   "output_mode": "separate",
+   "ranges_sha256_ref": "048be3000ca45a6206b2763b7b42cc7d17261fab53348e05af5384e4f61a1ea0",
+   "warmup": false
+  },
+  {
+   "count": 8,
+   "final_key": false,
+   "fixture": "hls",
+   "id": "hls-copy-mkv-joined-cold",
+   "kind": "hls",
+   "network": {
+    "base_delay_ms": 15,
+    "straggler_delay_ms": 0,
+    "straggler_path": "segment-001.ts"
+   },
+   "options": {
+    "cut_mode": "copy",
+    "format": "mkv",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "5eb2c473228b39e517f8aa2d84fa7b20665e671af9793c9ac368177d86137d03",
+   "warmup": false
+  },
+  {
+   "count": 8,
+   "final_key": false,
+   "fixture": "hls",
+   "id": "hls-copy-mkv-joined-warm",
+   "kind": "hls",
+   "network": {
+    "base_delay_ms": 15,
+    "straggler_delay_ms": 0,
+    "straggler_path": "segment-001.ts"
+   },
+   "options": {
+    "cut_mode": "copy",
+    "format": "mkv",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "048be3000ca45a6206b2763b7b42cc7d17261fab53348e05af5384e4f61a1ea0",
+   "warmup": true
+  },
+  {
+   "count": 8,
+   "final_key": true,
+   "fixture": "hls",
+   "id": "hls-copy-mkv-joined-straggler",
+   "kind": "hls",
+   "network": {
+    "base_delay_ms": 15,
+    "straggler_delay_ms": 250,
+    "straggler_path": "segment-001.ts"
+   },
+   "options": {
+    "cut_mode": "copy",
+    "format": "mkv",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "5eb2c473228b39e517f8aa2d84fa7b20665e671af9793c9ac368177d86137d03",
+   "warmup": false
+  },
+  {
+   "count": 8,
+   "final_key": true,
+   "fixture": "hls",
+   "id": "hls-copy-mkv-joined-overlap",
+   "kind": "hls",
+   "network": {
+    "base_delay_ms": 15,
+    "straggler_delay_ms": 0,
+    "straggler_path": "segment-001.ts"
+   },
+   "options": {
+    "cut_mode": "copy",
+    "format": "mkv",
+    "quality": "best"
+   },
+   "output_mode": "joined",
+   "ranges_sha256_ref": "048be3000ca45a6206b2763b7b42cc7d17261fab53348e05af5384e4f61a1ea0",
+   "warmup": false
+  }
+ ],
+ "schema": "core-performance-review-corpus-summary-v1",
+ "server_scenarios": [
+  {
+   "arrival": "simultaneous barrier after distinct-owner upload",
+   "cuts_per_job": 2,
+   "ffmpeg_threads": 2,
+   "fixture": "complex",
+   "id": "server-accurate-mp4-1",
+   "jobs_per_owner": 4,
+   "measure": [
+    "accepted_to_all_downloads",
+    "queue_wait",
+    "throughput",
+    "api_and_worker_cgroup_cpu_memory_io",
+    "actual_download_bytes"
+   ],
+   "output_mode": "separate",
+   "owners": 1,
+   "profile": "accurate-mp4",
+   "ranges_sha256_ref": "e09664caed027c1e921b0f60426962388b2514b9d446abc624453126237507c8",
+   "worker_concurrency": 2
+  },
+  {
+   "arrival": "simultaneous barrier after distinct-owner upload",
+   "cuts_per_job": 2,
+   "ffmpeg_threads": 2,
+   "fixture": "complex",
+   "id": "server-accurate-mp4-4",
+   "jobs_per_owner": 4,
+   "measure": [
+    "accepted_to_all_downloads",
+    "queue_wait",
+    "throughput",
+    "api_and_worker_cgroup_cpu_memory_io",
+    "actual_download_bytes"
+   ],
+   "output_mode": "separate",
+   "owners": 4,
+   "profile": "accurate-mp4",
+   "ranges_sha256_ref": "e09664caed027c1e921b0f60426962388b2514b9d446abc624453126237507c8",
+   "worker_concurrency": 2
+  },
+  {
+   "arrival": "simultaneous barrier after distinct-owner upload",
+   "cuts_per_job": 2,
+   "ffmpeg_threads": 2,
+   "fixture": "complex",
+   "id": "server-copy-mp4-1",
+   "jobs_per_owner": 4,
+   "measure": [
+    "accepted_to_all_downloads",
+    "queue_wait",
+    "throughput",
+    "api_and_worker_cgroup_cpu_memory_io",
+    "actual_download_bytes"
+   ],
+   "output_mode": "separate",
+   "owners": 1,
+   "profile": "copy-mp4",
+   "ranges_sha256_ref": "e09664caed027c1e921b0f60426962388b2514b9d446abc624453126237507c8",
+   "worker_concurrency": 2
+  },
+  {
+   "arrival": "simultaneous barrier after distinct-owner upload",
+   "cuts_per_job": 2,
+   "ffmpeg_threads": 2,
+   "fixture": "complex",
+   "id": "server-copy-mp4-4",
+   "jobs_per_owner": 4,
+   "measure": [
+    "accepted_to_all_downloads",
+    "queue_wait",
+    "throughput",
+    "api_and_worker_cgroup_cpu_memory_io",
+    "actual_download_bytes"
+   ],
+   "output_mode": "separate",
+   "owners": 4,
+   "profile": "copy-mp4",
+   "ranges_sha256_ref": "e09664caed027c1e921b0f60426962388b2514b9d446abc624453126237507c8",
+   "worker_concurrency": 2
+  },
+  {
+   "arrival": "simultaneous barrier after distinct-owner upload",
+   "cuts_per_job": 2,
+   "ffmpeg_threads": 2,
+   "fixture": "complex",
+   "id": "server-mp3-1",
+   "jobs_per_owner": 4,
+   "measure": [
+    "accepted_to_all_downloads",
+    "queue_wait",
+    "throughput",
+    "api_and_worker_cgroup_cpu_memory_io",
+    "actual_download_bytes"
+   ],
+   "output_mode": "separate",
+   "owners": 1,
+   "profile": "mp3",
+   "ranges_sha256_ref": "e09664caed027c1e921b0f60426962388b2514b9d446abc624453126237507c8",
+   "worker_concurrency": 2
+  },
+  {
+   "arrival": "simultaneous barrier after distinct-owner upload",
+   "cuts_per_job": 2,
+   "ffmpeg_threads": 2,
+   "fixture": "complex",
+   "id": "server-mp3-4",
+   "jobs_per_owner": 4,
+   "measure": [
+    "accepted_to_all_downloads",
+    "queue_wait",
+    "throughput",
+    "api_and_worker_cgroup_cpu_memory_io",
+    "actual_download_bytes"
+   ],
+   "output_mode": "separate",
+   "owners": 4,
+   "profile": "mp3",
+   "ranges_sha256_ref": "e09664caed027c1e921b0f60426962388b2514b9d446abc624453126237507c8",
+   "worker_concurrency": 2
+  }
+ ],
+ "settings": {
+  "disk_reserve_bytes": 3221225472,
+  "profile": "fast",
+  "sample_seconds": 0.02,
+  "sample_timeout_seconds": 180,
+  "threads": 2
+ },
+ "tools": {
+  "ffmpeg": {
+   "bytes": 327256,
+   "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/bin/ffmpeg",
+   "sha256": "aceef0294788642f8d606b70afe3a5d2091e7bbd85721850a1f5926f1619e98e",
+   "version": "ffmpeg version 5.1.9-0+deb12u1 Copyright (c) 2000-2026 the FFmpeg developers"
+  },
+  "ffprobe": {
+   "bytes": 209856,
+   "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/bin/ffprobe",
+   "sha256": "3de016d86d1c615f5279b714478d64360dfa61ab37d7911ae350a0e21dbb5ef5",
+   "version": "ffprobe version 5.1.9-0+deb12u1 Copyright (c) 2007-2026 the FFmpeg developers"
+  }
+ },
+ "verification": {
+  "cleanup": "delete only owned verified media after retaining fingerprints; keep failures",
+  "comparison": "decoded hashes + normalized public manifests; output bytes recorded separately",
+  "every_run": "result order/bounds and independently probed/decoded outputs"
+ }
+}

@@ -1,0 +1,635 @@
+{
+  "schema": 2,
+  "scope": "Finite universal-Go-core media decisions based on retained evidence. Finalruntimeguard is source1ms→MKV AAC/MP3/FLAC only. No production operations/deployment; this inventory is not final-v6 performance acceptance.",
+  "status": {
+    "runtime_decisions_frozen": true,
+    "universal_speed_claim_supported": false,
+    "competitor_speed_claim_supported": false,
+    "final_v6_timings": "Parent coordinator owns fresh generation6 acceptance; no fresh performance cohort executed by this report author."
+  },
+  "adopted": [
+    {
+      "path": "intermediate MP4 faststart",
+      "decision": "Remove index relocation only for internal MP4s consumed by a later mux; keep +faststart on each final MP4.",
+      "expected_mechanism": "Avoid one intermediate full-file relocation pass; no isolated end-to-end speed number asserted.",
+      "gates": [
+        "TestCopyJoinReusesRepeatedSegmentsAndFaststartOnlyFinal"
+      ],
+      "proof": [
+        "earlier_media_summary",
+        "native_complete_84",
+        "media_source_catalog"
+      ]
+    },
+    {
+      "path": "original local input probe reuse",
+      "decision": "One operation session reuses original-source stream metadata after file identity/size/mtime validation; worker bounded verified-file cache reuses between jobs. Output/staged-file probes remain fresh.",
+      "gates": [
+        "TestLocalExportSessionReusesOriginalAndVerifiesEveryJoinedResult",
+        "TestLocalProbeCacheReusesVerifiedFileAndInvalidatesChanges",
+        "TestLocalProbeCacheBoundsMetadataAndDoesNotReuseOutputProbes",
+        "TestWorkerReusesLocalProbeAcrossJobsAndStillVerifiesEachOutput"
+      ],
+      "proof": [
+        "host_full_suite",
+        "native_complete_84",
+        "media_source_catalog"
+      ],
+      "speed_number": null
+    },
+    {
+      "path": "copy-join source audio",
+      "decision": "One source-audio seek plus final mux is retained only for the independently proved millisecond-clock subset; audio-only packetdrop keeps amount0 and explicit AV_NOPTS exemption.",
+      "eligible": "OutputMKV AND selectedAAC/MP3/FLAC sourceTimeBase exactlypositive1/1000 rational AND finiteknownorigin AND unchangedtoolhaspacketdropexpressioncapability. Positive2/2000 canonicalequivalent accepted; malformed/zero/negative/overflow timebases fall back.",
+      "fallbacks": [
+        "ALL MP4outputs",
+        "ALL Opusinputs/outputs",
+        "finer or unknown/nonfinite/unparseable sourceclocks",
+        "unprovedcodecs",
+        "packetdropcapabilityunavailable"
+      ],
+      "bounds": "Tool capability query <=2s, identity-checked executable cache <=32 entries; a fresh CLI process starts with empty cache.",
+      "gates": [
+        "TestCopyJoinAudioPacketCopyPreservesClocks",
+        "TestCopyPacketDropPreservesUnknownPresentationTimestamps",
+        "TestCopyJoinAudioFallsBackWhenPacketTrimUnavailable",
+        "TestCopyJoinAudioPreservesFineSourcePacketClocks"
+      ],
+      "proof": [
+        "clock_fix_resolution",
+        "clock_final_build",
+        "clock_host_84",
+        "clock_production_84",
+        "clock_host_opus_pcm_6",
+        "clock_production_opus_pcm_6"
+      ],
+      "performance_claim": "One eligible audio-stage FFmpeg process removed only for source1ms→MKV AAC/MP3/FLAC. MP4/Opus retain established two-stage normalization. No new end-to-end speed number asserted."
+    },
+    {
+      "path": "subtitles",
+      "decision": "Reuse one original-source extraction per operation and one parsed cue index; binary-search prefix maximum end times preserves overlapping/spanning and unsorted cues; repeated/empty clips retain behavior.",
+      "bounds": {
+        "retained_tracks": 1,
+        "conservative_memory_bytes": 1048576,
+        "accounting": "raw/text backing plus slice capacities and bounded object overhead",
+        "large_track_fallback": "existing disk-backed one-track path"
+      },
+      "gates": [
+        "TestSubtitleIndexPreservesSpanningUnsortedRepeatedAndEmptyCues",
+        "TestSourceSubtitleIndexReusesOnlyOneBoundedTrack",
+        "TestLocalExportSessionExtractsSubtitlesOnceAndClipsEveryResult"
+      ],
+      "proof": [
+        "earlier_media_summary",
+        "native_complete_84",
+        "media_source_catalog"
+      ],
+      "speed_number": null
+    },
+    {
+      "path": "batch keyframes",
+      "decision": "Lazy merged bounded lookahead windows share nearby original-local-source packet scans within the operation; retain PTS/DTS selection, source/tool/stream guards and cancellation. Wider optional-probe failure falls back to the original bounded scan.",
+      "bounds": {
+        "windows": 16,
+        "keyframe_entries": 4096,
+        "lookahead_ms": 15000,
+        "planned_range_starts": 128
+      },
+      "gates": [
+        "TestCopyKeyframeSelectionKeepsInitialAndDecodeClocks",
+        "TestLocalKeyframeCacheChecksSourceToolStreamAndCancellation",
+        "TestLocalKeyframeLookaheadBoundsFallbackAndCacheLimit"
+      ],
+      "proof": [
+        "earlier_media_summary",
+        "native_complete_84",
+        "media_source_catalog"
+      ],
+      "speed_number": null
+    },
+    {
+      "path": "repeated ranges",
+      "decision": "Reuse a verified identical original-local-source join segment; engine/worker separate exports copy acknowledged verified results into independent files after source and published-file identity checks. Preserve requested order/labels, logical output accounting and per-result verification/publication.",
+      "bounds": "Operation-bounded ranges; join-segment reuse retains at most128 exact-range entries.",
+      "gates": [
+        "TestCopyJoinReusesRepeatedSegmentsAndFaststartOnlyFinal",
+        "TestPlanRepeatedIntervalsProduceIndependentFilesAndPreserveLabels",
+        "TestPlanRepeatedIntervalRegeneratesChangedPublishedResult",
+        "TestWorkerRepeatedLocalRangesReuseOwnedPublicationWithIndependentFiles"
+      ],
+      "proof": [
+        "earlier_media_summary",
+        "native_complete_84",
+        "media_source_catalog"
+      ],
+      "speed_number": null
+    }
+  ],
+  "rejected_or_deferred": [
+    {
+      "candidate": "global output -ss 0 single mux",
+      "decision": "Rejected.",
+      "observed": {
+        "failed_trials": 30,
+        "total_trials": 30,
+        "ordinary_beginning_video_packets": {
+          "baseline": 127,
+          "prototype": 77
+        },
+        "ordinary_later_video_packets": {
+          "baseline": 77,
+          "prototype": 27
+        }
+      },
+      "reason": "Global output seek discards the first copied B-frame GOP; ordered packet payload/count equality fails. Later audio checks did not execute after that failure.",
+      "scope": "Host FFmpeg master20261001; functional rejection, no performance conclusion.",
+      "proof": [
+        "global_output_seek_rejection"
+      ]
+    },
+    {
+      "candidate": "unconditional packet-drop audio mux",
+      "decision": "Reject generalMP4/Opusdirectdispatch, including source1ms→MP4; retain only finalguardedsubset.",
+      "reason": "Initialcomplex20MP4 changed1009/1701 audio packet clocks and formatduration by0.499ms despite identicalpayload/video/fullPCM. A source1ms-onlyguard still failed7exactclock/durationcases on5.1.9; MP4andOpusmustretainstaging.",
+      "proof": [
+        "clock_fix_resolution",
+        "clock_rejected_source_only_production",
+        "clock_production_84"
+      ]
+    },
+    {
+      "candidate": "continuous decode spanning distant cuts",
+      "decision": "Reject as universal planning rule; diagnostic only.",
+      "metrics": {
+        "ranges": 32,
+        "selected_media_ms": 35200,
+        "contiguous_media_ms": 3531100,
+        "selected": {
+          "median_wall_seconds": 0.18179721292108297,
+          "median_cpu_seconds": 0.30039899999999875,
+          "median_frames": 879
+        },
+        "contiguous": {
+          "median_wall_seconds": 6.0735818550456315,
+          "median_cpu_seconds": 12.786449000000005,
+          "median_frames": 88073
+        },
+        "wall_ratio": 33.40855317557665,
+        "cpu_ratio": 42.564885369125925
+      },
+      "scope": "Decode-to-null work diagnostic, different output frame counts/order; NOT semantically equivalent same-output export or end-to-end speed benchmark.",
+      "proof": [
+        "continuous_decode_diagnostic"
+      ]
+    },
+    {
+      "candidate": "close split+trim shared decode/encode",
+      "decision": "Measured future opportunity; defer runtime planner adoption this pass.",
+      "supersedes": "earlier_media_summary.rejected_or_deferred.adaptive_close_shared_decode lack-of-equivalence statement only; full-gap rejection remains separate.",
+      "ranges_ms": [
+        [
+          2400,
+          3500
+        ],
+        [
+          3200,
+          4300
+        ]
+      ],
+      "qualification": "32 qualification/measured output files byte-identical to literal immutable-baseline CLI outputs. Full video/PCM decode hashes, every video PTS/duration and sample count equal; candidate-versus-baseline audio lag0. Both selected streams mono, actual core flags AAC128k/no channel conversion.",
+      "timing_scope": "Host frozen FFmpeg master20261001; command stage only; n3 alternating measured pairs per fixture after separate qualification/warmup. Child CPU, peak single-process RSS, FFmpeg process count included; inspection/probes/publication/queue/transfers excluded.",
+      "metrics": [
+        {
+          "fixture": "ordinary",
+          "qualified": true,
+          "all_bytes_equal_to_cli": true,
+          "median": {
+            "baseline": {
+              "cpu_seconds": 0.13602799999999998,
+              "ffmpeg_process_count": 2,
+              "peak_process_rss_bytes": 48738304,
+              "wall_seconds": 0.10788628878071904
+            },
+            "shared": {
+              "cpu_seconds": 0.11667799999999999,
+              "ffmpeg_process_count": 1,
+              "peak_process_rss_bytes": 53583872,
+              "wall_seconds": 0.09255985682830215
+            }
+          },
+          "shared_over_baseline": {
+            "wall": 0.8579390196323449,
+            "cpu": 0.8577498750257301,
+            "peak_process_rss": 1.0994201193377595
+          },
+          "first_output_process_complete_bound_seconds": {
+            "baseline_first_child": 0.05252767587080598,
+            "shared_process": 0.09255985682830215
+          }
+        },
+        {
+          "fixture": "complex-1080p60",
+          "qualified": true,
+          "all_bytes_equal_to_cli": true,
+          "median": {
+            "baseline": {
+              "cpu_seconds": 1.8094869999999998,
+              "ffmpeg_process_count": 2,
+              "peak_process_rss_bytes": 121069568,
+              "wall_seconds": 1.039456516969949
+            },
+            "shared": {
+              "cpu_seconds": 1.743139,
+              "ffmpeg_process_count": 1,
+              "peak_process_rss_bytes": 174415872,
+              "wall_seconds": 0.9682652200572193
+            }
+          },
+          "shared_over_baseline": {
+            "wall": 0.931511038941528,
+            "cpu": 0.9633332541211957,
+            "peak_process_rss": 1.4406252114486773
+          },
+          "first_output_process_complete_bound_seconds": {
+            "baseline_first_child": 0.48502761288546026,
+            "shared_process": 0.9682652200572193
+          }
+        }
+      ],
+      "first_output_scope": "earliest process-complete bound for first safe result of this command-stage prototype; excludes inspection, publication, queue and transfer",
+      "remaining_bounds": [
+        "Complex process peakRSS rises44.1%; two encoders run simultaneously. Current composite export permit needs revised memory/thread weights and concurrency proof.",
+        "Safe portable first-output publication currently waits for entire grouped process; recorded process-complete bounds approximately52.5→92.6ms ordinary and485→968ms complex are not publication/download latency measurements.",
+        "Need FFmpeg5.1.9/native parity; VFR/HDR/rotation/SAR/other tracks/subtitles/remote semantics; cancellation/failure/partial-output/durable-publication proof."
+      ],
+      "proof": [
+        "close_protocol",
+        "close_raw",
+        "close_summary",
+        "close_first_output_bounds",
+        "close_report"
+      ]
+    },
+    {
+      "candidate": "copy reservation/decoder weight reduction",
+      "decision": "Keep conservative existing reservation and dimensions-based whole-export decoder weight. Optional pipeline preparation changes scheduling, not safety weights.",
+      "reason": "Copy composite still performs decoder-backed input/output probes and optional subtitle extraction; weight1 or local-file-only output allowance is not justified by remux costs alone.",
+      "missing_proof": "Phase-local release/reacquire without nested-acquire deadlock, producer/admission/publication cap consistency and8K peak-memory/resource proof.",
+      "proof": [
+        "earlier_media_summary"
+      ]
+    }
+  ],
+  "actual_compatibility_evidence": {
+    "host_local_full_suite": {
+      "result": "PASS",
+      "app_race_seconds": 275.31,
+      "precision": "Aggregate local full-suite receipt; does not retain verbose per-case84 listing. Earlier source snapshot; not a final-v5 timing result.",
+      "proof": [
+        "host_full_suite"
+      ]
+    },
+    "production_family_matrix": {
+      "tools": "DebianbookwormFFmpeg5.1.9 retainedproduction-familyimage, not productionserverexecution",
+      "image": "sha256:309d9f1027a655016b2151a7746e4fc47de98da916685f54294d3f6a80c44dae",
+      "total_cases": 84,
+      "full_run_counts": {
+        "PASS": 81,
+        "FAIL": 3,
+        "SKIP": 0
+      },
+      "initial_failed_cases": [
+        "opus-mp4-start0",
+        "opus-mp4-start100",
+        "opus-mp4-start3500"
+      ],
+      "initial_failure_kind": "Strictbaselinepacketclocks/timebase/formatdurationalreadyequal; oldOpusMP4baseline-source6.5msdelayhitformeroptimized-sourcealignmentgate.",
+      "final_test_only_compat_and_full_pcm_affected_rerun": {
+        "PASS": 6,
+        "FAIL": 0,
+        "SKIP": 0,
+        "formats": [
+          "mp4",
+          "mkv"
+        ],
+        "requests_ms": [
+          0,
+          100,
+          3500
+        ]
+      },
+      "expected_unsupported_flac_mp4_diagnostic_cases": 3,
+      "absolute_source_1ms_nonlegacy_output_cases": 75,
+      "runtime_go_changed_between_full_and_affected_runs": false,
+      "precision": "81full-runpasses+3knownbaseline-sourcefailures plus affected6finalcompatibility/fullPCMpasses; not one all84green5.1.9invocation. FinalCI will independentlyrunallcurrenttests.",
+      "proof": [
+        "clock_production_84",
+        "clock_production_opus_pcm_6",
+        "clock_final_build",
+        "clock_fix_resolution"
+      ]
+    },
+    "historical_native_complete_matrix_before_clock_fix": {
+      "platform": "macOS Intel",
+      "go": "1.27.2",
+      "ffmpeg": "7.1.5",
+      "revision": "555a2f2",
+      "counts": {
+        "PASS": 84,
+        "FAIL": 0,
+        "SKIP": 0
+      },
+      "proof": [
+        "native_complete_84"
+      ],
+      "precision": "Historical7.1.5 CI84/84 before strictpacketclock fix; not currentguard/nativeCI acceptance."
+    },
+    "final_host_strict_matrix": {
+      "tools": "frozenhostFFmpegmaster20261001",
+      "full_counts": {
+        "PASS": 84,
+        "FAIL": 0,
+        "SKIP": 0
+      },
+      "affected_final_test_only_OpusPCM_cases": 6,
+      "precision": "Full84runtimeguardpass, then finaltest-onlyOpusPCM/compat6pass; runtimeunchanged.",
+      "proof": [
+        "clock_host_84",
+        "clock_host_opus_pcm_6",
+        "clock_final_build"
+      ]
+    },
+    "legacy_opus_fallbacks": {
+      "optimized": false,
+      "actual_old_audio_stage_count_asserted": 2,
+      "sample_rate": 48000,
+      "source_lag_samples_baseline_and_candidate": {
+        "host_mp4": 24,
+        "host_mkv": 48,
+        "production_mp4": -312,
+        "production_mkv": -624
+      },
+      "production_source_error_ms": {
+        "mp4": 6.5,
+        "mkv": 13
+      },
+      "baseline_candidate_exact_packet_payload_pts_dts_duration_timebase_and_format_duration": true,
+      "baseline_candidate_complete_decoded_PCM_SHA256_equal": true,
+      "baseline_candidate_alignment_tolerance_ms": 1,
+      "optimized_eligible_paths_absolute_source_tolerance_ms": 1,
+      "interpretation": "Preserve originalsourceclockquirks only on explicitnonoptimizedOpusfallbacks. Independentlyrecordbothbaseline/source andcandidate/source lags. No globaltolerancechange.",
+      "proof": [
+        "clock_host_opus_pcm_6",
+        "clock_production_opus_pcm_6",
+        "clock_fix_resolution"
+      ]
+    }
+  },
+  "unresolved_p1_tool_stall": {
+    "severity": "Material unresolved reliability issue; no universal latency/throughput guarantee.",
+    "run": "final-v4-mixed/candidate-p1-pair03",
+    "source_revision": "555a2f2",
+    "configuration": "worker concurrency2/preparation1, two HLS jobs and two local jobs, unchanged job120s limit",
+    "observation": {
+      "affected_job": "job_16d9196e01452d1b4e8d841861db861f",
+      "affected_item": "item_1144cdfa249000234747fadcf7e8fd7d",
+      "ffmpeg_invocation_elapsed_ms": 118762,
+      "media_progress_ms": 0,
+      "source_preparation_wait_ms": 116067,
+      "cold_local_inspection_elapsed_ms": 116157,
+      "job_elapsed_ms": 120007,
+      "same_range_other_job_ffmpeg_elapsed_ms": 50
+    },
+    "interpretation": "Primary long wait is an already-entered FFmpeg invocation after successful input probe. Held media permit plus whole-pool cold local inspection/FIFO explains secondary waits. Static review found no nested HLS inspection permit or probe-cache mutex cycle; this is not proof of native root cause.",
+    "root_cause": "Unresolved native/tool-wrapper stall. No live native/Go stack retained from failing invocation. Not dismissed as harness and no deadline increase/fix claimed.",
+    "followup": {
+      "functional_repetitions": 12,
+      "stalls_over15s": 0,
+      "successful_download_hashes": 144,
+      "unchanged_deadlines": true,
+      "performance_claim": false,
+      "conclusion": "Failure did not recur;12 passes do not close the original stall."
+    },
+    "proof": [
+      "p1_failed_worker_log",
+      "p1_failed_witness",
+      "p1_failed_tool_events",
+      "p1_followup_diagnostics",
+      "p1_followup_build"
+    ]
+  },
+  "claim_boundaries": [
+    "Freshfinal-v6 immutable-binary paired acceptance remains with coordinator; historicalv5timings are not relabelled as currentguard results.",
+    "No controlled competitor benchmark exists. No statement that all operations/platforms/codecs are faster than baseline or competitors is supported.",
+    "Native FFmpeg dominates encode work. Go orchestration/cache wins are workload dependent; copy fallbacks/tool startup, inspection and verification remain intentional costs.",
+    "Host FFmpeg master timing does not establish5.1.9 production performance;5.1.9 matrix establishes bounded correctness/compatibility only.",
+    "Slow-HLS witnesses use fixed guarded local fixture transport; no public-network/provider throughput or production saturation claim.",
+    "Shared-output prototype is promising only in its proved two-cut local scope; extra memory and later first safe completion prevent universal planner adoption.",
+    "Strict84matrixruntimeproof and finaltest-only6OpusfullPCMproof are separatelymapped through immutablebuild/catalogreceipts; no one-shot84productiongreenclaim before currentCI."
+  ],
+  "sanity": {
+    "all_referenced_files_exist": true,
+    "report_preparation_used_only_retained_evidence": true,
+    "source_runtime_unchanged_across_full_matrices_and_test_only_pcm_extension": true,
+    "final_cli_byte_identical_to_exact_qualified_cli": true,
+    "final_catalog_bound": true,
+    "v1_preserved": true,
+    "new_universal_speed_claim": false,
+    "original_v4_p1_stall_closed": false
+  },
+  "evidence": {
+    "frozen_protocol": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/frozen-protocol.json",
+      "sha256": "660f1007db49c49ad01c6f1c2aa4bf564709823689342c9c26decf3b61091ba9",
+      "bytes": 148005
+    },
+    "earlier_media_summary": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/media-optimization-evidence.json",
+      "sha256": "d2844b119b5236fbc1dc1cdbdd1c474d39f031f57b6d0f0168462f7169ec19d9",
+      "bytes": 5643
+    },
+    "media_build": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/app-media-final-build-receipt.json",
+      "sha256": "3d9ee82cf0531e8eb4f4dc74de6d561492abd7d992e051727ff4f66a26f01ee7",
+      "bytes": 450
+    },
+    "media_source_catalog": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/app-media-final-source-catalog.json",
+      "sha256": "d3a3cb24ae1dfcb28c6340f452b1b920c479fd5b845a5c19728124b96145eb82",
+      "bytes": 22343
+    },
+    "compatibility_build": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/app-media-compatibility-final-v2-build-receipt.json",
+      "sha256": "a3864d8a45b3919512cc143b86e1ca1566850b718498afc252498bba4434004a",
+      "bytes": 778
+    },
+    "compatibility_source_catalog": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/app-media-compatibility-final-v2-source-catalog.json",
+      "sha256": "fe1fdccedbc956f04359546467bf5fb3f4935a567295b5b71af5fcc37fac3555",
+      "bytes": 22343
+    },
+    "production_matrix_full": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-audio-final-bookworm.txt",
+      "sha256": "2e61ad76f122c10f522cdc6b1611cbd4dadcf743173ffdb8283e5e7885692503",
+      "bytes": 16097
+    },
+    "production_legacy_affected_rerun": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-audio-opus-compatibility-final-v2-bookworm.txt",
+      "sha256": "8d940502894e6bcbc4bc0e81e9fa8f61c38ae77ccf78763bd070cfec93ced095",
+      "bytes": 1380
+    },
+    "production_unconditional_rejected": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-audio-prototype-expanded-bookworm.txt",
+      "sha256": "ba0f9bf1a997d94c2b835c13c88ea585741d27c67f8682d00a58344688cc3687",
+      "bytes": 14643
+    },
+    "host_initial_30": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-audio-prototype-v2.txt",
+      "sha256": "3c3ba7341df1df1ac71502340e32de741a97dfefa7004855d32ff25fd688d6df",
+      "bytes": 4774
+    },
+    "host_full_suite": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/check-full.log",
+      "sha256": "d4a6d1bb6a90f6af9bee1617fae1bd42ade1ae6844101a74b662b7548c412a14",
+      "bytes": 3849
+    },
+    "native_complete_84": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/ci-pr44-555a2f2-intel-native-115585156467-20261013T231545157174Z.log",
+      "sha256": "0157b25a33555f0c30f5d7f394b755d7bf7f0588712102c78af01bdbb74fc9b0",
+      "bytes": 642998
+    },
+    "global_output_seek_rejection": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-audio-rejected-v1.json",
+      "sha256": "b96714cd5e6ed61f5cbe3b3504e18dbbf464de74c49f1f1dcf3ea67665992a2e",
+      "bytes": 2110
+    },
+    "continuous_decode_diagnostic": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/shared-decode-diagnostic.json",
+      "sha256": "6dddba94fe201474280fb5913f21b545f33db9eb34fe3eaf502faf19514874e0",
+      "bytes": 32358
+    },
+    "close_protocol": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/close-shared-encode-supplement-v2.json",
+      "sha256": "eae60488d086cdca26a4ca522a27c7a4ffb97ce290dd8c39151f147c311c16e4",
+      "bytes": 4688
+    },
+    "close_raw": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/close-shared-encode-results-v2/results.json",
+      "sha256": "1aceb53fdba3f489c7846b2770f4bd815b32700d511c814d7a7a958b5d9e051b",
+      "bytes": 326639
+    },
+    "close_summary": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/close-shared-encode-summary-v2.json",
+      "sha256": "6f8070458a5cb0c594c3d957c64ba7aba5c2cb812b3522ded7090a86100d0585",
+      "bytes": 12446
+    },
+    "close_first_output_bounds": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/close-shared-encode-first-output-bounds-v2.json",
+      "sha256": "39daf58d96f399f196e89e5c7e9544a92ce736fc8b9f4492e04db3b6705ba41c",
+      "bytes": 2424
+    },
+    "close_report": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/close-shared-encode-report-v2.md",
+      "sha256": "75cd1e1c17151605fd0cd51996eb2d64af277d2dfbac4fc2639eb4d36047ecd5",
+      "bytes": 3186
+    },
+    "p1_failed_worker_log": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v4-mixed/candidate-p1-pair03/stderr.txt",
+      "sha256": "03a18dfadfde518170d13f51e26b84b61b8f345ff57d685fbfe9e0bc3b5e4f1a",
+      "bytes": 13184
+    },
+    "p1_failed_witness": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v4-mixed/candidate-p1-pair03/stdout.txt",
+      "sha256": "eaf18d6fa4a84f635742b85afb184cf69773a59bfa13c47c11b459070590fea8",
+      "bytes": 1384
+    },
+    "p1_failed_tool_events": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/final-v4-mixed/candidate-p1-pair03/actual-tool-events.jsonl",
+      "sha256": "b0634387359bda91982ddfa2072cee224f314d2a42fef9fd2663ba9e85d59f51",
+      "bytes": 4417
+    },
+    "p1_followup_diagnostics": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/mixed-deadlock-diagnostic-v1/results.json",
+      "sha256": "6cda9dca5e8c77d2f6bab5217de3f7c7acf4ee48e559fb795867bbb393b1f955",
+      "bytes": 39581
+    },
+    "p1_followup_build": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/mixed-deadlock-diagnostic-v1/build-receipt.json",
+      "sha256": "f27d040bbe4dd11a0bc327676e3b36530a48d3e5abdc9de91a746f8958dfd731",
+      "bytes": 26161
+    },
+    "clock_fix_resolution": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/clock-regression-resolution.json",
+      "bytes": 9124,
+      "sha256": "b09d17f1958216ba464287d95287d5f6b060d996471cddd32442f293e24cef4e"
+    },
+    "clock_final_build": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/final-clock-proof-build-receipt.json",
+      "bytes": 26511,
+      "sha256": "d71fff52a72903ba6137a97d179e0a8654f00f90475c49ea45ea5b8b6502ccaa"
+    },
+    "clock_host_84": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/strict-output-mkv-host-84.txt",
+      "bytes": 15025,
+      "sha256": "9180cb7c046a7b99c6fd1da7ad5db1d4c1e027975b8e2f981641eec6ce291d2d"
+    },
+    "clock_production_84": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/strict-output-mkv-bookworm-84.txt",
+      "bytes": 15812,
+      "sha256": "5fc93d42ca1db2d8cc929de1de72112a43ecacf96c14ed74af6faeb7cf6c6c05"
+    },
+    "clock_host_opus_pcm_6": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/opus-all-pcm-host.txt",
+      "bytes": 3583,
+      "sha256": "2a12377bccebc87071e7be2d90d6d9c4fca9d4575d87a57115b9259ce29a5dba"
+    },
+    "clock_production_opus_pcm_6": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/opus-all-pcm-bookworm.txt",
+      "bytes": 3608,
+      "sha256": "3f914ce589b4195cd776dd568549e0fe6efed276d87402713290679bfb5fb5be"
+    },
+    "clock_rejected_source_only_production": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/strict-bookworm-final.txt",
+      "bytes": 18053,
+      "sha256": "5d72139799a62f99dbb6778f5302dce36bbd42f24d13ffba5a59baafcce2e26a"
+    },
+    "clock_exact_qualification": {
+      "path": "/root/video_cut/reports/universal-go-core-20261014/copy-join-clock-regression-v1/exact-frozen-complex-qualification/results.json",
+      "bytes": 34398,
+      "sha256": "b55c0480e7d2cd185a49ec689038d629966d4f37cdc39aeff26869c9a792614d"
+    }
+  },
+  "supersedes": {
+    "path": "/root/video_cut/reports/universal-go-core-20261014/media-decisions.json",
+    "bytes": 24777,
+    "sha256": "ba836f79bdd0255567cfba765a14b8959569a02b55470a57717503fe4d3d8c74",
+    "reason": "Exact-clock regression invalidated broad one-processaudioeligibility. This version preserves the old report and replaces eligibility/compatibility facts with the final guardedproof chronology."
+  },
+  "source_catalog_sha256": "3503f2bd511ce8fee94b174085fd0a151c7b787ed7e910e1561d32a3a7708e07",
+  "exact_frozen_complex_qualification": {
+    "cases": [
+      "complex-copy-mp4-joined-20",
+      "complex-copy-mkv-joined-20"
+    ],
+    "oracle": "unchanged core-performance.py output_fingerprint/fullindependentdecode+copy-awarecompare_fingerprints",
+    "mp4": {
+      "duration_seconds": 36.206167,
+      "bytes": 36239898,
+      "byte_identical_to_baseline": true,
+      "clock_payload_video_pcm_equal": true
+    },
+    "mkv": {
+      "duration_seconds": 36.227,
+      "bytes": 36227552,
+      "byte_identical_to_baseline": false,
+      "clock_payload_video_pcm_equal": true,
+      "file_hash_difference": "File hash differs; all semantic fields identical under the unchanged oracle. Container-byte differences were not further localized."
+    },
+    "timing_claim": false,
+    "final_cli_byte_identical_to_qualified_cli": true,
+    "proof": [
+      "clock_exact_qualification",
+      "clock_final_build"
+    ]
+  }
+}

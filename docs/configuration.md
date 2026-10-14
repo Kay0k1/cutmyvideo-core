@@ -9,8 +9,10 @@ Byte values are decimal integers, not `1GiB` strings. Durations use Go syntax
 **code defaults**; the [Compose example](../deploy/compose.example.yml) uses
 smaller upload/output/storage/range budgets for a local trial. The separately
 prepared [public profile](self-hosting.md) also constrains container resources,
-private temporary storage, database roles and checked network policy; it awaits
-real container acceptance.
+private temporary storage, database roles and checked network policy. Current
+source passed the disposable Linux container acceptance, including the 006→007
+upgrade and restore; see the [verification receipt](../benchmarks/2026-10-14-universal-go-core/source-verification.json).
+This does not represent a deployment to an operator's production installation.
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -38,7 +40,7 @@ real container acceptance.
 | `STORAGE_SAFETY_BYTES` | 536870912 (512 MiB) | Actual disk headroom; zero allowed |
 | `STORAGE_WAIT_TIMEOUT` | `30m` | Persisted deadline for accepted storage-waiting jobs |
 | `WORKER_CONCURRENCY` | 1 | Local encoder/decoder processing slots; allowed 1–8 |
-| `WORKER_PREPARATION_CONCURRENCY` | 0 | Additional admitted jobs that prepare inputs while encoder slots are occupied; allowed 0–8. Zero retains the legacy job count and job-wide permit. Total active worker jobs are bounded by the sum of these two settings, at most 16. |
+| `WORKER_PREPARATION_CONCURRENCY` | 0 | Experimental additional admitted jobs that prepare inputs while encoder slots are occupied; allowed 0–8. Keep zero unless the tools and workload have been separately validated; see the [measurement limits](../benchmarks/2026-10-14-universal-go-core/README.md#deferred-changes-and-limits). Zero retains the legacy job count and job-wide permit. Total active worker jobs are bounded by the sum of these two settings, at most 16. |
 | `FFMPEG_THREADS` | 2 | Codec threads per process; allowed 1–32 |
 | `FFMPEG_PROFILE` | `fast` | `fast` favors CPU time; `compact` favors smaller files |
 | `FFMPEG_PATH` / `FFPROBE_PATH` / `YTDLP_PATH` | Executable names | Media/extractor executables |

@@ -1,0 +1,1323 @@
+{
+  "all_library_bytes_independently_hash_matched_to_image": true,
+  "bundled_library_directory": "lib",
+  "compact_inventory_canonical_definition": "SHA256 of sorted-by-basename libraries array encoded json.dumps(sort_keys=True,separators=(comma,colon)) UTF8 without trailing newline.",
+  "compact_inventory_canonical_sha256": "aafb8d9c5fb49bbd0fe87e875f124429c2f1f36313984303754642edd737a5ac",
+  "created_utc": "2026-10-14T01:24:24.086342+00:00",
+  "execution_protocol_inventory_canonical_sha256": "703c3ed07a25bae15280b7b4d251101a75a0b58014b1718b491d0e9f9758bf03",
+  "execution_protocol_rebinding_receipt": {
+    "bytes": 8881,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/production51-protocol/rebinding-receipt.json",
+    "sha256": "05dd781c68a4116f45b60c7f09d2cc775569c6401168d6c801f9560bd5cbda18"
+  },
+  "full_receipt": {
+    "bytes": 124910,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/toolchain.json",
+    "sha256": "f2e30eecb19d599677e5e70fc7a97cfe1bb359f3d6857c3099c408dde5a9a96e"
+  },
+  "full_receipt_inventory_definition": "SHA256 of full toolchain.json libraries array, original order, canonical JSON sort_keys/separators; includes image source, full owned path, size, sha256 and mode.",
+  "full_receipt_libraries_canonical_sha256": "703c3ed07a25bae15280b7b4d251101a75a0b58014b1718b491d0e9f9758bf03",
+  "image": {
+    "architecture": "amd64",
+    "id": "sha256:309d9f1027a655016b2151a7746e4fc47de98da916685f54294d3f6a80c44dae",
+    "os": "linux",
+    "reference": "cutmy-core:a9c75df83f96-28dab275534e"
+  },
+  "image_inspection_commands": {
+    "bytes": 2632,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/inspection-commands.json",
+    "sha256": "74be6ff50e2ee9850444e19029da574d7485d670e7f5395320568197bfaadfc2"
+  },
+  "image_original_sha_inventory": {
+    "bytes": 22402,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/provenance/image-all-files-sha256.txt",
+    "sha256": "33fa03a2e95062f21c11c8195be00c57575b8f59b13b57c4ed3209abe7f9bf37"
+  },
+  "libraries": [
+    {
+      "basename": "ld-linux-x86-64.so.2",
+      "bytes": 215000,
+      "sha256": "02bcda52c1a5dfc236f94d9e5255b4a0e26347d8a372a5223b650e31f291ce3c"
+    },
+    {
+      "basename": "libFLAC.so.12",
+      "bytes": 407488,
+      "sha256": "356a0a7f8f9d593ea6302c65c2dbcbab4367129ff22c7fe1ecea651fcbabd352"
+    },
+    {
+      "basename": "libGL.so.1",
+      "bytes": 542880,
+      "sha256": "b278058f0d4148e312a56f06b4632a7d7a67dacb150a0dde34601c579d2f894b"
+    },
+    {
+      "basename": "libGLX.so.0",
+      "bytes": 141736,
+      "sha256": "b702c46681f3d2fc6b95aaacc289dbe6b1bc1271cee3d51c5ab9ff1a812c6705"
+    },
+    {
+      "basename": "libGLdispatch.so.0",
+      "bytes": 719144,
+      "sha256": "53c73f15a1cbd61649ab26e03246f14fcea94f81686cff79dc79361c328c5190"
+    },
+    {
+      "basename": "libOpenCL.so.1",
+      "bytes": 69136,
+      "sha256": "b2b25f05472ab9109566852683f2a0e59c941e47fad1e23077d7b32a7cbd6327"
+    },
+    {
+      "basename": "libSDL2-2.0.so.0",
+      "bytes": 1916048,
+      "sha256": "33fc88ff82d5a51f819c587426c2da1064fb6741c7b076b214f1357216c40b21"
+    },
+    {
+      "basename": "libSvtAv1Enc.so.1",
+      "bytes": 6759376,
+      "sha256": "8b5b42015e42a27044123f5f1e6a2cc2c00dfaafa44d6bcbf384d08fa3ef9c72"
+    },
+    {
+      "basename": "libX11-xcb.so.1",
+      "bytes": 13944,
+      "sha256": "b909c2a5d093f563cf5a4cb9fdb4ecbc75c20280a0f2d4d915d95765adcafec3"
+    },
+    {
+      "basename": "libX11.so.6",
+      "bytes": 1318408,
+      "sha256": "688d7edc1a02a0e7993722d57a42821b22435e249071554625a5ec4784787d3d"
+    },
+    {
+      "basename": "libXau.so.6",
+      "bytes": 14496,
+      "sha256": "833aa73cf8f645330907d5923fcbf380e0895ab2551d522b41b0308747a51e27"
+    },
+    {
+      "basename": "libXcursor.so.1",
+      "bytes": 47768,
+      "sha256": "dd642a6a142df39d4243001a30bb8d09ef2bbbd35df6c2d226a12ee70cdadaa8"
+    },
+    {
+      "basename": "libXdmcp.so.6",
+      "bytes": 22728,
+      "sha256": "911ecd1cf42f310e788652f2719803bb4632e077b6e292af31b876c836bba264"
+    },
+    {
+      "basename": "libXext.so.6",
+      "bytes": 81568,
+      "sha256": "32471a718f4cfef053aae4b84154ebb34ad16996d5db5dd6254e41e5fb36079e"
+    },
+    {
+      "basename": "libXfixes.so.3",
+      "bytes": 26736,
+      "sha256": "a9e0b36916394b36351fbb017a80e5ec09c0454e6f1bf1125cb2b66cb1bbc6e6"
+    },
+    {
+      "basename": "libXi.so.6",
+      "bytes": 76160,
+      "sha256": "b5ecdc4892a59349238f5c5ed560c1634af7e2fc3c82a533345a7712fd2fbdd6"
+    },
+    {
+      "basename": "libXrandr.so.2",
+      "bytes": 47416,
+      "sha256": "8f8f1266a55b55b78d32e91a453af585467b77fcef6d1cb00d44d7427c4b3c6e"
+    },
+    {
+      "basename": "libXrender.so.1",
+      "bytes": 47608,
+      "sha256": "5cd723d723504af24d297cf9bc87156c0e023f4becbee2ce8432555cbaa73836"
+    },
+    {
+      "basename": "libXss.so.1",
+      "bytes": 14528,
+      "sha256": "6528937e7cb205fd279c08780dfb3845d6ca35de151ed3c9c8d39f3eab6b782b"
+    },
+    {
+      "basename": "libXv.so.1",
+      "bytes": 22856,
+      "sha256": "fd9454d15d0172b75bcb35b9640fcf006509f23634335aa59cc389c497016e55"
+    },
+    {
+      "basename": "libaom.so.3",
+      "bytes": 5639576,
+      "sha256": "a5a58f563f5038dcdac85fb2d3b556016b07736d4d8a4f1106fd8fcfcf5b61c1"
+    },
+    {
+      "basename": "libasound.so.2",
+      "bytes": 1079888,
+      "sha256": "9dabddc79cc29b4f69058ac7d94ac11e82a4d6d8cc8c9148cb8377705790c7ea"
+    },
+    {
+      "basename": "libass.so.9",
+      "bytes": 231656,
+      "sha256": "07e090c3f521d02df723d4ee690a19bce474d581430e338418301416d2ba73e8"
+    },
+    {
+      "basename": "libasyncns.so.0",
+      "bytes": 22368,
+      "sha256": "018cd06d2600c7513e2a3f79fc6a1e3b26321b77546a54a3c853a9998c92e3fc"
+    },
+    {
+      "basename": "libavc1394.so.0",
+      "bytes": 18648,
+      "sha256": "d145522b69278cf2c07ad9382bb41988ec9bb344a665ae48bf730de77ac293d8"
+    },
+    {
+      "basename": "libavcodec.so.59",
+      "bytes": 14938720,
+      "sha256": "4af5d9cffe2721f5c2cabf35d63c5c6a039b400df5721aaedf69995e37bd2a0d"
+    },
+    {
+      "basename": "libavdevice.so.59",
+      "bytes": 202744,
+      "sha256": "b2c93a9d33f73e1a38a9fa8fb3220e96af522e1b38a495bee7f8213bf7f198ad"
+    },
+    {
+      "basename": "libavfilter.so.8",
+      "bytes": 12599120,
+      "sha256": "5d5aa2e15aceef4a04431b0944cf1c508db9e3fab3779be37f76285336334030"
+    },
+    {
+      "basename": "libavformat.so.59",
+      "bytes": 2775216,
+      "sha256": "28aadd0a03e3e83d3aa6d4797b6a8569c15e09a5f49e6d71ff4866180871de8d"
+    },
+    {
+      "basename": "libavutil.so.57",
+      "bytes": 925424,
+      "sha256": "c46ee8987cacb9f9af711f676cc98bb6d465a340566dad9c678d21baa26e2c9d"
+    },
+    {
+      "basename": "libblas.so.3",
+      "bytes": 448352,
+      "sha256": "8d5488a64515f34451bd893877d813c342efdd0e98962e16b21e25095cd1e2af"
+    },
+    {
+      "basename": "libblkid.so.1",
+      "bytes": 355328,
+      "sha256": "cc3d6ca965cab25eacb8d7d98f0b13be7c94a19583983fb864ba10163e5536b0"
+    },
+    {
+      "basename": "libbluray.so.2",
+      "bytes": 310256,
+      "sha256": "f877f722f4a2e8f1eb3b5b6bf030de272ab56e5d5de8edd41af676e6d0107e88"
+    },
+    {
+      "basename": "libbrotlicommon.so.1",
+      "bytes": 137376,
+      "sha256": "d0dd623a89c3cd7c085757e41c940a39916a571a9b22b50bd736accd3f3aec53"
+    },
+    {
+      "basename": "libbrotlidec.so.1",
+      "bytes": 47264,
+      "sha256": "928b2613f2d3d73f78bc05c81d79c04cef7e196564f733c0ffdf893602d83aaa"
+    },
+    {
+      "basename": "libbrotlienc.so.1",
+      "bytes": 591920,
+      "sha256": "d7bbf3903f31428b5f0f0a3207f5f2e495c1c44bbd778ab79aae144051531a58"
+    },
+    {
+      "basename": "libbs2b.so.0",
+      "bytes": 22456,
+      "sha256": "f5f8385c01660dcdf2d68e7f7d9b53eb94c3b7e6c40d23a8c1a024e9cde1f866"
+    },
+    {
+      "basename": "libbsd.so.0",
+      "bytes": 84840,
+      "sha256": "c34693b27401e6e74d7ac32184c79bfb0cca936d3b1be990d435124a6a5686f5"
+    },
+    {
+      "basename": "libbz2.so.1.0",
+      "bytes": 74688,
+      "sha256": "e4f501c8bd22390e42422691093d8af4e744a3e854809b809948055e8b08bda5"
+    },
+    {
+      "basename": "libc.so.6",
+      "bytes": 1926232,
+      "sha256": "6b4a45352fd0c540a9c7c718f35ce8c8e46a4e482f9d3885a910c32d1a0e1421"
+    },
+    {
+      "basename": "libcaca.so.0",
+      "bytes": 814808,
+      "sha256": "8816692e747cb0104ab6fef86ccf4c66dd098899c1ea5850d503a15fecb4c7ae"
+    },
+    {
+      "basename": "libcairo-gobject.so.2",
+      "bytes": 42768,
+      "sha256": "76ce6bcb51d7b3116de8c01b7a7655e0ddbf34ee2cc699ef182487dbd3893df6"
+    },
+    {
+      "basename": "libcairo.so.2",
+      "bytes": 1187432,
+      "sha256": "207b61c5a21fbbae4b6a33617d33df7d4fec063370e8ac0fa26ed6d437e588ba"
+    },
+    {
+      "basename": "libcap.so.2",
+      "bytes": 47128,
+      "sha256": "206b61879ef80e797677e3b4c21f7b76ef9e963c4c4fd4e1311eb44fdde13165"
+    },
+    {
+      "basename": "libcdio.so.19",
+      "bytes": 160128,
+      "sha256": "770c479ff0fff050f413e4d824fa0cc98baa488c657bede28324b97e7e16e30f"
+    },
+    {
+      "basename": "libcdio_cdda.so.2",
+      "bytes": 34816,
+      "sha256": "ccb3a79d67faf742264c7f9fa587538f9878d5de09ae77dd5f3ec79796405964"
+    },
+    {
+      "basename": "libcdio_paranoia.so.2",
+      "bytes": 34864,
+      "sha256": "ced746c455d1f7d3e8e550946ca66e796b2c3d045c48634bee8431f45c568028"
+    },
+    {
+      "basename": "libchromaprint.so.1",
+      "bytes": 84480,
+      "sha256": "26e36d30adcf5537a72dca3bf5014f28144ccd0ee41966dffac7315807558fef"
+    },
+    {
+      "basename": "libcjson.so.1",
+      "bytes": 34688,
+      "sha256": "959f9ad8d02ff1c4b81a9063f8aa7508fcb7e0900b4ece4e1e8d232c3402ecf5"
+    },
+    {
+      "basename": "libcodec2.so.1.0",
+      "bytes": 16849840,
+      "sha256": "2bc69094e3f1bb6c2d4b2b393fd1d9ea219c7255be1748c1be328c8ffd83d192"
+    },
+    {
+      "basename": "libcom_err.so.2",
+      "bytes": 18344,
+      "sha256": "857baae57e13a2e8aab83e0c29f660e28a9e1c209bf0ac277edccdedb29fab38"
+    },
+    {
+      "basename": "libcrypto.so.3",
+      "bytes": 4742424,
+      "sha256": "76dd3d93e5ee48950a92a58d59b94de8143847f91a80d9682c938767b991577d"
+    },
+    {
+      "basename": "libdatrie.so.1",
+      "bytes": 34736,
+      "sha256": "cc5825727da9ca869263a95783d7d0a3ab69e3108b1460b84258826a37bcc76a"
+    },
+    {
+      "basename": "libdav1d.so.6",
+      "bytes": 1630208,
+      "sha256": "5c14fcb11d700445ad113c8dccee7094c35821b9a23fd768f8280f74e1f9568c"
+    },
+    {
+      "basename": "libdb-5.3.so",
+      "bytes": 1843792,
+      "sha256": "3601dc1fc553a861cee3f969d9a384e0b157dcddc75e59c4efcd08ee836c601f"
+    },
+    {
+      "basename": "libdbus-1.so.3",
+      "bytes": 346264,
+      "sha256": "cf27c1b1d00bd9018e42d1bcc8ec9b113e67a575671c9916cbe57868f8775edc"
+    },
+    {
+      "basename": "libdc1394.so.25",
+      "bytes": 230320,
+      "sha256": "ab93f62fd92a0caa34eb67377225c9c680213275820a3cce7a2e62d497415533"
+    },
+    {
+      "basename": "libdecor-0.so.0",
+      "bytes": 43360,
+      "sha256": "be509298ab24fea49a2a006f477e7eabccc8527bf589a2bd1e9c75c16a032a49"
+    },
+    {
+      "basename": "libdl.so.2",
+      "bytes": 14480,
+      "sha256": "95d521b2c39fd0333271b6fdcdddff878ae82001a304313a837b8e728ebe3cb1"
+    },
+    {
+      "basename": "libdrm.so.2",
+      "bytes": 84688,
+      "sha256": "6917ab7077a47373b0a00514dcf8c60d9ab19e649c927cfd1de6094d5a7c1eb9"
+    },
+    {
+      "basename": "libepoxy.so.0",
+      "bytes": 1238616,
+      "sha256": "ea190909369521091c2ff94cfa23e5f013d51b8f3af5df4eb0129bf7a118ffcb"
+    },
+    {
+      "basename": "libexpat.so.1",
+      "bytes": 178280,
+      "sha256": "453732cb225bc46f9337066d782118d24194bccee4c85b59eccf7e8714b5e62f"
+    },
+    {
+      "basename": "libffi.so.8",
+      "bytes": 43480,
+      "sha256": "983e72b7e964f3db43fe8a3dc8b338e731fade6ca38df6867aebb58186aaeb68"
+    },
+    {
+      "basename": "libflite.so.1",
+      "bytes": 247808,
+      "sha256": "35bec492db716f26ad12de26e1fe6bfd2519972a9f735d7205f732edd72a101d"
+    },
+    {
+      "basename": "libflite_cmu_us_awb.so.1",
+      "bytes": 4151280,
+      "sha256": "d6d4d9c247d33abc016328df805faf91e64cfddf7895552fd06e9267bf7bd583"
+    },
+    {
+      "basename": "libflite_cmu_us_kal.so.1",
+      "bytes": 1460248,
+      "sha256": "3b7e07ab650adba6c9c38a056e865e34b357a98af1103e278e3fedb53e5e38c8"
+    },
+    {
+      "basename": "libflite_cmu_us_kal16.so.1",
+      "bytes": 4032536,
+      "sha256": "e4e439812daa2f2c3094b096895629eca787fbde0f3a8f030e05ddc5b2a9316e"
+    },
+    {
+      "basename": "libflite_cmu_us_rms.so.1",
+      "bytes": 4823024,
+      "sha256": "cde623e852070bf3a34aa43dee7951fb6c24538bde0642cae586cd7b77807e19"
+    },
+    {
+      "basename": "libflite_cmu_us_slt.so.1",
+      "bytes": 4159472,
+      "sha256": "eade61da04628c79737acdd7924e656bfce0b4ede63d593ea1b936897c131334"
+    },
+    {
+      "basename": "libflite_cmulex.so.1",
+      "bytes": 612424,
+      "sha256": "c956f8c4e2076152dd1b761444947787d9a46f7dd69b46b6cae9004a78854ce0"
+    },
+    {
+      "basename": "libflite_usenglish.so.1",
+      "bytes": 174152,
+      "sha256": "045dbfd35918b4a597d85823832dbfbfdf5fda13414ae8a4c73d6d4170bad20f"
+    },
+    {
+      "basename": "libfontconfig.so.1",
+      "bytes": 306112,
+      "sha256": "eba9fe8895df08cb98d6a294825132a52b65b53f4f1bce26bb3f6ee6ac6b16ec"
+    },
+    {
+      "basename": "libfreetype.so.6",
+      "bytes": 821160,
+      "sha256": "5c691e2297772f84647dc07392a1a5d682ff4a190b057df34cd26bd2c4a27179"
+    },
+    {
+      "basename": "libfribidi.so.0",
+      "bytes": 108808,
+      "sha256": "4b2fa738995e433a57f724ea2bc32549b3b883c0ffb15244d32e3d39f82d46ad"
+    },
+    {
+      "basename": "libgbm.so.1",
+      "bytes": 64560,
+      "sha256": "addc95468585f5976a86555e52a59f121243b85fb3e5348257d189c7038f59ec"
+    },
+    {
+      "basename": "libgcc_s.so.1",
+      "bytes": 125312,
+      "sha256": "2bd1552c47799ef67e701e81d4383061fd76059868e446e63560f0dd0d5ec14e"
+    },
+    {
+      "basename": "libgcrypt.so.20",
+      "bytes": 1332480,
+      "sha256": "14d0ad938ee07d31ad774567059ac3bb1139e692c6ad21a1450785e880eeb1e8"
+    },
+    {
+      "basename": "libgdk_pixbuf-2.0.so.0",
+      "bytes": 186552,
+      "sha256": "9cd4f4a139a6d253781f94754765f824594956099e247bafd285b2cb1ef6d3c6"
+    },
+    {
+      "basename": "libgfortran.so.5",
+      "bytes": 2923712,
+      "sha256": "59811b6f7cff9cc414fcca4f5c29deaed251d410a2384602f323cf011a845877"
+    },
+    {
+      "basename": "libgio-2.0.so.0",
+      "bytes": 1953008,
+      "sha256": "5eb29a8a41206d23ea321159267e2799e5426975fb4501a062f90efc4450444d"
+    },
+    {
+      "basename": "libglib-2.0.so.0",
+      "bytes": 1273360,
+      "sha256": "1708487c60fb32855e9d4aec503f0c32dcb74c6834a839e015ccbd27a606a879"
+    },
+    {
+      "basename": "libgme.so.0",
+      "bytes": 321552,
+      "sha256": "8b5dc1ffa83be234e30c06cfb060f5f750be50001f8144b971cd72c7bd9f6804"
+    },
+    {
+      "basename": "libgmodule-2.0.so.0",
+      "bytes": 18480,
+      "sha256": "99144134d198f50b484b257fdc7c82a4035ff6c6753575e31457d5494bf23965"
+    },
+    {
+      "basename": "libgmp.so.10",
+      "bytes": 529216,
+      "sha256": "7376c9af0afd6e7698a64ee19de3c8a0199418664974384c70435a51c7ff7f3f"
+    },
+    {
+      "basename": "libgnutls.so.30",
+      "bytes": 2209528,
+      "sha256": "779b25d20249988bea2c1aa6bbeb218f5ae7ea8a9d30ce4f54ea37372965cc4b"
+    },
+    {
+      "basename": "libgobject-2.0.so.0",
+      "bytes": 387288,
+      "sha256": "59c621c45fadf0024cacd9e6982f540c26d1a0922c14d0c1dbe408129afe2385"
+    },
+    {
+      "basename": "libgomp.so.1",
+      "bytes": 290392,
+      "sha256": "f9a9ad78a8dc39c0e90a265ffa551fae6c92a40f360889b44a7e141f9a2adfb1"
+    },
+    {
+      "basename": "libgpg-error.so.0",
+      "bytes": 157768,
+      "sha256": "f93b4f9a2d482d553f743d1fe6ac6b219f88f20d59b528d46a61610c5d0ac10e"
+    },
+    {
+      "basename": "libgraphite2.so.3",
+      "bytes": 166048,
+      "sha256": "6d94ea3f501329d3f68636c31351b1e46670af4a3acdaf0e3f43004b9d53ff41"
+    },
+    {
+      "basename": "libgsm.so.1",
+      "bytes": 63496,
+      "sha256": "e8f2c037aa0a2dd125082618e762091e429b432c9c2b1fdaac5da0a8d9cf2fcf"
+    },
+    {
+      "basename": "libgssapi_krb5.so.2",
+      "bytes": 338680,
+      "sha256": "850b2e9351a5aaffb92292c5b3e3d85ca21735d486714843d8b2870e9631e8bc"
+    },
+    {
+      "basename": "libharfbuzz.so.0",
+      "bytes": 1064504,
+      "sha256": "1b55afd639cdf32fef66721032a29ee02b9c5af5527845cf53d185bc5413df1a"
+    },
+    {
+      "basename": "libhogweed.so.6",
+      "bytes": 292856,
+      "sha256": "480675ed8d58f9266ced954eb746c74a6c4ae3479bf5dccbcbc56ff0c814b9e4"
+    },
+    {
+      "basename": "libhwy.so.1",
+      "bytes": 38920,
+      "sha256": "019861aca5df2ac7946958d8d0802f22a1aa3e6b5b66832a66289daf91e64e99"
+    },
+    {
+      "basename": "libicudata.so.72",
+      "bytes": 31262256,
+      "sha256": "5f572a055d6410ab50fc45770d529109dcc4fe8888f3b2834f76730ff19ebf58"
+    },
+    {
+      "basename": "libicuuc.so.72",
+      "bytes": 2078888,
+      "sha256": "6ae74e03d74c29774be16f877aeba4b8c347ea83d8cb43b730fd283e205b375e"
+    },
+    {
+      "basename": "libidn2.so.0",
+      "bytes": 198776,
+      "sha256": "864f32ec2dc74d90c51d389a02b30003465b84e2090bf940039c0cd4b41b8f63"
+    },
+    {
+      "basename": "libiec61883.so.0",
+      "bytes": 51104,
+      "sha256": "3e5466a67bce1a250c7cb19b7d7010e778159ac4679c2282a6ba1bc2c628bf44"
+    },
+    {
+      "basename": "libjack.so.0",
+      "bytes": 330040,
+      "sha256": "8bfaaca5c1a56ffd523fa1228d50d5bf44c7ef30b94a7d193bbd9ca1f158360c"
+    },
+    {
+      "basename": "libjpeg.so.62",
+      "bytes": 600128,
+      "sha256": "dad87949ccad2be7e40a02986306087fdcfb35ccaadd59aea923a3f96d290eec"
+    },
+    {
+      "basename": "libjxl.so.0.7",
+      "bytes": 3505416,
+      "sha256": "d5b7cf16828b52a9c6e8945b6345a13dd8f025999ae4d0090a480ea8d7bad711"
+    },
+    {
+      "basename": "libjxl_threads.so.0.7",
+      "bytes": 18664,
+      "sha256": "06f07da4a2f784814ea4b37b1f1de4664d74498ac8fb07e301676a992536fdbc"
+    },
+    {
+      "basename": "libk5crypto.so.3",
+      "bytes": 183048,
+      "sha256": "6c7fa0480ed36f756eb63f83baef482bb2a01a5157f32d92be84832a63b926e6"
+    },
+    {
+      "basename": "libkeyutils.so.1",
+      "bytes": 22448,
+      "sha256": "3b2f8f3f07a1f8083f1084c6d61f242071fb6e6938a318dbf968b345507c7b71"
+    },
+    {
+      "basename": "libkrb5.so.3",
+      "bytes": 888080,
+      "sha256": "47b51d738881cbab3825dfcf8eb69fc64922a60d67609bb55b3f46e69276d572"
+    },
+    {
+      "basename": "libkrb5support.so.0",
+      "bytes": 52224,
+      "sha256": "2feeee09768665c44514696ef3b919426fc6f4726f8868e3d9a8885b7137215d"
+    },
+    {
+      "basename": "liblapack.so.3",
+      "bytes": 7333752,
+      "sha256": "72db5f4e45b7d85c756f1dcba10220bc843239c2b40ffcdd7da5d3c728a0ccac"
+    },
+    {
+      "basename": "liblcms2.so.2",
+      "bytes": 398304,
+      "sha256": "30a1a2ecb523474ab66b9dffa8f3920ea549d8cd851eb38bd55b41836b22d590"
+    },
+    {
+      "basename": "liblilv-0.so.0",
+      "bytes": 112480,
+      "sha256": "f7916f3c836da47e8546f02276811018e602b5b4659e69b5a09f9d5ccc625086"
+    },
+    {
+      "basename": "liblz4.so.1",
+      "bytes": 149952,
+      "sha256": "0f0ce52208a22570370eb2e96d250b3c088cb024f15cb7c48565e749eeab7cd5"
+    },
+    {
+      "basename": "liblzma.so.5",
+      "bytes": 190456,
+      "sha256": "5de60ec1bf90cd3d699188eb9ebb333c22b531394e0b030b55048edbd729ed17"
+    },
+    {
+      "basename": "libm.so.6",
+      "bytes": 911904,
+      "sha256": "7f2ca87f652f56b094462474b076749e90e689d0ecb9cb63c7679820b271b4e7"
+    },
+    {
+      "basename": "libmbedcrypto.so.7",
+      "bytes": 501808,
+      "sha256": "c04f91fdb172e17ddb21c9e0b75c04cb4f802bdfc40bb65484550746cd0019a8"
+    },
+    {
+      "basename": "libmd.so.0",
+      "bytes": 47312,
+      "sha256": "9e8462f7650da0b39ecfe1680fa87fe393f0710b324250931ab36fa0135b14cc"
+    },
+    {
+      "basename": "libmfx.so.1",
+      "bytes": 63728,
+      "sha256": "044fe46e213112a30f5298abb3e2e22741fc3b190b2a9d857d75d0671a6836ed"
+    },
+    {
+      "basename": "libmount.so.1",
+      "bytes": 404096,
+      "sha256": "70c1da7f7a3d802c498f4938449bfc7a51877c46b16572d1a396901c032758bc"
+    },
+    {
+      "basename": "libmp3lame.so.0",
+      "bytes": 296936,
+      "sha256": "33aec7029d42a903d0a127c549021c4e886273d29e97422b6f5b7fc6d49b8d1b"
+    },
+    {
+      "basename": "libmpg123.so.0",
+      "bytes": 372920,
+      "sha256": "24393058828c9e0bc242f3bfa7cf792bf5617980a56cdacc8f7df4d54ce052f6"
+    },
+    {
+      "basename": "libmysofa.so.1",
+      "bytes": 63328,
+      "sha256": "bbc1673914c754c113c8bcfd0376c35ca6943109ee5958712d52a1840d58521a"
+    },
+    {
+      "basename": "libncursesw.so.6",
+      "bytes": 231344,
+      "sha256": "b54b9b10f288d9d4cd72e955012a0b06464f08aa44b4acb7499e3c473939e99f"
+    },
+    {
+      "basename": "libnettle.so.8",
+      "bytes": 317544,
+      "sha256": "63f8ec7a41906ad65a800d27294cdbb34bf6c709252a575ed513a3c048d71019"
+    },
+    {
+      "basename": "libnorm.so.1",
+      "bytes": 489480,
+      "sha256": "f2cb1b619127400f6a12c3539f71048ecccf2797d836f3ccfabfbe3e3f24d51f"
+    },
+    {
+      "basename": "libnuma.so.1",
+      "bytes": 52312,
+      "sha256": "bb2bb9250f348587ea3b7594a0a22055312134e55d065434d1f7e22e99ebf1d5"
+    },
+    {
+      "basename": "libogg.so.0",
+      "bytes": 38752,
+      "sha256": "e694b4995fcb1e3372029899504d1faf976d25af6d70f0939caa205ed383592f"
+    },
+    {
+      "basename": "libopenal.so.1",
+      "bytes": 929272,
+      "sha256": "4c0acaa919cbdd14830d1ce30dab448cfc33aa6262dd49f7b605aa6bbd07c889"
+    },
+    {
+      "basename": "libopenjp2.so.7",
+      "bytes": 408000,
+      "sha256": "a666217fc2c9835acff70422584d9947e8c43c97c23f2a95dc581e64e3f2ca5f"
+    },
+    {
+      "basename": "libopenmpt.so.0",
+      "bytes": 1910928,
+      "sha256": "04cd1b65e9b46f4565485fac812ab8a3af1d456079c06a622d346e0e18d09113"
+    },
+    {
+      "basename": "libopus.so.0",
+      "bytes": 383424,
+      "sha256": "b9b1c55e42d607ec1fe5f8fa4b1418d6bf6a342db5488551e9b2343bd847589c"
+    },
+    {
+      "basename": "libp11-kit.so.0",
+      "bytes": 1261376,
+      "sha256": "a0a560ae54a793a11ab78d6ce12b902537932b2d7aab2352250391a035977ef1"
+    },
+    {
+      "basename": "libpango-1.0.so.0",
+      "bytes": 425568,
+      "sha256": "01746c3514fc0bdeb45a350392c40746ca499bd54c126f8a7abf97da39510f3e"
+    },
+    {
+      "basename": "libpangocairo-1.0.so.0",
+      "bytes": 63456,
+      "sha256": "53e7d5a5bea4b8ec0b49866c515a70ec06a4d69d3b0d16208ffbf679f5d74b53"
+    },
+    {
+      "basename": "libpangoft2-1.0.so.0",
+      "bytes": 100192,
+      "sha256": "e03bdc7262cf07cb96aca77b077caf75e3939d1e1932f7a618831e513af05c02"
+    },
+    {
+      "basename": "libpcre2-8.so.0",
+      "bytes": 629384,
+      "sha256": "44fcc2a56ee6e4aeb76f7cc46ba711555e15aef5fef86de00d3bf8b0c4d83c9c"
+    },
+    {
+      "basename": "libpgm-5.3.so.0",
+      "bytes": 306400,
+      "sha256": "86a31e6b2804d779b671f9072829fe6aacb69e12a4c8025815e5608e918634bc"
+    },
+    {
+      "basename": "libpixman-1.so.0",
+      "bytes": 698384,
+      "sha256": "cbbdbb3a14ee65123419a6bafcca3f66faad1255efd05ef818da66da1baf9eee"
+    },
+    {
+      "basename": "libplacebo.so.208",
+      "bytes": 7864376,
+      "sha256": "651f801d4dda41998c786b38a72dd99f4f0aba34bf8e1cee09e0bcc56843a7c6"
+    },
+    {
+      "basename": "libpng16.so.16",
+      "bytes": 219056,
+      "sha256": "8a6b5ae14e223d7c01bf09988ea9631c38fd5c898df6d330c343654b76414897"
+    },
+    {
+      "basename": "libpocketsphinx.so.3",
+      "bytes": 301704,
+      "sha256": "48d072c25d0961026472eb8e6b89e7adc282813703396d4e44bc83ca7d51dcdf"
+    },
+    {
+      "basename": "libpostproc.so.56",
+      "bytes": 137208,
+      "sha256": "858bd13b07a5d673c06ab37eb2e4234f22fedbd31a7900b12736a45d33cada86"
+    },
+    {
+      "basename": "libpthread.so.0",
+      "bytes": 14480,
+      "sha256": "b93a680da8a05b939b235c1533572e7a2f6d3d8808bf70209997edc64ea5fedc"
+    },
+    {
+      "basename": "libpulse.so.0",
+      "bytes": 338992,
+      "sha256": "38b07a06cefcaabd8db3edaddafea0ab5b5d2ee15e8641929f7d07d45fb66d59"
+    },
+    {
+      "basename": "libpulsecommon-16.1.so",
+      "bytes": 547016,
+      "sha256": "fd1df682a10d94591d2c691f4c52285ba5d08dc491dc9367cad36dc5e5da713e"
+    },
+    {
+      "basename": "libquadmath.so.0",
+      "bytes": 285304,
+      "sha256": "8c3e12967a5e6dccb0dc2a2b92f415d76ab2b90bea645eb5ec8a01531d01cefb"
+    },
+    {
+      "basename": "librabbitmq.so.4",
+      "bytes": 100272,
+      "sha256": "43e9e327c8a94bfd7880b3034ecfd6647ba8209a2125ed122d5b5736a1ce7626"
+    },
+    {
+      "basename": "librav1e.so.0",
+      "bytes": 2701536,
+      "sha256": "ea5a8ed4c9d680ad7225a715225fd5ba8d383d1cb4f68518da923a8f70e14930"
+    },
+    {
+      "basename": "libraw1394.so.11",
+      "bytes": 64616,
+      "sha256": "3b5222eba222c742640c8878969c77c8c0211c027778c7938c5d41cded96e88d"
+    },
+    {
+      "basename": "libresolv.so.2",
+      "bytes": 60328,
+      "sha256": "ac3924c6cdb26cdfff10fec2ab2748705c83931b39c7f6e638a2b31ae34d420b"
+    },
+    {
+      "basename": "librist.so.4",
+      "bytes": 170008,
+      "sha256": "4d33d170a0e7fb683e9fb7b3d22366d46418e2cce1ee578afe510dbfdda3ccbb"
+    },
+    {
+      "basename": "librom1394.so.0",
+      "bytes": 18568,
+      "sha256": "a271885cca04a6095e7b51538332ff67d9ab321c9e4de16fbcfe1e8e81046da2"
+    },
+    {
+      "basename": "librsvg-2.so.2",
+      "bytes": 11070952,
+      "sha256": "75b86d8a0f73cd6901f417682b7c1cfa5f846a53e29fc10d5edb4c9a588a0cac"
+    },
+    {
+      "basename": "librubberband.so.2",
+      "bytes": 374792,
+      "sha256": "19de330194228641586effced7e870d331746dbdf782280984bb6d1f1da6e8c1"
+    },
+    {
+      "basename": "libsamplerate.so.0",
+      "bytes": 1497656,
+      "sha256": "a79431874d2d35644e60b045579654e45dd1a7cc9665bb427b86a0b9b7bb1f8a"
+    },
+    {
+      "basename": "libselinux.so.1",
+      "bytes": 174312,
+      "sha256": "0207e4908ea384e186c75925b0e56996a3eccecd48c99252aeb757d0d3451c93"
+    },
+    {
+      "basename": "libserd-0.so.0",
+      "bytes": 108456,
+      "sha256": "a832d314d2d9dc6b70c65a251902d80a087bab95970a80eeed80120c85213a6d"
+    },
+    {
+      "basename": "libshine.so.3",
+      "bytes": 43136,
+      "sha256": "64a2941b893372d558d2f69e320b0d93d2661807b423b3a4fa6504d1cb4e5b55"
+    },
+    {
+      "basename": "libslang.so.2",
+      "bytes": 2168672,
+      "sha256": "86dc1320bb69221d418257ba398b58b5f7a7609f2e9ee1247cbb030fef421d5c"
+    },
+    {
+      "basename": "libsnappy.so.1",
+      "bytes": 43376,
+      "sha256": "f877f91f6b09dc43160ff8cec697c2986613b7cded2a03fb27a8b112d0a9bb73"
+    },
+    {
+      "basename": "libsndfile.so.1",
+      "bytes": 554160,
+      "sha256": "3441ea8e0666f733a9b17d152aa43950b500678f484070e8654afa0c30b686dd"
+    },
+    {
+      "basename": "libsndio.so.7.0",
+      "bytes": 67888,
+      "sha256": "c2a65f3e29b49ab7d6a730bc16f9e6cb2da89421e4c8b66c9171637453f452f8"
+    },
+    {
+      "basename": "libsodium.so.23",
+      "bytes": 359112,
+      "sha256": "703b3f766ce3f4a0c6bb67790763ccc87c50c6efa15c6f6559007ee719b6fb5e"
+    },
+    {
+      "basename": "libsord-0.so.0",
+      "bytes": 38752,
+      "sha256": "e77f1d7347331d596912a7188d43b529acd9ab4d26fdad12e0de7af2c05ba4fd"
+    },
+    {
+      "basename": "libsoxr.so.0",
+      "bytes": 215960,
+      "sha256": "c57c8de5a9bf1634735103c9aa52efd343b7933e3bfaeec7f6157fc55d180884"
+    },
+    {
+      "basename": "libspeex.so.1",
+      "bytes": 108456,
+      "sha256": "0e600de667e0241363769dbf1b0a0659396d718669e650a0aa101748692c7ae9"
+    },
+    {
+      "basename": "libsphinxbase.so.3",
+      "bytes": 272560,
+      "sha256": "a8cdc409344a656f0cb94b883b0cfecebdfcea70bd00c43150639b5a3d6a3964"
+    },
+    {
+      "basename": "libsratom-0.so.0",
+      "bytes": 42848,
+      "sha256": "3f9f4ffe9ffd88daadbe3233284faade219aefdd8b09d2b8803493fa24ae058e"
+    },
+    {
+      "basename": "libsrt-gnutls.so.1.5",
+      "bytes": 891720,
+      "sha256": "d578c903c24a6ab979edaa695a916f2f7862d1764fb09693de548d716add8db1"
+    },
+    {
+      "basename": "libssh-gcrypt.so.4",
+      "bytes": 593120,
+      "sha256": "6733636aeb1c5d541aa06c578a95d12c2253c4e99fc85623595341905d3d6221"
+    },
+    {
+      "basename": "libssl.so.3",
+      "bytes": 688160,
+      "sha256": "df53c8f504722cacd8035111fdaed5151ce17b79fd380efcf28b3b4a1ca70cd5"
+    },
+    {
+      "basename": "libstdc++.so.6",
+      "bytes": 2190440,
+      "sha256": "e7848e32af4932840ba775169041759a2a8dd5a008af360e5c55bce506eebcf4"
+    },
+    {
+      "basename": "libswresample.so.4",
+      "bytes": 133112,
+      "sha256": "8858da6d309d6f62d89bc78a541112b1bd62ad0ae714ecc54aa61c14219e73b4"
+    },
+    {
+      "basename": "libswscale.so.6",
+      "bytes": 669688,
+      "sha256": "74693df891b0d13f465bb0b759bc865fffdbca27a1326175ac09b8eb18aaac91"
+    },
+    {
+      "basename": "libsystemd.so.0",
+      "bytes": 844736,
+      "sha256": "3880319ae776b622ad3c89201984065905d10271f78ef3a4db2ee0604a61256b"
+    },
+    {
+      "basename": "libtasn1.so.6",
+      "bytes": 83968,
+      "sha256": "139e933ac55f26bb80520fc63893ff2a528055fdf8058d8341bbd9d7bd762a5e"
+    },
+    {
+      "basename": "libthai.so.0",
+      "bytes": 41000,
+      "sha256": "6a0a7928dfa5ddde72412007f723840a9fb8492be104d3f84c668ad71b442dc8"
+    },
+    {
+      "basename": "libtheoradec.so.1",
+      "bytes": 108696,
+      "sha256": "9852e35b1c768bfdcf5d1398a549d282db6dc71c89ca25e3907d782c17a6490e"
+    },
+    {
+      "basename": "libtheoraenc.so.1",
+      "bytes": 231576,
+      "sha256": "8a205582ea1c1c96b09c94b9fa7de35bda7bedef6b1275fbe79bec1e8fd8545d"
+    },
+    {
+      "basename": "libtinfo.so.6",
+      "bytes": 204088,
+      "sha256": "5c19747909b3815b996ac20b94bccb1faf1c6ff1ad240b05792ee4feab733a88"
+    },
+    {
+      "basename": "libtwolame.so.0",
+      "bytes": 128936,
+      "sha256": "fe4d103778cc9158c82fb6f14b878bbb9425f93a5e278556a1f9011a354457b2"
+    },
+    {
+      "basename": "libudev.so.1",
+      "bytes": 182544,
+      "sha256": "99a5e38f8b45ec2729e5bc24d2d8e2f04d260a2455431a1f9d61f500b31060dd"
+    },
+    {
+      "basename": "libudfread.so.0",
+      "bytes": 38752,
+      "sha256": "c271482df48605dfbb9e998244fe8bad53f833e87e6826d30705abc1253d42f4"
+    },
+    {
+      "basename": "libunistring.so.2",
+      "bytes": 1792040,
+      "sha256": "bc5951aa3d6eaba20ff9688efa3420dc95785aae3709ec48ff6df46d6f409ee5"
+    },
+    {
+      "basename": "libusb-1.0.so.0",
+      "bytes": 121936,
+      "sha256": "9d0e975d3666b74954e280aa2a8f6a4ec3af70b14deec891ae7cbe0aa7be0a01"
+    },
+    {
+      "basename": "libva-drm.so.2",
+      "bytes": 14472,
+      "sha256": "bb2917e7a30aa7fd131fdc859963cb6125639f849e3908abd796a868934951c3"
+    },
+    {
+      "basename": "libva-x11.so.2",
+      "bytes": 27208,
+      "sha256": "63d467149f44460966689b52512c33a5819db7d3dca81af1e7b082727b20699b"
+    },
+    {
+      "basename": "libva.so.2",
+      "bytes": 190944,
+      "sha256": "fb60968d2b5c9bd399628bd277b238217cbbbfab5c7df8a312cee107834a3b1a"
+    },
+    {
+      "basename": "libvdpau.so.1",
+      "bytes": 18440,
+      "sha256": "4826c0493d14c6f05aa6d7a8eeb6fe4b4b8385f09fbb49d410ac92e68eef21d5"
+    },
+    {
+      "basename": "libvidstab.so.1.1",
+      "bytes": 84976,
+      "sha256": "36c543ba4af71c29a7f05adeb58c71563e104ca6437a76e5a3c62f44c3bfdb72"
+    },
+    {
+      "basename": "libvorbis.so.0",
+      "bytes": 178088,
+      "sha256": "efe5d67767878529ab895d8185c89f971408b98416284936f087f172dac5db82"
+    },
+    {
+      "basename": "libvorbisenc.so.2",
+      "bytes": 694248,
+      "sha256": "39121c4b0e7864c7f10d99aca4945608fc134c227d9f736f278148c58587ee4f"
+    },
+    {
+      "basename": "libvorbisfile.so.3",
+      "bytes": 38752,
+      "sha256": "893839d05f0d02ce9f4beb8a24a5dc8d7feda2ab85cee1eaeaf390204daa9703"
+    },
+    {
+      "basename": "libvpx.so.7",
+      "bytes": 3098696,
+      "sha256": "47f09e7b5c4131771bf66db4204b319edd2ba5a908d7c6ef4b8b4100c907d89a"
+    },
+    {
+      "basename": "libvulkan.so.1",
+      "bytes": 457224,
+      "sha256": "91dd2cb10ee4de7b77d0624938ff0a7542641e5348708d0d8c42d9404476d152"
+    },
+    {
+      "basename": "libwayland-client.so.0",
+      "bytes": 68968,
+      "sha256": "a670cef062aecc919539af3b630b23bddb5e901a982851c4c86d2079a49d5b3b"
+    },
+    {
+      "basename": "libwayland-cursor.so.0",
+      "bytes": 35232,
+      "sha256": "f758b21119720747bb8bc27e9ae8acacea45b4c4f6e50fabb902c25646648d10"
+    },
+    {
+      "basename": "libwayland-egl.so.1",
+      "bytes": 14192,
+      "sha256": "f81b121a0cc543ad8cd20d6f48f44201078a09036affa902bdd204ee33e6ea38"
+    },
+    {
+      "basename": "libwayland-server.so.0",
+      "bytes": 89672,
+      "sha256": "55bad26cd3cb8a4a5824f1ba619a409f391f6435bcfd0e6cd94278899f99de35"
+    },
+    {
+      "basename": "libwebp.so.7",
+      "bytes": 453240,
+      "sha256": "4fedb320592cad963eab7f598d3acf3fa9054a2ccffac95bc97085b134ffdc3e"
+    },
+    {
+      "basename": "libwebpmux.so.3",
+      "bytes": 43272,
+      "sha256": "0ef03d06bdb13d3f5be6140e87365ff381bb60aed9a11c6bca201594b43dd875"
+    },
+    {
+      "basename": "libx264.so.164",
+      "bytes": 1900664,
+      "sha256": "df2ae77fb306f1bc427992db9f6f1cbe4fd38dd64cff32f709b9473c4bac3a10"
+    },
+    {
+      "basename": "libx265.so.199",
+      "bytes": 16394944,
+      "sha256": "40d78df44817cd89c2ebd891eda7810b8d4bce99f1e7e5c6813ff89884b57235"
+    },
+    {
+      "basename": "libxcb-dri3.so.0",
+      "bytes": 22600,
+      "sha256": "c885f292ff6ed9299b907cedfb0dd98bf0b0d8abd319ae6d467e623b5275812e"
+    },
+    {
+      "basename": "libxcb-render.so.0",
+      "bytes": 55560,
+      "sha256": "e2b5e78b21258f8fce20c6ea7435c843a5b635087411d496da5cf82430d3f1d4"
+    },
+    {
+      "basename": "libxcb-shape.so.0",
+      "bytes": 14376,
+      "sha256": "52451ae4356c44bf14d2772dbe7f6e23a45e8c963a1c79dc9a0970cb41d91f28"
+    },
+    {
+      "basename": "libxcb-shm.so.0",
+      "bytes": 14392,
+      "sha256": "ce4b516a319766fcacecacc213dfc2de46a6ca7a5aa5a9066fd1bfe604db0257"
+    },
+    {
+      "basename": "libxcb-xfixes.so.0",
+      "bytes": 34856,
+      "sha256": "3ad37794c10c608c72bd5435982af3220271e9725cc436015820f899dd0c6022"
+    },
+    {
+      "basename": "libxcb.so.1",
+      "bytes": 166824,
+      "sha256": "35e218293d7c1f65b765337b92c6425f3495e80f5973058d8847fa08258cb97e"
+    },
+    {
+      "basename": "libxkbcommon.so.0",
+      "bytes": 281256,
+      "sha256": "b1bab7c5ae610a7855f543a1cc141dc9b0de1e59f08d9905d097ff1f9f79620b"
+    },
+    {
+      "basename": "libxml2.so.2",
+      "bytes": 1750104,
+      "sha256": "c05750a6f1c9a90c254df313a9dda9b4c958c0a768b0faf4c15e04b3515c7d93"
+    },
+    {
+      "basename": "libxvidcore.so.4",
+      "bytes": 691200,
+      "sha256": "a7230550e2f636bdf753c8924e9f28d4cb7cccd9f2191eb9e816ea81881f927c"
+    },
+    {
+      "basename": "libz.so.1",
+      "bytes": 121280,
+      "sha256": "7e2a72b4c4b38c61e6962de6e3f4a5e9ae692e732c68deead10a7ce2135a7f68"
+    },
+    {
+      "basename": "libzimg.so.2",
+      "bytes": 850792,
+      "sha256": "07cc6939d64015e99b8271a595a634fded1ceee9b61251e7202ac163b05ce06a"
+    },
+    {
+      "basename": "libzmq.so.5",
+      "bytes": 774184,
+      "sha256": "98f0defc3ab562a85a2b402fbd5200fe8383a830e259498d9e3c3cb451a8d31a"
+    },
+    {
+      "basename": "libzstd.so.1",
+      "bytes": 763816,
+      "sha256": "37412b7ac11063c25a375bdff6f4fdb340362f926cd9c3a55962e8a9c9bc702e"
+    },
+    {
+      "basename": "libzvbi.so.0",
+      "bytes": 581016,
+      "sha256": "c98850173acfee131daff729736ee8a5c3405e4b3a88fa0a6987fb8be12e9a05"
+    }
+  ],
+  "library_count_including_loader": 214,
+  "loader": {
+    "basename": "ld-linux-x86-64.so.2",
+    "bytes": 215000,
+    "image_bytes_unchanged": true,
+    "sha256": "02bcda52c1a5dfc236f94d9e5255b4a0e26347d8a372a5223b650e31f291ce3c"
+  },
+  "patcher_package_matches_authenticated_apt_sha256": true,
+  "relocated_bin_directory": "bin",
+  "relocation": {
+    "changed": "Main ELF dynamic metadata/interpreter/layout only; both .text sections unchanged. All214 libraries including loader byte-identical to image.",
+    "dt_rpath": "$ORIGIN/../lib",
+    "dt_runpath_absent_in_main_elf": true,
+    "extra_dt_needed": "libpulsecommon-16.1.so",
+    "global_env_change": false,
+    "go_source_change": false,
+    "image_change": false,
+    "interpreter": "Absolute private bundle lib/ld-linux-x86-64.so.2 path; fixed installation path, repatch required if moved.",
+    "per_invocation_wrapper": false,
+    "production_change": false,
+    "system_library_change": false,
+    "why_extra_needed": "Image libpulse.so.0 has an absolute DT_RUNPATH=/usr/lib/x86_64-linux-gnu/pulseaudio which prevents inherited main RPATH from resolving its dependency in a flat private bundle. Add an already-required dependency to each main ELF so main RPATH loads the exact image libpulsecommon early. Parent explicitly authorized this ELF-header-only extension after retained initial loader failure.",
+    "why_three_separate_patch_calls": "Combined patchelf0.14.3 set-rpath/add-needed aliased FFprobe RPATH/NEEDED strings; changing RPATH alone changed both. Final binaries were recreated from pristine image originals, then add-needed/interpreter/RPATH each applied in separate process calls. Final exact .text, private metadata, loader closure and direct-version checks passed."
+  },
+  "retained_preparation_failures": [
+    {
+      "diagnostic": {
+        "bytes": 213,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/provenance/ffmpeg-private-loader-list.txt",
+        "sha256": "bf88a807e0f2e044cd7bc019508513e6b7707e4f8aae85756fb37893d60837b0"
+      },
+      "finding": "Image libpulse absolute RUNPATH prevented private libpulsecommon discovery.",
+      "phase": "Initial flat private closure",
+      "receipt": {
+        "bytes": 25049,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/preparation-failure.json",
+        "sha256": "db1b59a6f386cd071dfed66e822d002d89da88f7e799aabc86342efef8f306a6"
+      }
+    },
+    {
+      "diagnostic": {
+        "bytes": 214,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/provenance/ffprobe-final-private-loader-list.txt",
+        "sha256": "c8767a802af5b6d9cfd77025b49354ad5a9e1774b3b0b305a1fe444382ccd39d"
+      },
+      "finding": "FFprobe RPATH became libpulsecommon-16.1.so.",
+      "phase": "Combined patch metadata",
+      "receipt": {
+        "bytes": 29750,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/completion-failure.json",
+        "sha256": "fbcfc8d68d570efbb567bcca319096992ccf327fe939e3da5ea2e8c2df329b73"
+      }
+    },
+    {
+      "diagnostic": {
+        "bytes": 5605,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/provenance/ffprobe-final2-elf.txt",
+        "sha256": "a67267778dc7ec3df907b25142887dbd21d9ea10d378e806d99422144a982a63"
+      },
+      "finding": "RPATH and added NEEDED shared a dynstr string. Final copies were recreated from pristine image binaries with three separate patch processes.",
+      "phase": "Repatch of aliased dynamic strings",
+      "receipt": {
+        "bytes": 33768,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/completion2-failure.json",
+        "sha256": "2ec458ca54e0ea5048b71edd67dbfa8e76a0bd0120d60b11283dbd40c3cbe53c"
+      }
+    }
+  ],
+  "retained_provenance": {
+    "commands": {
+      "bytes": 38035,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/commands.json",
+      "sha256": "0ecf451fc610643267c9ccadd4f209fbfa547602bed14e963fdfa08fa6497cb2"
+    },
+    "completion_script": {
+      "bytes": 10004,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/finish-portable-v3.py",
+      "sha256": "38fed6180dd4f984f0a396eea16e72a7cbc8f961d20f488cb716bbebea07d5df"
+    },
+    "first_completion_script": {
+      "bytes": 8841,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/finish-portable-v1.py",
+      "sha256": "101732f1e92ced8df60fa277b41ac0ecbf4df128406b591b1cb95eb8676ff938"
+    },
+    "initial_preparation_script": {
+      "bytes": 10405,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/prepare-portable.py",
+      "sha256": "649275cb6544a92c04dc5b325908877a55ce8c27c6f7a2a11c484702828931cf"
+    },
+    "library_search_metadata": {
+      "bytes": 250,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/provenance/library-search-tags.json",
+      "sha256": "2877f27ff84fb1e6b1a904738504acf209d48bfc355d52f8757e52e2e3bb0c56"
+    },
+    "patcher": {
+      "bytes": 166240,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/patcher-root/usr/bin/patchelf",
+      "sha256": "ebc7bde09fdc923acdfade62f49c32b7c32de3d64f83aea14fc38143ecf77c25"
+    },
+    "patcher_apt_metadata": {
+      "bytes": 1219,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/patcher-packages/apt-cache-show.txt",
+      "sha256": "4f70135efc47e2c476175613ff815e4ed61c324bd3e3af8399caea375fd4a232"
+    },
+    "patcher_download_command": {
+      "bytes": 45,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/patcher-packages/download-command.json",
+      "sha256": "ecdc810d8314150fa49bf1666017c6753afbd787816418a3af0930be64d845ca"
+    },
+    "patcher_package": {
+      "bytes": 72146,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/patcher-packages/patchelf_0.14.3-1_amd64.deb",
+      "sha256": "357b874f4490c657195dcd5b8f3ec5b8bcd32710eb008347af972ad9002cf7a4"
+    },
+    "second_completion_script": {
+      "bytes": 9417,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/finish-portable-v2.py",
+      "sha256": "d7a5e7327e184f21febcc0ee0d3c3d60df343b620deca2ed40a5813586586920"
+    },
+    "temporary_cleanup": {
+      "bytes": 3764,
+      "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/temporary-elf-cleanup.json",
+      "sha256": "61e8a6a6ece6021dacf7726068cb1233b4e2b220d587e3e8fdda4a96fea305c6"
+    }
+  },
+  "retained_raw_failed_elf": {
+    "bytes": 200816,
+    "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/provenance/ffprobe-failed-dynstr.elf",
+    "sha256": "ef111b82081ae30a379f75d8e83e4969b5a22c619d1a1cbf0e82c6d48a511ed4"
+  },
+  "schema": "production51-toolchain-proof-compact-v1",
+  "scope": "Benchmark toolchain matching production image5.1.9, with owned ELF metadata relocation. Not a proven fix for either historical native stall. Initial dependency closure only; optional runtime dlopen/plugins/configuration are not asserted by loader--list.",
+  "temporary_cleanup_scope": "Only successful owned objcopy inspection ELF duplicates, with per-file SHA/size ledger; originals, final tools, section bytes and all preparation failure evidence retained.",
+  "tools": {
+    "ffmpeg": {
+      "basename": "ffmpeg",
+      "bytes": 327256,
+      "closure_equals_full_library_inventory": true,
+      "direct_elf_execution": true,
+      "direct_elf_version_log": {
+        "bytes": 1802,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/provenance/ffmpeg-final3-direct-version.txt",
+        "sha256": "b6e71b8343c5f344c67dd9420ccec50bec64a7f67373dff001ec55c9679de96c"
+      },
+      "final_elf_metadata_log": {
+        "bytes": 5768,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/provenance/ffmpeg-final3-elf.txt",
+        "sha256": "e2d26deb630d13ff9c05e4ba5e74c3906c124c6ed48a0f6fab969ba9eda529a5"
+      },
+      "original_image_elf": {
+        "bytes": 293288,
+        "sha256": "0dafc1360bb07743f76abeb1e4ae16b0aaa1331e9041a0e8d6a8524111dc0cbb",
+        "source": "/usr/bin/ffmpeg"
+      },
+      "original_text": {
+        "bytes": 168095,
+        "sha256": "21c513d549f9681eefc3e42c1581601db53fafd4026628acab3fb3f56e173442"
+      },
+      "private_loader_list_log": {
+        "bytes": 31855,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/provenance/ffmpeg-final3-private-loader-list.txt",
+        "sha256": "19a8e208cba587a56551cbc0b06e9708946011eb3a900d7d06217d244778bbae"
+      },
+      "private_loader_resolved_paths": 214,
+      "private_loader_unique_owned_paths": 214,
+      "relocated_text": {
+        "bytes": 168095,
+        "sha256": "21c513d549f9681eefc3e42c1581601db53fafd4026628acab3fb3f56e173442"
+      },
+      "sha256": "aceef0294788642f8d606b70afe3a5d2091e7bbd85721850a1f5926f1619e98e",
+      "text_sha256_equal": true,
+      "unbundled_initial_dependencies_except_vdso": 0,
+      "version": "ffmpeg version 5.1.9-0+deb12u1 Copyright (c) 2000-2026 the FFmpeg developers"
+    },
+    "ffprobe": {
+      "basename": "ffprobe",
+      "bytes": 209856,
+      "closure_equals_full_library_inventory": true,
+      "direct_elf_execution": true,
+      "direct_elf_version_log": {
+        "bytes": 1803,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/provenance/ffprobe-final3-direct-version.txt",
+        "sha256": "f09922104888db8ada3723a31d96dd7589ac2823e6ba8a27fb06359d2af6aa7b"
+      },
+      "final_elf_metadata_log": {
+        "bytes": 5768,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/provenance/ffprobe-final3-elf.txt",
+        "sha256": "a09e3799e741b5b8154c82358e9cfd468e05ea8a9a48651ad6cdc820f3c36ef1"
+      },
+      "original_image_elf": {
+        "bytes": 187336,
+        "sha256": "0e598fe6d247bfe63757f5c839dc145a166b3f876f2875ca88a306a5b8ec5a58",
+        "source": "/usr/bin/ffprobe"
+      },
+      "original_text": {
+        "bytes": 95569,
+        "sha256": "f2def55ca4ef5ce42bd8d510819248d38995bf70cf94ccdd7377211e635c40b2"
+      },
+      "private_loader_list_log": {
+        "bytes": 31855,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/production-media-toolchain-v1/provenance/ffprobe-final3-private-loader-list.txt",
+        "sha256": "1d8c97e850c099b776ff5c8db52159d5a6403e50c8c5d181accb827219f25596"
+      },
+      "private_loader_resolved_paths": 214,
+      "private_loader_unique_owned_paths": 214,
+      "relocated_text": {
+        "bytes": 95569,
+        "sha256": "f2def55ca4ef5ce42bd8d510819248d38995bf70cf94ccdd7377211e635c40b2"
+      },
+      "sha256": "3de016d86d1c615f5279b714478d64360dfa61ab37d7911ae350a0e21dbb5ef5",
+      "text_sha256_equal": true,
+      "unbundled_initial_dependencies_except_vdso": 0,
+      "version": "ffprobe version 5.1.9-0+deb12u1 Copyright (c) 2007-2026 the FFmpeg developers"
+    }
+  }
+}
