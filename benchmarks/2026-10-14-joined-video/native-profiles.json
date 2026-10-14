@@ -1,0 +1,458 @@
+[
+  {
+    "case": "local-accurate-mp4-joined-20",
+    "cpu_seconds": 0.763415,
+    "diagnostic_only": true,
+    "full_output_oracle_pass": true,
+    "maxrss_bytes": 74199040,
+    "profile": {
+      "codecs": [
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 802,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1369,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 0,
+          "frames_received": 0,
+          "frames_sent": 948,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 0,
+          "frames_received": 0,
+          "frames_sent": 551,
+          "name": "libx264",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 6,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 8
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 13
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        }
+      ],
+      "diagnostic_only": true,
+      "period_ns": 2000000,
+      "samples": {
+        "avcodec": 79,
+        "avfilter": 3,
+        "avformat": 5,
+        "other": 38,
+        "swresample": 0,
+        "swscale": 0,
+        "unmapped": 0,
+        "x264": 28
+      },
+      "timers": 8
+    },
+    "seconds": 0.5518423409666866
+  },
+  {
+    "case": "complex-accurate-mp4-joined-20",
+    "cpu_seconds": 19.395940999999997,
+    "diagnostic_only": true,
+    "full_output_oracle_pass": true,
+    "maxrss_bytes": 128995328,
+    "profile": {
+      "codecs": [
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 2172,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1716,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 0,
+          "frames_received": 0,
+          "frames_sent": 1032,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 0,
+          "frames_received": 0,
+          "frames_sent": 1320,
+          "name": "libx264",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 3,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 3
+        },
+        {
+          "decoder": 1,
+          "frames_received": 2,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 3
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 2
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 3,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 4
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 3
+        },
+        {
+          "decoder": 1,
+          "frames_received": 5,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 6
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 1,
+          "frames_sent": 0,
+          "name": "h264",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        },
+        {
+          "decoder": 1,
+          "frames_received": 0,
+          "frames_sent": 0,
+          "name": "aac",
+          "opens": 1
+        }
+      ],
+      "diagnostic_only": true,
+      "period_ns": 2000000,
+      "samples": {
+        "avcodec": 1092,
+        "avfilter": 12,
+        "avformat": 5,
+        "other": 346,
+        "swresample": 0,
+        "swscale": 0,
+        "unmapped": 0,
+        "x264": 3139
+      },
+      "timers": 8
+    },
+    "seconds": 7.975217466941103
+  }
+]

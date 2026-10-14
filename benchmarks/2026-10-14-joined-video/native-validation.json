@@ -1,0 +1,89 @@
+{
+  "mandatory_mp4_gates": [
+    "TestOwnedMP4MetadataMatchesFreshFFprobe",
+    "TestJoinedMP4UsesFreshStructuralVerification",
+    "TestOwnedMP4UnknownAndCorruptShapesKeepNativeVerification",
+    "TestOwnedMP4FreshIdentityBoundsAndCancellation",
+    "TestOwnedMP4ValidUnsupportedShapesUseFreshFallback",
+    "TestOwnedMP4TrackAndEditRoundingMatchesFFprobe"
+  ],
+  "contexts": {
+    "current-corrected-tests-v3": {
+      "path": "/root/video_cut/reports/joined-video-20261014/current-corrected-tests-v3.jsonl",
+      "bytes": 32550,
+      "sha256": "de2bbdf966fa38c1f8fa5df3fbc5f549d9ce41f86092fc84a0c4e81831e2cab9",
+      "passed": [
+        "TestOwnedMP4ValidUnsupportedShapesUseFreshFallback",
+        "TestOwnedMP4MetadataMatchesFreshFFprobe",
+        "TestJoinedMP4UsesFreshStructuralVerification",
+        "TestOwnedMP4UnknownAndCorruptShapesKeepNativeVerification",
+        "TestOwnedMP4FreshIdentityBoundsAndCancellation",
+        "TestOwnedMP4TrackAndEditRoundingMatchesFFprobe",
+        "TestJoinedAccurateDiscoveryPreservesReorderedVFRAndSilence",
+        "TestJoinedAccurateDiscoveryPreservesDualInputClocks",
+        "TestJoinedRemoteEntryKeepsMediaFormatAndProtocolRestrictions",
+        "TestLocalExportSessionReusesOriginalAndVerifiesEveryJoinedResult"
+      ],
+      "race": true
+    },
+    "production51-final-c2": {
+      "path": "/root/video_cut/reports/joined-video-20261014/production51-final-c2.jsonl",
+      "bytes": 32550,
+      "sha256": "c9a38418313cb48901c22ff1aa0a0f882454420a4957f8d56c7c0dd31ca297c5",
+      "passed": [
+        "TestOwnedMP4ValidUnsupportedShapesUseFreshFallback",
+        "TestOwnedMP4MetadataMatchesFreshFFprobe",
+        "TestJoinedMP4UsesFreshStructuralVerification",
+        "TestOwnedMP4UnknownAndCorruptShapesKeepNativeVerification",
+        "TestOwnedMP4FreshIdentityBoundsAndCancellation",
+        "TestOwnedMP4TrackAndEditRoundingMatchesFFprobe",
+        "TestJoinedAccurateDiscoveryPreservesReorderedVFRAndSilence",
+        "TestJoinedAccurateDiscoveryPreservesDualInputClocks",
+        "TestJoinedRemoteEntryKeepsMediaFormatAndProtocolRestrictions",
+        "TestLocalExportSessionReusesOriginalAndVerifiesEveryJoinedResult"
+      ],
+      "race": true
+    },
+    "mixed-encoder51-final-c2": {
+      "path": "/root/video_cut/reports/joined-video-20261014/mixed-encoder51-final-c2.jsonl",
+      "bytes": 32557,
+      "sha256": "cd19cb73ef33e8513e5dad1b5c57905ce54c0162bcd46c8d1ce107ed4f6037bb",
+      "passed": [
+        "TestOwnedMP4ValidUnsupportedShapesUseFreshFallback",
+        "TestOwnedMP4MetadataMatchesFreshFFprobe",
+        "TestJoinedMP4UsesFreshStructuralVerification",
+        "TestOwnedMP4UnknownAndCorruptShapesKeepNativeVerification",
+        "TestOwnedMP4FreshIdentityBoundsAndCancellation",
+        "TestOwnedMP4TrackAndEditRoundingMatchesFFprobe",
+        "TestJoinedAccurateDiscoveryPreservesReorderedVFRAndSilence",
+        "TestJoinedAccurateDiscoveryPreservesDualInputClocks",
+        "TestJoinedRemoteEntryKeepsMediaFormatAndProtocolRestrictions",
+        "TestLocalExportSessionReusesOriginalAndVerifiesEveryJoinedResult"
+      ],
+      "race": true
+    },
+    "mixed-probe51-final-c2": {
+      "path": "/root/video_cut/reports/joined-video-20261014/mixed-probe51-final-c2.jsonl",
+      "bytes": 32554,
+      "sha256": "75ae80df84acf0f2b4b0ddb7a231b99d8873676a8094150685bc7cae65535836",
+      "passed": [
+        "TestOwnedMP4ValidUnsupportedShapesUseFreshFallback",
+        "TestOwnedMP4MetadataMatchesFreshFFprobe",
+        "TestJoinedMP4UsesFreshStructuralVerification",
+        "TestOwnedMP4UnknownAndCorruptShapesKeepNativeVerification",
+        "TestOwnedMP4FreshIdentityBoundsAndCancellation",
+        "TestOwnedMP4TrackAndEditRoundingMatchesFFprobe",
+        "TestJoinedAccurateDiscoveryPreservesReorderedVFRAndSilence",
+        "TestJoinedAccurateDiscoveryPreservesDualInputClocks",
+        "TestJoinedRemoteEntryKeepsMediaFormatAndProtocolRestrictions",
+        "TestLocalExportSessionReusesOriginalAndVerifiesEveryJoinedResult"
+      ],
+      "race": true
+    }
+  },
+  "publication_identity_test": {
+    "path": "/root/video_cut/reports/joined-video-20261014/final-identity-test.jsonl",
+    "sha256": "a35a124b34572a74f965851d483b9b07da0c6d615e73ab1b2913432a10e9d0d7",
+    "passed": true
+  }
+}

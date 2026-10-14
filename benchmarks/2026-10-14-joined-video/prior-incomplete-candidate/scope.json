@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "created_utc": "2026-10-14T11:55:59.227973+00:00",
+  "old_source": "b179167e17adafc7df605e9894576080bf1a1604",
+  "primary": "terminal failure after98 observations;96 prior fully matched operations and2 retained capped outputs with unequal decoded hashes; no speed acceptance for whole cohort",
+  "direct": "not activated; withdrawn because final source eligibility is being corrected",
+  "next_source_reason": "Native32-cut AAC track tkhd rounds duration up while its edit rounds to nearest; strict equality conservatively caused native fallback. Keep output gates and exact native rounding; do not widen350ms tolerance.",
+  "capped_quality": "Will test baseline reproducibility independently; preserve unequal hashes and unchanged native arguments, no explanation claimed yet."
+}

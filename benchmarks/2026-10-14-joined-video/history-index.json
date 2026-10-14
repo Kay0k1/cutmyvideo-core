@@ -1,0 +1,234 @@
+[
+  {
+    "artifact": {
+      "bytes": 32136,
+      "path": "/root/video_cut/reports/joined-video-20261014/current-corrected-tests-v2.jsonl",
+      "sha256": "eb6b9317494b94a707ec6111b0c0d2d8a61cfd423238e2eef9ce147db9c01dae"
+    },
+    "kind": "native test history"
+  },
+  {
+    "artifact": {
+      "bytes": 32550,
+      "path": "/root/video_cut/reports/joined-video-20261014/current-corrected-tests-v3.jsonl",
+      "sha256": "de2bbdf966fa38c1f8fa5df3fbc5f549d9ce41f86092fc84a0c4e81831e2cab9"
+    },
+    "kind": "native test history"
+  },
+  {
+    "artifact": {
+      "bytes": 35012,
+      "path": "/root/video_cut/reports/joined-video-20261014/current-corrected-tests.jsonl",
+      "sha256": "e461408c1f0d33740ea6343e853a0ec94316817021f1e162209a296676a61790"
+    },
+    "kind": "native test history"
+  },
+  {
+    "artifact": {
+      "bytes": 29688,
+      "path": "/root/video_cut/reports/joined-video-20261014/current-final-tests-v2.jsonl",
+      "sha256": "2491269dc14800499f044ff76048e557d8d42948254d6c26de5de39fa5a3b2db"
+    },
+    "kind": "native test history"
+  },
+  {
+    "artifact": {
+      "bytes": 30641,
+      "path": "/root/video_cut/reports/joined-video-20261014/current-final-tests-v3.jsonl",
+      "sha256": "d490c32294c2cdef6f6a86b8fa5cac1717e8166a567dfeb47f4d4d77fc0630e6"
+    },
+    "kind": "native test history"
+  },
+  {
+    "artifact": {
+      "bytes": 22495,
+      "path": "/root/video_cut/reports/joined-video-20261014/current-tests-v1.jsonl",
+      "sha256": "5280aa785a25747b631ccca7bc37f8ab153f6e825232f8c50d9c63e240cdd0e4"
+    },
+    "kind": "native test history"
+  },
+  {
+    "artifact": {
+      "bytes": 32557,
+      "path": "/root/video_cut/reports/joined-video-20261014/mixed-encoder51-final-c2.jsonl",
+      "sha256": "cd19cb73ef33e8513e5dad1b5c57905ce54c0162bcd46c8d1ce107ed4f6037bb"
+    },
+    "kind": "native test history"
+  },
+  {
+    "artifact": {
+      "bytes": 30645,
+      "path": "/root/video_cut/reports/joined-video-20261014/mixed-encoder51-tests.jsonl",
+      "sha256": "c9879d925c20578b21dc3c94553c140c9d664d2dc986b1dfd243b0999b3f086c"
+    },
+    "kind": "native test history"
+  },
+  {
+    "artifact": {
+      "bytes": 32554,
+      "path": "/root/video_cut/reports/joined-video-20261014/mixed-probe51-final-c2.jsonl",
+      "sha256": "75ae80df84acf0f2b4b0ddb7a231b99d8873676a8094150685bc7cae65535836"
+    },
+    "kind": "native test history"
+  },
+  {
+    "artifact": {
+      "bytes": 30641,
+      "path": "/root/video_cut/reports/joined-video-20261014/mixed-probe51-tests.jsonl",
+      "sha256": "0bfbc847075a1cd5bf3f9bf0ed749912d8f60031845d1708b1de7092b453cca6"
+    },
+    "kind": "native test history"
+  },
+  {
+    "artifact": {
+      "bytes": 31844,
+      "path": "/root/video_cut/reports/joined-video-20261014/production51-corrected-tests-v1.jsonl",
+      "sha256": "f10b6bc852159e447ecb61fb0dc005b6e94b36e6a4896d927b2126f147d19d6c"
+    },
+    "kind": "native test history"
+  },
+  {
+    "artifact": {
+      "bytes": 31557,
+      "path": "/root/video_cut/reports/joined-video-20261014/production51-corrected-tests-v2.jsonl",
+      "sha256": "e6811a6262227f2e564720a80a5f842cc9e922da4c73aa57e996aaf2f2e0a2a3"
+    },
+    "kind": "native test history"
+  },
+  {
+    "artifact": {
+      "bytes": 32550,
+      "path": "/root/video_cut/reports/joined-video-20261014/production51-final-c2.jsonl",
+      "sha256": "c9a38418313cb48901c22ff1aa0a0f882454420a4957f8d56c7c0dd31ca297c5"
+    },
+    "kind": "native test history"
+  },
+  {
+    "artifact": {
+      "bytes": 30655,
+      "path": "/root/video_cut/reports/joined-video-20261014/production51-final-tests-v4.jsonl",
+      "sha256": "c65704b0864133635631b86a8c38a02c825cd809f290d7388b684a762c14c801"
+    },
+    "kind": "native test history"
+  },
+  {
+    "artifact": {
+      "bytes": 29692,
+      "path": "/root/video_cut/reports/joined-video-20261014/production51-final-tests.jsonl",
+      "sha256": "f31e4e018a198fd044b6045d9f5744d880155e2a18a03e4966bcb1419e0aa5dc"
+    },
+    "kind": "native test history"
+  },
+  {
+    "artifact": {
+      "bytes": 1440,
+      "path": "/root/video_cut/reports/joined-video-20261014/production51-tests-v1.jsonl",
+      "sha256": "4503df603eff8a5d1534972332c947b6004ab1d010f2973f3395aa51500e5669"
+    },
+    "kind": "native test history"
+  },
+  {
+    "artifact": {
+      "bytes": 21282,
+      "path": "/root/video_cut/reports/joined-video-20261014/production51-tests-v2.jsonl",
+      "sha256": "c5b1f5bcee03011abd75d218ef38d7bc0aa10a60f2e16a22197470ae80e7a456"
+    },
+    "kind": "native test history"
+  },
+  {
+    "artifact": {
+      "bytes": 20973,
+      "path": "/root/video_cut/reports/joined-video-20261014/production51-tests-v3.jsonl",
+      "sha256": "639a3d1b69fb959ff09a27f38a7ddc3284678ef7fde3ad53e712e093410a196e"
+    },
+    "kind": "native test history"
+  },
+  {
+    "artifact": {
+      "bytes": 71284,
+      "path": "/root/video_cut/reports/joined-video-20261014/diagnostic-v1/qualification/results.json",
+      "sha256": "2954528b34d24c981de522fd8e09d812e0b25678e67dd5f7841652b83a733b3d"
+    },
+    "kind": "retained qualification or failed history"
+  },
+  {
+    "artifact": {
+      "bytes": 53456,
+      "path": "/root/video_cut/reports/joined-video-20261014/diagnostic-v1/qualification-next/results.json",
+      "sha256": "c85ad298d9a23675cae9ede5583977bd36fec501b8c8a25f52d863b268eb86aa"
+    },
+    "kind": "retained qualification or failed history"
+  },
+  {
+    "artifact": {
+      "bytes": 25898,
+      "path": "/root/video_cut/reports/joined-video-20261014/capped-before-reproducibility/results.json",
+      "sha256": "04a72399bbac8853352c6d52a0aefacd013ef32462bcce591c4be93e39443a60"
+    },
+    "kind": "retained qualification or failed history"
+  },
+  {
+    "artifact": {
+      "bytes": 217,
+      "path": "/root/video_cut/reports/joined-video-20261014/capped-before-reproducibility/complete.json",
+      "sha256": "077bffec752c9d382c309744cd7ded0e62c81e3ab4e113705fd1c51a86956998"
+    },
+    "kind": "retained qualification or failed history"
+  },
+  {
+    "artifact": {
+      "bytes": 4864144,
+      "path": "/root/video_cut/reports/joined-video-20261014/ci-b179167-failed.log",
+      "sha256": "3840b013d70285f1da0e217928a5de419b596d991b0e8c3da0217ba5caa869f4"
+    },
+    "kind": "retained qualification or failed history"
+  },
+  {
+    "artifact": {
+      "bytes": 5614,
+      "path": "/root/video_cut/reports/joined-video-20261014/inspect32/boxes.json",
+      "sha256": "f7a1e4cae3ca79bba6b5a2c1b31fd5bdd88b0fb790c5e21aa855cf0c96a28543"
+    },
+    "kind": "retained qualification or failed history"
+  },
+  {
+    "artifact": {
+      "bytes": 2770,
+      "path": "/root/video_cut/reports/joined-video-20261014/owned-cache-cleanup.json",
+      "sha256": "98e1f0561eb61205d9e390f3433440af08d64bb54e0ce8bd64a8eaab73b5283c"
+    },
+    "kind": "retained qualification or failed history"
+  },
+  {
+    "artifact": {
+      "bytes": 2163,
+      "path": "/root/video_cut/reports/joined-video-20261014/owned-cache-cleanup-source.json",
+      "sha256": "707954f5369d3880a6405d9acdc8f9daa1d00c897f133c08dcfe5ab42912b927"
+    },
+    "kind": "retained qualification or failed history"
+  },
+  {
+    "artifact": {
+      "bytes": 22529,
+      "path": "/root/video_cut/reports/joined-video-20261014/owned-cache-cleanup-worktree.json",
+      "sha256": "05056092f7dc9b54ee3fd396a62bec7fa9166598270bd4e27edfa4040665c75a"
+    },
+    "kind": "retained qualification or failed history"
+  },
+  {
+    "artifact": {
+      "bytes": 871154,
+      "path": "/root/video_cut/reports/joined-video-20261014/ci-9d02-failed.log",
+      "sha256": "8e91453b09b32fc29bad0b61a7604b34eb4a6b78823d78cb1f2f67c8a60e4e64"
+    },
+    "kind": "retained CI or publication test history"
+  },
+  {
+    "artifact": {
+      "bytes": 1499,
+      "path": "/root/video_cut/reports/joined-video-20261014/final-identity-test.jsonl",
+      "sha256": "a35a124b34572a74f965851d483b9b07da0c6d615e73ab1b2913432a10e9d0d7"
+    },
+    "kind": "retained CI or publication test history"
+  }
+]

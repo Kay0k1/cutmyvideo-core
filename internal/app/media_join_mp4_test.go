@@ -199,7 +199,14 @@ func TestOwnedMP4UnknownAndCorruptShapesKeepNativeVerification(t *testing.T) {
 func TestOwnedMP4FreshIdentityBoundsAndCancellation(t *testing.T) {
 	c, ctx := mcConfig(t)
 	path := ownedMP4Fixture(t, ctx, c, 48000, 1, "identity")
-	before, err := os.Stat(path)
+	handle, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := handle.Stat()
+	if closeErr := handle.Close(); closeErr != nil {
+		t.Fatal(closeErr)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

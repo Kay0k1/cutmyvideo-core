@@ -11,6 +11,12 @@ MP3 outputs use fresh bounded frame/CRC verification instead of one FFprobe
 process. Tested video thread/discovery changes were removed after adverse
 elapsed-time results; every slower case and observer-context limit is retained.
 
+The [joined MP4 follow-up](../benchmarks/2026-10-14-joined-video/README.md)
+adds 132 fully decoded matched outputs. Supported own fast MP4 results use
+fresh bounded container/sample/NAL inspection instead of one final FFprobe.
+Encoding settings are unchanged; heavy-video adverse cases, capped-encoder
+non-repeatability and interrupted cohorts remain explicit in that report.
+
 Responsive preview evidence: [five identical-tool cold/warm observations and
 bounded search-strip design, 2026-10-12](../benchmarks/2026-10-12-responsive-preview/README.md).
 
