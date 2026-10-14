@@ -353,7 +353,12 @@ func joinAccurateMode(ctx context.Context, c Config, inputs [][]mediaInput, rang
 	if e != nil {
 		return nil, e
 	}
-	final, e := verifyJoinedOwnedMP3(ctx, c, out, request, elapsed, limit, selection.mp3DurationMode)
+	var final probeInfo
+	if request.Format == "mp4" && c.FFmpegProfile != "compact" {
+		final, e = verifyJoinedOwnedMP4(ctx, c, out, request, elapsed, limit, selection)
+	} else {
+		final, e = verifyJoinedOwnedMP3(ctx, c, out, request, elapsed, limit, selection.mp3DurationMode)
+	}
 	if e != nil {
 		return nil, e
 	}

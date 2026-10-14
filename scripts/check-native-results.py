@@ -87,6 +87,11 @@ UNIVERSAL_STORAGE_REQUIRED = {
     "TestCopyExportsRetainDecoderBudgetForCompositeVerification",
 }
 UNIVERSAL_MEDIA_REQUIRED = {
+    "TestOwnedMP4MetadataMatchesFreshFFprobe",
+    "TestJoinedMP4UsesFreshStructuralVerification",
+    "TestOwnedMP4UnknownAndCorruptShapesKeepNativeVerification",
+    "TestOwnedMP4FreshIdentityBoundsAndCancellation",
+    "TestOwnedMP4ValidUnsupportedShapesUseFreshFallback",
     "TestOwnedMP3UnknownProbeFamilyKeepsFreshVerification",
     "TestOwnedMP3FreshScanRejectsReplacedPathIdentity",
     "TestOwnedMP3MetadataMatchesFreshFFprobe",
