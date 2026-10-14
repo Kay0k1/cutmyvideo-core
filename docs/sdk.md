@@ -5,10 +5,11 @@ self-hosted HTTP API. They have no runtime dependencies. The API client owns
 one private session; the local client runs the same version 1 cutting plans as
 the CLI. Neither client decides which moments to cut or changes encoding quality.
 
-This is the SDK foundation for 1.3.0. Packages use development versions and are
-not published to PyPI or npm by this PR. Preflight requires a core containing
-the [job preflight change](https://github.com/Kay0k1/cutmyvideo-core/pull/45);
-the stable 1.2.0 binary does not contain that command or endpoint.
+This is the SDK foundation for 1.3.0, available in `main`. Packages use
+development versions and have not been published to PyPI or npm. Build a matching
+core from current sources for preflight; the stable 1.2.0 binary does not contain
+that command or endpoint. See the [project overview](../README.en.md#versions)
+for release status and the [architecture](architecture.md) for dependencies.
 
 ## Install the candidate packages
 

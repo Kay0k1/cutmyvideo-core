@@ -7,6 +7,12 @@ for behavior changes and document API changes alongside their implementation.
 
 ## Development environment
 
+Choose tools for the component you are changing. Documentation-only changes can
+run `make docs-check`; local engine/CLI work needs Go and FFmpeg/ffprobe. Database
+and platform-import dependencies below are for the full server acceptance suite.
+See the [repository map](docs/architecture.md) and
+[documentation index](docs/README.md) before adding a new top-level guide.
+
 Use Go 1.27.2 (the security-patched CI/release toolchain; module minimum 1.26.9),
 FFmpeg/ffprobe with libx264/AAC/libmp3lame, Python 3 and PostgreSQL 17. Platform
 imports also need Node.js. Offline metadata tests use the same checksum-pinned
@@ -60,6 +66,37 @@ media tools, exact extractor pin and dedicated database, runs uncached race test
 workflow validation and govulncheck, and verifies third-party notices. It also
 requires actual HTTP/OpenAPI fixtures and their Python tooling. CI does the same
 on Linux and makes no requests to public videos.
+
+### SDK checks
+
+Python SDK tests require Python 3.10+; TypeScript SDK tests require Node.js
+20.19+ and npm. These focused commands do not start the API or render media:
+
+```sh
+PYTHONPATH=sdk/python/src python3 -m unittest discover -s sdk/python/tests -v
+npm --prefix sdk/typescript ci
+npm --prefix sdk/typescript test
+```
+
+Installed-package acceptance additionally requires Go, FFmpeg/ffprobe and the
+pinned Python build tooling. It builds and installs wheel/sdist/npm packages
+outside the source tree and exercises real local media; `--http` also requires
+the isolated `TEST_DATABASE_URL` and runs the API/worker workflow:
+
+```sh
+python3 -m pip install --require-hashes --only-binary=:all: \
+  -r scripts/requirements-sdk-build.txt
+python3 scripts/check-sdks.py --output /tmp/cutmy-sdk-check
+# Use a fresh output directory for each run.
+make sdk-check SDK_REPORT_DIR=/tmp/cutmy-sdk-http-check
+```
+
+Run these inside an isolated Python environment. CI requires installed-package
+acceptance on all five native platforms and a separate HTTP acceptance run;
+passing only source unit tests does not establish package installation or media
+behavior. SDK versions remain development candidates until registry publication.
+
+### Change-specific validation
 
 For a targeted change, run relevant tests first, then the full checks before
 release. Fetching changes need URL/redirect/byte-limit/owner-isolation tests.

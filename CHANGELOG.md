@@ -92,8 +92,10 @@ This tag and its signed draft were not published. All five native consumers
 received HTTP 403 while reading draft release metadata with a read-scoped GitHub
 token. They downloaded no assets, verified no signatures and ran no archived
 binary; this was an authorization refusal, not an observed binary failure. The
-original tag and draft remain unchanged. Version 1.0.2 corrects draft read access
-for the first public 1.x release.
+original tag remains unchanged. Version 1.0.2 corrected draft read access for
+the first public 1.x release. The superseded unpublished draft was archived and
+removed from the GitHub release page during repository cleanup on 2026-10-15;
+the original failure history and tag are retained.
 
 ## 1.0.0 - 2026-10-11
 
