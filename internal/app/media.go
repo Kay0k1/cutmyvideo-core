@@ -176,7 +176,11 @@ type probeInfo struct {
 		Duration  string `json:"duration"`
 		StartTime string `json:"start_time"`
 	} `json:"format"`
-	Streams []probeStream `json:"streams"`
+	Streams         []probeStream `json:"streams"`
+	LibraryVersions []struct {
+		Name  string `json:"name"`
+		Major int    `json:"major"`
+	} `json:"library_versions"`
 }
 
 func probe(ctx context.Context, c Config, path string, remote bool) (probeInfo, int64, error) {
@@ -209,7 +213,7 @@ func probeStreamsUncached(ctx context.Context, c Config, path string, remote boo
 	// complete side data such as a user-controlled display-matrix dump.
 	args := []string{"-v", "error", "-max_alloc", "268435456", "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats}
 	args = append(args, mediaInputBounds(c)...)
-	args = append(args, "-show_entries", mediaProbeEntries, "-show_data_hash", "sha256", "-of", "json", path)
+	args = append(args, "-show_library_versions", "-show_entries", mediaProbeEntries+":library_version=name,major", "-show_data_hash", "sha256", "-of", "json", path)
 	b, err := runCommand(ctx, c.FFprobe, args...)
 	var p probeInfo
 	if err != nil {

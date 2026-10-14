@@ -87,6 +87,15 @@ UNIVERSAL_STORAGE_REQUIRED = {
     "TestCopyExportsRetainDecoderBudgetForCompositeVerification",
 }
 UNIVERSAL_MEDIA_REQUIRED = {
+    "TestOwnedMP3UnknownProbeFamilyKeepsFreshVerification",
+    "TestOwnedMP3FreshScanRejectsReplacedPathIdentity",
+    "TestOwnedMP3MetadataMatchesFreshFFprobe",
+    "TestJoinedMP3UsesFreshBoundedVerificationAndLargeFallback",
+    "TestOwnedMP3UnprovedBytesKeepNativeVerification",
+    "TestOwnedMP3ValidUnsupportedShapesUseFreshFallback",
+    "TestOwnedMP3ReaderKeepsIOBoundAndCancellation",
+    "TestJoinedAccurateDiscoveryPreservesReorderedVFRAndSilence",
+    "TestJoinedAccurateDiscoveryPreservesDualInputClocks",
     "TestCopyJoinAudioPacketCopyPreservesClocks",
     "TestCopyJoinAudioPreservesFineSourcePacketClocks",
     "TestCopyPacketDropPreservesUnknownPresentationTimestamps",

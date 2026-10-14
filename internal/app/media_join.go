@@ -296,8 +296,22 @@ func joinAccurateMode(ctx context.Context, c Config, inputs [][]mediaInput, rang
 			return nil, e
 		}
 		args = append(args, "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats+",concat")
-		args = append(args, mediaInputBounds(c)...)
-		args = append(args, "-segment_time_metadata", "1", "-safe", "0", "-i", path)
+		inputConfig := c
+		if request.Format != "mp3" && column == selection.VideoInput && selection.Video != nil && selection.Video.CodecName == "h264" && selection.Video.Width <= 320 && selection.Video.Height <= 240 {
+			// Tiny frames spend more work scheduling frame decoders than
+			// decoding. Keep the configured encoder/filter budget; larger
+			// pictures and other codecs retain their input thread limit.
+			inputConfig.FFmpegThreads = 1
+		}
+		args = append(args, mediaInputBounds(inputConfig)...)
+		args = append(args, "-segment_time_metadata", "1", "-safe", "0")
+		if request.Format != "mp3" {
+			// Every concat child still discovers its complete stream data.
+			// Avoid the additional heuristic pass over the trusted wrapper;
+			// the completed output is independently inspected below.
+			args = append(args, "-nofind_stream_info")
+		}
+		args = append(args, "-i", path)
 	}
 	args = append(args, selection.mapArgs(request.Format)...)
 	var segments []ArtifactSegment
@@ -353,7 +367,7 @@ func joinAccurateMode(ctx context.Context, c Config, inputs [][]mediaInput, rang
 	if e != nil {
 		return nil, e
 	}
-	final, e := verifyJoined(ctx, c, out, request, elapsed, limit)
+	final, e := verifyJoinedOwnedMP3(ctx, c, out, request, elapsed, limit, selection.mp3DurationMode)
 	if e != nil {
 		return nil, e
 	}

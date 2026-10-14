@@ -49,7 +49,14 @@ Singleton exports reuse their initial input inspection, and batches reuse exact
 repeated ranges while producing separate output files with independent inodes.
 The source and previously published file identities are checked before reuse;
 changed outputs regenerate from the verified source. Fresh media outputs receive
-fresh probes. Exact repeated byte copies inherit the prior semantic verification,
+fresh validation. Small (at most 1 MiB) CBR MPEG1 MP3 outputs from the accurate
+join's own libmp3lame encoder use a new bounded scan: all frame headers/counts,
+Info byte/duration fields and the muxer's audio payload CRC must agree, with
+file identity checked before and after. The existing source inspection supplies
+the actual FFprobe library family: versions 5–7 use raw frame duration, while
+8/current 63 use the tag's encoder delay/padding to match gapless duration.
+Unknown or ambiguous families keep the native probe. Unknown metadata, other encoder shapes,
+larger files or any unproved structure keep the existing fresh FFprobe path. Exact repeated byte copies inherit the prior semantic verification,
 with new file/byte-count checks and independent publication. No database is
 required by `pkg/engine`.
 

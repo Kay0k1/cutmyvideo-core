@@ -85,6 +85,7 @@ func (p *probeInfo) selectedAudio() *probeStream {
 type mediaSelection struct {
 	Video, Audio           *probeStream
 	VideoInput, AudioInput int
+	mp3DurationMode        int
 }
 
 func probeInputSelection(ctx context.Context, c Config, inputs []mediaInput) (mediaSelection, error) {
@@ -99,7 +100,7 @@ func probeInputSelectionOptions(ctx context.Context, c Config, inputs []mediaInp
 	if err != nil {
 		return mediaSelection{}, err
 	}
-	selection := mediaSelection{Video: first.selectedVideo(), Audio: first.selectedAudio()}
+	selection := mediaSelection{Video: first.selectedVideo(), Audio: first.selectedAudio(), mp3DurationMode: first.ownedMP3DurationMode()}
 	if len(inputs) == 2 {
 		// Existing separate progressive pairs have video in input zero and
 		// audio in input one. Do not silently substitute audio from the video.
