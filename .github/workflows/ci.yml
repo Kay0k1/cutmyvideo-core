@@ -17,6 +17,118 @@ permissions:
   contents: read
 
 jobs:
+  sdk:
+    name: Installed SDKs (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]
+    env:
+      GOTOOLCHAIN: local
+      CUTMY_REQUIRE_DURABLE_FS: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '20.20.0'
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.10'
+      - name: Linux media dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: macOS media dependencies
+        if: runner.os == 'macOS'
+        run: |
+          media_formula=ffmpeg-full
+          if [ "$RUNNER_ARCH" = X64 ]; then media_formula=ffmpeg@7; fi
+          brew install "$media_formula"
+          echo "$(brew --prefix "$media_formula")/bin" >> "$GITHUB_PATH"
+      - name: Windows pinned media tools
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'sdk-ffmpeg.zip'
+          Invoke-WebRequest 'https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-10-13-04/ffmpeg-n8.1.3-17-gc389840894-win64-gpl-8.1.zip' -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '2a7921874ac122ba731c181c2f235542ab9de790a67c08ec58fe0b54ff763647') { throw 'FFmpeg checksum mismatch' }
+          $media = Join-Path $env:RUNNER_TEMP 'cutmy-sdk-media'
+          Expand-Archive $archive -DestinationPath $media
+          (Get-ChildItem $media -Recurse -Filter ffmpeg.exe | Select-Object -First 1).DirectoryName >> $env:GITHUB_PATH
+      - name: Package, install and exercise Python and TypeScript SDKs
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: -r scripts/requirements-sdk-build.txt
+          python -m unittest discover -s scripts -p sdk_checks_test.py
+          python scripts/check-sdks.py --output "$RUNNER_TEMP/sdk-evidence"
+      - name: Retain installed package evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sdk-${{ matrix.runner }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sdk-evidence
+          if-no-files-found: error
+          retention-days: 3
+  sdk-http:
+    name: Installed SDK HTTP and worker acceptance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17.11-bookworm
+        env:
+          POSTGRES_USER: cutmy
+          POSTGRES_PASSWORD: sdk-test-only
+          POSTGRES_DB: cutmy_sdk
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cutmy -d cutmy_sdk"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      TEST_DATABASE_URL: postgres://cutmy:sdk-test-only@127.0.0.1:5432/cutmy_sdk?sslmode=disable
+      GOTOOLCHAIN: local
+      CUTMY_REQUIRE_DURABLE_FS: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.13'
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Installed consumers against actual API, worker and media
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: -r scripts/requirements-sdk-build.txt
+          python scripts/check-sdks.py --http --output "$RUNNER_TEMP/sdk-http-evidence"
+      - name: Retain HTTP consumer evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sdk-http-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sdk-http-evidence
+          if-no-files-found: error
+          retention-days: 3
   artifact-policy:
     runs-on: ubuntu-24.04
     steps:
