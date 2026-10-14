@@ -179,7 +179,9 @@ func TestPreflightCapabilitiesFailuresAreBoundedAndCancelable(t *testing.T) {
 	err = checkPreflightCapabilities(ctx, Config{FFmpeg: missing}, groups, &PreflightResult{}, queryPreflightCapabilities)
 	var pathError *os.PathError
 	var execError *exec.Error
-	if !errors.As(err, &pathError) && !errors.As(err, &execError) || !errors.Is(err, os.ErrNotExist) {
+	// Windows LookPath returns exec.ErrNotFound even for absolute paths;
+	// preserve either native missing-executable cause rather than replacing it.
+	if (!errors.As(err, &pathError) && !errors.As(err, &execError)) || (!errors.Is(err, os.ErrNotExist) && !errors.Is(err, exec.ErrNotFound)) {
 		t.Fatalf("missing tool lost its operating-system cause: %v", err)
 	}
 	c := preflightTestConfig(t)
