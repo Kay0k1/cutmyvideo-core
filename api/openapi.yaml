@@ -353,6 +353,57 @@ paths:
               schema: {$ref: '#/components/schemas/Error'}
         '504': {$ref: '#/components/responses/Error'}
         default: {$ref: '#/components/responses/Error'}
+  /api/v1/collections/validate:
+    post:
+      description: Validates selected clips from a versioned single-source plan without encoding or creating jobs. Each clip joins its intervals in submitted order with its own inherited/overridden settings. Selected intervals and total duration share the existing MAX_RANGES/MAX_JOB_MS budgets. Unselected clip IDs, labels and structural bounds are checked; their media edits can remain unfinished. Local clips receive fresh protected media/tool preflight; remote clips receive metadata-only reports with explicit deferred checks. Requires the same owner session, same-origin guard, 1 MiB strict JSON body and ten-second body timeout as jobs. The whole local collection shares SOURCE_TIMEOUT and one inspection/reader admission. Shares the 30 preflight requests per session per minute allowance with job preflight. No idempotency key is consumed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CollectionRequest'}
+      responses:
+        '200':
+          description: Known selected-clip prerequisites passed; execution checks remain deferred
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CollectionValidation'}
+        default:
+          description: Collection validation failed; clip_id and field identify known plan/media blockers when available
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CollectionError'}
+  /api/v1/collections:
+    post:
+      description: Adapts selected collection clips to ordinary joined jobs in the existing queue. Requires a workflow Idempotency-Key; per-clip identities include that key, clip ID/label and the normalized effective request, including rendition. Retry the same plan/key to recover retained jobs and admit pending clips after capacity is available. Editing one clip creates new work only for that clip; other retained jobs stay available. A fresh key intentionally starts new work. Collection admission is incremental and preserves the existing three active jobs per owner, global queue, storage and ten new-export attempts per session per minute limits; a 15-clip plan can require several retries as jobs finish. Retained jobs recover before current source-duration, source-media, operator-budget, inspection and export allowance checks. Source ownership, strict JSON, supported plan shape/options and unique selection remain enforced. Only newly pending clips are validated against the actual source and aggregate current budgets; identity-only normalization never authorizes fresh work. Already retained jobs remain in a partial response when pending validation fails. Local pending clips share one fresh preflight admission and SOURCE_TIMEOUT before any new jobs are created; remote media is inspected by the worker. A response containing any retained/admitted job is 202 even if other clips have errors. complete describes admission only, never completed encoding. Poll/cancel/download each job using the existing owner-protected endpoints. Non-admitted retryable clips should be retried with the same workflow key and plan; uncertain database commits are recovered by the same per-clip keys. A terminal failed/cancelled job is still retained and recovered; use a fresh workflow key to intentionally rerun it. No collection database/project is created.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, minLength: 1, x-maxBytes: 128}
+          description: A nonblank workflow key, maximum 128 UTF-8 bytes. Stable across retries and edits to this collection; unlike POST jobs, edited effective clip requests receive new per-clip jobs. Retention limits recovery.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CollectionRequest'}
+      responses:
+        '202':
+          description: At least one clip job is retained/admitted; inspect complete and every clip error before retrying pending work
+          headers:
+            Retry-After:
+              description: Present when pending clips hit rate or queue limits; wait this many seconds before retrying
+              schema: {type: integer, minimum: 1}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CollectionSubmission'}
+        default:
+          description: Request guard error, or a collection submission report with no admitted jobs (400 plan, 404 source, 410 removed media, 413 storage budget, 422 media, 429 admission, 503 database/inspection or 504 inspection timeout)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - {$ref: '#/components/schemas/CollectionError'}
+                  - {$ref: '#/components/schemas/CollectionSubmission'}
   /api/v1/jobs/{id}:
     parameters: [{$ref: '#/components/parameters/ID'}]
     get:
@@ -612,6 +663,121 @@ components:
         no_audio: {type: boolean, default: false, description: Export video without audio; cannot be combined with audio_track or MP3.}
         subtitle_mode: {type: string, enum: [omit, preserve], default: omit, description: Preserve compatible plain text subtitles from local copy sources, clipped and rebased to actual boundaries. Unsupported subtitle codecs fail explicitly. MP4 writes mov_text; MKV writes subrip.}
         crop: {$ref: '#/components/schemas/Crop'}
+        rendition: {type: string, enum: [final, draft], default: final, description: Draft requires accurate MP4 and uses a 720p cap plus ultrafast CRF28 encoding. Omitted/final retains installed final encoder settings. Persisted normalized final requests omit this field.}
+    CollectionRequest:
+      type: object
+      additionalProperties: false
+      required: [source_id, plan]
+      properties:
+        source_id: {type: string, description: Source accessible to the current session. HTTP collection plans cannot open local filesystem paths.}
+        plan: {$ref: '#/components/schemas/CollectionPlan'}
+        clip_ids:
+          type: array
+          maxItems: 128
+          uniqueItems: true
+          items: {type: string, pattern: '^[a-z0-9][a-z0-9_-]{0,63}$'}
+          description: Selected IDs, returned in plan order. Empty/omitted selects every clip. Unknown or duplicate IDs fail explicitly.
+        rendition: {type: string, enum: [final, draft], default: final, description: Draft requires accurate MP4, retains edits/crop/audio choices and uses a 720p cap plus ultrafast CRF28 encoding. Final uses requested quality and installed final encoder settings.}
+    CollectionPlan:
+      type: object
+      additionalProperties: false
+      required: [version, clips]
+      properties:
+        version: {type: integer, const: 1}
+        input: {type: string, const: '', description: Local engine plans may contain input; HTTP requires this field to be absent or empty and uses source_id.}
+        options: {$ref: '#/components/schemas/CollectionOptions'}
+        clips:
+          type: array
+          minItems: 1
+          maxItems: 128
+          items: {$ref: '#/components/schemas/CollectionClip'}
+    CollectionClip:
+      type: object
+      additionalProperties: false
+      required: [id, ranges]
+      properties:
+        id: {type: string, pattern: '^[a-z0-9][a-z0-9_-]{0,63}$', description: Stable unique clip identity within this plan.}
+        label: {type: string, x-maxBytes: 200, description: Optional human label; whitespace is trimmed for normalized output.}
+        ranges:
+          type: array
+          minItems: 1
+          maxItems: 128
+          items: {$ref: '#/components/schemas/Range'}
+          description: Source intervals joined in this order, including repeated or overlapping intervals. Selected intervals share aggregate server budgets.
+        options: {$ref: '#/components/schemas/CollectionOptions'}
+    CollectionOptions:
+      type: object
+      additionalProperties: false
+      description: Clip options override collection options. Empty strings and omitted/null pointers inherit. Defaults are MP4, best, accurate, automatic audio and omitted subtitles. Explicit no_audio false enables inherited audio; audio_track -1 resets inherited selection to automatic. clear_crop removes inherited crop; crop and clear_crop together fail. Settings must be compatible after inheritance.
+      properties:
+        format: {type: string, enum: ['', mp4, mp3, mkv]}
+        quality: {type: string, enum: ['', best, 1080p, 720p]}
+        cut_mode: {type: string, enum: ['', accurate, copy]}
+        subtitle_mode: {type: string, enum: ['', omit, preserve]}
+        audio_track: {type: [integer, 'null'], minimum: -1}
+        no_audio: {type: [boolean, 'null']}
+        crop:
+          oneOf:
+            - {$ref: '#/components/schemas/Crop'}
+            - {type: 'null'}
+        clear_crop: {type: boolean}
+    CollectionDiagnostic:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string, description: Open public diagnostic vocabulary; accept future codes.}
+        message: {type: string, description: Safe human diagnostic without server paths or raw subprocess/database output.}
+        clip_id: {type: string, description: Clip responsible for this error, when identifiable. A shared inspection blocker can prevent admission of other pending clips.}
+        field: {type: string, description: JSON-style field path within the clip or top-level plan/selection.}
+    CollectionError:
+      type: object
+      required: [error]
+      properties:
+        error: {$ref: '#/components/schemas/CollectionDiagnostic'}
+    CollectionValidation:
+      type: object
+      required: [version, valid, rendition, requested_duration_ms, clips]
+      properties:
+        version: {type: integer, const: 1}
+        valid: {type: boolean, const: true}
+        rendition: {type: string, enum: [final, draft]}
+        requested_duration_ms: {type: integer, minimum: 1}
+        clips:
+          type: array
+          minItems: 1
+          maxItems: 128
+          items:
+            type: object
+            required: [clip_id, label, preflight]
+            properties:
+              clip_id: {type: string}
+              label: {type: string}
+              preflight: {$ref: '#/components/schemas/PreflightResult'}
+    CollectionSubmission:
+      type: object
+      required: [version, rendition, complete, clips]
+      properties:
+        version: {type: integer, const: 1}
+        rendition: {type: string, enum: [final, draft]}
+        complete: {type: boolean, description: All selected clips have retained/admitted jobs. Jobs can still be running, failed or cancelled.}
+        clips:
+          type: array
+          minItems: 1
+          maxItems: 128
+          items:
+            type: object
+            required: [clip_id, label, requested_duration_ms, request, retryable]
+            oneOf:
+              - required: [job]
+              - required: [error]
+            properties:
+              clip_id: {type: string}
+              label: {type: string}
+              requested_duration_ms: {type: integer, minimum: 1}
+              request: {$ref: '#/components/schemas/ExportRequest'}
+              job: {$ref: '#/components/schemas/Job'}
+              error: {$ref: '#/components/schemas/CollectionDiagnostic'}
+              retryable: {type: boolean, description: Pending work can be retried with the same plan/workflow key after the stated condition changes. Recovered jobs use false.}
     PreflightResult:
       type: object
       required: [version, valid, source, request, requested_duration_ms, output_count, track_manifest, checks, warnings]

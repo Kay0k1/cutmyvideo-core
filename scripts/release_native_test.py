@@ -87,6 +87,24 @@ class NativeControls(unittest.TestCase):
         value['groups']['process']['checks'] = value['groups']['process']['checks'][:3]
         self.reject(value)
 
+    def test_every_archived_collection_observation_is_required_on_all_targets(self):
+        self.assertEqual(len(n.COLLECTION_MEDIA_CHECKS), 6)
+        for target in ('linux', 'darwin', 'windows'):
+            for name in n.COLLECTION_MEDIA_CHECKS:
+                self.assertIn(name, n.required_checks(target)['media'])
+                for mutation in ('missing', 'failed', 'skip'):
+                    with self.subTest(target=target, name=name, mutation=mutation):
+                        value = report(target)
+                        checks = value['groups']['media']['checks']
+                        check = next(item for item in checks if item['name'] == name)
+                        if mutation == 'missing':
+                            checks.remove(check)
+                        elif mutation == 'failed':
+                            check['ok'] = False
+                        else:
+                            check['skip'] = True
+                        self.reject(value)
+
     def test_changed_binary_and_suppressed_errors_rejected(self):
         for mutation in ('before', 'after', 'archive', 'errors', 'ok'):
             with self.subTest(mutation=mutation):

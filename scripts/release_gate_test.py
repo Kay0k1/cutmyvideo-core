@@ -125,6 +125,22 @@ class AggregateControls(unittest.TestCase):
                     wrong[0]['groups']['service']['status'] = mutation
                 self.reject(wrong)
 
+    def test_aggregate_refuses_missing_or_failed_collection_evidence_on_each_target(self):
+        for index, native_report in enumerate(self.reports):
+            for name in fixture.n.COLLECTION_MEDIA_CHECKS:
+                for mutation in ('missing', 'failed', 'skip'):
+                    with self.subTest(target=native_report['target'], name=name, mutation=mutation):
+                        wrong = deepcopy(self.reports)
+                        checks = wrong[index]['groups']['media']['checks']
+                        check = next(item for item in checks if item['name'] == name)
+                        if mutation == 'missing':
+                            checks.remove(check)
+                        elif mutation == 'failed':
+                            check['ok'] = False
+                        else:
+                            check['skip'] = True
+                        self.reject(wrong)
+
     def test_actual_archive_recovery_passes(self):
         kwargs = {key: value for key, value in self.kwargs.items() if key not in ('manifest_sha256', 'event_sha')}
         value = gate.validate_recovery(self.recovery, self.source, self.manifest, **kwargs)

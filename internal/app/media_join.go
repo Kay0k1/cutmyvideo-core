@@ -319,7 +319,9 @@ func joinAccurateMode(ctx context.Context, c Config, inputs [][]mediaInput, rang
 		}
 		rate := exportVideoBitrate(c, Range{EndMS: elapsed}, request)
 		args = append(args, "-vf", "select=concatdec_select,"+filter, "-c:v", "libx264", "-maxrate", strconv.FormatInt(rate, 10), "-bufsize", strconv.FormatInt(rate*2, 10), "-pix_fmt", "yuv420p", "-fps_mode:v", "passthrough", "-enc_time_base:v", clock)
-		if c.FFmpegProfile == "compact" {
+		if CollectionDraft(ctx) {
+			args = append(args, "-preset", "ultrafast", "-crf", "28", "-coder", "1")
+		} else if c.FFmpegProfile == "compact" {
 			args = append(args, "-preset", "veryfast", "-crf", "20")
 		} else {
 			args = append(args, "-preset", "ultrafast", "-crf", "18", "-coder", "1")

@@ -17,8 +17,8 @@ t = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(t)
 m = t.m
 ROOT = Path(__file__).resolve().parents[1]
-NATIVE_RECEIPT_COUNTS = {('linux', 'amd64'): 47, ('linux', 'arm64'): 47,
-                         ('darwin', 'amd64'): 47, ('darwin', 'arm64'): 47, ('windows', 'amd64'): 45}
+NATIVE_RECEIPT_COUNTS = {('linux', 'amd64'): 53, ('linux', 'arm64'): 53,
+                         ('darwin', 'amd64'): 53, ('darwin', 'arm64'): 53, ('windows', 'amd64'): 51}
 
 
 class TrustControls(unittest.TestCase):
@@ -205,15 +205,17 @@ class TrustControls(unittest.TestCase):
     def test_trust_rejects_old_or_changed_native_group_and_check_counts(self):
         t.validate_verdict(self.verdict, self.source, self.manifest, self.run)
         for index, receipt in enumerate(self.verdict['native']):
-            for mutation in ('old', 'missing', 'extra', 'other_platform', 'missing_group', 'extra_group',
+            for mutation in ('old', 'pre_collection', 'missing', 'extra', 'other_platform', 'missing_group', 'extra_group',
                              'checks_float', 'groups_float'):
                 with self.subTest(os=receipt['os'], arch=receipt['arch'], mutation=mutation):
                     changed = deepcopy(self.verdict)
                     native = changed['native'][index]
                     if mutation == 'old':
                         native['required_checks'] = 37 if receipt['os'] == 'windows' else 39
+                    elif mutation == 'pre_collection':
+                        native['required_checks'] = 45 if receipt['os'] == 'windows' else 47
                     elif mutation == 'other_platform':
-                        native['required_checks'] = 47 if receipt['os'] == 'windows' else 45
+                        native['required_checks'] = 53 if receipt['os'] == 'windows' else 51
                     elif mutation == 'checks_float':
                         native['required_checks'] = float(native['required_checks'])
                     elif mutation == 'groups_float':

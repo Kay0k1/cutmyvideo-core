@@ -109,6 +109,7 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 	}()
 	ctx, cancel := context.WithTimeout(parent, c.JobTimeout)
 	ctx = withMediaDiagnostics(ctx, c, j.ID, "")
+	ctx = CollectionRenderContext(ctx, j.Request.Rendition)
 	defer cancel()
 	stopHeartbeat := make(chan struct{})
 	heartbeatDone := make(chan struct{})

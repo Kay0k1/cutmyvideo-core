@@ -6,8 +6,8 @@ one private session; the local client runs the same version 1 cutting plans as
 the CLI. Neither client decides which moments to cut or changes encoding quality.
 
 This is the SDK foundation for 1.3.0, available in `main`. Packages use
-development versions and have not been published to PyPI or npm. Build a matching
-core from current sources for preflight; the stable 1.2.0 binary does not contain
+development versions and have not been published to PyPI or npm. Use core 1.3.0
+or a matching current source build for preflight; the 1.2.0 binary does not contain
 that command or endpoint. See the [project overview](../README.en.md#versions)
 for release status and the [architecture](architecture.md) for dependencies.
 

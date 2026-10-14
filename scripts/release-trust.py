@@ -44,7 +44,7 @@ SCHEMAS = frozenset({'20261005-storage-queue-v3', '20261010-cache-retention-v1',
                     '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1',
                     '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1'})
 # Reviewed archive-gate inventory; changing native scenarios requires a new review.
-NATIVE_GROUP_CHECK_COUNTS = (('archive', 4), ('version', 3), ('cli', 4), ('media', 12),
+NATIVE_GROUP_CHECK_COUNTS = (('archive', 4), ('version', 3), ('cli', 4), ('media', 18),
                              ('process', 3), ('service', 13), ('deletion', 6))
 NATIVE_UNIX_PROCESS_CHECKS = 2
 

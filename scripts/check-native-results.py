@@ -146,6 +146,27 @@ PREFLIGHT_MEDIA_REQUIRED = {
     "TestPreflightLocalRejectsChangingInput",
 }
 
+# The collection workflow must execute on every native platform; HTTP contract
+# dependencies are installed only in the separate Linux contract job.
+COLLECTION_ENGINE_REQUIRED = {
+    "TestCollectionRoundTripSelectedDraftAndNoOverwrite",
+    "TestCollectionInvalidSelectedAndGlobalShape",
+    "TestCollectionPartialPublicationAndAggregateLimit",
+    "TestCollectionCancellationAndTimeout",
+    "TestCollectionDetectsSourceChangeAndLateCollision",
+}
+COLLECTION_CLI_REQUIRED = {
+    "TestCLICollectionWorkflow", "TestCLICollectionStrictPlansAndDiagnostics",
+}
+COLLECTION_SERVICE_REQUIRED = {
+    "TestHTTPCollectionsRemoteValidationAndGuards",
+    "TestHTTPCollectionsSubmitRetryAndSelectedEdit",
+    "TestHTTPCollectionsLocalPreflightAndDraft",
+    "TestHTTPCollectionsPartialFailureRecovery",
+    "TestHTTPCollectionsRetainedRecoveryAfterSourceChanges",
+}
+COLLECTION_CONTRACT_REQUIRED = {"TestHTTPCollectionsPublicContract"}
+
 REQUIRED = [
     {"TestEngineInspectAndExportActualMedia", "TestConcurrentPublicationHasExactlyOneCompleteWinner", "TestCLIInspectAndClipActualMedia", "TestCLIBatchSavedPlanRelativeInputAndJoinedAudio", "TestPlanRoundTripActualOutputsAndPartialPublication"},
     {"TestProcessCancellationTerminatesDescendants", "TestProcessOutputStopsUnboundedProducer"},
@@ -214,6 +235,8 @@ REQUIRED[4].update(UNIVERSAL_MEDIA_REQUIRED)
 REQUIRED[0].update(PREFLIGHT_ENGINE_REQUIRED | PREFLIGHT_CLI_REQUIRED)
 REQUIRED[2].update(PREFLIGHT_SERVICE_REQUIRED)
 REQUIRED[4].update(PREFLIGHT_MEDIA_REQUIRED)
+REQUIRED[0].update(COLLECTION_ENGINE_REQUIRED | COLLECTION_CLI_REQUIRED)
+REQUIRED[2].update(COLLECTION_SERVICE_REQUIRED)
 
 REQUIRED_PACKAGES = [
     {ENGINE_PACKAGE, FS_PACKAGE, CLI_PACKAGE},
@@ -264,8 +287,8 @@ if __name__ == "__main__":
         verify_report(sys.argv[2], BOOKWORM_REQUIRED, {APP_PACKAGE})
         print(f"Bookworm's {len(BOOKWORM_REQUIRED)} required media and timeline checks passed without skips.")
     elif len(sys.argv) == 3 and sys.argv[1] == "--preflight-contract":
-        verify_report(sys.argv[2], PREFLIGHT_CONTRACT_REQUIRED, {APP_PACKAGE})
-        print("Preflight public-handler OpenAPI samples passed without skips.")
+        verify_report(sys.argv[2], PREFLIGHT_CONTRACT_REQUIRED | COLLECTION_CONTRACT_REQUIRED, {APP_PACKAGE})
+        print("Preflight and collection public-handler OpenAPI samples passed without skips.")
     else:
         verify(sys.argv[1:])
         print("Native media contract, filesystem, CLI, process tree, API/worker and storage checks passed without skips.")
