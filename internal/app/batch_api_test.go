@@ -274,7 +274,9 @@ func TestSeparateBatchPartialFailureKeepsCompletedDownload(t *testing.T) {
 	c := mediaConfig(t)
 	c.MaxStorageBytes = 100 << 20
 	c.JobTimeout = 20 * time.Second
-	c.SourceTimeout = time.Second
+	// This checks publication failure, not inspection speed. Native race
+	// runners must have time to reach the injected second publication.
+	c.SourceTimeout = 10 * time.Second
 	s.ConfigureStorage(c)
 	source := workerSourceFixture(t, s, c)
 	request := requestFor(source)
@@ -294,6 +296,9 @@ func TestSeparateBatchPartialFailureKeepsCompletedDownload(t *testing.T) {
 		}
 		return s.PublishArtifact(ctx, j, path, token, a)
 	})
+	if calls != 2 {
+		t.Fatalf("injected second publication was not reached: %d calls", calls)
+	}
 	finished, err := s.Job(context.Background(), job.ID, source.Owner)
 	if err != nil || finished.Status != "failed" || finished.Items[0].Status != "succeeded" || finished.Items[0].Artifact == nil || finished.Items[1].Status != "failed" || finished.Items[1].Artifact != nil {
 		t.Fatal("partial batch lost completed artifact", finished, err)
@@ -310,7 +315,9 @@ func TestJoinedLostPublicationAcknowledgementResumesWithoutRendering(t *testing.
 	c := mediaConfig(t)
 	c.MaxStorageBytes = 100 << 20
 	c.JobTimeout = 20 * time.Second
-	c.SourceTimeout = time.Second
+	// Recovery assertions require a completed publication first; inspection
+	// latency under the native race runner is checked by separate tests.
+	c.SourceTimeout = 10 * time.Second
 	s.ConfigureStorage(c)
 	source := workerSourceFixture(t, s, c)
 	request := requestFor(source)
