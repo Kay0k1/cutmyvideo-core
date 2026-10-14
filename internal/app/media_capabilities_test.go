@@ -66,16 +66,22 @@ func TestPacketDropCapabilitiesCheckToolIdentityBoundsAndCancellation(t *testing
 
 func TestCopyPacketTrimEligibilityPreservesUnprovenClockPaths(t *testing.T) {
 	for _, sample := range []struct {
-		codec, clock, format string
-		want                 bool
+		codec, clock, format, timeBase string
+		want                           bool
 	}{
-		{"aac", "0", "mp4", true}, {"mp3", "0.021", "mkv", true},
-		{"flac", "0", "mkv", true}, {"opus", "0.007", "mp4", true},
-		{"opus", "0.007", "mkv", false}, {"vorbis", "0", "mkv", false},
-		{"aac", "", "mp4", false}, {"aac", "N/A", "mkv", false},
-		{"aac", "NaN", "mp4", false}, {"aac", "+Inf", "mkv", false},
+		{"aac", "0", "mp4", "1/1000", false}, {"mp3", "0.021", "mkv", "1/1000", true},
+		{"flac", "0", "mkv", "1/1000", true}, {"opus", "0.007", "mp4", "1/1000", false},
+		{"opus", "0.007", "mkv", "1/1000", false}, {"vorbis", "0", "mkv", "1/1000", false},
+		{"aac", "", "mp4", "1/1000", false}, {"aac", "N/A", "mkv", "1/1000", false},
+		{"aac", "NaN", "mp4", "1/1000", false}, {"aac", "+Inf", "mkv", "1/1000", false},
+		{"aac", "0", "mp4", "1/48000", false}, {"aac", "0", "mp4", "1/44100", false},
+		{"aac", "0", "mp4", "", false}, {"aac", "0", "mp4", "N/A", false},
+		{"aac", "0", "mkv", "2/2000", true}, {"aac", "0", "mkv", "0/1000", false},
+		{"aac", "0", "mp4", "1/0", false}, {"aac", "0", "mp4", "-1/-1000", false},
+		{"aac", "0", "mp4", "2147483647/2147483647", false},
+		{"aac", "0", "mp4", "999999999999999999999999/1000", false},
 	} {
-		selection := mediaSelection{Audio: &probeStream{CodecName: sample.codec, StartTime: sample.clock}}
+		selection := mediaSelection{Audio: &probeStream{CodecName: sample.codec, StartTime: sample.clock, TimeBase: sample.timeBase}}
 		if got := copyAudioPacketTrimEligible(selection, ExportRequest{Format: sample.format}); got != sample.want {
 			t.Fatalf("eligibility for %s clock=%s format=%s: %t", sample.codec, sample.clock, sample.format, got)
 		}
@@ -89,7 +95,11 @@ func TestCopyJoinAudioFallsBackWhenPacketTrimUnavailable(t *testing.T) {
 	c := mediaConfig(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	input := batchFixture(t, c, ctx)
+	original := batchFixture(t, c, ctx)
+	input := filepath.Join(c.DataDir, "eligible-source.mkv")
+	if _, err := runCommand(ctx, c.FFmpeg, "-v", "error", "-i", original, "-map", "0", "-c", "copy", "-c:s", "srt", input); err != nil {
+		t.Fatal(err)
+	}
 	commands := countMediaCommands(t, &c)
 	available, err := supportsAudioPacketDropWithProbe(ctx, c, func(context.Context, string, ...string) ([]byte, error) {
 		return []byte("legacy filter without packet drop expressions"), nil
@@ -98,8 +108,12 @@ func TestCopyJoinAudioFallsBackWhenPacketTrimUnavailable(t *testing.T) {
 		t.Fatalf("negative capability witness failed: available=%t err=%v", available, err)
 	}
 	selected := 2
-	request := ExportRequest{Format: "mp4", Quality: "best", CutMode: "copy", AudioTrack: &selected}
-	out := filepath.Join(c.DataDir, "fallback.mp4")
+	request := ExportRequest{Format: "mkv", Quality: "best", CutMode: "copy", AudioTrack: &selected}
+	selection, err := probeInputSelectionOptions(ctx, c, []mediaInput{{Path: input}}, request)
+	if err != nil || !copyAudioPacketTrimEligible(selection, request) {
+		t.Fatalf("capability negative control does not exercise an eligible source: %v", err)
+	}
+	out := filepath.Join(c.DataDir, "fallback.mkv")
 	segments, err := ExportJoinedLocal(ctx, c, input, out, []Range{{StartMS: 1200, EndMS: 2200}, {StartMS: 3200, EndMS: 4200}}, request)
 	if err != nil {
 		t.Fatal(err)

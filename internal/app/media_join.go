@@ -413,7 +413,22 @@ func joinCopyAudio(ctx context.Context, c Config, inputs []mediaInput, selection
 }
 
 func copyAudioPacketTrimEligible(selection mediaSelection, request ExportRequest) bool {
-	if selection.Audio == nil {
+	if selection.Audio == nil || request.Format != "mkv" {
+		return false
+	}
+	// The established audio.mka stage normalizes packet clocks to milliseconds.
+	// Bypassing it for a finer source clock changes copied PTS/durations even
+	// when payloads and decoded samples agree. Keep that stage unless the source
+	// already uses its time base and the output keeps it too. Older MP4 muxers
+	// also adjust packet durations after that stage. Exact packet-clock witnesses
+	// cover only the Matroska-to-Matroska AAC/MP3/FLAC subset.
+	parts := strings.Split(selection.Audio.TimeBase, "/")
+	if len(parts) != 2 {
+		return false
+	}
+	numerator, numeratorErr := strconv.ParseInt(parts[0], 10, 32)
+	denominator, denominatorErr := strconv.ParseInt(parts[1], 10, 32)
+	if numeratorErr != nil || denominatorErr != nil || numerator <= 0 || denominator <= 0 || numerator*1000 != denominator {
 		return false
 	}
 	clock, err := strconv.ParseFloat(selection.Audio.StartTime, 64)
@@ -423,11 +438,6 @@ func copyAudioPacketTrimEligible(selection mediaSelection, request ExportRequest
 	switch selection.Audio.CodecName {
 	case "aac", "mp3", "flac":
 		return true
-	case "opus":
-		// Matroska Opus carries decoder delay in both codec-private data and its
-		// container clock. Keep its established normalization stage; direct remux
-		// failed the independent presentation-clock witness despite identical bytes.
-		return request.Format != "mkv"
 	default:
 		// Preserve the established path until the codec's decoder-delay and
 		// container clocks have an independent packet and decoded-audio witness.

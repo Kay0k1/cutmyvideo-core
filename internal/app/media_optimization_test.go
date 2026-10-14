@@ -196,7 +196,13 @@ func TestCopyJoinReusesRepeatedSegmentsAndFaststartOnlyFinal(t *testing.T) {
 	c := mediaConfig(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	input := batchFixture(t, c, ctx)
+	original := batchFixture(t, c, ctx)
+	// Keep this a positive witness for reuse plus direct audio on a source
+	// whose clocks already match the established millisecond staging format.
+	input := filepath.Join(c.DataDir, "millisecond-source.mkv")
+	if _, err := runCommand(ctx, c.FFmpeg, "-v", "error", "-i", original, "-map", "0", "-c", "copy", "-c:s", "srt", input); err != nil {
+		t.Fatal(err)
+	}
 	commands := countMediaCommands(t, &c)
 	packetTrim, err := supportsAudioPacketDrop(ctx, c)
 	if err != nil {
@@ -204,10 +210,14 @@ func TestCopyJoinReusesRepeatedSegmentsAndFaststartOnlyFinal(t *testing.T) {
 	}
 	track := 2
 	for _, format := range []string{"mp4", "mkv"} {
+		source := original
+		if format == "mkv" {
+			source = input
+		}
 		request := ExportRequest{Format: format, Quality: "best", CutMode: "copy", AudioTrack: &track, SubtitleMode: "preserve"}
 		ranges := []Range{{StartMS: 1200, EndMS: 2400, Label: "first"}, {StartMS: 3200, EndMS: 4400, Label: "middle"}, {StartMS: 1200, EndMS: 2400, Label: "repeat"}}
 		out := filepath.Join(c.DataDir, "repeat."+format)
-		segments, err := ExportJoinedLocal(ctx, c, input, out, ranges, request)
+		segments, err := ExportJoinedLocal(ctx, c, source, out, ranges, request)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -218,7 +228,7 @@ func TestCopyJoinReusesRepeatedSegmentsAndFaststartOnlyFinal(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, segment := range segments {
-			compareAudioTimeline(t, ctx, c, input, out, track, segment.SourceStartMS+300, segment.OutputStartMS+300, true)
+			compareAudioTimeline(t, ctx, c, source, out, track, segment.SourceStartMS+300, segment.OutputStartMS+300, true)
 		}
 	}
 	var encodes, keyframes, faststarts, directAudio, stagedAudio int
@@ -245,7 +255,7 @@ func TestCopyJoinReusesRepeatedSegmentsAndFaststartOnlyFinal(t *testing.T) {
 	if encodes != 4 || keyframes != 2 || faststarts != 1 {
 		t.Fatalf("repeated work remained: encodes=%d keyframes=%d faststarts=%d", encodes, keyframes, faststarts)
 	}
-	if packetTrim && (directAudio != 4 || stagedAudio != 0) || !packetTrim && (directAudio != 0 || stagedAudio != 8) {
+	if packetTrim && (directAudio != 2 || stagedAudio != 4) || !packetTrim && (directAudio != 0 || stagedAudio != 8) {
 		t.Fatalf("copy audio process selection: supported=%t direct=%d staged=%d", packetTrim, directAudio, stagedAudio)
 	}
 }

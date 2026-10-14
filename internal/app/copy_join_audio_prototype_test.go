@@ -14,6 +14,38 @@ import (
 	"time"
 )
 
+type copyAudioPacketWitness struct {
+	Stream   int         `json:"stream_index"`
+	Hash     string      `json:"data_hash"`
+	PTS      json.Number `json:"pts"`
+	DTS      json.Number `json:"dts"`
+	Duration json.Number `json:"duration"`
+}
+
+type copyAudioClockWitness struct {
+	Packets []copyAudioPacketWitness `json:"packets"`
+	Streams []struct {
+		Index    int    `json:"index"`
+		TimeBase string `json:"time_base"`
+	} `json:"streams"`
+	Format struct {
+		Duration string `json:"duration"`
+	} `json:"format"`
+}
+
+func readCopyAudioClockWitness(t *testing.T, ctx context.Context, c Config, path string) copyAudioClockWitness {
+	t.Helper()
+	data, err := runCommand(ctx, c.FFprobe, "-v", "error", "-show_packets", "-show_streams", "-show_format", "-show_data_hash", "sha256", "-show_entries", "packet=stream_index,data_hash,pts,dts,duration:stream=index,time_base:format=duration", "-of", "json", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result copyAudioClockWitness
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
 func TestCopyJoinAudioSingleProcessPrototype(t *testing.T) {
 	if os.Getenv("CUTMY_COPY_JOIN_PROTOTYPE") != "1" {
 		t.Skip("opt-in candidate evaluation, not part of shipped media path")
@@ -23,6 +55,80 @@ func TestCopyJoinAudioSingleProcessPrototype(t *testing.T) {
 
 func TestCopyJoinAudioPacketCopyPreservesClocks(t *testing.T) {
 	testCopyJoinAudioMatrix(t, false)
+}
+
+func TestCopyJoinAudioPreservesFineSourcePacketClocks(t *testing.T) {
+	c := mediaConfig(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	input := filepath.Join(c.DataDir, "fine-clock.mp4")
+	if _, err := runCommand(ctx, c.FFmpeg, "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=60", "-f", "lavfi", "-i", "aevalsrc=sin(2*PI*(200*t+30*t*t)):s=48000", "-t", "6", "-c:v", "libx264", "-threads", "1", "-g", "120", "-keyint_min", "120", "-sc_threshold", "0", "-bf", "2", "-c:a", "aac", input); err != nil {
+		t.Fatal(err)
+	}
+	inputs := []mediaInput{{Path: input}}
+	request := ExportRequest{Format: "mp4", Quality: "best", CutMode: "copy"}
+	selection, err := probeInputSelectionOptions(ctx, c, inputs, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selection.Audio == nil || selection.Audio.TimeBase != "1/48000" {
+		t.Fatal("fixture does not exercise a fine source audio clock")
+	}
+	video := filepath.Join(c.DataDir, "fine-video.mp4")
+	videoRequest := request
+	videoRequest.NoAudio = true
+	start, end, err := exportInputsCoreProgressMode(ctx, c, inputs, Range{StartMS: 2400, EndMS: 3500}, videoRequest, video, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseline, out := filepath.Join(c.DataDir, "fine-baseline.mp4"), filepath.Join(c.DataDir, "fine-dispatched.mp4")
+	if err := joinCopyAudioStaged(ctx, c, inputs, selection, start, end, video, baseline, request, c.MaxOutputBytes); err != nil {
+		t.Fatal(err)
+	}
+	observed := c
+	commands := countMediaCommands(t, &observed)
+	if err := joinCopyAudio(ctx, observed, inputs, selection, start, end, video, out, request, c.MaxOutputBytes); err != nil {
+		t.Fatal(err)
+	}
+	stages := 0
+	for _, command := range commands() {
+		if strings.Contains(command, "-bsf:a noise=") {
+			t.Fatal("fine source clock bypassed its normalization stage")
+		}
+		if strings.Contains(command, "audio.mka") {
+			stages++
+		}
+	}
+	if stages != 2 {
+		t.Fatalf("fine source clock did not retain both audio stages: %d", stages)
+	}
+	witness := func(path string) []byte {
+		data, err := json.Marshal(readCopyAudioClockWitness(t, ctx, c, path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return data
+	}
+	expected := witness(baseline)
+	if !bytes.Equal(expected, witness(out)) {
+		t.Fatal("fine source packet payloads, PTS/DTS/durations, time bases or format duration changed")
+	}
+	compareAudioTimeline(t, ctx, c, input, out, selection.Audio.Index, start+300, 300, true)
+	available, err := supportsAudioPacketDrop(ctx, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if available {
+		// Keep a negative control for the previously invisible sub-millisecond
+		// regression: decoded content and 1 ms correlation alone do not detect it.
+		direct := filepath.Join(c.DataDir, "fine-unconditional-negative.mp4")
+		if err := joinCopyAudioDirect(ctx, c, inputs, selection, start, end, video, direct, request, c.MaxOutputBytes); err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Equal(expected, witness(direct)) {
+			t.Fatal("negative control did not distinguish skipped millisecond normalization")
+		}
+	}
 }
 
 func testCopyJoinAudioMatrix(t *testing.T, unconditional bool) {
@@ -122,7 +228,7 @@ func testCopyJoinAudioMatrix(t *testing.T, unconditional bool) {
 					}
 					out := filepath.Join(c.DataDir, fmt.Sprintf("prototype-%d-%s-%d.%s", inputIndex, format, requested, format))
 					var prototypeErr error
-					legacyOpus := !unconditional && selection.Audio.CodecName == "opus" && format == "mkv"
+					legacyOpus := !unconditional && selection.Audio.CodecName == "opus"
 					if unconditional {
 						prototypeErr = joinCopyAudioDirect(ctx, c, inputs, selection, start, end, video, out, request, c.MaxOutputBytes)
 					} else if legacyOpus {
@@ -131,7 +237,7 @@ func testCopyJoinAudioMatrix(t *testing.T, unconditional bool) {
 						commands := fallbackCommands()
 						for _, line := range commands[fallbackCommandCount:] {
 							if strings.Contains(line, "-bsf:a noise=") {
-								t.Fatal("Opus/Matroska compatibility path used the unproven direct mux")
+								t.Fatal("Opus compatibility path used the unproven direct mux")
 							}
 							if strings.Contains(line, "audio.mka") {
 								stages++
@@ -139,7 +245,7 @@ func testCopyJoinAudioMatrix(t *testing.T, unconditional bool) {
 						}
 						fallbackCommandCount = len(commands)
 						if stages != 2 {
-							t.Fatalf("Opus/Matroska compatibility did not use both original stages: %d", stages)
+							t.Fatalf("Opus compatibility did not use both original stages: %d", stages)
 						}
 					} else {
 						prototypeErr = joinCopyAudio(ctx, c, inputs, selection, start, end, video, out, request, c.MaxOutputBytes)
@@ -156,36 +262,20 @@ func testCopyJoinAudioMatrix(t *testing.T, unconditional bool) {
 					if prototypeErr != nil {
 						t.Fatal(prototypeErr)
 					}
-					readPackets := func(path string) []struct {
-						Stream int    `json:"stream_index"`
-						Hash   string `json:"data_hash"`
-					} {
-						data, err := runCommand(ctx, c.FFprobe, "-v", "error", "-show_packets", "-show_data_hash", "sha256", "-show_entries", "packet=stream_index,data_hash", "-of", "json", path)
-						if err != nil {
-							t.Fatal(err)
-						}
-						var result struct {
-							Packets []struct {
-								Stream int    `json:"stream_index"`
-								Hash   string `json:"data_hash"`
-							} `json:"packets"`
-						}
-						if err := json.Unmarshal(data, &result); err != nil {
-							t.Fatal(err)
-						}
-						return result.Packets
+					before, after := readCopyAudioClockWitness(t, ctx, c, baseline), readCopyAudioClockWitness(t, ctx, c, out)
+					if before.Format.Duration != after.Format.Duration || fmt.Sprint(before.Streams) != fmt.Sprint(after.Streams) {
+						t.Fatalf("copy duration/time bases changed: baseline=%s/%v candidate=%s/%v", before.Format.Duration, before.Streams, after.Format.Duration, after.Streams)
 					}
-					before, after := readPackets(baseline), readPackets(out)
 					for stream := 0; stream < 2; stream++ {
-						var expected, actual []string
-						for _, packet := range before {
+						var expected, actual []copyAudioPacketWitness
+						for _, packet := range before.Packets {
 							if packet.Stream == stream {
-								expected = append(expected, packet.Hash)
+								expected = append(expected, packet)
 							}
 						}
-						for _, packet := range after {
+						for _, packet := range after.Packets {
 							if packet.Stream == stream {
-								actual = append(actual, packet.Hash)
+								actual = append(actual, packet)
 							}
 						}
 						if len(expected) != len(actual) {
@@ -193,7 +283,7 @@ func testCopyJoinAudioMatrix(t *testing.T, unconditional bool) {
 						}
 						for i := range expected {
 							if expected[i] != actual[i] {
-								t.Fatalf("stream%d packet%d payload changed", stream, i)
+								t.Fatalf("stream%d packet%d payload/clock changed: baseline=%+v candidate=%+v", stream, i, expected[i], actual[i])
 							}
 						}
 					}
@@ -201,17 +291,29 @@ func testCopyJoinAudioMatrix(t *testing.T, unconditional bool) {
 						t.Fatal(err)
 					}
 					if legacyOpus {
-						// FFmpeg 5.1's established Opus/Matroska staging already has a
-						// source-relative decoder-delay error. This acceleration retains
-						// its clock exactly; optimized paths keep the absolute 1 ms gate.
+						// FFmpeg 5.1's established Opus staging already shifts source
+						// audio by 6.5 ms for MP4 and 13 ms for Matroska. Preserve the
+						// baseline clocks exactly; optimized paths keep the absolute 1 ms gate.
 						for _, witness := range []struct{ label, path string }{{"baseline", baseline}, {"candidate", out}} {
 							correlation, lag := audioTimelineAlignment(t, ctx, c, fixture.reference, witness.path, fixture.refIndex, start-inputs[selection.AudioInput].OffsetMS+300, 300)
 							if correlation < .99 {
-								t.Fatalf("legacy Opus/Matroska %s changed source audio: %.6f", witness.label, correlation)
+								t.Fatalf("legacy Opus/%s %s changed source audio: %.6f", format, witness.label, correlation)
 							}
-							t.Logf("legacy Opus/Matroska %s source-clock witness: correlation=%.6f lag=%d samples", witness.label, correlation, lag)
+							t.Logf("legacy Opus/%s %s source-clock witness: correlation=%.6f lag=%d samples", format, witness.label, correlation, lag)
 						}
 						compareAudioTimeline(t, ctx, c, baseline, out, 1, 300, 300, true)
+						pcmHash := func(path string) []byte {
+							data, err := runCommand(ctx, c.FFmpeg, "-v", "error", "-nostdin", "-threads", "1", "-i", path, "-map", "0:a:0", "-vn", "-c:a", "pcm_s16le", "-f", "hash", "-hash", "sha256", "-")
+							if err != nil {
+								t.Fatal(err)
+							}
+							return bytes.TrimSpace(data)
+						}
+						baselinePCM, candidatePCM := pcmHash(baseline), pcmHash(out)
+						if len(baselinePCM) == 0 || !bytes.Equal(baselinePCM, candidatePCM) {
+							t.Fatal("legacy Opus fallback changed complete decoded PCM")
+						}
+						t.Logf("legacy Opus/%s baseline=candidate complete decoded PCM %s", format, baselinePCM)
 					} else {
 						compareAudioTimeline(t, ctx, c, fixture.reference, out, fixture.refIndex, start-inputs[selection.AudioInput].OffsetMS+300, 300, true)
 					}

@@ -88,6 +88,7 @@ UNIVERSAL_STORAGE_REQUIRED = {
 }
 UNIVERSAL_MEDIA_REQUIRED = {
     "TestCopyJoinAudioPacketCopyPreservesClocks",
+    "TestCopyJoinAudioPreservesFineSourcePacketClocks",
     "TestCopyPacketDropPreservesUnknownPresentationTimestamps",
     "TestCopyJoinAudioFallsBackWhenPacketTrimUnavailable",
     "TestCopyKeyframeSelectionKeepsInitialAndDecodeClocks",
