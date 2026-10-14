@@ -5,6 +5,7 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 ## Unreleased
 
 ### Added
+- Dependency-free Python and TypeScript SDK candidates for local CLI plans and owner-scoped HTTP workflows: inspection, preflight, explicit idempotent submission, bounded waiting/cancellation and streamed artifact downloads. Typed errors preserve partial results and recovery context. Installed wheel/sdist/npm consumers exercise real media and the API/worker; SDK registry publication remains separate.
 - Read-only job preflight through Go `Engine.PreflightPlan`, CLI `cutmy preflight` and owner-protected `POST /api/v1/jobs/preflight`. Shared reports expose normalized settings, selected tracks, output geometry/count and explicit deferred checks; local plans also predict output names without writing files. Inspection checks fresh media and bounded configured-tool capabilities, with independent HTTP rate/admission limits and temporary reader protection.
 
 ## 1.2.0 - 2026-10-14

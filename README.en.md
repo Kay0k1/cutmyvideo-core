@@ -1,5 +1,7 @@
 # cutmyvideo-core
 
+[Python and TypeScript SDKs: local cutting and HTTP API](docs/sdk.md).
+
 [Check a job before starting](docs/batch-cutting.md#check-a-job-before-starting) through Go, CLI or HTTP without rendering or creating output files.
 
 [Saved batch plans, joined output, audio tracks and MKV/subtitles](docs/batch-cutting.md).

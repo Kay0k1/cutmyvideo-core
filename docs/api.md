@@ -2,6 +2,8 @@
 
 [Saved plans, joined outputs, selected audio and MKV/subtitles](batch-cutting.md).
 
+[Python and TypeScript SDKs](sdk.md) wrap the local CLI and these HTTP workflows.
+
 Base path: `/api/v1`. Media timestamps are integer milliseconds on the original source timeline. Retention and waiting deadlines are nullable RFC3339 strings. A range is `[start_ms, end_ms)`. Delivery URLs (`preview_url`, `thumbnail_url`, `download_url`) are relative to the same origin. Platform page and embed URLs are absolute HTTPS URLs. Enum names and known error codes are stable machine-readable identifiers; user-facing messages can be localized by a client. Ignore unknown response fields and use a safe generic fallback for unknown additive error codes.
 
 Initialize a session with `GET /session`. The HttpOnly cookie is a bearer capability: keep it private and send it with every subsequent request, including media and downloads. Each request checks ownership; foreign resources return the same 404 as absent ones. Source preparation currently blocks until metadata/staging completes, bounded by the source timeout. Export is asynchronous.
@@ -34,6 +36,7 @@ for ordinary database failures. Readiness retains `503 not_ready`.
 | GET | `/sources/{id}/waveform?start_ms=…` | Private aligned 30-second selected-audio peaks, one per 100 ms; source timestamps, at most 300 peaks and less than 64 KiB; always background admission and bounded preview cache |
 | GET | `/sources/{id}/thumbnail` | Authorized, inspected PNG/JPEG; Range supported |
 | POST | `/jobs` | Job, HTTP 202 |
+| POST | `/jobs/preflight` | Read-only job report with passed/deferred checks; no job or output reservation |
 | GET | `/jobs` | `{jobs:[JobSummary...]}`; up to 30 owned exports, active jobs first |
 | GET | `/jobs/{id}` | Job; clients may poll once per second |
 | POST | `/jobs/{id}/cancel` | Job; running cancellation settles asynchronously |
