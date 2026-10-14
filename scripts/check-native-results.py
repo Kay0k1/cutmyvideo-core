@@ -121,6 +121,31 @@ UNIVERSAL_MEDIA_REQUIRED = {
     "TestCopyPacketTrimEligibilityPreservesUnprovenClockPaths",
 }
 
+
+# Preflight must run on real media and expose deferred checks without rendering.
+PREFLIGHT_ENGINE_REQUIRED = {
+    "TestPlanJoinedParentFailureKeepsPublicationCode",
+    "TestPreflightPlanMatchesExportAndLeavesNoFiles",
+    "TestPreflightPlanInvalidSettingsAndOutputConflicts",
+    "TestPreflightPlanCancellationAndToolErrors",
+}
+PREFLIGHT_CLI_REQUIRED = {
+    "TestCLIPreflightPlanJSONAndNoOutput",
+    "TestCLIPreflightStrictPlansAndDiagnostics",
+}
+PREFLIGHT_SERVICE_REQUIRED = {
+    "TestHTTPPreflightRemoteMetadataAndGuards",
+    "TestHTTPPreflightLocalReadOnlyAndAdmissionCleanup",
+    "TestHTTPPreflightCancellationReleasesLeases",
+}
+PREFLIGHT_CONTRACT_REQUIRED = {"TestHTTPPreflightPublicContract"}
+PREFLIGHT_MEDIA_REQUIRED = {
+    "TestPreflightLocalChecksMediaWithoutRendering",
+    "TestPreflightCapabilitiesParseExactLists",
+    "TestPreflightCapabilitiesFailuresAreBoundedAndCancelable",
+    "TestPreflightLocalRejectsChangingInput",
+}
+
 REQUIRED = [
     {"TestEngineInspectAndExportActualMedia", "TestConcurrentPublicationHasExactlyOneCompleteWinner", "TestCLIInspectAndClipActualMedia", "TestCLIBatchSavedPlanRelativeInputAndJoinedAudio", "TestPlanRoundTripActualOutputsAndPartialPublication"},
     {"TestProcessCancellationTerminatesDescendants", "TestProcessOutputStopsUnboundedProducer"},
@@ -186,6 +211,10 @@ REQUIRED[2].update(UNIVERSAL_SERVICE_REQUIRED)
 REQUIRED[3].update(UNIVERSAL_STORAGE_REQUIRED)
 REQUIRED[4].update(UNIVERSAL_MEDIA_REQUIRED)
 
+REQUIRED[0].update(PREFLIGHT_ENGINE_REQUIRED | PREFLIGHT_CLI_REQUIRED)
+REQUIRED[2].update(PREFLIGHT_SERVICE_REQUIRED)
+REQUIRED[4].update(PREFLIGHT_MEDIA_REQUIRED)
+
 REQUIRED_PACKAGES = [
     {ENGINE_PACKAGE, FS_PACKAGE, CLI_PACKAGE},
     {APP_PACKAGE},
@@ -211,6 +240,7 @@ BOOKWORM_REQUIRED = {
 BOOKWORM_REQUIRED.update(NEW_MEDIA_REQUIRED)
 BOOKWORM_REQUIRED.update(EFFICIENT_CUTTING_MEDIA_REQUIRED)
 BOOKWORM_REQUIRED.update(UNIVERSAL_MEDIA_REQUIRED)
+BOOKWORM_REQUIRED.update(PREFLIGHT_MEDIA_REQUIRED)
 
 
 def verify_report(filename, names, packages):
@@ -233,6 +263,9 @@ if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "--bookworm":
         verify_report(sys.argv[2], BOOKWORM_REQUIRED, {APP_PACKAGE})
         print(f"Bookworm's {len(BOOKWORM_REQUIRED)} required media and timeline checks passed without skips.")
+    elif len(sys.argv) == 3 and sys.argv[1] == "--preflight-contract":
+        verify_report(sys.argv[2], PREFLIGHT_CONTRACT_REQUIRED, {APP_PACKAGE})
+        print("Preflight public-handler OpenAPI samples passed without skips.")
     else:
         verify(sys.argv[1:])
         print("Native media contract, filesystem, CLI, process tree, API/worker and storage checks passed without skips.")

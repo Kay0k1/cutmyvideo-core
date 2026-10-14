@@ -6,6 +6,7 @@ A version 1 JSON plan describes named intervals from one local source. Save the
 ```sh
 mkdir clips
 cutmy inspect --input interview.mp4
+cutmy preflight --plan cuts.json --output clips
 cutmy batch --plan cuts.json --output clips
 ```
 
@@ -37,6 +38,62 @@ video and audio; `quality: best` preserves display resolution and source cadence
 but is not bit-for-bit original quality. Copy mode preserves compatible video
 and the selected audio packets and may include keyframe preroll. Its actual
 boundaries are reported; it never falls back to accurate mode or reduces quality.
+
+## Check a job before starting
+
+`cutmy preflight --plan cuts.json --output clips` checks a saved plan without
+rendering, creating output files or creating a workspace. For a joined plan,
+pass the proposed filename, such as `--output highlights.mp4`. The output
+directory or joined file's parent must already exist. Preflight and batch share
+the same plan parser, defaults, range validation and output naming. Preflight
+accepts `--profile fast|compact`, `--threads 1..32` and `--timeout 2m`.
+
+Go callers use the additive method:
+
+```go
+report, err := engine.New(engine.Config{}).PreflightPlan(ctx, plan, output)
+if err != nil {
+    // engine.CodeOf(err) identifies the blocker.
+    return err
+}
+// report.OutputPaths are proposed names; nothing has been written.
+```
+
+The version 1 JSON report contains `valid`, `source`, the normalized `request`,
+`requested_duration_ms`, `output_count`, `track_manifest`, optional output
+`video` geometry, `checks` and `warnings`. Go/CLI additionally return absolute
+`output_paths`. A check has a `name` and `status` of `passed` or `deferred`;
+warnings have stable machine-readable `code` and a human `message`. Successful
+reports always have `valid: true`: the checks that could be completed passed.
+Blocking errors use the existing Go error contract or CLI stderr; prefix the
+CLI command with `--json-errors` for one JSON error envelope and a nonzero exit.
+
+Local inspection checks a fresh source, range/settings limits, selected tracks,
+crop/display geometry, timing prerequisites, and the exact encoders, muxers,
+filters, demuxers and bitstream filters required from the configured FFmpeg.
+Capability queries are limited to two seconds and 1 MiB per table. Unknown or
+failed capability responses are explicitly deferred. A recognized table missing
+a required capability produces `encoder_unavailable`, `muxer_unavailable`,
+`filter_unavailable`, `demuxer_unavailable` or `bitstream_filter_unavailable`.
+Copy never silently encodes or changes quality.
+
+Preflight cannot guarantee an export. Payload decoding, copy codec/container
+compatibility, packet/keyframe boundaries, final output size, execution/storage
+admission and durable filesystem publication are explicitly deferred. Local
+output paths are checked for current conflicts, but permission and publication
+capabilities are checked by execution. Every export inspects and admits its
+source again; a report is a snapshot, not a reservation.
+
+HTTP callers send the existing export request to
+`POST /api/v1/jobs/preflight` with their owner session and usual JSON/origin
+guards. It returns the same report without server filesystem paths. This call
+creates no job, downloads no remote media, reserves no output storage and does
+not consume the new-export allowance. An independent allowance permits 30
+checks per owner per minute, with bounded cross-process admission and renewable
+reader protection during local inspection. Remote sources use persisted
+metadata to check the request and explicitly defer media/track/tool inspection.
+Removed media, ownership failures, malformed requests and known local blockers
+use the documented HTTP error responses. See [OpenAPI](../api/openapi.yaml).
 
 ## Choose audio
 

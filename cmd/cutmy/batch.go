@@ -1,16 +1,13 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"flag"
-	"fmt"
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
@@ -39,32 +36,9 @@ func runBatch(args []string, stdout, stderr io.Writer) error {
 	if (*profile != "fast" && *profile != "compact") || *threads < 1 || *threads > 32 || *timeout <= 0 {
 		return invalidCLI(errors.New("use --profile fast|compact, --threads 1..32, and a positive timeout"))
 	}
-	file, err := os.Open(*planPath)
+	plan, err := readCuttingPlan(*planPath)
 	if err != nil {
 		return err
-	}
-	defer file.Close()
-	const maxPlanBytes = 1 << 20
-	blob, err := io.ReadAll(io.LimitReader(file, maxPlanBytes+1))
-	if err != nil {
-		return err
-	}
-	if len(blob) > maxPlanBytes {
-		return invalidCLI(errors.New("plan exceeds 1 MiB; use at most 128 named intervals"))
-	}
-	var plan engine.Plan
-	decoder := json.NewDecoder(bytes.NewReader(blob))
-	decoder.DisallowUnknownFields()
-	if err = decoder.Decode(&plan); err != nil {
-		return invalidCLI(fmt.Errorf("invalid cutting plan: %w", err))
-	}
-	if err = decoder.Decode(new(any)); err != io.EOF {
-		return invalidCLI(errors.New("plan must contain exactly one JSON object"))
-	}
-	// Relative source paths resolve beside the saved plan, making the plan
-	// portable and independent of the caller's current working directory.
-	if plan.Input != "" && !filepath.IsAbs(plan.Input) {
-		plan.Input = filepath.Join(filepath.Dir(*planPath), plan.Input)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

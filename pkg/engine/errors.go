@@ -34,16 +34,22 @@ var (
 type ErrorCode string
 
 const (
-	CodeInvalidArgument       ErrorCode = "invalid_argument"
-	CodeInputNotFound         ErrorCode = "input_not_found"
-	CodePermissionDenied      ErrorCode = "permission_denied"
-	CodeToolUnavailable       ErrorCode = "tool_unavailable"
-	CodeUnsupportedMedia      ErrorCode = "unsupported_media"
-	CodeAudioMissing          ErrorCode = "audio_missing"
-	CodeAudioTrackUnavailable ErrorCode = "audio_track_unavailable"
-	CodeSubtitleUnsupported   ErrorCode = "subtitle_unsupported"
-	CodeSubtitleUnavailable   ErrorCode = "subtitle_unavailable"
-	CodeJoinIncompatible      ErrorCode = "join_incompatible"
+	CodeInvalidArgument            ErrorCode = "invalid_argument"
+	CodeInputNotFound              ErrorCode = "input_not_found"
+	CodeSourceChanged              ErrorCode = "source_changed"
+	CodePermissionDenied           ErrorCode = "permission_denied"
+	CodeToolUnavailable            ErrorCode = "tool_unavailable"
+	CodeEncoderUnavailable         ErrorCode = "encoder_unavailable"
+	CodeFilterUnavailable          ErrorCode = "filter_unavailable"
+	CodeMuxerUnavailable           ErrorCode = "muxer_unavailable"
+	CodeDemuxerUnavailable         ErrorCode = "demuxer_unavailable"
+	CodeBitstreamFilterUnavailable ErrorCode = "bitstream_filter_unavailable"
+	CodeUnsupportedMedia           ErrorCode = "unsupported_media"
+	CodeAudioMissing               ErrorCode = "audio_missing"
+	CodeAudioTrackUnavailable      ErrorCode = "audio_track_unavailable"
+	CodeSubtitleUnsupported        ErrorCode = "subtitle_unsupported"
+	CodeSubtitleUnavailable        ErrorCode = "subtitle_unavailable"
+	CodeJoinIncompatible           ErrorCode = "join_incompatible"
 	// CodeHDRConversionUnavailable means accurate HDR video conversion requires
 	// capabilities absent from the configured tools; repeating that export does
 	// not add those capabilities. Compatible copy and audio-only export may work.

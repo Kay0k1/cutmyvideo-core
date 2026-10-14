@@ -4,6 +4,9 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
+### Added
+- Read-only job preflight through Go `Engine.PreflightPlan`, CLI `cutmy preflight` and owner-protected `POST /api/v1/jobs/preflight`. Shared reports expose normalized settings, selected tracks, output geometry/count and explicit deferred checks; local plans also predict output names without writing files. Inspection checks fresh media and bounded configured-tool capabilities, with independent HTTP rate/admission limits and temporary reader protection.
+
 ## 1.2.0 - 2026-10-14
 
 ### Added

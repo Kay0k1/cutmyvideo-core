@@ -24,7 +24,7 @@ class NativeResultsChecks(unittest.TestCase):
             events = []
             for name in sorted(names):
                 package = native_results.APP_PACKAGE
-                if name.startswith("TestEngine"):
+                if name.startswith("TestEngine") or name in native_results.PREFLIGHT_ENGINE_REQUIRED:
                     package = native_results.ENGINE_PACKAGE
                 elif name.startswith("TestCLI"):
                     package = native_results.CLI_PACKAGE
@@ -84,6 +84,88 @@ class NativeResultsChecks(unittest.TestCase):
                     path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
                     self.assertNotEqual(self.run_gate().returncode, 0)
         path.write_text(original, encoding="utf-8")
+
+    def test_preflight_results_are_required_and_selected_without_skips(self):
+        lines = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8").splitlines()
+        groups = (
+            (0, native_results.PREFLIGHT_ENGINE_REQUIRED | native_results.PREFLIGHT_CLI_REQUIRED, "native-media-tests.jsonl"),
+            (2, native_results.PREFLIGHT_SERVICE_REQUIRED, "native-service-tests.jsonl"),
+            (4, native_results.PREFLIGHT_MEDIA_REQUIRED, "native-media-contract-tests.jsonl"),
+        )
+        for index, names, report in groups:
+            command = next(line for line in lines if "tee " + report in line)
+            selector = re.search(r"-run '([^']+)'", command)
+            if index == 0:
+                self.assertIn("./pkg/engine", command)
+                self.assertIn("./cmd/cutmy", command)
+                self.assertIsNone(selector, "engine and CLI preflight must run in their complete native packages")
+            original = self.reports[index].read_text(encoding="utf-8")
+            for name in names:
+                self.assertIn(name, native_results.REQUIRED[index])
+                if selector:
+                    self.assertIsNotNone(re.fullmatch(selector.group(1), name))
+                for action in ("missing", "skip", "failed-subtest"):
+                    with self.subTest(name=name, action=action):
+                        events = [json.loads(line) for line in original.splitlines()]
+                        if action != "failed-subtest":
+                            events = [event for event in events if event.get("Test") != name]
+                        if action != "missing":
+                            events.append({"Action": "skip" if action == "skip" else "fail", "Test": name if action == "skip" else name + "/fault", "Package": native_results.APP_PACKAGE})
+                        self.reports[index].write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+                        result = self.run_gate()
+                        self.assertNotEqual(result.returncode, 0)
+                        if action != "failed-subtest":
+                            self.assertIn(name, result.stderr)
+            self.reports[index].write_text(original, encoding="utf-8")
+
+    def test_bookworm_preflight_checks_require_actual_complete_results(self):
+        lines = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8").splitlines()
+        command = next(line for line in lines if "tee bookworm-media-tests.jsonl" in line)
+        selector = re.search(r"-run '([^']+)'", command).group(1)
+        for name in native_results.PREFLIGHT_MEDIA_REQUIRED:
+            self.assertIn(name, native_results.BOOKWORM_REQUIRED)
+            self.assertIsNotNone(re.fullmatch(selector, name))
+        for name in native_results.PREFLIGHT_SERVICE_REQUIRED:
+            self.assertIsNone(re.fullmatch(selector, name), "Bookworm media job has no test PostgreSQL")
+        path = Path(self.directory.name) / "bookworm-preflight.jsonl"
+        events = [{"Action": "pass", "Test": name, "Package": native_results.APP_PACKAGE} for name in sorted(native_results.BOOKWORM_REQUIRED)]
+        events.append({"Action": "pass", "Package": native_results.APP_PACKAGE})
+        invocation = [sys.executable, str(SCRIPT), "--bookworm", str(path)]
+        for name in native_results.PREFLIGHT_MEDIA_REQUIRED:
+            for action in ("missing", "skip", "failed-subtest"):
+                with self.subTest(name=name, action=action):
+                    changed = [event for event in events if action == "failed-subtest" or event.get("Test") != name]
+                    if action != "missing":
+                        changed.append({"Action": "skip" if action == "skip" else "fail", "Test": name if action == "skip" else name + "/fault", "Package": native_results.APP_PACKAGE})
+                    path.write_text("".join(json.dumps(event) + "\n" for event in changed), encoding="utf-8")
+                    self.assertNotEqual(subprocess.run(invocation, capture_output=True, timeout=10).returncode, 0)
+
+    def test_preflight_public_contract_report_cannot_be_missing_or_skipped(self):
+        lines = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8").splitlines()
+        command = next(line for line in lines if "tee preflight-contract-tests.jsonl" in line)
+        self.assertIn("CUTMY_REQUIRE_CONTRACT=1", command)
+        selector = re.search(r"-run '([^']+)'", command).group(1)
+        native_service = next(line for line in lines if "tee native-service-tests.jsonl" in line)
+        native_selector = re.search(r"-run '([^']+)'", native_service).group(1)
+        for name in native_results.PREFLIGHT_CONTRACT_REQUIRED:
+            self.assertIsNotNone(re.fullmatch(selector, name))
+            self.assertIsNone(re.fullmatch(native_selector, name), "native matrix does not install contract Python dependencies")
+        path = Path(self.directory.name) / "preflight-contract.jsonl"
+        events = [{"Action": "pass", "Test": name, "Package": native_results.APP_PACKAGE} for name in sorted(native_results.PREFLIGHT_CONTRACT_REQUIRED)]
+        events.append({"Action": "pass", "Package": native_results.APP_PACKAGE})
+        invocation = [sys.executable, str(SCRIPT), "--preflight-contract", str(path)]
+        def invoke(changed):
+            path.write_text("".join(json.dumps(event) + "\n" for event in changed), encoding="utf-8")
+            return subprocess.run(invocation, capture_output=True, timeout=10)
+        self.assertEqual(invoke(events).returncode, 0)
+        for name in native_results.PREFLIGHT_CONTRACT_REQUIRED:
+            for action in ("missing", "skip", "failed-subtest"):
+                with self.subTest(name=name, action=action):
+                    changed = [event for event in events if action == "failed-subtest" or event.get("Test") != name]
+                    if action != "missing":
+                        changed.append({"Action": "skip" if action == "skip" else "fail", "Test": name if action == "skip" else name + "/fault", "Package": native_results.APP_PACKAGE})
+                    self.assertNotEqual(invoke(changed).returncode, 0)
+        self.assertNotEqual(invoke([event for event in events if event.get("Test")]).returncode, 0)
 
     def test_complete_reports_pass(self):
         self.assertEqual(self.run_gate().returncode, 0)
@@ -170,7 +252,7 @@ class NativeResultsChecks(unittest.TestCase):
                  "TestStorageScanSessionReadBatchPreservesNonISODateStyle",
                  "TestStorageScanSessionReadBatchLookupFailureRollsBackAndRecovers")
         self.assertEqual(len(native_results.REQUIRED[3]), 48 + len(native_results.UNIVERSAL_STORAGE_REQUIRED))
-        self.assertEqual(sum(map(len, native_results.REQUIRED)), 122 + sum(map(len, (native_results.UNIVERSAL_ENGINE_REQUIRED, native_results.UNIVERSAL_SERVICE_REQUIRED, native_results.UNIVERSAL_STORAGE_REQUIRED, native_results.UNIVERSAL_MEDIA_REQUIRED))))
+        self.assertEqual(sum(map(len, native_results.REQUIRED)), 122 + sum(map(len, (native_results.UNIVERSAL_ENGINE_REQUIRED, native_results.UNIVERSAL_SERVICE_REQUIRED, native_results.UNIVERSAL_STORAGE_REQUIRED, native_results.UNIVERSAL_MEDIA_REQUIRED, native_results.PREFLIGHT_ENGINE_REQUIRED, native_results.PREFLIGHT_CLI_REQUIRED, native_results.PREFLIGHT_SERVICE_REQUIRED, native_results.PREFLIGHT_MEDIA_REQUIRED))))
         workflow = SCRIPT.parent.parent / ".github" / "workflows" / "ci.yml"
         commands = [line for line in workflow.read_text(encoding="utf-8").splitlines()
                     if "tee native-storage-tests.jsonl" in line]
