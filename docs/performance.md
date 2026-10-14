@@ -5,6 +5,12 @@ The current universal-core pass is tracked in the
 Its completed 627-operation comparison and limits are separate from the
 historical results below; it establishes no single speed ratio across workloads.
 
+The [joined MP3 follow-up](../benchmarks/2026-10-14-joined-followup/README.md)
+adds 252 separately measured outputs on the final runtime source. Small own
+MP3 outputs use fresh bounded frame/CRC verification instead of one FFprobe
+process. Tested video thread/discovery changes were removed after adverse
+elapsed-time results; every slower case and observer-context limit is retained.
+
 Responsive preview evidence: [five identical-tool cold/warm observations and
 bounded search-strip design, 2026-10-12](../benchmarks/2026-10-12-responsive-preview/README.md).
 

@@ -1,0 +1,115 @@
+{
+  "family_qualification_note": "MP3 verifier/library metadata/rounding code matches final source; later runtime edit restores prior video arguments only. Actual finalsource CI receipt is separately required.",
+  "family_registration": {
+    "bytes": 3788,
+    "path": "/root/video_cut/reports/joined-followup-20261014/runtime-compatibility-v2/registration.json",
+    "sha256": "2535448175315c038eed7c568dd34709f520562d3cb9347af5e31501b8975cda"
+  },
+  "finalsource_required_plus_whitelist": {
+    "events": {
+      "bytes": 37851,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final2-required-production51-tests.jsonl",
+      "sha256": "50ea2e0c059ec5cd4775e2e9d45c3b8101471a2d38c0cc43a326b6031a768407"
+    },
+    "passed": [
+      "TestOwnedMP3FreshScanRejectsReplacedPathIdentity",
+      "TestOwnedMP3MetadataMatchesFreshFFprobe",
+      "TestJoinedMP3UsesFreshBoundedVerificationAndLargeFallback",
+      "TestOwnedMP3UnprovedBytesKeepNativeVerification",
+      "TestOwnedMP3ValidUnsupportedShapesUseFreshFallback",
+      "TestOwnedMP3ReaderKeepsIOBoundAndCancellation",
+      "TestOwnedMP3UnknownProbeFamilyKeepsFreshVerification",
+      "TestJoinedAccurateDiscoveryPreservesReorderedVFRAndSilence",
+      "TestJoinedAccurateDiscoveryPreservesDualInputClocks",
+      "TestJoinedRemoteEntryKeepsMediaFormatAndProtocolRestrictions"
+    ]
+  },
+  "gate_unit_suite": {
+    "bytes": 114,
+    "path": "/root/video_cut/reports/joined-followup-20261014/runtime-compatibility-v2/native-results-tests.txt",
+    "sha256": "e5ca37eb915a45d1f0d233a197de6ff2c4b3186a07394a9c91317e1a6e752afb"
+  },
+  "qualification_contexts": [
+    {
+      "context": "production51",
+      "half_ms_boundary_passed": true,
+      "required_top_level_passed": [
+        "TestOwnedMP3FreshScanRejectsReplacedPathIdentity",
+        "TestOwnedMP3MetadataMatchesFreshFFprobe",
+        "TestJoinedMP3UsesFreshBoundedVerificationAndLargeFallback",
+        "TestOwnedMP3UnprovedBytesKeepNativeVerification",
+        "TestOwnedMP3ValidUnsupportedShapesUseFreshFallback",
+        "TestOwnedMP3ReaderKeepsIOBoundAndCancellation",
+        "TestOwnedMP3UnknownProbeFamilyKeepsFreshVerification",
+        "TestJoinedAccurateDiscoveryPreservesReorderedVFRAndSilence",
+        "TestJoinedAccurateDiscoveryPreservesDualInputClocks"
+      ],
+      "tests": {
+        "bytes": 33047,
+        "path": "/root/video_cut/reports/joined-followup-20261014/runtime-compatibility-v2/production51/tests.jsonl",
+        "sha256": "d7570131c2811eb48017d706d4bc357bc371d2b4ceeb98261b9419a7547bf92d"
+      }
+    },
+    {
+      "context": "current",
+      "half_ms_boundary_passed": true,
+      "required_top_level_passed": [
+        "TestOwnedMP3FreshScanRejectsReplacedPathIdentity",
+        "TestOwnedMP3MetadataMatchesFreshFFprobe",
+        "TestJoinedMP3UsesFreshBoundedVerificationAndLargeFallback",
+        "TestOwnedMP3UnprovedBytesKeepNativeVerification",
+        "TestOwnedMP3ValidUnsupportedShapesUseFreshFallback",
+        "TestOwnedMP3ReaderKeepsIOBoundAndCancellation",
+        "TestOwnedMP3UnknownProbeFamilyKeepsFreshVerification",
+        "TestJoinedAccurateDiscoveryPreservesReorderedVFRAndSilence",
+        "TestJoinedAccurateDiscoveryPreservesDualInputClocks"
+      ],
+      "tests": {
+        "bytes": 33059,
+        "path": "/root/video_cut/reports/joined-followup-20261014/runtime-compatibility-v2/current/tests.jsonl",
+        "sha256": "8d904b2b57ee7dfb6b38ecbe04a2c9a2236d32a6d5ab01d213498ddb2cade913"
+      }
+    },
+    {
+      "context": "encoder-current-probe51",
+      "half_ms_boundary_passed": true,
+      "required_top_level_passed": [
+        "TestOwnedMP3FreshScanRejectsReplacedPathIdentity",
+        "TestOwnedMP3MetadataMatchesFreshFFprobe",
+        "TestJoinedMP3UsesFreshBoundedVerificationAndLargeFallback",
+        "TestOwnedMP3UnprovedBytesKeepNativeVerification",
+        "TestOwnedMP3ValidUnsupportedShapesUseFreshFallback",
+        "TestOwnedMP3ReaderKeepsIOBoundAndCancellation",
+        "TestOwnedMP3UnknownProbeFamilyKeepsFreshVerification",
+        "TestJoinedAccurateDiscoveryPreservesReorderedVFRAndSilence",
+        "TestJoinedAccurateDiscoveryPreservesDualInputClocks"
+      ],
+      "tests": {
+        "bytes": 33047,
+        "path": "/root/video_cut/reports/joined-followup-20261014/runtime-compatibility-v2/encoder-current-probe51/tests.jsonl",
+        "sha256": "635f3906956f51e1ddcb2f1852478da08e24ae591d4a5a849084df5fe4cbf5ea"
+      }
+    },
+    {
+      "context": "encoder51-probe-current",
+      "half_ms_boundary_passed": true,
+      "required_top_level_passed": [
+        "TestOwnedMP3FreshScanRejectsReplacedPathIdentity",
+        "TestOwnedMP3MetadataMatchesFreshFFprobe",
+        "TestJoinedMP3UsesFreshBoundedVerificationAndLargeFallback",
+        "TestOwnedMP3UnprovedBytesKeepNativeVerification",
+        "TestOwnedMP3ValidUnsupportedShapesUseFreshFallback",
+        "TestOwnedMP3ReaderKeepsIOBoundAndCancellation",
+        "TestOwnedMP3UnknownProbeFamilyKeepsFreshVerification",
+        "TestJoinedAccurateDiscoveryPreservesReorderedVFRAndSilence",
+        "TestJoinedAccurateDiscoveryPreservesDualInputClocks"
+      ],
+      "tests": {
+        "bytes": 33047,
+        "path": "/root/video_cut/reports/joined-followup-20261014/runtime-compatibility-v2/encoder51-probe-current/tests.jsonl",
+        "sha256": "20cfd7af4011e900dcfaee9c3d3d8f7432f865e717b4bc276e8672e4027865de"
+      }
+    }
+  ],
+  "schema": "joined-followup-native-validation-v1"
+}

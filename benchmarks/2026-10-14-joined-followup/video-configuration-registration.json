@@ -1,0 +1,125 @@
+{
+  "cases": [
+    "local-accurate-mp4-joined-20",
+    "embedded-accurate-mp4-32",
+    "complex-accurate-mp4-joined-20"
+  ],
+  "final_speed_claim": false,
+  "manifest": {
+    "bytes": 225971,
+    "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/execution-manifest.json",
+    "sha256": "2c54ec05c3a2d08df09e81ce970effdab6afaa4dec5b4240925d046f884308c7"
+  },
+  "modes": {
+    "before": "default",
+    "fixed": "default",
+    "legacyVideo": "decoder2find",
+    "threads2": "decoder2"
+  },
+  "operations": 48,
+  "orders": [
+    [
+      "before",
+      "fixed",
+      "legacyVideo",
+      "threads2"
+    ],
+    [
+      "fixed",
+      "threads2",
+      "before",
+      "legacyVideo"
+    ],
+    [
+      "threads2",
+      "legacyVideo",
+      "fixed",
+      "before"
+    ],
+    [
+      "legacyVideo",
+      "before",
+      "threads2",
+      "fixed"
+    ]
+  ],
+  "outputs": 48,
+  "programs": {
+    "before": {
+      "actual_compile_revision": "865e4afd072f77206ba674e7922a2d31de6d3c99",
+      "cli": {
+        "bytes": 19746277,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/candidate-cutmy-v6",
+        "sha256": "879581327014b2b7c8bb977a508bb0abd6ba9aa6d5a371a258bd0cd14267697e"
+      },
+      "engine": {
+        "bytes": 8846344,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/candidate-engine",
+        "sha256": "448f7f6b3aabb36938223e020fcff0727e97abb6425ee26ff84ad1155308d69b"
+      },
+      "revision": "cc3eb26b32c4c1fdf15a0c5361c69a8cebfdab33",
+      "source_catalog_sha256": "3503f2bd511ce8fee94b174085fd0a151c7b787ed7e910e1561d32a3a7708e07"
+    },
+    "fixed": {
+      "cli": {
+        "bytes": 19771043,
+        "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/fixed-cutmy",
+        "sha256": "c8ecc72eee2068e2094affdb81ee776b91931c865d1d3ddfac634e6f338f81de"
+      },
+      "engine": {
+        "bytes": 8876070,
+        "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/fixed-engine",
+        "sha256": "4113c5b5762afc6ac8e8eb3fb1b1fbb085a1fc368e513b980f5ace99c45fba3b"
+      },
+      "revision": "b588c82de649d17146ec0c35b127e39f514e1e32",
+      "source_catalog_sha256": "0f1e41535792d90d71caf211e57c39656a48ec806569cb13405806906e750530"
+    },
+    "legacyVideo": {
+      "cli": {
+        "bytes": 19771043,
+        "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/fixed-cutmy",
+        "sha256": "c8ecc72eee2068e2094affdb81ee776b91931c865d1d3ddfac634e6f338f81de"
+      },
+      "engine": {
+        "bytes": 8876070,
+        "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/fixed-engine",
+        "sha256": "4113c5b5762afc6ac8e8eb3fb1b1fbb085a1fc368e513b980f5ace99c45fba3b"
+      },
+      "revision": "b588c82de649d17146ec0c35b127e39f514e1e32",
+      "source_catalog_sha256": "0f1e41535792d90d71caf211e57c39656a48ec806569cb13405806906e750530"
+    },
+    "threads2": {
+      "cli": {
+        "bytes": 19771043,
+        "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/fixed-cutmy",
+        "sha256": "c8ecc72eee2068e2094affdb81ee776b91931c865d1d3ddfac634e6f338f81de"
+      },
+      "engine": {
+        "bytes": 8876070,
+        "path": "/root/video_cut/reports/joined-followup-20261014/final-v1/fixed-engine",
+        "sha256": "4113c5b5762afc6ac8e8eb3fb1b1fbb085a1fc368e513b980f5ace99c45fba3b"
+      },
+      "revision": "b588c82de649d17146ec0c35b127e39f514e1e32",
+      "source_catalog_sha256": "0f1e41535792d90d71caf211e57c39656a48ec806569cb13405806906e750530"
+    }
+  },
+  "purpose": "Isolate current defaultinput1/nofind, input2/nofind, input2/find with samefixedGo; compare exactPRbeforeGo+nativeinput2/find. No source change or candidate selection by changing oracles. Eacharm eachpositiononce.",
+  "qualification_only": true,
+  "runner": {
+    "bytes": 4707,
+    "path": "/root/video_cut/reports/joined-followup-20261014/video-attribution-v1/runner.py",
+    "sha256": "1de4deed0cc486c5ba709b416643499260cc1d674af723df0028680093495c05"
+  },
+  "schema": "joined-video-configuration-attribution-v1",
+  "toolspy": {
+    "bytes": 22056,
+    "path": "/root/video_cut/reports/joined-followup-20261014/video-attribution-v1/toolspy",
+    "sha256": "4e4bf85ea47f89c100dba66929c27961fc9c2cd0e5c6010328982618e0121ffd"
+  },
+  "toolspy_source": {
+    "bytes": 12002,
+    "path": "/root/video_cut/reports/joined-followup-20261014/video-attribution-v1/toolspy.c",
+    "sha256": "bfe4fa5ce1bab23feb21f3abeaf14c2fa746b453a5d3fc0a749351484092f305"
+  },
+  "utc": "2026-10-14T09:43:16.448030+00:00"
+}

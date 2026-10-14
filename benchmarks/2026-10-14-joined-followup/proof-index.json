@@ -1,0 +1,181 @@
+{
+  "assembler": {
+    "bytes": 21397,
+    "path": "/root/video_cut/reports/joined-followup-20261014/final-report-assembler-v2.py",
+    "sha256": "f493a0123ccd3088aa4f54aa3c720ac886b32f1c51cf8ded792d2a44e8c50851"
+  },
+  "build_receipt": {
+    "bytes": 3673,
+    "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/build-receipt.json",
+    "sha256": "ad16914db4cd4ac16ac5e03c7b19332175db87a8c096512aff79ec7412bc8b91"
+  },
+  "direct": {
+    "complete.json": {
+      "bytes": 607,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/direct-run/complete.json",
+      "sha256": "48b0e81d744c22cc1982988cc34169104809c7fe0751f149a28c4053f9ce0b99"
+    },
+    "environment.json": {
+      "bytes": 3460,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/direct-run/environment.json",
+      "sha256": "af9964239419cd2e8baa372ce3d8331c1a48b20a8809d24d8d2440ed127ecc24"
+    },
+    "raw-results.json": {
+      "bytes": 349667,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/direct-run/raw-results.json",
+      "sha256": "572fb2db68dd3bf8b583d7ccc4dda809920f2283dd20b74c6c91b8042ae4f258"
+    }
+  },
+  "joined_output_files": {
+    "direct_control": 36,
+    "primary": 216
+  },
+  "manifest": {
+    "bytes": 225971,
+    "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/execution-manifest.json",
+    "sha256": "59050da5a71062767d6e3c9aee32cfc9cdadecd8d2a13fbab53871a2059ea9d7"
+  },
+  "observations": [
+    {
+      "bytes": 61335,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-report-v2/observations-01.csv",
+      "sha256": "93f8419a5c0964334099ebf78268eb95bce677b7383a0774211ad25a9c248c54"
+    },
+    {
+      "bytes": 3241,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-report-v2/observations-02.csv",
+      "sha256": "47195c718a2518818d84b640367160b115e942a6dc00855b089b6725d7317e7a"
+    }
+  ],
+  "operations": {
+    "direct_control": 36,
+    "primary": 216
+  },
+  "output_proof_rows": 252,
+  "output_proofs": [
+    {
+      "bytes": 61129,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-report-v2/output-proofs-01.csv",
+      "sha256": "9f4c60580cfb17e5ddb69712ff87b26799b8bbd165fa751e9b38badd4687ccca"
+    },
+    {
+      "bytes": 61093,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-report-v2/output-proofs-02.csv",
+      "sha256": "29b28291e49157e519ca2260f3cc983abc1de127a5a5713e33e97cd8bd6f1402"
+    },
+    {
+      "bytes": 33889,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-report-v2/output-proofs-03.csv",
+      "sha256": "b18b4c449e07f2d548595373e8e4d8ef586a81eaa6d07fee2e389631360f264e"
+    }
+  ],
+  "pairs": [
+    {
+      "bytes": 59461,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-report-v2/pairs-01.csv",
+      "sha256": "5be2e926f4455a79cd620c416911bcd847044e92fa34b616d3a5b20c40d85e8b"
+    }
+  ],
+  "primary": {
+    "complete.json": {
+      "bytes": 608,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/primary-run/complete.json",
+      "sha256": "9bd3092c5bdcd772cadd7e01e815b9824f636f8170b9e6268a4d5e777d53833a"
+    },
+    "environment.json": {
+      "bytes": 3801,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/primary-run/environment.json",
+      "sha256": "c732a031de3b2bd91b073bea910cdac2ecd04fe6ed3970dc3964043d493898bc"
+    },
+    "raw-results.json": {
+      "bytes": 4188016,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/primary-run/raw-results.json",
+      "sha256": "23b645ef30d8018be49a619448ed35b3749eb6277326fb22e9b15d33225e0452"
+    }
+  },
+  "protocol": {
+    "bytes": 7284,
+    "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/protocol-provisional.json",
+    "sha256": "55c7341c7a92f98ed2c329e836f661919762c4d879dc97d4906136fa52f6adc7"
+  },
+  "rejected_video_candidate": {
+    "compiled_input_catalog": "0f1e41535792d90d71caf211e57c39656a48ec806569cb13405806906e750530",
+    "direct_control_operations": 36,
+    "primary_operations": 216,
+    "reason": "Input1/nofind loweredCPU on small pictures but worsened paired elapsed time for multiple accurate-video cases.48operation4arm attribution did not qualify either video toggle as a consistent latency gain. Both are removed; encoder/input/filter settings restored.",
+    "source_revision": "b588c82de649d17146ec0c35b127e39f514e1e32",
+    "whole_report": "/root/video_cut/reports/joined-followup-20261014/final-report-v1"
+  },
+  "schema": "joined-final-report-extraction-v2",
+  "scope": {
+    "application_plus_spy_tail_cpu_seconds": "wait4 CPU minus recorded native CPU minus spy SELF. Contains application work and spy final-log/exit tail; not exact Go CPU and not a wall-stage duration.",
+    "direct_nulls": "Native attribution and external subprocess counts are unobserved, not zero.",
+    "external_command_counts": "Observed ffmpeg/ffprobe processes only; no assertion about internal libavformat probing calls.",
+    "fingerprint_proofs": "SHA256 of UTF-8 JSON with sorted keys, compact separators, default ASCII escaping and finite numbers. Full fingerprint retains file bytes/SHA and encoded packet payload maps. Semantic projection excludes only file_sha256 and bytes, plus accurate encoded packet payload map; copy retains payloads. Every A/B/C triad semantic SHA agrees. Packet-clock proof includes exact stream time bases, counts and full clock-sequence hashes; stream/source/segment/track proofs retain all recorded fields. Decoded receipt strings preserve the original FFmpeg SHA256= prefix when present.",
+    "native_wall_sum_seconds": "Sum of native invocation wait intervals; may overlap and is not the whole operation elapsed time.",
+    "primary_and_direct_are_separate_contexts": true,
+    "prior627_reused": false,
+    "publication": "Only bounded JSON and CSV; no raw media, argv, environment contents or native binaries.",
+    "ratios": "Median of six registered matched per-block ratios, not ratio of cohort medians; all12cases retained; no cross-case average.",
+    "rss_workspace_io": "20ms sampled lower bounds; summed tree RSS may double-count shared pages. wait4 max RSS is largest waited process, not simultaneous peak. wait4 block counters are counts, not bytes.",
+    "semantics": "Frozen runner performed full independent decode/clock/track/order verification for every output outside timing. This assembler only rechecks stored consistency.",
+    "wait4_cpu_seconds": "Measured helper and waited descendants; includes native tool and C spy CPU."
+  },
+  "summary_files": [
+    {
+      "bytes": 50496,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-report-v2/primary-cases.json",
+      "sha256": "67ebfe622feaa01e64bae5fc4209c83ee2576356f6a844d632bc95abb9783e1c"
+    },
+    {
+      "bytes": 6575,
+      "path": "/root/video_cut/reports/joined-followup-20261014/final-report-v2/direct-cases.json",
+      "sha256": "ec23e74524a3bc81f78defdb6a9625f9ddf64a20ff943014c46c919491cf7cee"
+    }
+  ],
+  "versions": {
+    "before": {
+      "actual_compile_revision": "865e4afd072f77206ba674e7922a2d31de6d3c99",
+      "cli": {
+        "bytes": 19746277,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/candidate-cutmy-v6",
+        "sha256": "879581327014b2b7c8bb977a508bb0abd6ba9aa6d5a371a258bd0cd14267697e"
+      },
+      "engine": {
+        "bytes": 8846344,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/candidate-engine",
+        "sha256": "448f7f6b3aabb36938223e020fcff0727e97abb6425ee26ff84ad1155308d69b"
+      },
+      "revision": "cc3eb26b32c4c1fdf15a0c5361c69a8cebfdab33",
+      "source_catalog_sha256": "3503f2bd511ce8fee94b174085fd0a151c7b787ed7e910e1561d32a3a7708e07"
+    },
+    "fixed": {
+      "cli": {
+        "bytes": 19769307,
+        "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/fixed-cutmy",
+        "sha256": "2e9496ece88226450ce002d7c9eb290002e9d84922bd654f4b4c946de778e82b"
+      },
+      "engine": {
+        "bytes": 8876206,
+        "path": "/root/video_cut/reports/joined-followup-20261014/final-v2/fixed-engine",
+        "sha256": "3ddc2ebf536c5594eb64adcc9414838f19b3d7758f8904b7bbc303ce6bb3aeb7"
+      },
+      "revision": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "source_catalog_sha256": "dd860c8e1516201e6818b99c0a70773356fab2870bad16a78bfa71b38d9e9b1b"
+    },
+    "original": {
+      "cli": {
+        "bytes": 19509827,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/baseline-cutmy",
+        "sha256": "38f6d7970283a1e5db83fac92bce92c2a6f2e9bcc53810e38bcecb9191e9c02a"
+      },
+      "engine": {
+        "bytes": 8678702,
+        "path": "/root/video_cut/reports/universal-go-core-20261014/main-witnesses-final-v6/baseline-engine",
+        "sha256": "027a925df1dbeff2a110ff93f0a568dbfc9d1ce6f5a51dfa33426c6c867824e3"
+      },
+      "revision": "a9c75df83f965bf1d56e2263ca585ab77aeaf305",
+      "source_catalog_sha256": "a7e75103f44e3e47acbdf26355205d79aa29072df73ec43d828865545186ef4e"
+    }
+  }
+}

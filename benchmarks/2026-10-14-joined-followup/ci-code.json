@@ -1,0 +1,272 @@
+{
+  "schema": "joined-followup-actual-source-ci-v1",
+  "captured_utc": "2026-10-14T10:32:14.701058+00:00",
+  "runtime_revision": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+  "compiled_input_catalog": "dd860c8e1516201e6818b99c0a70773356fab2870bad16a78bfa71b38d9e9b1b",
+  "actual_source_checks": [
+    {
+      "completed_at": "2026-10-14T10:14:43Z",
+      "conclusion": "skipped",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115799402856",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "Draft from verified archives",
+      "started_at": "2026-10-14T10:14:44Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:14:43Z",
+      "conclusion": "skipped",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115799401903",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "Attest the tested release archives",
+      "started_at": "2026-10-14T10:14:44Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:14:43Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115799205633",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "SPDX from verified executable bytes",
+      "started_at": "2026-10-14T10:14:16Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:14:14Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115799040638",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "Verified archive gate",
+      "started_at": "2026-10-14T10:13:51Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:05:15Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115794079553",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "Archived CLI (darwin/arm64)",
+      "started_at": "2026-10-14T10:03:48Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:03:49Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115794079377",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "Archived Linux upgrade and restore",
+      "started_at": "2026-10-14T10:01:20Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:02:54Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115794079310",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "Archived CLI (linux/arm64)",
+      "started_at": "2026-10-14T10:01:23Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:03:40Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115794079185",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "Archived CLI (darwin/amd64)",
+      "started_at": "2026-10-14T10:01:21Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:02:35Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115794079170",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "Archived CLI (linux/amd64)",
+      "started_at": "2026-10-14T10:01:20Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:02:45Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115794079151",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "Archived CLI (windows/amd64)",
+      "started_at": "2026-10-14T10:01:19Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:04:19Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115793195415",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "checks / Native media (ubuntu-24.04)",
+      "started_at": "2026-10-14T09:59:10Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:05:00Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115793195359",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "checks / Native media (macos-15)",
+      "started_at": "2026-10-14T09:59:14Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:03:26Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115793195321",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "checks / Native media (ubuntu-24.04-arm)",
+      "started_at": "2026-10-14T09:59:12Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:13:48Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115793195316",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "checks / Native media (macos-15-intel)",
+      "started_at": "2026-10-14T09:59:11Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:06:20Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115793195299",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "checks / Native media (windows-2025)",
+      "started_at": "2026-10-14T09:59:10Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:04:24Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115793195183",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "checks / bookworm-media",
+      "started_at": "2026-10-14T09:59:10Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T09:59:14Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115793195151",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "checks / artifact-policy",
+      "started_at": "2026-10-14T09:59:10Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:10:27Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115793195095",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "checks / test",
+      "started_at": "2026-10-14T09:59:09Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:01:17Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115793194954",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "packages",
+      "started_at": "2026-10-14T09:59:10Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T09:59:06Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312507/job/115793134966",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "resolve",
+      "started_at": "2026-10-14T09:59:00Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:10:29Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312311/job/115793134494",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "Disposable Linux public profile, upgrade and restoration",
+      "started_at": "2026-10-14T09:59:00Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:09:55Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312305/job/115793134271",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "test",
+      "started_at": "2026-10-14T09:59:00Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:11:58Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312305/job/115793134269",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "Native media (macos-15-intel)",
+      "started_at": "2026-10-14T09:59:03Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:03:37Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312305/job/115793134100",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "bookworm-media",
+      "started_at": "2026-10-14T09:59:00Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:06:15Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312305/job/115793134099",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "Native media (windows-2025)",
+      "started_at": "2026-10-14T09:59:00Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:03:25Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312305/job/115793134076",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "Native media (ubuntu-24.04-arm)",
+      "started_at": "2026-10-14T09:59:03Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:06:25Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312305/job/115793133906",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "Native media (macos-15)",
+      "started_at": "2026-10-14T09:59:07Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T10:02:51Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312305/job/115793133899",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "Native media (ubuntu-24.04)",
+      "started_at": "2026-10-14T09:59:00Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-10-14T09:59:07Z",
+      "conclusion": "success",
+      "details_url": "https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38546312305/job/115793133588",
+      "head_sha": "1ea32fcef8425ac6d4de168f5f8be8c09035a0e9",
+      "name": "artifact-policy",
+      "started_at": "2026-10-14T09:59:00Z",
+      "status": "completed"
+    }
+  ],
+  "success": 27,
+  "intentional_pr_skips": 2,
+  "later_documentation_head_note": "This receipt covers the actual runtime source. A later documentation head must preserve all231 catalog entries and report its own live checks separately."
+}
