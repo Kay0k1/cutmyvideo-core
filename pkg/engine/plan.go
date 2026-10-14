@@ -90,82 +90,32 @@ func (e *Engine) ExecutePlan(ctx context.Context, plan Plan, output string) (res
 	if e.configErr != nil {
 		return result, invalidArgument(e.configErr)
 	}
-	if plan.Version != 1 {
-		return result, invalidArgument(errors.New("plan version must be 1"))
-	}
-	if plan.Input == "" || output == "" {
-		return result, invalidArgument(errors.New("plan input and output are required"))
+	input, output, request, err := planRequest(plan, output)
+	if err != nil {
+		return result, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, e.exportTimeout)
 	defer cancel()
-	input, err := filepath.Abs(plan.Input)
-	if err != nil {
-		return result, err
-	}
-	output, err = filepath.Abs(output)
-	if err != nil {
-		return result, err
-	}
 	ctx, session := app.BeginLocalExport(ctx, input)
 	defer session.Close()
 	source, err := e.InspectWithTracks(ctx, input)
 	if err != nil {
 		return result, err
 	}
-	o := plan.Options
-	if o.Quality == "" {
-		o.Quality = "best"
-	}
-	if o.CutMode == "" {
-		o.CutMode = "accurate"
-	}
-	mode := plan.OutputMode
-	if mode == "" {
-		mode = "separate"
-	}
-	if o.Format == "" {
-		if mode == "joined" {
-			o.Format = strings.TrimPrefix(strings.ToLower(filepath.Ext(output)), ".")
-		} else {
-			o.Format = "mp4"
-		}
-	}
-	ranges := make([]app.Range, len(plan.Ranges))
-	for i, r := range plan.Ranges {
-		ranges[i] = app.Range{StartMS: r.StartMS, EndMS: r.EndMS, Label: r.Label}
-	}
-	request := app.ExportRequest{Ranges: ranges, Format: o.Format, Quality: o.Quality, CutMode: o.CutMode, OutputMode: mode, AudioTrack: o.AudioTrack, NoAudio: o.NoAudio, SubtitleMode: o.SubtitleMode, Crop: o.Crop}
 	if err = request.Validate(e.config, app.Source{DurationMS: source.DurationMS, Path: input}); err != nil {
 		return result, invalidArgument(err)
 	}
+	ranges := request.Ranges
 	session.SetRanges(ranges)
 	tracks, err := app.SelectExportTracks(source.Tracks, request)
 	if err != nil {
 		return result, err
 	}
-	parent := filepath.Dir(output)
-	var names []string
-	if mode == "joined" {
-		names = []string{output}
-	} else {
-		info, e := os.Stat(output)
-		if e != nil {
-			return result, e
-		}
-		if !info.IsDir() {
-			return result, invalidArgument(errors.New("separate output must be an existing directory"))
-		}
-		parent = output
-		for i, r := range ranges {
-			names = append(names, filepath.Join(output, fmt.Sprintf("%02d-%s.%s", i+1, outputLabel(r.Label), o.Format)))
-		}
-	}
-	for _, name := range names {
-		if _, e := os.Lstat(name); e == nil {
-			return result, &messageCause{message: ErrOutputExists.Error(), cause: errors.Join(ErrOutputExists, os.ErrExist)}
-		} else if !errors.Is(e, os.ErrNotExist) {
-			return result, e
-		}
+	// Joined exports retain their existing workspace/publication error contract.
+	// Preflight additionally inspects their proposed parent without writing it.
+	parent, names, err := planOutputPaths(output, request, false)
+	if err != nil {
+		return result, err
 	}
 	dir, err := os.MkdirTemp(parent, ".cutmy-batch-")
 	if err != nil {
@@ -177,8 +127,8 @@ func (e *Engine) ExecutePlan(ctx context.Context, plan Plan, output string) (res
 		return result, err
 	}
 	prepared := make([]BatchOutput, 0, len(names))
-	if mode == "joined" {
-		path := filepath.Join(dir, "output."+o.Format)
+	if request.OutputMode == "joined" {
+		path := filepath.Join(dir, "output."+request.Format)
 		segments, e := app.ExportJoinedLocal(ctx, e.config, input, path, ranges, request)
 		if e != nil {
 			return result, e
@@ -199,7 +149,7 @@ func (e *Engine) ExecutePlan(ctx context.Context, plan Plan, output string) (res
 		}
 		completed := make(map[interval]reusable)
 		for i, r := range ranges {
-			path := filepath.Join(dir, fmt.Sprintf("output-%d.%s", i, o.Format))
+			path := filepath.Join(dir, fmt.Sprintf("output-%d.%s", i, request.Format))
 			key := interval{r.StartMS, r.EndMS}
 			var start, end int64
 			var exportErr error

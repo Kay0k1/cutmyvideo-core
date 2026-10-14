@@ -320,6 +320,39 @@ paths:
         '202': {$ref: '#/components/responses/Job'}
         '408': {$ref: '#/components/responses/Error'}
         default: {$ref: '#/components/responses/Error'}
+  /api/v1/jobs/preflight:
+    post:
+      description: Checks an export request without creating a job, downloading remote media, or reserving export outputs. Local media uses bounded owner-protected inspection and temporary reader leases. Remote sources receive metadata-only validation with explicitly deferred media, track, geometry and tool checks. Valid means the reported prerequisites passed; decoding, encoding, container compatibility, output size, queue/storage admission and publication can still fail during execution. A later export independently rechecks the source. No Idempotency-Key is consumed or recovered. Strict JSON body reads are limited to 1 MiB and ten seconds; source inspection uses the configured SOURCE_TIMEOUT. The endpoint shares ordinary session, origin and request guards and allows at most 30 job inspections per session per minute independently of new-export allowance.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ExportRequest'}
+      responses:
+        '200':
+          description: Known prerequisites passed, with deferred execution checks
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PreflightResult'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '408': {$ref: '#/components/responses/Error'}
+        '410': {$ref: '#/components/responses/Error'}
+        '422':
+          description: Local media prerequisites or configured tool capabilities are unavailable, including unsupported_media, audio_missing, audio_track_unavailable, copy_quality_unsupported, subtitle_unsupported, encoder_unavailable, filter_unavailable, muxer_unavailable, demuxer_unavailable, bitstream_filter_unavailable or tool_unavailable
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503':
+          description: Bounded database or inspection admission failure, including database_unavailable, storage_initializing or server_busy
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '504': {$ref: '#/components/responses/Error'}
+        default: {$ref: '#/components/responses/Error'}
   /api/v1/jobs/{id}:
     parameters: [{$ref: '#/components/parameters/ID'}]
     get:
@@ -579,6 +612,57 @@ components:
         no_audio: {type: boolean, default: false, description: Export video without audio; cannot be combined with audio_track or MP3.}
         subtitle_mode: {type: string, enum: [omit, preserve], default: omit, description: Preserve compatible plain text subtitles from local copy sources, clipped and rebased to actual boundaries. Unsupported subtitle codecs fail explicitly. MP4 writes mov_text; MKV writes subrip.}
         crop: {$ref: '#/components/schemas/Crop'}
+    PreflightResult:
+      type: object
+      required: [version, valid, source, request, requested_duration_ms, output_count, track_manifest, checks, warnings]
+      description: A read-only prerequisite report. Known blockers return an error response instead. Deferred checks are not proof of export success; execution does its own validation and admission. No local server paths, extracted media URLs or tool diagnostics are exposed.
+      properties:
+        version: {type: integer, const: 1}
+        valid: {type: boolean, const: true}
+        source: {$ref: '#/components/schemas/PreflightSource'}
+        request: {$ref: '#/components/schemas/ExportRequest'}
+        requested_duration_ms: {type: integer, minimum: 1, description: Sum of requested intervals in submitted order; overlapping or repeated intervals each contribute. Copy boundaries can change actual duration.}
+        output_count: {type: integer, minimum: 1, description: One for joined export; otherwise one per requested interval.}
+        track_manifest:
+          type: array
+          items: {$ref: '#/components/schemas/TrackSelection'}
+          description: Deterministic inspected stream selection for local media; empty for remote metadata-only checks.
+        video: {$ref: '#/components/schemas/PreflightVideo'}
+        checks:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/PreflightCheck'}
+        warnings:
+          type: array
+          items: {$ref: '#/components/schemas/PreflightWarning'}
+    PreflightSource:
+      type: object
+      required: [duration_ms]
+      properties:
+        duration_ms: {type: integer, minimum: 1}
+        width: {type: integer, minimum: 1, description: Coded selected video width, omitted for audio-only sources.}
+        height: {type: integer, minimum: 1, description: Coded selected video height, omitted for audio-only sources.}
+        display_width: {type: integer, minimum: 1, description: Fresh local upright square-pixel display width when supported; omitted for remote or audio-only sources.}
+        display_height: {type: integer, minimum: 1, description: Fresh local upright square-pixel display height when supported; omitted for remote or audio-only sources.}
+    PreflightVideo:
+      type: object
+      required: [width, height, hdr_to_sdr]
+      properties:
+        width: {type: integer, minimum: 1, description: Requested rendered video width; copy retains source dimensions.}
+        height: {type: integer, minimum: 1, description: Requested rendered video height; copy retains source dimensions.}
+        hdr_to_sdr: {type: boolean, description: Accurate rendering requests HDR-to-SDR conversion.}
+    PreflightCheck:
+      type: object
+      required: [name, status]
+      properties:
+        name: {type: string, description: Prerequisite identifier; clients must accept future names.}
+        status: {type: string, enum: [passed, deferred]}
+    PreflightWarning:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string, description: Machine-readable warning; clients must accept future codes.}
+        message: {type: string, description: Human diagnostic which may change.}
     Artifact:
       type: object
       required: [id, filename, size_bytes, download_url, actual_start_ms, actual_end_ms, expires_at]

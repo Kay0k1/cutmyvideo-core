@@ -39,6 +39,24 @@ func TestPlanRepeatedIntervalsProduceIndependentFilesAndPreserveLabels(t *testin
 	}
 }
 
+// The output-path helper shared with PreflightPlan must retain the 1.x export
+// error when an otherwise valid joined job has no destination directory.
+func TestPlanJoinedParentFailureKeepsPublicationCode(t *testing.T) {
+	input := fixture(t)
+	dir := t.TempDir()
+	output := filepath.Join(dir, "missing-parent", "joined.mp4")
+	e := New(Config{FFmpegPath: filepath.Join(dir, "must-not-run")})
+	plan := Plan{Version: 1, Input: input, OutputMode: "joined", Ranges: []NamedRange{{EndMS: 1000}}}
+	result, err := e.ExecutePlan(context.Background(), plan, output)
+	if CodeOf(err) != CodePublicationFailed || !errors.Is(err, ErrPublicationFailed) || !errors.Is(err, os.ErrNotExist) || len(result.Outputs) != 0 {
+		t.Fatalf("joined destination failure lost its publication code/cause: %+v %v", result, err)
+	}
+	entries, readErr := os.ReadDir(dir)
+	if readErr != nil || len(entries) != 0 {
+		t.Fatalf("failed destination check created files: %v %v", entries, readErr)
+	}
+}
+
 func TestPlanRepeatedIntervalRegeneratesChangedPublishedResult(t *testing.T) {
 	input := fixture(t)
 	e := New(Config{MaxOutputBytes: 10 << 20, FFmpegThreads: 1})

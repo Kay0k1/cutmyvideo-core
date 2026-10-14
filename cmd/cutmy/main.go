@@ -39,6 +39,9 @@ func runArgs(args []string, stdout, stderr io.Writer) error {
 	if args[0] == "clip" {
 		return runClip(args[1:], stdout, stderr)
 	}
+	if args[0] == "preflight" {
+		return runPreflight(args[1:], stdout, stderr)
+	}
 	if args[0] == "batch" {
 		return runBatch(args[1:], stdout, stderr)
 	}
