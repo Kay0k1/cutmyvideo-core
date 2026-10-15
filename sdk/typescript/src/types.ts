@@ -18,6 +18,53 @@ export interface ExportRequest extends ExportOptions {
   cut_mode: "accurate" | "copy";
   output_mode?: "separate" | "joined";
   cleanup_source?: boolean;
+  rendition?: "final" | "draft";
+}
+/** Omitted collection options inherit; -1 resets automatic audio. */
+export interface CollectionOptions {
+  format?: "" | "mp4" | "mp3" | "mkv";
+  quality?: "" | "best" | "1080p" | "720p";
+  cut_mode?: "" | "accurate" | "copy";
+  subtitle_mode?: "" | "omit" | "preserve";
+  audio_track?: number | null;
+  no_audio?: boolean | null;
+  crop?: Crop | null;
+  clear_crop?: boolean;
+}
+export interface CollectionClip { id: string; label?: string; ranges: Range[]; options?: CollectionOptions }
+export interface CollectionPlan { version: 1; input?: string; options?: CollectionOptions; clips: CollectionClip[] }
+export interface CollectionRequest { source_id: string; plan: CollectionPlan; clip_ids?: string[]; rendition?: "final" | "draft" }
+export interface CollectionDiagnostic { code: string; message: string; clip_id?: string; field?: string; [key: string]: unknown }
+export interface CollectionValidation {
+  version: 1; valid: true; rendition: "final" | "draft"; requested_duration_ms: number;
+  clips: { clip_id: string; label: string; preflight: PreflightResult; [key: string]: unknown }[];
+  [key: string]: unknown;
+}
+export interface CollectionSubmissionClip {
+  clip_id: string; label: string; requested_duration_ms: number; request: NormalizedRequest;
+  job?: Job; error?: CollectionDiagnostic; retryable: boolean; [key: string]: unknown;
+}
+export interface CollectionSubmission {
+  version: 1; rendition: "final" | "draft"; complete: boolean; clips: CollectionSubmissionClip[];
+  /** Transport metadata retained for partial reports, including non-2xx admission. */
+  http_status?: number; retry_after_seconds?: number; [key: string]: unknown;
+}
+export interface LocalCollectionOptions extends RequestOptions { clipIds?: string[]; rendition?: "final" | "draft"; maxOutputBytes?: number }
+export interface LocalCollectionValidation {
+  version: 1; valid: true; rendition: "final" | "draft"; source: SourceInfo; selected_clip_ids: string[];
+  clips: { id: string; label?: string; requested_duration_ms: number; request: NormalizedRequest; output_path: string; track_manifest: TrackSelection[]; checks: PreflightResult["checks"]; warnings: PreflightResult["warnings"]; video?: PreflightResult["video"] }[];
+}
+export interface LocalCollectionOutput extends LocalOutput { id: string; requested_ranges: Range[] }
+export interface LocalCollectionResult extends BatchResult { version: 1; rendition: "final" | "draft"; outputs: LocalCollectionOutput[] }
+export interface CollectionFile {
+  clip_id: string; job_id: string; artifact_id: string; path: string; size_bytes: number; sha256: string;
+  segments: Segment[]; track_manifest: TrackSelection[];
+}
+export interface CollectionReport {
+  complete: boolean; source_id: string; rendition: "final" | "draft"; outputs: CollectionFile[];
+  pending: { clip_id: string; code: string; retryable: boolean; field?: string; message?: string; diagnostic_clip_id?: string }[];
+  phase?: string;
+  download?: { clip_id: string; artifact_id: string; offset: number; total_size: number; resumed: boolean };
 }
 /** Serialized responses can retain normalized empty defaults and additive fields. */
 export type NormalizedRequest = Omit<ExportRequest, "output_mode" | "subtitle_mode"> & {
@@ -79,6 +126,10 @@ export interface RequestOptions { signal?: AbortSignal; timeoutMs?: number }
 export interface SubmissionOptions extends RequestOptions { idempotencyKey: string }
 export interface WaitOptions extends RequestOptions { pollIntervalMs?: number; onProgress?: (job: Job) => void | Promise<void> }
 export interface DownloadOptions extends RequestOptions { maxBytes?: number }
+export interface RangeDownloadOptions extends DownloadOptions { offset: number; ifRange?: string; expectedSize?: number }
+export interface ArtifactRangeDownload extends ArtifactDownload {
+  status: 200 | 206; rangeStart: number; totalLength: number | null; lastModified: string | null;
+}
 export interface ArtifactDownload {
   stream: ReadableStream<Uint8Array>;
   contentType: string | null;

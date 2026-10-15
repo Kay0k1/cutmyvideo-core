@@ -53,6 +53,24 @@ class LocalTests(unittest.TestCase):
         self.assertEqual(oversized.exception.code, "response_too_large")
         self.assertLess(time.monotonic() - started, 4)
 
+    def test_collection_operations_selection_rendition_and_private_plan(self):
+        plan = {"version": 1, "input": "source ü.mp4", "clips": [{"id": "answer", "ranges": [{"start_ms": 0, "end_ms": 1000}]}]}
+        with tempfile.TemporaryDirectory() as directory:
+            for method, operation in ((self.client().validate_collection, "validate"), (self.client().execute_collection, "export")):
+                result = method(plan, directory, clip_ids=["answer"], rendition="draft", timeout=2)
+                self.assertEqual(result["args"][:3], ["--json-errors", "collection", operation])
+                self.assertIn("--clips", result["args"])
+                self.assertIn("answer", result["args"])
+                self.assertIn("draft", result["args"])
+                self.assertFalse(pathlib.Path(result["plan_path"]).exists())
+        self.assertEqual(plan["input"], "source ü.mp4")
+        for ids in ("answer", ["../outside"], ["con"], ["answer", "answer"]):
+            with self.assertRaises(ValueError):
+                self.client().execute_collection(plan, ".", clip_ids=ids)
+        with self.assertRaises(LocalError) as partial:
+            self.client("partial").execute_collection(plan, ".")
+        self.assertEqual(partial.exception.outputs[0]["path"], "first.mp4")
+
     def test_deadline_and_posix_descendant_cleanup(self):
         with tempfile.TemporaryDirectory() as directory:
             pidfile = pathlib.Path(directory) / "pid"

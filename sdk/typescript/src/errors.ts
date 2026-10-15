@@ -1,4 +1,4 @@
-import type { Artifact, BatchResult, Job } from "./types.js";
+import type { Artifact, BatchResult, CollectionDiagnostic, CollectionReport, Job } from "./types.js";
 
 export class CutmyError extends Error {
   readonly code: string;
@@ -16,8 +16,11 @@ export class CutmyError extends Error {
 }
 export class ApiError extends CutmyError {
   readonly retryAfterSeconds: number | undefined;
-  constructor(message: string, options: { code: string; status?: number; jobId?: string; idempotencyKey?: string; retryAfterSeconds?: number }) {
+  readonly diagnostic: CollectionDiagnostic | undefined;
+  constructor(message: string, options: { code: string; status?: number; jobId?: string; idempotencyKey?: string; retryAfterSeconds?: number; diagnostic?: CollectionDiagnostic }) {
     super(message, options); this.name = "ApiError"; this.retryAfterSeconds = options.retryAfterSeconds;
+    const diagnostic = options.diagnostic;
+    this.diagnostic = diagnostic ? { code: diagnostic.code, message: diagnostic.message, ...(typeof diagnostic.clip_id === "string" ? { clip_id: diagnostic.clip_id } : {}), ...(typeof diagnostic.field === "string" ? { field: diagnostic.field } : {}) } : undefined;
   }
 }
 export class JobError extends CutmyError {
@@ -27,6 +30,13 @@ export class JobError extends CutmyError {
     super(`Job ${job.status}`, { code: job.status, jobId: job.id });
     this.name = "JobError"; this.job = job;
     this.artifacts = readyArtifacts(job);
+  }
+}
+/** Durable cycle failures retain a public partial report; credentials are absent. */
+export class CollectionError extends CutmyError {
+  readonly report: CollectionReport;
+  constructor(code: string, report: CollectionReport, message = "Collection execution stopped; saved work can be resumed") {
+    super(message, { code }); this.name = "CollectionError"; this.report = report;
   }
 }
 export class LocalError extends CutmyError {

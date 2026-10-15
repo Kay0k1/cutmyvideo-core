@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { ApiError, LocalError } from "./errors.js";
 import { decode, JSON_LIMIT, object, positive } from "./protocol.js";
 import type { CutmyClient } from "./client.js";
-import type { BatchResult, DownloadOptions, InspectedSource, LocalPreflightResult, Plan, RequestOptions, Source } from "./types.js";
+import type { BatchResult, CollectionPlan, DownloadOptions, InspectedSource, LocalCollectionOptions, LocalCollectionResult, LocalCollectionValidation, LocalPreflightResult, Plan, RequestOptions, Source } from "./types.js";
 
 export interface LocalOptions {
   /** Installed cutmy executable. No binaries are downloaded or upgraded. */
@@ -48,13 +48,30 @@ export class LocalCutmy {
   }
   preflight(plan: Plan, output: string, options: RequestOptions = {}): Promise<LocalPreflightResult> { return this.#plan("preflight", plan, output, options); }
   executePlan(plan: Plan, output: string, options: RequestOptions = {}): Promise<BatchResult> { return this.#plan("batch", plan, output, options); }
-  async #plan<T>(command: string, plan: Plan, output: string, options: RequestOptions): Promise<T> {
-    const timeout = positive(options.timeoutMs ?? (command === "batch" ? 30 * 60_000 : 120_000), "timeoutMs");
+  validateCollection(plan: CollectionPlan, output: string, options: LocalCollectionOptions = {}): Promise<LocalCollectionValidation> { return this.#plan("collection validate", plan, output, options, options); }
+  executeCollection(plan: CollectionPlan, output: string, options: LocalCollectionOptions = {}): Promise<LocalCollectionResult> { return this.#plan("collection export", plan, output, options, options); }
+  async #plan<T>(command: string, plan: Plan | CollectionPlan, output: string, options: RequestOptions, collection?: LocalCollectionOptions): Promise<T> {
+    const timeout = positive(options.timeoutMs ?? (command === "batch" || command === "collection export" ? 30 * 60_000 : 120_000), "timeoutMs");
     if (!plan.input || !output) throw new TypeError("plan.input and output are required");
     if (options.signal?.aborted) throw new LocalError("The operation was cancelled", { code: "cancelled" });
     // Resolve before moving the plan: CLI resolves relative input beside its plan file.
     const bytes = Buffer.from(JSON.stringify({ ...plan, input: resolve(this.#cwd, plan.input) }));
     if (bytes.length > JSON_LIMIT) throw new TypeError("Plan exceeds the 1 MiB limit");
+    const extra: string[] = [];
+    if (collection) {
+      if (collection.clipIds !== undefined) {
+        if (!Array.isArray(collection.clipIds) || !collection.clipIds.every(id => /^[a-z0-9][a-z0-9_-]{0,63}$/.test(id)) || new Set(collection.clipIds).size !== collection.clipIds.length) throw new TypeError("clipIds must contain unique valid IDs");
+        if (collection.clipIds.length) extra.push("--clips", collection.clipIds.join(","));
+      }
+      if (collection.rendition !== undefined) {
+        if (!["final", "draft"].includes(collection.rendition)) throw new TypeError("rendition must be final or draft");
+        extra.push("--rendition", collection.rendition);
+      }
+      if (collection.maxOutputBytes !== undefined) {
+        if (!Number.isSafeInteger(collection.maxOutputBytes) || collection.maxOutputBytes <= 0) throw new TypeError("maxOutputBytes must be a positive safe integer");
+        extra.push("--max-output-bytes", String(collection.maxOutputBytes));
+      }
+    }
     const deadline = performance.now() + timeout;
     let directory: string | undefined;
     try {
@@ -64,7 +81,8 @@ export class LocalCutmy {
       try { await file.writeFile(bytes); } finally { await file.close(); }
       const remaining = Math.floor(deadline - performance.now());
       if (remaining <= 0) throw new LocalError("The operation timed out", { code: "timeout" });
-      return await this.#run<T>([command, "--plan", path, "--output", resolve(this.#cwd, output), "--profile", this.#profile, "--threads", `${this.#threads}`, "--timeout", `${remaining}ms`], command === "batch" ? "batch" : "local-preflight", remaining, options.signal);
+      const kind = command === "collection export" ? "local-collection-result" : command === "collection validate" ? "local-collection-validation" : command === "batch" ? "batch" : "local-preflight";
+      return await this.#run<T>([...command.split(" "), "--plan", path, "--output", resolve(this.#cwd, output), "--profile", this.#profile, "--threads", `${this.#threads}`, "--timeout", `${remaining}ms`, ...extra], kind, remaining, options.signal);
     } catch (error) { if (error instanceof LocalError) throw error; throw new LocalError("The local plan could not be prepared", { code: "filesystem_error" }); }
     finally { if (directory) await rm(directory, { recursive: true, force: true }); }
   }
@@ -118,7 +136,7 @@ export class LocalCutmy {
         clearTimeout(timer); if (forceTimer) clearTimeout(forceTimer); signal?.removeEventListener("abort", abort);
         let result: BatchResult | undefined;
         let value: unknown;
-        try { value = JSON.parse(Buffer.concat(stdout).toString("utf8")) as unknown; if (kind === "batch") result = decode<BatchResult>(value, "batch"); } catch { /* A failure may legitimately have no output JSON. */ }
+        try { value = JSON.parse(Buffer.concat(stdout).toString("utf8")) as unknown; if (kind === "batch" || kind === "local-collection-result") result = decode<BatchResult>(value, kind); } catch { /* A failure may legitimately have no output JSON. */ }
         let publicCode = terminalCode ?? (spawnFailed ? "tool_unavailable" : "local_error");
         let message = terminalCode === "timeout" ? "The operation timed out" : terminalCode === "cancelled" ? "The operation was cancelled" : terminalCode === "response_too_large" ? "CLI output exceeded the JSON limit" : spawnFailed ? "The cutmy executable could not be started" : "The local operation failed";
         if (exitCode !== 0 || terminalCode || spawnFailed) {

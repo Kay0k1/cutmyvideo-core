@@ -41,6 +41,22 @@ def sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def collection_inputs():
+    paths = [ROOT / name for name in (
+        "go.mod", "go.sum", "scripts/check-sdks.py", "scripts/sdk_checks_test.py",
+        "scripts/sdk-smoke.py", "scripts/sdk-smoke.mjs",
+        "scripts/sdk-collection-acceptance.py", "scripts/sdk-collection-acceptance.mjs",
+        "scripts/sdk-collection-acceptance-verify.py", "scripts/sdk-collection-acceptance-verify-test.py",
+        "internal/app/sdk_integration_test.go", "internal/app/sdk_collections_integration_test.go",
+        "sdk/python/README.md", "sdk/python/pyproject.toml", "sdk/python/src/cutmyvideo/py.typed",
+        "sdk/typescript/README.md", "sdk/typescript/package.json", "sdk/typescript/package-lock.json",
+        "sdk/typescript/tsconfig.json")]
+    for folder, pattern in (("sdk/python/src/cutmyvideo", "*.py"), ("sdk/python/tests", "*.py"),
+                            ("sdk/typescript/src", "*.ts"), ("sdk/typescript/test", "*.mjs")):
+        paths.extend((ROOT / folder).rglob(pattern))
+    return {str(path.relative_to(ROOT)): sha256(path) for path in sorted(set(paths))}
+
+
 def run(argv, *, cwd, env, log, timeout=300):
     with log.open("wb") as output:
         process = subprocess.run(argv, cwd=cwd, env=env, stdout=output,
@@ -52,7 +68,9 @@ def run(argv, *, cwd, env, log, timeout=300):
 def check_wheel(path):
     with zipfile.ZipFile(path) as archive:
         names = archive.namelist()
-        if "cutmyvideo/__init__.py" not in names or "cutmyvideo/py.typed" not in names:
+        required_modules = {"cutmyvideo/__init__.py", "cutmyvideo/py.typed", "cutmyvideo/collections.py",
+                            "cutmyvideo/_collection_protocol.py", "cutmyvideo/_collection_state.py"}
+        if not required_modules.issubset(names):
             raise RuntimeError("Python wheel is missing its public module or typing marker")
         if not any(name.endswith("/LICENSE") for name in names):
             raise RuntimeError("Python wheel is missing its license")
@@ -70,9 +88,12 @@ def main():
         parser.error("SDK consumer evidence must be outside the checkout")
     output.mkdir(parents=True, exist_ok=False)
     env = dict(os.environ)
+    source_inputs = collection_inputs()
     python, node, npm = sys.executable, shutil.which("node"), shutil.which("npm")
     if not node or not npm:
         parser.error("Node.js and npm are required")
+    run([python, str(ROOT / "scripts/sdk-collection-acceptance-verify-test.py")],
+        cwd=output, env=env, log=output / "collection-content-controls.log", timeout=180)
     # npm is a command script on Windows. Invoke its actual JS entry with Node
     # so arguments never pass through cmd.exe or shell quoting.
     if os.name == "nt":
@@ -137,14 +158,22 @@ def main():
         raise RuntimeError("SDK unexpectedly introduced runtime dependencies")
     env["CUTMY_SDK_JS_ENTRY"] = str(package / "dist/index.js")
     env["CUTMY_SDK_LOCAL_JS_ENTRY"] = str(package / "dist/local.js")
+    env["CUTMY_SDK_COLLECTION_JS_ENTRY"] = str(package / "dist/collections.js")
     run([node, "--test", *map(str, sorted((ts_root / "test").glob("*.test.mjs")))],
         cwd=consumer, env=env, log=output / "typescript-installed-tests.log")
-    (consumer / "types.ts").write_text('''import { CutmyClient } from "@cutmyvideo/sdk";
+    (consumer / "types.ts").write_text('''import { CutmyClient, type CollectionRequest } from "@cutmyvideo/sdk";
 import { LocalCutmy } from "@cutmyvideo/sdk/local";
+import { runCollection, resumeCollection } from "@cutmyvideo/sdk/collections";
 const client = new CutmyClient({baseUrl: "http://127.0.0.1:8080"});
 const local = new LocalCutmy({binary: "cutmy"});
 void client.preflight({source_id: "src", ranges: [{start_ms: 0, end_ms: 1000}], format: "mp4", quality: "best", cut_mode: "accurate"});
-void local;
+const request: CollectionRequest = {source_id: "src", plan: {version: 1, options: {format: "mp4", quality: "best", cut_mode: "accurate"}, clips: [{id: "answer", ranges: [{start_ms: 0, end_ms: 1000}]}]}};
+void client.validateCollection(request);
+void client.submitCollection(request, {idempotencyKey: "saved-key"});
+void runCollection(client, request, "/private/project", {timeoutMs: 1800000, onProgress: report => { console.log(report.outputs.map(output => output.clip_id)); }});
+void resumeCollection(client, "/private/project", {request});
+void local.validateCollection({...request.plan, input: "/media/interview.mp4"}, "/media/clips");
+void local.executeCollection({...request.plan, input: "/media/interview.mp4"}, "/media/clips", {clipIds: ["answer"], rendition: "draft"});
 ''', encoding="utf-8")
     run([node, str(ts_root / "node_modules/typescript/bin/tsc"), "--noEmit", "--strict", "--module", "NodeNext",
          "--moduleResolution", "NodeNext", "--target", "ES2022", "--lib", "ES2022,DOM",
@@ -153,19 +182,22 @@ void local;
     binary = output / ("cutmy.exe" if os.name == "nt" else "cutmy")
     run(["go", "build", "-trimpath", "-o", str(binary), "./cmd/cutmy"], cwd=ROOT, env=env, log=output / "core-build.log")
     env.update(CUTMY_REQUIRE_SDK="1", CUTMY_SDK_PYTHON=consumer_python, CUTMY_SDK_NODE=node, CUTMY_SDK_BINARY=str(binary))
-    top_level = {"TestInstalledSDKLocalWorkflow"}
+    top_level = {"TestInstalledSDKLocalWorkflow", "TestInstalledSDKCollectionLocalWorkflow"}
     if args.http:
         if not env.get("TEST_DATABASE_URL"):
             parser.error("--http requires an isolated TEST_DATABASE_URL")
         top_level.add("TestInstalledSDKHTTPWorkflow")
+        top_level.add("TestInstalledSDKCollectionHTTPWorkflow")
     required = top_level | {f"{name}/{language}" for name in top_level for language in ("python", "typescript")}
     selector = "^(" + "|".join(sorted(top_level)) + ")$"
-    run(["go", "test", "-json", "-race", "-count=1", "-timeout=3m", "./internal/app", "-run", selector],
-        cwd=ROOT, env=env, log=output / "installed-sdk-tests.jsonl", timeout=240)
+    run(["go", "test", "-json", "-race", "-count=1", "-timeout=15m" if args.http else "-timeout=3m", "./internal/app", "-run", selector],
+        cwd=ROOT, env=env, log=output / "installed-sdk-tests.jsonl", timeout=960 if args.http else 240)
     verify_go_report(output / "installed-sdk-tests.jsonl", required)
+    if collection_inputs() != source_inputs:
+        raise RuntimeError("SDK or acceptance inputs changed during verification; rerun from frozen source")
     receipt = {"schema": 1, "required_tests": sorted(required), "python_wheel_sha256": sha256(wheels[0]),
                "python_sdist_sha256": sha256(sdists[0]), "npm_tarball_sha256": sha256(tarballs[0]),
-               "cli_sha256": sha256(binary), "installed_consumers": True}
+               "cli_sha256": sha256(binary), "installed_consumers": True, "source_inputs_sha256": source_inputs}
     (output / "SDK-CHECKS.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     print("Built, installed and verified both SDKs against real media and the core.")
 

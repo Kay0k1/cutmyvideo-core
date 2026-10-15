@@ -5,6 +5,10 @@ obtains them through another transcription or analysis tool. The collection
 engine joins the selected source intervals and applies explicit crop/audio
 settings. Keep the collection JSON as the editable source of truth.
 
+For Python or Node agents, the [resumable SDK workflow](sdk-collections.md) handles
+validation, incremental admission, waiting, downloads and process interruption.
+The CLI/HTTP steps below remain useful when implementing another client.
+
 This workflow needs a binary containing clip-collection support, FFmpeg/ffprobe
 and a finite local media file. For the current checkout:
 
