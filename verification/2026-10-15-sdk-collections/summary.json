@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "release_candidate": "1.4.0",
+  "published": false,
+  "base_commit": "1e6cb516a3b64cb58cc37cfdd80b61bc40606a1b",
+  "sdk_versions": {
+    "python": "1.4.0.dev0",
+    "typescript": "1.4.0-dev.0"
+  },
+  "runtime_dependencies": 0,
+  "verification_date_utc": "2026-10-15",
+  "tools": {
+    "go": "1.27.2",
+    "node": "20.20.0",
+    "python": "3.10.12",
+    "ffmpeg": "N-127083-g65a3870462-20261001"
+  },
+  "fixture": {
+    "page": "https://commons.wikimedia.org/wiki/File:Interview_WMF.ogv",
+    "author": "Wikimedia Deutschland (WMDE)",
+    "license": "CC BY-SA 3.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/3.0",
+    "normalized_size_bytes": 82242740,
+    "normalized_sha256": "0f9e167eea8a4c503396cf819edd5e356c94858befef12a8e3667cea22d27fca",
+    "width": 1280,
+    "height": 720,
+    "duration_seconds": 516.912472
+  },
+  "checks": {
+    "full_source_checks_passed": true,
+    "go_race": true,
+    "reachable_vulnerability_scan_passed": true,
+    "python_installed_unit_tests": 45,
+    "typescript_installed_unit_tests": 49,
+    "physical_content_controls": 8,
+    "required_installed_go_tests": [
+      "TestInstalledSDKCollectionHTTPWorkflow",
+      "TestInstalledSDKCollectionHTTPWorkflow/python",
+      "TestInstalledSDKCollectionHTTPWorkflow/typescript",
+      "TestInstalledSDKCollectionLocalWorkflow",
+      "TestInstalledSDKCollectionLocalWorkflow/python",
+      "TestInstalledSDKCollectionLocalWorkflow/typescript",
+      "TestInstalledSDKHTTPWorkflow",
+      "TestInstalledSDKHTTPWorkflow/python",
+      "TestInstalledSDKHTTPWorkflow/typescript",
+      "TestInstalledSDKLocalWorkflow",
+      "TestInstalledSDKLocalWorkflow/python",
+      "TestInstalledSDKLocalWorkflow/typescript"
+    ],
+    "all_required_consumers_passed_without_skips": true,
+    "strict_windows_cancellation_and_high_resolution_deadline_controls": true,
+    "legacy_windows_console_json_control": true
+  },
+  "frozen_sdk_acceptance_inputs": 43,
+  "frozen_inputs_digest_sha256": "fa766a0ce17327dfd3d2261e54dade5177ce441174672cf148d932f688d4396d",
+  "distribution_sha256": {
+    "python_wheel_sha256": "40c100244c925be04ff72fa5d269992b2c5bddcaf1d4788b89cd73efbb2e1322",
+    "python_sdist_sha256": "1bb754d34bb1ba3d6c73d2d79174432ef3fa7b27c44cb9657e64e3d0ee26c99d",
+    "npm_tarball_sha256": "e34be57f04782f552f3496295f1af28e87cb2f8aca3024fc7191b93acbd95e5c",
+    "cli_sha256": "c8f7d53aedb5808d398475769727b9058ec3bd243b36281b16aebcdd523194fa"
+  },
+  "results": {
+    "python": {
+      "initial_clips": 15,
+      "completed_before_os_kill": 8,
+      "jobs_after_revision": 17,
+      "jobs_after_selected_drafts": 19,
+      "render_attempts": 19,
+      "interrupted_artifact_full_gets": 1,
+      "resumed_download_offset": 2459505,
+      "recovery": {
+        "lost_submit_reply_recovered": true,
+        "interrupted_download_ranged": true,
+        "partial_admission": true,
+        "admission_retry_after_respected": true,
+        "final_restored_without_new_work": true
+      },
+      "content": {
+        "audio_samples": 38,
+        "frame_samples": 76,
+        "max_frame_mae": 0.7648,
+        "min_audio_correlation": 0.8892,
+        "segments": 38,
+        "silent_segments": 0,
+        "stage_output_receipts": 32,
+        "unique_artifacts": 19
+      }
+    },
+    "typescript": {
+      "initial_clips": 15,
+      "completed_before_os_kill": 8,
+      "jobs_after_revision": 17,
+      "jobs_after_selected_drafts": 19,
+      "render_attempts": 19,
+      "interrupted_artifact_full_gets": 1,
+      "resumed_download_offset": 2396026,
+      "recovery": {
+        "lost_submit_reply_recovered": true,
+        "interrupted_download_ranged": true,
+        "partial_admission": true,
+        "admission_retry_after_respected": true,
+        "final_restored_without_new_work": true
+      },
+      "content": {
+        "audio_samples": 38,
+        "frame_samples": 76,
+        "max_frame_mae": 0.7648,
+        "min_audio_correlation": 0.8892,
+        "segments": 38,
+        "silent_segments": 0,
+        "stage_output_receipts": 32,
+        "unique_artifacts": 19
+      }
+    }
+  },
+  "paired_python_typescript_identical_media": true,
+  "only_two_revised_clip_hashes_changed": true,
+  "retained_other_clip_hashes": 13,
+  "media_and_private_state_committed": false,
+  "native_release_status": "Required PR source/archive/native gates tracked in GitHub; publication requires actual-main and signed-tag consumer checks.",
+  "additional_test_verification": {
+    "kind": "test_only_update_to_original_media_snapshot",
+    "changed_source_inputs": [
+      {
+        "original_sha256": "5bb2147b8289aa0e2ecb1ead2514ae1facabc79269a3be54e4c00a7ce4cc3bb0",
+        "path": "sdk/typescript/test/collections.test.mjs",
+        "updated_sha256": "f4e2a34fb04415d2d10fa1a0ad52a15efa5210e51c53042baa99fee2907640b0"
+      }
+    ],
+    "final_inputs_digest_sha256": "923378da31b6567bb24a88249bdadebb649f9fbf1d44cf4d0facb15fded8261f",
+    "unchanged_media_acceptance_inputs": 42,
+    "typescript_installed_unit_tests": 49,
+    "failed": 0,
+    "skipped": 0,
+    "runtime_modules_unchanged": true,
+    "npm_payload_matches_installed_files": true,
+    "configured_poll_interval_ms": 3000,
+    "required_poll_request_gap_ms": 2950,
+    "removed_persisted_deadline_guard_rejected": true,
+    "negative_control_log_sha256": "73e1ce858994a1f579adad6ac898af0fac357facca55f4f0a40a24805f985139"
+  }
+}

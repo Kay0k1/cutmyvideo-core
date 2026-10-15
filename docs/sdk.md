@@ -5,8 +5,9 @@ self-hosted HTTP API. They have no runtime dependencies. The API client owns
 one private session; the local client runs the same version 1 cutting plans as
 the CLI. Neither client decides which moments to cut or changes encoding quality.
 
-This is the SDK foundation for 1.3.0, available in `main`. Packages use
-development versions and have not been published to PyPI or npm. Use core 1.3.0
+The 1.4.0 SDK candidate adds [complete, resumable clip collections](sdk-collections.md)
+to the 1.3.0 SDK foundation. Packages use development versions and have not been
+published to PyPI or npm. Use core 1.3.0
 or a matching current source build for preflight; the 1.2.0 binary does not contain
 that command or endpoint. See the [project overview](../README.en.md#versions)
 for release status and the [architecture](architecture.md) for dependencies.
@@ -53,10 +54,11 @@ for output in result["outputs"]:
 ```
 
 ```typescript
+import type { Plan } from "@cutmyvideo/sdk";
 import { LocalCutmy } from "@cutmyvideo/sdk/local";
 
 const core = new LocalCutmy({ binary: "/usr/local/bin/cutmy", threads: 2 });
-const plan = {
+const plan: Plan = {
   version: 1 as const,
   input: "/media/interview.mp4",
   ranges: [{ label: "Quote", start_ms: 5000, end_ms: 15000 }],
@@ -97,12 +99,12 @@ with CutmyClient("http://127.0.0.1:8080") as client:
 ```
 
 ```typescript
-import { CutmyClient, readyArtifacts } from "@cutmyvideo/sdk";
+import { CutmyClient, readyArtifacts, type ExportRequest } from "@cutmyvideo/sdk";
 import { uploadFile, downloadArtifactToFile } from "@cutmyvideo/sdk/local";
 
 const client = new CutmyClient({ baseUrl: "http://127.0.0.1:8080" });
 const source = await uploadFile(client, "interview.mp4");
-const request = {
+const request: ExportRequest = {
   source_id: source.id,
   ranges: [{ label: "Quote", start_ms: 5000, end_ms: 15000 }],
   format: "mp4", quality: "best", cut_mode: "accurate",
@@ -133,6 +135,8 @@ the real job snapshot rather than an invented completion percentage.
 Submission requires an explicit idempotency key. Persist that key before sending
 the request and reuse it if acknowledgement is lost; a fresh key can create
 another job. The SDK never automatically repeats uploads, imports or mutations.
+The high-level collection runner persists its own key and exact body before
+safe retries; source creation is still never retried automatically.
 Submission errors retain the key, while wait errors retain the job ID. If a
 batch fails or is cancelled, `JobError` includes the terminal job and already
 ready artifacts. `ready_artifacts`/`readyArtifacts` selects downloadable outputs.
@@ -162,7 +166,10 @@ fresh consumer environments outside the repository, reruns their protocol tests,
 checks external TypeScript declarations and executes real local media workflows.
 The HTTP acceptance uses an isolated PostgreSQL database and the actual API and
 worker: upload, preflight without creating a job, idempotent submission, polling
-and streamed artifact download. Downloaded bytes match the published artifact;
+and streamed artifact download. Required collection checks additionally kill
+consumers during a download and after eight ready files, resume to 15 clips,
+replay without new work, change two clips and produce selected drafts.
+Downloaded bytes match the published artifact;
 independent full decoding checks durations, selected audio, geometry and manifests.
 
 ```sh

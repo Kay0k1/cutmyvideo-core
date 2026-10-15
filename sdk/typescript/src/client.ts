@@ -1,6 +1,6 @@
 import { ApiError, JobError } from "./errors.js";
 import { abortedError, abortable, boundedJSON, budget, decode, delay, endpointID, object, positive, retryAfter } from "./protocol.js";
-import type { ArtifactDownload, DownloadOptions, ExportRequest, Job, PreflightResult, RequestOptions, Session, Source, SubmissionOptions, Tracks, WaitOptions } from "./types.js";
+import type { ArtifactDownload, ArtifactRangeDownload, CollectionDiagnostic, CollectionRequest, CollectionSubmission, CollectionValidation, DownloadOptions, ExportRequest, Job, PreflightResult, RangeDownloadOptions, RequestOptions, Session, Source, SubmissionOptions, Tracks, WaitOptions } from "./types.js";
 
 export interface ClientOptions {
   baseUrl: string;
@@ -22,6 +22,8 @@ export class CutmyClient {
   readonly #transferMs: number;
   #cookie = "";
   #session: Promise<Session> | undefined;
+  /** Canonical server scope, safe to store in a public checkpoint. */
+  get serverUrl(): string { return this.#base.href.replace(/\/$/, ""); }
   constructor(options: ClientOptions) {
     this.#base = new URL(options.baseUrl);
     if (!["http:", "https:"].includes(this.#base.protocol) || this.#base.username || this.#base.password || this.#base.search || this.#base.hash) throw new TypeError("baseUrl must be an HTTP(S) URL without credentials, query or fragment");
@@ -50,6 +52,13 @@ export class CutmyClient {
     if (!runtime.process?.versions?.node) throw new ApiError("Browser owner cookies are HttpOnly and cannot be exported", { code: "session_unavailable" });
     if (!this.#cookie) throw new ApiError("Initialize the owner session before exporting its capability", { code: "session_unavailable" });
     return this.#cookie.slice(this.#cookie.indexOf("=") + 1);
+  }
+  /** Node-only restoration refuses replacing an already established owner. */
+  restoreSessionCookie(cookie: string): void {
+    const runtime = globalThis as typeof globalThis & { process?: { versions?: { node?: string } } };
+    if (!runtime.process?.versions?.node || !/^[A-Za-z0-9_-]{43}$/.test(cookie)) throw new TypeError("A valid Node owner capability is required");
+    if (this.#cookie && this.#cookie !== "cutmy_session=" + cookie) throw new ApiError("The client already belongs to another owner", { code: "owner_conflict" });
+    if (!this.#cookie) { this.#cookie = "cutmy_session=" + cookie; this.#session = undefined; }
   }
   #ensureSession(): Promise<Session> {
     if (!this.#session) {
@@ -91,14 +100,21 @@ export class CutmyClient {
       if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new ApiError("Redirect responses are refused", { code: "redirect_refused", status: response.status, ...context }); }
       this.#captureSession(response);
       const value = await boundedJSON(response);
+      if (kind === "collection-submission" && [200,202,207,400,408,410,413,429,500,502,503,504].includes(response.status) && object(value) && value.version === 1 && Array.isArray(value.clips)) {
+        const report = decode<CollectionSubmission>(value, kind);
+        const retry = retryAfter(response).retryAfterSeconds;
+        return { ...report, http_status: response.status, ...(retry === undefined ? {} : { retry_after_seconds: retry }) } as T;
+      }
       if (!response.ok) {
         const envelope = object(value) && object(value.error) ? value.error : undefined;
-        throw new ApiError(envelope && typeof envelope.message === "string" ? envelope.message : "The API request failed", { code: envelope && typeof envelope.code === "string" ? envelope.code : "http_error", status: response.status, ...retryAfter(response), ...context });
+        let diagnostic: CollectionDiagnostic | undefined;
+        if (["collection-validation", "collection-submission"].includes(kind) && envelope && typeof envelope.code === "string" && typeof envelope.message === "string") diagnostic = { code: envelope.code, message: envelope.message, ...(typeof envelope.clip_id === "string" ? { clip_id: envelope.clip_id } : {}), ...(typeof envelope.field === "string" ? { field: envelope.field } : {}) };
+        throw new ApiError(envelope && typeof envelope.message === "string" ? envelope.message : "The API request failed", { code: envelope && typeof envelope.code === "string" ? envelope.code : "http_error", status: response.status, ...retryAfter(response), ...context, ...(diagnostic ? { diagnostic } : {}) });
       }
       return decode<T>(value, kind);
     } catch (error) {
       if (scope.controller.signal.aborted) throw abortedError(scope, context);
-      if (error instanceof ApiError) throw new ApiError(error.message, { code: error.code, ...(error.status === undefined ? (response ? { status: response.status } : {}) : { status: error.status }), ...(response ? retryAfter(response) : {}), ...context });
+      if (error instanceof ApiError) throw new ApiError(error.message, { code: error.code, ...(error.status === undefined ? (response ? { status: response.status } : {}) : { status: error.status }), ...(response ? retryAfter(response) : {}), ...context, ...(error.diagnostic ? { diagnostic: error.diagnostic } : {}) });
       throw new ApiError("The API request could not be completed", { code: "network_error", ...(response ? { status: response.status } : {}), ...context });
     } finally { scope.dispose(); }
   }
@@ -111,6 +127,13 @@ export class CutmyClient {
   getSource(id: string, options: RequestOptions = {}): Promise<Source> { return this.#request("GET", `api/v1/sources/${endpointID(id)}`, undefined, "source", options); }
   getTracks(id: string, options: RequestOptions = {}): Promise<Tracks> { return this.#request("GET", `api/v1/sources/${endpointID(id)}/tracks`, undefined, "tracks", { ...options, timeoutMs: options.timeoutMs ?? this.#sourceMs }); }
   preflight(request: ExportRequest, options: RequestOptions = {}): Promise<PreflightResult> { return this.#request("POST", "api/v1/jobs/preflight", request, "preflight", { ...options, timeoutMs: options.timeoutMs ?? this.#sourceMs }); }
+  validateCollection(request: CollectionRequest, options: RequestOptions = {}): Promise<CollectionValidation> {
+    return this.#request("POST", "api/v1/collections/validate", request, "collection-validation", { ...options, timeoutMs: options.timeoutMs ?? this.#sourceMs });
+  }
+  submitCollection(request: CollectionRequest, options: SubmissionOptions): Promise<CollectionSubmission> {
+    if (typeof options?.idempotencyKey !== "string" || !options.idempotencyKey.trim() || new TextEncoder().encode(options.idempotencyKey).byteLength > 128 || /[\x00-\x1f\x7f]/.test(options.idempotencyKey)) throw new TypeError("idempotencyKey must contain 1 to 128 UTF-8 bytes and no control characters");
+    return this.#request("POST", "api/v1/collections", request, "collection-submission", { ...options, timeoutMs: options.timeoutMs ?? this.#sourceMs }, { idempotencyKey: options.idempotencyKey });
+  }
   createJob(request: ExportRequest, options: SubmissionOptions): Promise<Job> {
     if (typeof options?.idempotencyKey !== "string" || !options.idempotencyKey.trim() || new TextEncoder().encode(options.idempotencyKey).byteLength > 128 || /[\x00-\x1f\x7f]/.test(options.idempotencyKey)) throw new TypeError("idempotencyKey must contain 1 to 128 UTF-8 bytes and no control characters");
     return this.#request("POST", "api/v1/jobs", request, "job", options, { idempotencyKey: options.idempotencyKey });
@@ -136,6 +159,16 @@ export class CutmyClient {
   }
   /** Uses the owner-protected artifact ID route; download_url is never followed. */
   async downloadArtifact(id: string, options: DownloadOptions = {}): Promise<ArtifactDownload> {
+    return this.#download(id, options);
+  }
+  /** Explicit ranged ID transfer; a 200 response must be restarted, never appended. */
+  async downloadArtifactRange(id: string, options: RangeDownloadOptions): Promise<ArtifactRangeDownload> {
+    if (!Number.isSafeInteger(options.offset) || options.offset < 0) throw new TypeError("offset must be a nonnegative safe integer");
+    if (options.expectedSize !== undefined && (!Number.isSafeInteger(options.expectedSize) || options.expectedSize < 0)) throw new TypeError("expectedSize must be a nonnegative safe integer");
+    if (options.ifRange !== undefined && (options.ifRange.length > 128 || /[\x00-\x1f\x7f]/.test(options.ifRange))) throw new TypeError("ifRange must be a bounded validator");
+    return this.#download(id, options, options);
+  }
+  async #download(id: string, options: DownloadOptions, range?: RangeDownloadOptions): Promise<ArtifactRangeDownload> {
     const path = `api/v1/artifacts/${endpointID(id)}/download`;
     if (options.maxBytes !== undefined && (!Number.isSafeInteger(options.maxBytes) || options.maxBytes < 1)) throw new TypeError("maxBytes must be a positive safe integer");
     const scope = budget(options.timeoutMs ?? this.#transferMs, options.signal);
@@ -143,7 +176,10 @@ export class CutmyClient {
     let response: Response | undefined;
     try {
       await abortable(this.#ensureSession(), scope.controller.signal);
-      response = await this.#fetch(new URL(path, this.#base), { headers: this.#headers(false, {}), credentials: "include", redirect: "manual", signal: scope.controller.signal });
+      const headers = this.#headers(false, {});
+      if (range) headers.set("Accept-Encoding", "identity");
+      if (range && range.offset > 0) { headers.set("Range", "bytes=" + range.offset + "-"); if (range.ifRange) headers.set("If-Range", range.ifRange); }
+      response = await this.#fetch(new URL(path, this.#base), { headers, credentials: "include", redirect: "manual", signal: scope.controller.signal });
       if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new ApiError("Redirect responses are refused", { code: "redirect_refused", status: response.status }); }
       this.#captureSession(response);
       if (!response.ok) {
@@ -151,9 +187,23 @@ export class CutmyClient {
         const envelope = object(value) && object(value.error) ? value.error : undefined;
         throw new ApiError(envelope && typeof envelope.message === "string" ? envelope.message : "Download failed", { code: envelope && typeof envelope.code === "string" ? envelope.code : "http_error", status: response.status, ...retryAfter(response) });
       }
-      if (response.status !== 200) { await response.body?.cancel(); throw new ApiError("Download returned an incomplete response", { code: "invalid_response", status: response.status }); }
+      if (response.status !== 200 && !(range && range.offset > 0 && response.status === 206)) { await response.body?.cancel(); throw new ApiError("Download returned an incomplete response", { code: "invalid_response", status: response.status }); }
+      const encoding = response.headers.get("content-encoding")?.trim().toLowerCase();
+      if (range && encoding && encoding !== "identity") { await response.body?.cancel(); throw new ApiError("Ranged artifact transfer requires identity content encoding", { code: "content_encoding_unsupported", status: response.status }); }
       const header = response.headers.get("content-length");
       const length = header && /^\d+$/.test(header) && Number.isSafeInteger(Number(header)) ? Number(header) : null;
+      let rangeStart = 0;
+      let totalLength = length;
+      if (response.status === 206) {
+        const match = /^bytes ([0-9]+)-([0-9]+)\/([0-9]+)$/.exec(response.headers.get("content-range") ?? "");
+        const start = Number(match?.[1]), end = Number(match?.[2]), total = Number(match?.[3]);
+        if (!match || ![start,end,total].every(Number.isSafeInteger) || start !== range!.offset || end < start || end !== total - 1 || (length !== null && length !== end - start + 1) || (range!.expectedSize !== undefined && total !== range!.expectedSize) || (range!.ifRange !== undefined && response.headers.get("last-modified") !== range!.ifRange)) {
+          await response.body?.cancel(); throw new ApiError("Range response does not match the saved artifact", { code: "invalid_range", status: response.status });
+        }
+        rangeStart = start; totalLength = total;
+      }
+      if (range?.expectedSize !== undefined && response.status === 200 && totalLength !== null && totalLength !== range.expectedSize) { await response.body?.cancel(); throw new ApiError("Artifact size changed", { code: "artifact_changed", status: response.status }); }
+      if (options.maxBytes !== undefined && totalLength !== null && totalLength > options.maxBytes) { await response.body?.cancel(); throw new ApiError("Download exceeded maxBytes", { code: "download_too_large", status: response.status }); }
       if (options.maxBytes !== undefined && length !== null && length > options.maxBytes) { await response.body?.cancel(); throw new ApiError("Download exceeded maxBytes", { code: "download_too_large", status: response.status }); }
       if (!response.body) throw new ApiError("Download has no response body", { code: "invalid_response", status: response.status });
       reader = response.body.getReader();
@@ -182,7 +232,7 @@ export class CutmyClient {
         },
         async cancel(reason) { try { await reader!.cancel(reason); } finally { cleanup(); scope.controller.abort(); } },
       }, { highWaterMark: 0 });
-      return { stream, contentType: response.headers.get("content-type"), contentLength: length, cancel: async reason => { await stream.cancel(reason); } };
+      return { stream, contentType: response.headers.get("content-type"), contentLength: length, status: response.status as 200 | 206, rangeStart, totalLength, lastModified: response.headers.get("last-modified"), cancel: async reason => { await stream.cancel(reason); } };
     } catch (error) {
       scope.dispose();
       if (scope.controller.signal.aborted) throw abortedError(scope);

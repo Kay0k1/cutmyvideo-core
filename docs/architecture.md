@@ -59,6 +59,12 @@ the cutting. The main TypeScript HTTP entry also works in browsers with modern
 Fetch APIs. Its separate `@cutmyvideo/sdk/local` entry uses Node process and
 filesystem APIs.
 
+The Node-only `@cutmyvideo/sdk/collections` entry and Python collection runner
+coordinate the [complete HTTP project cycle](sdk-collections.md). Private local
+state stores accepted job IDs and verified receipts; a separate file stores the
+owner capability. Recovery uses the existing queue and artifacts without a new
+server scheduler, schema or encoder.
+
 Platform import uses yt-dlp with a Node.js runtime; the server image bundles
 these alongside FFmpeg. Node is an import dependency, not an alternative media
 engine. Uploaded/local server files do not require platform extraction.

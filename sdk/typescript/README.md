@@ -3,7 +3,7 @@
 TypeScript clients for local `cutmy` execution and the cutmyvideo-core HTTP API.
 The package has no runtime dependencies. Node 20.19 or newer is required for the
 Node entry; the main HTTP entry also works in browsers with modern Fetch APIs.
-This is the unpublished `1.3.0-dev.0` development package.
+This is the unpublished `1.4.0-dev.0` development package.
 
 Build and install a package from this checkout:
 
@@ -11,7 +11,7 @@ Build and install a package from this checkout:
 cd sdk/typescript
 npm ci
 npm pack
-npm install /absolute/path/to/cutmyvideo-sdk-1.3.0-dev.0.tgz
+npm install /absolute/path/to/cutmyvideo-sdk-1.4.0-dev.0.tgz
 ```
 
 ## Local files
@@ -108,6 +108,147 @@ call `exportSessionCookie()` to save its value in a private credential store.
 To resume that owner session, pass the value as `sessionCookie` to a new client;
 never log that capability. Exporting cookies is unavailable in browsers.
 All redirects are refused, so cookies are not forwarded to another endpoint.
+
+## Clip collections
+
+Each named clip contains one or more original-source ranges, joined in their given
+order. Collection options inherit into clips; a clip can override them, reset
+audio selection with `audio_track: -1`, or remove inherited crop with
+`clear_crop: true`. Final and draft have separate server job identities. Draft is
+accurate MP4 at up to 720p; music, transcription and topic selection stay in the
+calling agent's workflow.
+
+```ts
+import { CutmyClient, CollectionError } from '@cutmyvideo/sdk';
+import type { CollectionRequest } from '@cutmyvideo/sdk';
+import { uploadFile } from '@cutmyvideo/sdk/local';
+import { runCollection, resumeCollection } from '@cutmyvideo/sdk/collections';
+
+const client = new CutmyClient({ baseUrl: 'https://cutmy.video' });
+// Prepare the source explicitly. Recover an uncertain upload separately.
+const source = await uploadFile(client, './interview.mp4');
+const request: CollectionRequest = {
+  source_id: source.id,
+  plan: {
+    version: 1,
+    options: { format: 'mp4', quality: 'best', cut_mode: 'accurate' },
+    clips: [
+      { id: 'opening', ranges: [{ start_ms: 10_000, end_ms: 18_000 }] },
+      { id: 'answer', ranges: [
+        { start_ms: 30_000, end_ms: 40_000 },
+        { start_ms: 45_000, end_ms: 51_000 },
+      ] },
+    ],
+  },
+};
+try {
+  const report = await runCollection(client, request, './interview-project', {
+    timeoutMs: 600_000,
+    maxOutputBytes: 2_000_000_000,
+    onProgress: report => console.log(report.phase, report.outputs.length),
+  });
+  console.log(report.outputs.map(file => ({ path: file.path, sha256: file.sha256 })));
+} catch (error) {
+  if (error instanceof CollectionError) console.log(error.code, error.report);
+  throw error;
+}
+
+// A fresh process restores this project's saved owner and original key.
+const resumed = await resumeCollection(
+  new CutmyClient({ baseUrl: 'https://cutmy.video' }), './interview-project',
+  { timeoutMs: 600_000 },
+);
+// Revise the request, or request a selected draft. Prior output files survive.
+const draft = await resumeCollection(
+  new CutmyClient({ baseUrl: 'https://cutmy.video' }), './interview-project',
+  { request: { ...request, clip_ids: ['answer'], rendition: 'draft' } },
+);
+```
+
+The Node-only `./collections` entry completes validation, admission, polling and
+download. The default admission batch is 3 (`admissionBatchSize: 1..128`), counting
+accepted clips until their local files are published. `maxSubmitBatch` separately
+bounds each pending submission (default 3); omitted admission size inherits that
+value. Server limits still apply. It saves accepted jobs from partial responses, observes
+`Retry-After`, and downloads their outputs while remaining clips wait for capacity.
+Per-job poll deadlines are checkpointed so a fresh resume preserves rate-limit
+and temporary-unavailability delays as well as the minimum poll interval.
+The whole call, including progress callbacks, shares one deadline. Poll intervals
+must be at least 1000ms. Timeout, cancellation and terminal failures throw
+`CollectionError` with verified outputs and remaining clip diagnostics in `report`;
+they do not cancel remote jobs. Resume can continue an uncertain submission using
+its exact persisted body, owner and key. Finish that submission before changing the
+request. Equivalent clip requests are deduplicated by the server's normalized
+identity, so only changed clips create new jobs.
+
+The caller chooses a private project directory. On POSIX the directory and child
+directories are 0700 and files are 0600. `state.json` holds requests, keys, jobs and
+receipts; `owner.json` holds the owner capability separately. A private
+`initialize.json` bootstrap journal bridges crashes before these two files exist;
+it is removed and synchronized before any collection submission. Keep the entire
+directory private, including crash leftovers. These are sensitive recovery files,
+not artifacts for sharing, Git or diagnostic uploads. SDK state is versioned and
+language-specific; Python and TypeScript projects cannot share a state directory.
+Configured server and saved owner conflicts are refused before a collection call.
+The runner never automatically repeats an uncertain source upload.
+
+State checkpoints synchronize bytes and use atomic publication. Completed files
+are SHA-256 verified on every resume; outputs include immutable artifact IDs in
+their names and publish exclusively. Interrupted downloads save a verified prefix,
+then resume through the protected artifact ID route with `Range` and, when
+available, `Last-Modified`/`If-Range`. Transfers request identity content encoding
+and reject compressed responses before appending bytes. A server ignoring Range causes an owned
+temporary file to restart. An inconsistent 206 or changed artifact is refused.
+Prepared publication receipts recover a crash after exclusive publication without
+adopting unrelated files. Symlinks, unverified lock receipts and modified saved
+files require attention. `maxOutputBytes` bounds all retained project outputs and
+reserved full sizes of unfinished transfers, including prior revisions;
+transfer retries and network bytes are also bounded.
+
+One writer owns each project. Node uses an exclusive loopback listener, released
+by the OS even after SIGKILL, plus a private PID/host receipt. Its hashed port is in
+10000..29999 and receives no secrets or other traffic. A rare port collision safely
+returns `project_busy`; retry later or choose another project directory. Lock
+receipts from another host are refused, so moving a crashed project between hosts
+requires explicit operator recovery. Windows does not provide POSIX modes; use a
+directory accessible only to the running user.
+
+Public progress includes `output_ready`, `download_checkpoint` and
+`download_interrupted`. Download phases carry
+`download: { clip_id, artifact_id, offset, total_size, resumed }` after the prefix
+has been synchronized and checkpointed. Progress callbacks may be asynchronous
+and receive independent public report values.
+
+For a manual agent loop, the browser-compatible main client exposes
+`validateCollection(request)` and
+`submitCollection(request, { idempotencyKey })`. Validation encodes no outputs;
+submission makes exactly one call. Partial collection reports preserve
+`http_status` and `retry_after_seconds`, even when admission returns non-2xx.
+Collection envelope failures expose `ApiError.diagnostic` with only
+`code`, `message`, `clip_id` and `field`; raw bodies and other error fields are not
+retained. Durable pending diagnostics preserve the named field so an agent can
+repair the clip in a revised request. Applications own their polling and retry
+policy at this level.
+
+Local collections use the installed core CLI without HTTP state:
+
+```ts
+import { LocalCutmy } from '@cutmyvideo/sdk/local';
+const local = new LocalCutmy({ binary: '/usr/local/bin/cutmy', threads: 2 });
+const plan = { ...request.plan, input: './interview.mp4' };
+await local.validateCollection(plan, './drafts', {
+  clipIds: ['answer'], rendition: 'draft', maxOutputBytes: 1_000_000_000,
+});
+const files = await local.executeCollection(plan, './drafts', {
+  clipIds: ['answer'], rendition: 'draft', timeoutMs: 600_000,
+});
+```
+
+The output directory must exist. CLI validation checks selected output collisions
+without encoding; execution reports clip IDs, requested ranges, actual segments
+and selected tracks. `LocalError.result` retains earlier published outputs if a
+later clip fails. The wrapper preserves literal arguments and temporary-plan
+privacy for these methods as for single-job plans.
 
 ## Results, limits and failures
 

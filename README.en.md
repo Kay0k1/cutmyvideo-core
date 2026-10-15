@@ -29,6 +29,8 @@ Install CLI archives from the [latest published release](https://github.com/Kay0
 
 **1.3.0** adds editable clip collections, draft assemblies, job preflight and the Python/TypeScript SDK foundation. These are absent from the v1.2.0 binary. SDKs currently use development versions and install from source; PyPI/npm publication is pending. The [changelog](CHANGELOG.md) separates published changes from `Unreleased`.
 
+The **1.4.0 candidate** adds the complete SDK collection cycle and recovery after interruption: ready clips survive, transfers continue from verified offsets, and revisions submit only needed work. [Agent workflow](docs/sdk-collections.md) · [Release preparation](docs/release-1.4.0.md).
+
 <a id="local-trimming"></a>
 
 ## Quick start: a local file
@@ -71,7 +73,7 @@ Save one collection with stable clip IDs and ordered fragments per clip. Validat
 
 Both SDKs support **check a job → run it → retrieve results**, locally and over HTTP. They provide typed errors, partial results, cancellation, waiting and streaming file transfers. Neither has third-party runtime library dependencies; video processing remains in Go/FFmpeg.
 
-Plans are ordinary JSON for editors, services or automated assistants. For HTTP jobs, callers persist an idempotency key before submission so they can recover after a lost connection.
+Plans are ordinary JSON for editors, services or automated assistants. The collection runner saves private state and an idempotency key itself; callers retain this responsibility for individual HTTP jobs.
 
 [Installation and examples](docs/sdk.md) · [Python](sdk/python/README.md) · [TypeScript](sdk/typescript/README.md)
 

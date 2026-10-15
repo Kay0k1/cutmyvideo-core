@@ -2,7 +2,7 @@
 
 from typing import Any, Mapping
 
-from .types import Artifact, BatchOutput, Job
+from .types import Artifact, BatchOutput, CollectionDiagnostic, Job
 
 
 class CutmyError(Exception):
@@ -13,11 +13,13 @@ class CutmyError(Exception):
 
 class APIError(CutmyError):
     def __init__(self, message: str, *, code: str, status: int | None = None,
-                 idempotency_key: str | None = None, retry_after: float | None = None):
+                 idempotency_key: str | None = None, retry_after: float | None = None,
+                 diagnostic: CollectionDiagnostic | None = None):
         super().__init__(message, code=code)
         self.status = status
         self.idempotency_key = idempotency_key
         self.retry_after = retry_after
+        self.diagnostic = dict(diagnostic) if diagnostic is not None else None
 
 
 class JobError(CutmyError):
@@ -49,6 +51,16 @@ class LocalError(CutmyError):
         super().__init__(message, code=code)
         self.exit_code = exit_code
         self.outputs = outputs or []
+
+
+class CollectionError(CutmyError):
+    """A paused/failed durable cycle; completed files and its owner are retained."""
+
+    def __init__(self, message: str, *, code: str, report: Mapping[str, Any], directory: str):
+        import copy
+        super().__init__(message, code=code)
+        self.report = copy.deepcopy(dict(report))
+        self.directory = directory
 
 
 def ready_artifacts(job: Mapping[str, Any]) -> list[Artifact]:

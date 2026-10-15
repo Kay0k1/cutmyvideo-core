@@ -42,6 +42,8 @@ if arguments[0:2] != ["--json-errors", "inspect"]:
     result = {"outputs": [], "plan": plan, "plan_path": str(plan_path), "args": arguments}
     if arguments[1] == "preflight":
         result.update({"version": 1, "valid": True, "checks": [], "warnings": [], "output_paths": []})
+    elif arguments[1:3] == ["collection", "validate"]:
+        result.update({"version": 1, "valid": True, "clips": [], "selected_clip_ids": []})
 else:
     result = {"duration_ms": 1000, "tracks": [], "args": arguments}
 print(json.dumps(result))

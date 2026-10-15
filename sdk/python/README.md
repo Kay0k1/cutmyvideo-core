@@ -5,7 +5,7 @@ applications. Python 3.10 or later; no runtime dependencies. Requests and result
 use JSON-compatible typed dictionaries, so the same plans can be saved, reviewed,
 or passed between tools without a framework or an agent-specific protocol.
 
-This is the unpublished `1.3.0.dev0` SDK. Install from this repository:
+This is the unpublished `1.4.0.dev0` SDK. Install from this repository:
 
 ```sh
 python -m pip install ./sdk/python
@@ -92,7 +92,8 @@ in representations or logs. A known capability may be supplied explicitly as
 `session_cookie=...` to resume its owner; treat it as a password. After calling
 `session()` or another operation, `export_session_cookie()` explicitly returns
 the capability for your credential store. Keep it out of prompts, logs, public
-plans, and source control. The SDK does not persist it automatically. `close()` forgets
+plans, and source control. Ordinary HTTP methods do not persist it automatically;
+the collection runner below saves a separate private owner file. `close()` forgets
 the local capability. It does not delete remote sources/jobs or revoke a cookie.
 `session()` returns public server limits. `get_source`, `list_sources`,
 `get_tracks`, and `get_job` support inspection and recovery.
@@ -102,7 +103,7 @@ Persist it before submitting. If `APIError` reports a transport failure, timeout
 or server error, the mutation may already have committed: recover by calling
 `create_job` with the **same owner and key**. Reusing a retained key returns the
 original job, even if the request body changes; use a fresh key for different
-work. There are no automatic mutation retries. Uploads and URL imports have no
+work. Individual HTTP calls do not retry mutations automatically. Uploads and URL imports have no
 idempotency guarantee: consult `list_sources()` before deciding to repeat one.
 
 `wait_for_job` returns the succeeded job; failed or cancelled jobs raise
@@ -113,6 +114,97 @@ polled until the deadline. The minimum polling interval is one second.
 request remains bounded by its own deadline. `WaitTimeout` and `WaitCancelled`
 retain the job ID and latest observed job/artifacts and do not cancel the server
 job. Use `cancel_job(job_id)` explicitly to request server cancellation.
+
+## Collections and durable HTTP execution
+
+Collection operations require core 1.3 or later. Each clip assembles ordered
+intervals of the same source with its own settings. Local wrappers expose
+`validate_collection(plan, directory, clip_ids=None, rendition="final")` and
+`execute_collection(...)`. The output directory must exist; partial
+`LocalError.outputs` retain IDs, segments and tracks. Local rendering has no
+saved runner or automatic process-resume promise.
+
+```python
+from cutmyvideo import CutmyClient, CollectionError
+
+client = CutmyClient("https://your-cutmy-server.example")
+source = client.upload_source("interview.mp4")  # Explicit preparation, once.
+request = {
+    "source_id": source["id"],
+    "plan": {"version": 1, "clips": [
+        {"id": "answer", "ranges": [
+            {"start_ms": 50000, "end_ms": 65000},
+            {"start_ms": 10000, "end_ms": 15000},
+        ]},
+    ]},
+}
+client.validate_collection(request)  # Read-only, no queued jobs.
+try:
+    result = client.run_collection(request, "./interview-project", timeout=1800)
+except CollectionError as error:
+    result = error.report  # Ready files remain usable; no implicit remote cancel.
+
+# A fresh client/process restores the SAME saved owner and header key.
+result = CutmyClient("https://your-cutmy-server.example").resume_collection(
+    "./interview-project", timeout=1800,
+)
+```
+
+`submit_collection(request, idempotency_key=...)` performs one submission. A
+structured admission result, including all-unadmitted 429/503, preserves each
+clip's diagnostic/retryability together with `http_status` and `retry_after`.
+`complete` means queue admission, not finished media.
+
+The runner persists a generated key before submission and retries uncertain
+submissions with the saved owner, key and exact body. It observes quota and
+`Retry-After` diagnostics while continuing accepted jobs. Both run/resume accept
+`timeout`, `poll_interval` (minimum one second), `cancel_event`, `on_progress`,
+`max_output_bytes` (default 10 GiB across retained outputs), and
+`admission_batch_size` (default 3, configurable 1..128). It never retries an
+upload/import, changes export settings, deletes remote sources or cancels jobs.
+
+Admission retry delays apply to every later submission in the project, including
+previously unsubmitted IDs and uncertain retries. This shared delay survives
+process interruption; polling and downloading accepted jobs continue during it.
+
+Pass `request=revised_request` to resume with the same source and key. Select
+changed IDs using `clip_ids`; server normalization decides job reuse. Previous
+revision files remain available, and draft/final artifacts have distinct names.
+Recover an uncertain original submission before revising it.
+
+One private project contains bounded `state.json` and a separate secret
+`owner.json`; POSIX modes are 0700 for its directory and 0600 for metadata. Keep
+the project out of source control/public shares. The configured trusted server
+must match saved scope; an initialized conflicting owner is refused. Python and
+TypeScript states are deliberately separate formats. An OS lock rejects a live
+writer and releases after a killed process.
+
+A temporary private initialization journal seals the original owner, request
+and key before the primary files are created. Resume completes an interrupted
+initialization from this journal; it is removed before any collection job is
+submitted. Missing primary files without a valid journal are refused.
+
+Downloads use configured artifact-ID routes, never remote URLs/filenames.
+Private parts retain fsynced offsets and prefix SHA256. Resume verifies prefixes
+and uses genuine `Range` with saved `Last-Modified`/`If-Range`; malformed 206 or
+changed validators are refused. An ignored Range returning 200 restarts the
+owned part. Uncheckpointed crash bytes are truncated. Complete files are hashed,
+exclusively published and recorded durably. Finished files are rehashed on
+resume; tampering preserves the file and gives a clear error for caller repair.
+
+Progress receives public ready `outputs`, `pending`, `source_id`, `rendition`
+and `phase` after a state checkpoint. Download details include `clip_id`,
+`artifact_id`, `offset`, `total_size`, `resumed`; pending rows expose `stage`,
+`downloaded_bytes`, `total_bytes`. `download_interrupted` follows a failed
+transfer checkpoint before retry; `output_ready` follows durable publication.
+A callback exception stops with `CollectionError.report`, retaining state.
+Reports/errors never include the owner capability. State JSON is bounded to
+4 MiB; other JSON remains bounded to 1 MiB. Publication requires hard links.
+
+Collection validation/submission `APIError.diagnostic` retains only the public
+`code`, `message`, `clip_id` and `field` repair fields. Durable failures include
+the attributed clip's field in `CollectionError.report.pending`; unknown
+response fields are discarded.
 
 ## Reports, timeouts, and downloads
 

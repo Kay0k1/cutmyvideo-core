@@ -4,9 +4,24 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
+## 1.4.0 - 2026-10-15
+
+Release candidate prepared; tag, signed-consumer publication and deployment are
+pending. The latest published release remains 1.3.0.
+
+### Added
+- Complete resumable HTTP collections in Python and the Node SDK: validation, bounded incremental admission, saved exact idempotent submissions, polling/backoff and verified streamed downloads. Private owner/state checkpoints recover process interruption without repeating completed work.
+- Genuine ranged transfer continuation with prefix hashes, immutable artifact receipts and exclusive publication recovery. Completed files are rehashed; conflicting scope or modified files are refused. Retained revisions count toward project output budgets.
+- Collection types, low-level validation/submission, local CLI collection wrappers, selected revisions/drafts and public progress/partial diagnostics in both SDKs. The browser TypeScript entry stays separate from the Node durable runner.
+- Required installed-package acceptance for 15 clips, lost committed replies, interrupted transfers, OS-killed consumers, replay, two revised clips and selected drafts, with independent media/backend-byte verification. Packages remain development candidates; see the [1.4.0 candidate](docs/release-1.4.0.md).
+- The [real-interview verification](verification/2026-10-15-sdk-collections/README.md) records both installed SDKs completing 15 clips after interrupted transfer/processes, preserving server retry delays and producing exactly 19 render attempts after two revisions/two drafts. Independent comparisons verify source frames and speech; private state and media stay outside Git.
+
 ### Changed
 - Run complete PR source checks once through the immutable archive resolver instead of starting a duplicate standalone workflow. Preserve all five native/SDK targets, production-family media, race checks and archive recovery.
 - Cancel superseded PR archive/hosting runs and stale main source/hosting pushes; retain tag publication and manual verification runs.
+
+### Fixed
+- Collection cancellation bounds stalled Python JSON reads and TLS handshakes even when socket shutdown does not wake the operation. High-resolution elapsed deadlines keep expired collection waits consistent on Windows Python 3.10; valid fragmented responses remain supported.
 
 ## 1.3.0 - 2026-10-15
 

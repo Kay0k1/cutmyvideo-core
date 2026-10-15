@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import http.client
+from contextvars import ContextVar
+import errno
+from functools import partial
+import io
 import json
 import math
 import os
 import queue
 import secrets
+import selectors
 import socket
 import ssl
 import stat
@@ -21,10 +26,11 @@ from typing import Any, Callable, Mapping, cast
 from urllib.parse import quote, urlsplit
 
 from .errors import APIError, WaitCancelled, WaitTimeout, JobError
-from .types import Artifact, ExportRequest, Job, PreflightResult, Source, TrackReport
+from .types import Artifact, CollectionRequest, CollectionRunReport, CollectionSubmission, CollectionValidation, ExportRequest, Job, PreflightResult, Source, TrackReport
 
 _JSON_LIMIT = 1 << 20
 _CHUNK = 64 << 10
+_COLLECTION_CANCEL: ContextVar[tuple[object, threading.Event | None] | None] = ContextVar("cutmy_collection_cancel", default=None)
 
 
 def _positive(value: float, name: str) -> float:
@@ -34,13 +40,13 @@ def _positive(value: float, name: str) -> float:
 
 
 def _remaining(deadline: float) -> float:
-    value = deadline - time.monotonic()
+    value = deadline - time.perf_counter()
     if value <= 0:
         raise TimeoutError("operation deadline exceeded")
     return value
 
 
-def _connect(host: str, port: int, deadline: float) -> socket.socket:
+def _connect(host: str, port: int, deadline: float, cancel_event: threading.Event | None = None) -> socket.socket:
     # getaddrinfo has no portable timeout. Bound waiting for its daemon worker
     # separately; an abandoned resolver never acquires an HTTP socket/cookie.
     resolved: queue.Queue[Any] = queue.Queue(maxsize=1)
@@ -52,34 +58,135 @@ def _connect(host: str, port: int, deadline: float) -> socket.socket:
             resolved.put(exc)
 
     threading.Thread(target=resolve, daemon=True).start()
-    try:
-        addresses = resolved.get(timeout=_remaining(deadline))
-    except queue.Empty:
-        raise TimeoutError("name resolution deadline exceeded") from None
+    while True:
+        if cancel_event is not None and cancel_event.is_set():
+            raise APIError("Collection connection cancelled", code="collection_cancelled")
+        try:
+            remaining = _remaining(deadline)
+            addresses = resolved.get(timeout=min(.05, remaining) if cancel_event is not None else remaining)
+            break
+        except queue.Empty:
+            if cancel_event is None or time.perf_counter() >= deadline:
+                raise TimeoutError("name resolution deadline exceeded") from None
     if isinstance(addresses, OSError):
         raise addresses
     last: OSError | None = None
     for family, socktype, proto, _, address in addresses:
         connection = socket.socket(family, socktype, proto)
         try:
-            connection.settimeout(_remaining(deadline))
-            connection.connect(address)
+            if cancel_event is None:
+                connection.settimeout(_remaining(deadline))
+                connection.connect(address)
+            else:
+                connection.setblocking(False)
+                status = connection.connect_ex(address)
+                pending = {errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK}
+                if os.name == "nt":
+                    pending.update((10035, 10036, 10037))
+                if status and status not in pending:
+                    raise OSError(status, "Connection failed")
+                if status:
+                    with selectors.DefaultSelector() as selector:
+                        selector.register(connection, selectors.EVENT_WRITE)
+                        while True:
+                            if cancel_event.is_set():
+                                raise APIError("Collection connection cancelled", code="collection_cancelled")
+                            if selector.select(min(.05, _remaining(deadline))):
+                                status = connection.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+                                if status:
+                                    raise OSError(status, "Connection failed")
+                                break
+                connection.settimeout(_remaining(deadline))
             return connection
         except OSError as exc:
             last = exc
             connection.close()
+        except BaseException:
+            connection.close()
+            raise
     raise last or OSError("No addresses for configured server")
 
 
+class _CancellableReader(io.RawIOBase):
+    """Poll nonblocking socket reads; shutdown need not wake a Winsock recv."""
+
+    def __init__(self, sock: socket.socket, deadline: float, cancel_event: threading.Event):
+        super().__init__()
+        self.sock, self.deadline, self.cancel = sock, deadline, cancel_event
+        self.raw: Any = None
+        sock.setblocking(False)
+        # Keep SocketIO's reference ownership, including Connection: close.
+        self.raw = sock.makefile("rb", buffering=0)
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer: Any) -> int:
+        while True:
+            if self.cancel.is_set():
+                raise APIError("Collection read cancelled", code="collection_cancelled")
+            _remaining(self.deadline)
+            wait_for = selectors.EVENT_READ
+            try:
+                count = self.raw.readinto(buffer)
+                if count is not None:
+                    if self.cancel.is_set():
+                        raise APIError("Collection read cancelled", code="collection_cancelled")
+                    return count
+            except ssl.SSLWantWriteError:
+                wait_for = selectors.EVENT_WRITE
+            except (BlockingIOError, ssl.SSLWantReadError):
+                pass
+            with selectors.DefaultSelector() as readiness:
+                readiness.register(self.sock, wait_for)
+                while True:
+                    if self.cancel.is_set():
+                        raise APIError("Collection read cancelled", code="collection_cancelled")
+                    if readiness.select(min(.05, _remaining(self.deadline))):
+                        break
+
+    def close(self) -> None:
+        if not self.closed:
+            try:
+                if self.raw is not None:
+                    self.raw.close()
+            finally:
+                super().close()
+
+
+class _ReadSocket:
+    def __init__(self, sock: socket.socket, deadline: float, cancel_event: threading.Event):
+        self.sock, self.deadline, self.cancel = sock, deadline, cancel_event
+
+    def makefile(self, mode: str) -> io.BufferedReader:
+        if mode != "rb":
+            raise ValueError("Collection response socket is read-only")
+        return io.BufferedReader(_CancellableReader(self.sock, self.deadline, self.cancel))
+
+
+class _CancellableResponse(http.client.HTTPResponse):
+    def __init__(self, sock: socket.socket, debuglevel: int = 0, method: str | None = None, url: str | None = None, *,
+                 deadline: float, cancel_event: threading.Event):
+        super().__init__(_ReadSocket(sock, deadline, cancel_event), debuglevel, method, url)
+
+
 class _HTTPConnection(http.client.HTTPConnection):
-    def __init__(self, host: str, port: int, deadline: float):
+    def __init__(self, host: str, port: int, deadline: float, cancel_event: threading.Event | None = None):
         super().__init__(host, port, timeout=_remaining(deadline))
         self.deadline = deadline
         self._wire_socket: socket.socket | None = None
+        self.cancel_event = cancel_event
+        self._cancellable_read = False
 
     def connect(self) -> None:
-        self.sock = _connect(self.host, self.port, self.deadline)
+        self.sock = _connect(self.host, self.port, self.deadline, self.cancel_event)
         self._wire_socket = self.sock
+
+    def getresponse(self) -> http.client.HTTPResponse:
+        if self.cancel_event is not None:
+            self._cancellable_read = True
+            self.response_class = partial(_CancellableResponse, deadline=self.deadline, cancel_event=self.cancel_event)
+        return super().getresponse()
 
 
 class _HTTPSConnection(_HTTPConnection):
@@ -87,8 +194,31 @@ class _HTTPSConnection(_HTTPConnection):
         super().connect()
         assert self.sock is not None
         self.sock.settimeout(_remaining(self.deadline))
-        self.sock = ssl.create_default_context().wrap_socket(self.sock, server_hostname=self.host)
+        self.sock = ssl.create_default_context().wrap_socket(self.sock, server_hostname=self.host, do_handshake_on_connect=False)
         self._wire_socket = self.sock
+        if self.cancel_event is None:
+            self.sock.do_handshake()
+            return
+        self.sock.setblocking(False)
+        while True:
+            if self.cancel_event.is_set():
+                raise APIError("Collection TLS connection cancelled", code="collection_cancelled")
+            _remaining(self.deadline)
+            try:
+                self.sock.do_handshake()
+                break
+            except ssl.SSLWantReadError:
+                wait_for = selectors.EVENT_READ
+            except ssl.SSLWantWriteError:
+                wait_for = selectors.EVENT_WRITE
+            with selectors.DefaultSelector() as readiness:
+                readiness.register(self.sock, wait_for)
+                while True:
+                    if self.cancel_event.is_set():
+                        raise APIError("Collection TLS connection cancelled", code="collection_cancelled")
+                    if readiness.select(min(.05, _remaining(self.deadline))):
+                        break
+        self.sock.settimeout(_remaining(self.deadline))
 
 
 class CutmyClient:
@@ -111,6 +241,10 @@ class CutmyClient:
         self._port = parsed.port or (443 if parsed.scheme == "https" else 80)
         self._secure = parsed.scheme == "https"
         self._prefix = quote(parsed.path.rstrip("/"), safe="/%:@!$&'()*+,;=-._~")
+        authority = "[" + self._host + "]" if ":" in self._host else self._host
+        if self._port != (443 if self._secure else 80):
+            authority += ":" + str(self._port)
+        self._server_url = parsed.scheme + "://" + authority + self._prefix
         self.request_timeout = _positive(request_timeout, "request_timeout")
         self.upload_timeout = _positive(upload_timeout, "upload_timeout")
         self.download_timeout = _positive(download_timeout, "download_timeout")
@@ -147,13 +281,12 @@ class CutmyClient:
         self.close()
 
     def _deadline(self, timeout: float | None, default: float) -> float:
-        return time.monotonic() + _positive(default if timeout is None else timeout, "timeout")
+        return time.perf_counter() + _positive(default if timeout is None else timeout, "timeout")
 
     def _ensure_session(self, deadline: float, *, require_report: bool = False) -> None:
         if self._cookie and (not require_report or self._session_report is not None):
             return
-        if not self._session_lock.acquire(timeout=_remaining(deadline)):
-            raise TimeoutError("session initialization deadline exceeded")
+        self._acquire_session(deadline)
         try:
             if self._cookie and (not require_report or self._session_report is not None):
                 return
@@ -168,19 +301,40 @@ class CutmyClient:
         finally:
             self._session_lock.release()
 
+    def _acquire_session(self, deadline: float, cancel_event: threading.Event | None = None) -> None:
+        active = _COLLECTION_CANCEL.get()
+        if cancel_event is None and active is not None and active[0] is self:
+            cancel_event = active[1]
+        while True:
+            if cancel_event is not None and cancel_event.is_set():
+                raise APIError("Collection session wait cancelled", code="collection_cancelled")
+            remaining = _remaining(deadline)
+            if self._session_lock.acquire(timeout=min(.05, remaining) if cancel_event is not None else remaining):
+                return
+            if cancel_event is None:
+                raise TimeoutError("session initialization deadline exceeded")
+
     def _exchange(self, method: str, path: str, deadline: float, *,
                   body: bytes | None = None, headers: Mapping[str, str] | None = None,
                   stream: tuple[bytes, Any, bytes, int] | None = None,
                   destination: Path | None = None, max_bytes: int | None = None,
-                  session: bool = True) -> Any:
+                  session: bool = True, collection_response: bool = False,
+                  receive: Callable[..., Any] | None = None,
+                  cancel_event: threading.Event | None = None) -> Any:
+        active = _COLLECTION_CANCEL.get()
+        if cancel_event is None and active is not None and active[0] is self:
+            cancel_event = active[1]
+        if cancel_event is not None and cancel_event.is_set():
+            raise APIError("Collection request cancelled", code="collection_cancelled")
         try:
             if session:
                 self._ensure_session(deadline)
             conn_type = _HTTPSConnection if self._secure else _HTTPConnection
-            connection = conn_type(self._host, self._port, deadline)
+            connection = conn_type(self._host, self._port, deadline, cancel_event)
         except TimeoutError:
             raise APIError("Request deadline exceeded", code="request_timeout") from None
         expired = threading.Event()
+        finished = threading.Event()
 
         def abort() -> None:
             expired.set()
@@ -193,9 +347,16 @@ class CutmyClient:
         timer = threading.Timer(_remaining(deadline), abort)
         timer.daemon = True
         timer.start()
+        if cancel_event is not None:
+            def cancel_transfer() -> None:
+                while not finished.wait(0.05):
+                    if cancel_event.is_set():
+                        abort()
+                        return
+            threading.Thread(target=cancel_transfer, daemon=True).start()
         response = None
         try:
-            outgoing = {"Accept": "application/json", "User-Agent": "cutmyvideo-python/1.3.0.dev0"}
+            outgoing = {"Accept": "application/json", "User-Agent": "cutmyvideo-python/1.4.0.dev0"}
             if self._cookie:
                 outgoing["Cookie"] = "cutmy_session=" + self._cookie
             if headers:
@@ -235,6 +396,8 @@ class CutmyClient:
                             token = cookies["cutmy_session"].value
                             if token and all(c.isascii() and (c.isalnum() or c in "-_") for c in token):
                                 self._cookie = token
+            if receive is not None and response.status in (200, 206, 416):
+                return receive(response, connection, deadline)
             if 200 <= response.status < 300 and destination is not None:
                 if response.status != 200:
                     raise APIError("Expected a complete artifact response", code="invalid_response", status=response.status)
@@ -246,32 +409,43 @@ class CutmyClient:
                 raise APIError("Server returned invalid JSON", code="invalid_response", status=response.status) from None
             if not isinstance(data, dict):
                 raise APIError("Server returned a non-object JSON response", code="invalid_response", status=response.status)
+            retry_after = None
+            retry = response.getheader("Retry-After")
+            if retry is not None:
+                try:
+                    retry_after = float(retry) if retry.isdecimal() else parsedate_to_datetime(retry).timestamp() - time.time()
+                    if not math.isfinite(retry_after) or not 0 <= retry_after <= 86400:
+                        retry_after = None
+                except (ValueError, TypeError, OverflowError):
+                    pass
+            if collection_response and "clips" in data and response.status in (200, 202, 207, 400, 408, 410, 413, 429, 500, 502, 503, 504):
+                from ._collection_protocol import submission
+                submission(data, self._job)
+                return {**data, "http_status": response.status, "retry_after": retry_after}
             if not 200 <= response.status < 300:
                 error = data.get("error")
                 code = error.get("code") if isinstance(error, dict) else None
                 message = error.get("message") if isinstance(error, dict) else None
-                retry_after = None
-                retry = response.getheader("Retry-After")
-                if retry is not None:
-                    try:
-                        retry_after = float(retry) if retry.isdecimal() else parsedate_to_datetime(retry).timestamp() - time.time()
-                        if not math.isfinite(retry_after) or not 0 <= retry_after <= 86400:
-                            retry_after = None
-                    except (ValueError, TypeError, OverflowError):
-                        pass
+                detail = None
+                if path in ("/api/v1/collections", "/api/v1/collections/validate"):
+                    from ._collection_protocol import diagnostic
+                    detail = diagnostic(error)
                 raise APIError(message if isinstance(message, str) else "Server request failed",
                                code=code if isinstance(code, str) else "http_error", status=response.status,
-                               retry_after=retry_after)
+                               retry_after=retry_after, diagnostic=detail)
             if expired.is_set():
                 raise TimeoutError("operation deadline exceeded")
             return data
         except APIError:
             raise
         except (OSError, TimeoutError, http.client.HTTPException) as exc:
-            timed_out = expired.is_set() or isinstance(exc, TimeoutError) or time.monotonic() >= deadline
+            if cancel_event is not None and cancel_event.is_set():
+                raise APIError("Collection transfer interrupted", code="collection_cancelled") from None
+            timed_out = expired.is_set() or isinstance(exc, TimeoutError) or time.perf_counter() >= deadline
             raise APIError("Request deadline exceeded" if timed_out else "Could not complete server request",
                            code="request_timeout" if timed_out else "transport_error") from None
         finally:
+            finished.set()
             timer.cancel()
             if response is not None:
                 response.close()
@@ -280,7 +454,7 @@ class CutmyClient:
     @staticmethod
     def _set_budget(connection: _HTTPConnection, deadline: float) -> None:
         remaining = _remaining(deadline)
-        if connection._wire_socket is not None:
+        if connection._wire_socket is not None and not connection._cancellable_read:
             connection._wire_socket.settimeout(remaining)
 
     def _read_bounded(self, response: http.client.HTTPResponse, connection: _HTTPConnection,
@@ -435,6 +609,56 @@ class CutmyClient:
             exc.idempotency_key = idempotency_key
             raise
 
+    def validate_collection(self, request: CollectionRequest | Mapping[str, Any], *, timeout: float | None = None) -> CollectionValidation:
+        from ._collection_protocol import request_copy
+        data = self._json("POST", "/api/v1/collections/validate", request_copy(request), timeout=timeout)
+        if (data.get("version") != 1 or isinstance(data.get("version"), bool) or data.get("valid") is not True
+                or not isinstance(data.get("clips"), list) or not data["clips"]
+                or any(not isinstance(item, dict) or not isinstance(item.get("clip_id"), str)
+                       or not isinstance(item.get("preflight"), dict) for item in data["clips"])):
+            raise APIError("Invalid collection validation response", code="invalid_response")
+        return cast(CollectionValidation, data)
+
+    def submit_collection(self, request: CollectionRequest | Mapping[str, Any], *, idempotency_key: str,
+                          timeout: float | None = None) -> CollectionSubmission:
+        from ._collection_protocol import request_copy, submission
+        if (not isinstance(idempotency_key, str) or not idempotency_key.strip()
+                or len(idempotency_key.encode()) > 128 or any(ord(c) < 32 or ord(c) == 127 for c in idempotency_key)):
+            raise ValueError("idempotency_key must contain1..128 UTF-8 bytes without controls")
+        request = request_copy(request)
+        body = json.dumps(request, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode()
+        try:
+            data = self._exchange("POST", "/api/v1/collections", self._deadline(timeout, self.request_timeout),
+                                  body=body, headers={"Content-Type": "application/json", "Idempotency-Key": idempotency_key.encode().decode("latin-1")},
+                                  collection_response=True)
+            return cast(CollectionSubmission, submission(data, self._job))
+        except APIError as error:
+            error.idempotency_key = idempotency_key
+            raise
+
+    def run_collection(self, request: CollectionRequest | Mapping[str, Any], directory: str | os.PathLike[str], *,
+                       idempotency_key: str | None = None, timeout: float = 1800, poll_interval: float = 1,
+                       cancel_event: threading.Event | None = None,
+                       on_progress: Callable[[CollectionRunReport], None] | None = None,
+                       max_output_bytes: int = 10 << 30, admission_batch_size: int = 3) -> CollectionRunReport:
+        """Run a durable owner-scoped cycle; interruption preserves project state."""
+        from .collections import run_collection
+        return cast(CollectionRunReport, run_collection(self, request, directory, idempotency_key=idempotency_key,
+                    timeout=timeout, poll_interval=poll_interval, cancel_event=cancel_event, on_progress=on_progress,
+                    max_output_bytes=max_output_bytes, admission_batch_size=admission_batch_size))
+
+    def resume_collection(self, directory: str | os.PathLike[str], *,
+                          request: CollectionRequest | Mapping[str, Any] | None = None,
+                          timeout: float = 1800, poll_interval: float = 1,
+                          cancel_event: threading.Event | None = None,
+                          on_progress: Callable[[CollectionRunReport], None] | None = None,
+                          max_output_bytes: int = 10 << 30, admission_batch_size: int = 3) -> CollectionRunReport:
+        """Restore saved owner/key and verify files before continuing or revising."""
+        from .collections import resume_collection
+        return cast(CollectionRunReport, resume_collection(self, directory, request=request, timeout=timeout,
+                    poll_interval=poll_interval, cancel_event=cancel_event, on_progress=on_progress,
+                    max_output_bytes=max_output_bytes, admission_batch_size=admission_batch_size))
+
     def get_job(self, job_id: str, *, timeout: float | None = None) -> Job:
         return self._job(self._json("GET", "/api/v1/jobs/" + self._id(job_id), timeout=timeout))
 
@@ -451,12 +675,12 @@ class CutmyClient:
         while True:
             if cancel_event is not None and cancel_event.is_set():
                 raise WaitCancelled(job_id, last)
-            if time.monotonic() >= deadline:
+            if time.perf_counter() >= deadline:
                 raise WaitTimeout(job_id, last)
             try:
                 last = self.get_job(job_id, timeout=min(self.request_timeout, _remaining(deadline)))
             except APIError as exc:
-                if time.monotonic() >= deadline:
+                if time.perf_counter() >= deadline:
                     raise WaitTimeout(job_id, last) from None
                 raise
             if on_progress is not None:
@@ -466,7 +690,7 @@ class CutmyClient:
                 return last
             if status in ("failed", "cancelled"):
                 raise JobError(last)
-            duration = min(poll_interval, max(0, deadline - time.monotonic()))
+            duration = min(poll_interval, max(0, deadline - time.perf_counter()))
             if cancel_event is not None:
                 cancel_event.wait(duration)
             else:

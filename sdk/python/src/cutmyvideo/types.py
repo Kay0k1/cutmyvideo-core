@@ -34,6 +34,7 @@ class ExportRequest(_ExportRequired, total=False):
     subtitle_mode: str
     crop: Crop
     cleanup_source: bool
+    rendition: str
 
 
 class PlanOptions(TypedDict, total=False):
@@ -223,3 +224,128 @@ class BatchOutput(_BatchOutputRequired, total=False):
 
 class BatchResult(TypedDict):
     outputs: list[BatchOutput]
+
+
+class CollectionOptions(PlanOptions, total=False):
+    clear_crop: bool
+
+
+class _CollectionClipRequired(TypedDict):
+    id: str
+    ranges: list[NamedRange]
+
+
+class CollectionClip(_CollectionClipRequired, total=False):
+    label: str
+    options: CollectionOptions
+
+
+class _CollectionPlanRequired(TypedDict):
+    version: int
+    clips: list[CollectionClip]
+
+
+class CollectionPlan(_CollectionPlanRequired, total=False):
+    input: str
+    options: CollectionOptions
+
+
+class _CollectionRequestRequired(TypedDict):
+    source_id: str
+    plan: CollectionPlan
+
+
+class CollectionRequest(_CollectionRequestRequired, total=False):
+    clip_ids: list[str]
+    rendition: str
+
+
+class CollectionDiagnostic(TypedDict, total=False):
+    code: str
+    message: str
+    clip_id: str
+    field: str
+
+
+class CollectionValidation(TypedDict):
+    version: int
+    valid: bool
+    rendition: str
+    requested_duration_ms: int
+    clips: list[dict]
+
+
+class CollectionSubmission(TypedDict):
+    version: int
+    complete: bool
+    rendition: str
+    clips: list[dict]
+    http_status: int
+    retry_after: float | None
+
+
+class CollectionOutput(BatchOutput):
+    id: str
+    requested_ranges: list[NamedRange]
+
+
+class LocalCollectionResult(TypedDict):
+    version: int
+    rendition: str
+    outputs: list[CollectionOutput]
+
+
+class LocalCollectionPreflight(TypedDict):
+    version: int
+    valid: bool
+    rendition: str
+    selected_clip_ids: list[str]
+    clips: list[dict]
+
+
+class CollectionRunOutput(TypedDict):
+    clip_id: str
+    job_id: str
+    artifact_id: str
+    path: str
+    size_bytes: int
+    sha256: str
+    segments: list[Segment]
+    track_manifest: list[TrackSelection]
+
+
+class _CollectionPendingRequired(TypedDict):
+    clip_id: str
+    code: str
+    retryable: bool
+
+
+class CollectionPending(_CollectionPendingRequired, total=False):
+    stage: str
+    downloaded_bytes: int
+    total_bytes: int
+    field: str
+    message: str
+    diagnostic_clip_id: str
+
+
+class CollectionDownload(TypedDict):
+    clip_id: str
+    artifact_id: str
+    offset: int
+    total_size: int
+    resumed: bool
+
+
+class _CollectionRunRequired(TypedDict):
+    complete: bool
+    source_id: str
+    rendition: str
+    outputs: list[CollectionRunOutput]
+    pending: list[CollectionPending]
+    phase: str
+
+
+class CollectionRunReport(_CollectionRunRequired, total=False):
+    download: CollectionDownload
+    diagnostic: CollectionDiagnostic

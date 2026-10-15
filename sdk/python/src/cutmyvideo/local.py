@@ -15,7 +15,7 @@ from typing import Any, Mapping, Sequence, cast
 
 from .client import _positive
 from .errors import LocalError
-from .types import BatchResult, LocalPreflightResult, LocalSourceInfo, Plan
+from .types import BatchResult, CollectionPlan, LocalCollectionPreflight, LocalCollectionResult, LocalPreflightResult, LocalSourceInfo, Plan
 
 _LIMIT = 1 << 20
 
@@ -57,8 +57,32 @@ class LocalCutmy:
                      *, timeout: float = 1800) -> BatchResult:
         return cast(BatchResult, self._plan_operation("batch", plan, output, timeout))
 
-    def _plan_operation(self, command: str, plan: Mapping[str, Any], output: str | os.PathLike[str],
-                        timeout: float) -> dict[str, Any]:
+    def validate_collection(self, plan: CollectionPlan | Mapping[str, Any], output: str | os.PathLike[str], *,
+                            clip_ids: Sequence[str] | None = None, rendition: str = "final", timeout: float = 120) -> LocalCollectionPreflight:
+        return cast(LocalCollectionPreflight, self._collection_operation("validate", plan, output, clip_ids, rendition, timeout))
+
+    def execute_collection(self, plan: CollectionPlan | Mapping[str, Any], output: str | os.PathLike[str], *,
+                           clip_ids: Sequence[str] | None = None, rendition: str = "final", timeout: float = 1800) -> LocalCollectionResult:
+        return cast(LocalCollectionResult, self._collection_operation("export", plan, output, clip_ids, rendition, timeout))
+
+    def _collection_operation(self, operation: str, plan: Mapping[str, Any], output: str | os.PathLike[str],
+                              clip_ids: Sequence[str] | None, rendition: str, timeout: float) -> dict[str, Any]:
+        from ._collection_protocol import clip_id
+        if rendition not in ("draft", "final"):
+            raise ValueError("rendition must be draft or final")
+        flags = ["--rendition", rendition]
+        if clip_ids is not None:
+            if isinstance(clip_ids, (str, bytes)):
+                raise ValueError("clip_ids must be a sequence of clip IDs")
+            ids = [clip_id(value) for value in clip_ids]
+            if len(ids) != len(set(ids)):
+                raise ValueError("clip_ids must be unique")
+            if ids:
+                flags += ["--clips", ",".join(ids)]
+        return self._plan_operation(["collection", operation], plan, output, timeout, flags)
+
+    def _plan_operation(self, command: str | list[str], plan: Mapping[str, Any], output: str | os.PathLike[str],
+                        timeout: float, extra: list[str] | None = None) -> dict[str, Any]:
         _positive(timeout, "timeout")
         # JSON-copy prevents mutation of the caller's request and rejects NaN.
         data = json.loads(json.dumps(dict(plan), ensure_ascii=False, allow_nan=False))
@@ -75,7 +99,7 @@ class LocalCutmy:
                     os.chmod(path, 0o600)
                 file.write(encoded)
             return self._run(command, ["--plan", str(path), "--output", str(Path(output).absolute()),
-                                      "--profile", self.profile, "--threads", str(self.threads)], timeout)
+                                      "--profile", self.profile, "--threads", str(self.threads)] + (extra or []), timeout)
 
     @staticmethod
     def _signal_group(process: subprocess.Popen[bytes], signum: int) -> None:
@@ -118,9 +142,9 @@ class LocalCutmy:
                 process.kill()
         process.wait()
 
-    def _run(self, command: str, arguments: list[str], timeout: float) -> dict[str, Any]:
+    def _run(self, command: str | list[str], arguments: list[str], timeout: float) -> dict[str, Any]:
         timeout = _positive(timeout, "timeout")
-        argv = self._binary + ["--json-errors", command] + arguments + ["--timeout", f"{timeout:.9f}s"]
+        argv = self._binary + ["--json-errors"] + ([command] if isinstance(command, str) else command) + arguments + ["--timeout", f"{timeout:.9f}s"]
         kwargs: dict[str, Any] = {"stdout": subprocess.PIPE, "stderr": subprocess.PIPE, "stdin": subprocess.DEVNULL}
         if os.name == "posix":
             kwargs["start_new_session"] = True
@@ -202,6 +226,10 @@ class LocalCutmy:
         if command == "inspect":
             valid = (isinstance(output.get("duration_ms"), int) and not isinstance(output["duration_ms"], bool)
                      and output["duration_ms"] > 0 and isinstance(output.get("tracks"), list))
+        elif command == ["collection", "validate"]:
+            valid = (output.get("valid") is True and output.get("version") == 1
+                     and not isinstance(output.get("version"), bool) and isinstance(output.get("clips"), list)
+                     and isinstance(output.get("selected_clip_ids"), list))
         elif command == "preflight":
             valid = (output.get("valid") is True and output.get("version") == 1
                      and not isinstance(output.get("version"), bool)
