@@ -9,15 +9,17 @@ import test from 'node:test';
 
 const { CutmyClient, SourcePreparationError } = await import(process.env.CUTMY_SDK_JS_ENTRY ? pathToFileURL(process.env.CUTMY_SDK_JS_ENTRY).href : '../dist/index.js');
 const { prepareSource, resumeSource } = await import(process.env.CUTMY_SDK_SOURCE_JS_ENTRY ? pathToFileURL(process.env.CUTMY_SDK_SOURCE_JS_ENTRY).href : '../dist/sources.js');
+function diagnostic(stage) { process.stderr.write('source-fixture-stage=' + stage + '\n'); }
 const cookie = 's'.repeat(43), hash = value => createHash('sha256').update(value).digest('hex');
 const limits = { max_source_bytes: 10000000, max_output_bytes: 10000000, max_fetch_bytes: 10000000, max_ranges: 128, max_range_ms: 100000, max_job_ms: 100000 };
 function json(response, value, status = 200) { response.writeHead(status, { 'content-type': 'application/json' }); response.end(JSON.stringify(value)); }
 async function fixture(t) {
   const receipts = new Map(), posts = [], calls = [], config = {};
-  const root = await mkdtemp(join(tmpdir(), 'cutmy-source-sdk-')); t.after(() => rm(root, { recursive: true, force: true }));
+  const root = await mkdtemp(join(tmpdir(), 'cutmy-source-sdk-')); t.after(async () => { diagnostic('cleanup-files-start'); await rm(root, { recursive: true, force: true }); diagnostic('cleanup-files-done'); }, { timeout: 5000 });
   const path = join(root, 'interview.mp4'), payload = Buffer.from('source-fixture'.repeat(100)); await writeFile(path, payload);
   const server = createServer(async (req, res) => {
     calls.push({ method: req.method, path: req.url });
+    if (config.loseReply) diagnostic('request-' + (req.url === '/api/v1/session' ? 'session' : req.method === 'GET' ? 'preparation' : 'submission'));
     try {
       if (req.url === '/api/v1/session') { res.setHeader('Set-Cookie', 'cutmy_session=' + cookie); return json(res, { ok: true, limits }); }
       assert.equal(req.headers.cookie, 'cutmy_session=' + cookie);
@@ -34,24 +36,25 @@ async function fixture(t) {
         const source = { id: 'source-' + (receipts.size + 1), duration_ms: 9000, title: 'Fixture', fingerprint, unknown_secret: cookie };
         receipts.set(key, { version: 1, key, state: 'ready', source_id: source.id, source, fingerprint });
       }
-      if (config.loseReply) { config.loseReply = false; req.socket.destroy(); return; }
+      if (config.loseReply) { config.loseReply = false; req.socket.destroy(); diagnostic('lost-reply-socket-destroyed'); return; }
       json(res, receipts.get(key).source, 201);
     } catch { if (!res.headersSent) json(res, { error: { code: 'fixture_error', message: 'Fixture failed' } }, 500); else res.destroy(); }
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  t.after(() => { server.closeAllConnections(); return new Promise(resolve => server.close(resolve)); });
+  t.after(async () => { diagnostic('cleanup-http-start'); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); diagnostic('cleanup-http-done'); }, { timeout: 5000 });
   const baseUrl = 'http://127.0.0.1:' + server.address().port;
   return { root, path, payload, project: join(root, 'project'), config, posts, calls, receipts, baseUrl, client: new CutmyClient({ baseUrl }) };
 }
 
-test('durable source upload recovers a lost committed reply with saved owner, key and fingerprint without reupload', async t => {
-  const f = await fixture(t); f.config.loseReply = true;
+test('durable source upload recovers a lost committed reply with saved owner, key and fingerprint without reupload', { timeout: 25000 }, async t => {
+  diagnostic('lost-reply-test-start');
+  const f = await fixture(t); diagnostic('fixture-ready'); f.config.loseReply = true;
   await assert.rejects(prepareSource(f.client, { kind: 'upload', path: f.path }, f.project, { idempotencyKey: 'private-source-key', timeoutMs: 10000,
-    onProgress: value => { assert(!JSON.stringify(value).includes(cookie)); if (value.phase === 'uncertain') throw new Error('Stop after lost reply'); },
+    onProgress: value => { diagnostic('preparation-' + value.phase); assert(!JSON.stringify(value).includes(cookie)); if (value.phase === 'uncertain') throw new Error('Stop after lost reply'); },
   }), error => error instanceof SourcePreparationError && error.code === 'callback_error');
-  await unlink(f.path);
+  diagnostic('uncertain-checkpoint-returned'); await unlink(f.path); diagnostic('input-unlinked');
   const result = await resumeSource(new CutmyClient({ baseUrl: f.baseUrl }), f.project, { timeoutMs: 10000 });
-  assert.equal(result.complete, true); assert.equal(result.source_id, 'source-1'); assert.equal(f.posts.length, 1);
+  diagnostic('ready-resume-returned'); assert.equal(result.complete, true); assert.equal(result.source_id, 'source-1'); assert.equal(f.posts.length, 1);
   assert.deepEqual(result.fingerprint, { kind: 'content', sha256: hash(f.payload), size_bytes: f.payload.length });
   assert(!JSON.stringify(result).includes(cookie)); assert(!JSON.stringify(result).includes('private-source-key'));
 });
