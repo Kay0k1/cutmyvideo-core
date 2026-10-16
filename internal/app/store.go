@@ -134,10 +134,10 @@ func storePoolConfig(raw string) (*pgxpool.Config, error) {
 		// Release spare connections left by brief concurrent SQL operations.
 		// Pool health checks only retire idle resources; acquired connections
 		// and the worker's separate notification connection remain unaffected.
-		config.MaxConnIdleTime = 30 * time.Second
+		config.MaxConnIdleTime = 5 * time.Second
 	}
 	if _, explicit := connection.RuntimeParams["pool_health_check_period"]; !explicit {
-		config.HealthCheckPeriod = 5 * time.Second
+		config.HealthCheckPeriod = time.Second
 	}
 	return config, nil
 }

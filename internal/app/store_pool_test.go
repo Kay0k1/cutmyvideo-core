@@ -49,18 +49,18 @@ func TestStorePoolIdleDefaultsPreserveExplicitDurations(t *testing.T) {
 		idle, health      time.Duration
 		max, min, minIdle int32
 	}{
-		{"url defaults", "postgres://localhost/test", 30 * time.Second, 5 * time.Second, 4, 0, 0},
-		{"keyword defaults", "host=localhost dbname=test", 30 * time.Second, 5 * time.Second, 4, 0, 0},
-		{"url idle only", "postgres://localhost/test?pool_max_conn_idle_time=2m", 2 * time.Minute, 5 * time.Second, 4, 0, 0},
-		{"keyword idle only", "host=localhost pool_max_conn_idle_time='3m'", 3 * time.Minute, 5 * time.Second, 4, 0, 0},
-		{"url health only", "postgres://localhost/test?pool_health_check_period=17s", 30 * time.Second, 17 * time.Second, 4, 0, 0},
-		{"keyword health only", "host=localhost pool_health_check_period='19s'", 30 * time.Second, 19 * time.Second, 4, 0, 0},
+		{"url defaults", "postgres://localhost/test", 5 * time.Second, time.Second, 4, 0, 0},
+		{"keyword defaults", "host=localhost dbname=test", 5 * time.Second, time.Second, 4, 0, 0},
+		{"url idle only", "postgres://localhost/test?pool_max_conn_idle_time=2m", 2 * time.Minute, time.Second, 4, 0, 0},
+		{"keyword idle only", "host=localhost pool_max_conn_idle_time='3m'", 3 * time.Minute, time.Second, 4, 0, 0},
+		{"url health only", "postgres://localhost/test?pool_health_check_period=17s", 5 * time.Second, 17 * time.Second, 4, 0, 0},
+		{"keyword health only", "host=localhost pool_health_check_period='19s'", 5 * time.Second, 19 * time.Second, 4, 0, 0},
 		{"url both", "postgres://localhost/test?pool_max_conn_idle_time=1h&pool_health_check_period=7m", time.Hour, 7 * time.Minute, 4, 0, 0},
 		{"keyword both fractional", "host=localhost pool_max_conn_idle_time='125ms' pool_health_check_period='12.5ms'", 125 * time.Millisecond, 12500 * time.Microsecond, 4, 0, 0},
-		{"explicit zero idle", "host=localhost pool_max_conn_idle_time='0'", 0, 5 * time.Second, 4, 0, 0},
+		{"explicit zero idle", "host=localhost pool_max_conn_idle_time='0'", 0, time.Second, 4, 0, 0},
 		{"url limits unchanged", "postgres://localhost/test?pool_max_conns=16&pool_min_conns=8&pool_min_idle_conns=6&pool_max_conn_idle_time=40s&pool_health_check_period=3s", 40 * time.Second, 3 * time.Second, 16, 8, 6},
 		{"keyword limits unchanged", "host=localhost pool_max_conns=12 pool_min_conns=7 pool_min_idle_conns=5 pool_max_conn_idle_time='45s' pool_health_check_period='4s'", 45 * time.Second, 4 * time.Second, 12, 7, 5},
-		{"implicit maximum follows minimum", "host=localhost pool_min_conns=8 pool_min_idle_conns=6", 30 * time.Second, 5 * time.Second, 8, 8, 6},
+		{"implicit maximum follows minimum", "host=localhost pool_min_conns=8 pool_min_idle_conns=6", 5 * time.Second, time.Second, 8, 8, 6},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			config, err := storePoolConfig(tt.connection)
