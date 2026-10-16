@@ -102,6 +102,7 @@ UNIVERSAL_MEDIA_REQUIRED = {
     "TestOwnedMP3ReaderKeepsIOBoundAndCancellation",
     "TestJoinedAccurateDiscoveryPreservesReorderedVFRAndSilence",
     "TestJoinedAccurateDiscoveryPreservesDualInputClocks",
+    "TestJoinedAccurateDiscoveryDecoderBudgetPreservesEncoding",
     "TestCopyJoinAudioPacketCopyPreservesClocks",
     "TestCopyJoinAudioPreservesFineSourcePacketClocks",
     "TestCopyPacketDropPreservesUnknownPresentationTimestamps",
@@ -121,6 +122,14 @@ UNIVERSAL_MEDIA_REQUIRED = {
     "TestCopyPacketTrimEligibilityPreservesUnprovenClockPaths",
 }
 
+
+# Pool lifecycle must retain explicit operator settings and acquired work while
+# retiring only genuinely released idle connections on every native service host.
+POOL_SERVICE_REQUIRED = {
+    "TestStorePoolIdleDefaultsPreserveExplicitDurations",
+    "TestStorePoolInvalidIdleDurationsRemainParserErrors",
+    "TestStorePoolIdleRetirementPreservesAcquiredTransaction",
+}
 
 # Preflight must run on real media and expose deferred checks without rendering.
 PREFLIGHT_ENGINE_REQUIRED = {
@@ -276,6 +285,7 @@ REQUIRED[4].update(UNIVERSAL_MEDIA_REQUIRED)
 
 REQUIRED[0].update(PREFLIGHT_ENGINE_REQUIRED | PREFLIGHT_CLI_REQUIRED)
 REQUIRED[2].update(PREFLIGHT_SERVICE_REQUIRED)
+REQUIRED[2].update(POOL_SERVICE_REQUIRED)
 REQUIRED[4].update(PREFLIGHT_MEDIA_REQUIRED)
 REQUIRED[0].update(COLLECTION_ENGINE_REQUIRED | COLLECTION_CLI_REQUIRED)
 REQUIRED[2].update(COLLECTION_SERVICE_REQUIRED)

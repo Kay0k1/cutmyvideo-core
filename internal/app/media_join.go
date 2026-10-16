@@ -296,7 +296,14 @@ func joinAccurateMode(ctx context.Context, c Config, inputs [][]mediaInput, rang
 			return nil, e
 		}
 		args = append(args, "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats+",concat")
-		args = append(args, mediaInputBounds(c)...)
+		inputConfig := c
+		// At a one- or two-thread codec budget, one joined-video decoder
+		// avoids an extra frame pipeline. Keep the encoder/filter budget and
+		// explicitly larger operator budgets unchanged.
+		if request.Format != "mp3" && column == selection.VideoInput && threads <= 2 {
+			inputConfig.FFmpegThreads = 1
+		}
+		args = append(args, mediaInputBounds(inputConfig)...)
 		args = append(args, "-segment_time_metadata", "1", "-safe", "0", "-i", path)
 	}
 	args = append(args, selection.mapArgs(request.Format)...)

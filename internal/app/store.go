@@ -115,7 +115,7 @@ func OpenStore(ctx context.Context, url string) (*Store, error) {
 func storePoolConfig(raw string) (*pgxpool.Config, error) {
 	// Parse through pgx so URL and keyword connection strings both retain
 	// their explicit pool settings. pgxpool removes these runtime parameters
-	// while parsing, making an explicit maximum indistinguishable afterward.
+	// while parsing, making explicit settings indistinguishable afterward.
 	connection, err := pgx.ParseConfig(raw)
 	if err != nil {
 		return nil, err
@@ -129,6 +129,15 @@ func storePoolConfig(raw string) (*pgxpool.Config, error) {
 		// container has a small quota. Each API/worker needs a bounded pool;
 		// preserve larger operator-requested minimums and explicit maxima.
 		config.MaxConns = max(4, config.MinConns, config.MinIdleConns)
+	}
+	if _, explicit := connection.RuntimeParams["pool_max_conn_idle_time"]; !explicit {
+		// Release spare connections left by brief concurrent SQL operations.
+		// Pool health checks only retire idle resources; acquired connections
+		// and the worker's separate notification connection remain unaffected.
+		config.MaxConnIdleTime = 30 * time.Second
+	}
+	if _, explicit := connection.RuntimeParams["pool_health_check_period"]; !explicit {
+		config.HealthCheckPeriod = 5 * time.Second
 	}
 	return config, nil
 }
