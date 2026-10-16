@@ -101,14 +101,19 @@ report binds this quality evidence to all 24 actual timing/backend receipts.
 | [Interrupted M6 primary-v1](interrupted-m6-v1/README.md) | Infrastructure failure after three admissible rows; incomplete, never pooled. |
 | [M6 primary-v2 negative result](rejected-m6-primary-v2/README.md) | Six fresh pairs retained; registered 2% memory-improvement margin missed. |
 | [Repeated-download observation](supplemental-repeat-download/README.md) | All six synthetic observations retained, including slower draft-path I/O; no export, RAM, p50-request or SLA claim. |
-| [Frozen original tools and methods](tools/) | Preserved source/guard/control records, including historical V4/V5 and prospective V6; source presence is not measured acceptance. |
+| [Frozen original tools and methods](../tools/first-draft-v6/) | Preserved source/guard/control records, including historical V4/V5 and prospective V6; source presence is not measured acceptance. |
 | [Backend lifecycle supplement](tools-infra-v2/README.md) | Separately frozen infrastructure repair used by a new registration; earlier failed evidence stays unchanged. |
 
-The [V6 controller method](tools/controller-v6-method.md),
-[quality method](tools/quality-reuse-v6-method.md) and
-[independent report method](tools/render-v6-report-method.md) describe the checks.
-The historical `quality-reuse-method.md` cited by the V6 note is not included in this packet; the [base](tools/quality-reuse.py) and [V6](tools/quality-reuse-v6.py) implementations are included.
+The [V6 controller method](../tools/first-draft-v6/controller-v6-method.md),
+[quality method](../tools/first-draft-v6/quality-reuse-v6-method.md) and
+[independent report method](../tools/first-draft-v6/render-v6-report-method.md) describe the checks.
+The historical `quality-reuse-method.md` cited by the V6 note is not included in this packet; the [base](../tools/first-draft-v6/quality-reuse.py) and [V6](../tools/first-draft-v6/quality-reuse-v6.py) implementations are included.
 Their original preparation-time wording and frozen hashes are retained; the
 linked cohort report establishes the actual benchmark execution. Private owner/session
 state, operational resource identities, production configuration and media are
 excluded from the published evidence.
+
+The unchanged source bundle is stored in the shared benchmark-tools directory,
+separately from dated diagnostic payloads. Historical frozen notes may refer to
+its earlier `tools/` location; the linked bundle retains all 33 files (32
+inventoried payloads plus their exact SHA256 inventory). The dated-report artifact-size policy is unchanged.
