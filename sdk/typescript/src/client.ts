@@ -1,5 +1,10 @@
 import { ApiError, JobError } from "./errors.js";
 import { abortedError, abortable, boundedJSON, budget, decode, delay, endpointID, object, positive, retryAfter } from "./protocol.js";
+import { preparationKey, preparationReceipt, uploadFingerprint } from "./source_protocol.js";
+import { subtitleRequest, subtitleResult } from "./subtitles.js";
+import { projectResult } from "./projects.js";
+import type { AgentProject, ProjectCreateRequest, ProjectEditRequest, ProjectHandoff } from "./types.js";
+import type { ContentFingerprint, SourcePreparationReceipt, SourceSubmissionOptions, SubtitleRequest, SubtitleResult } from "./types.js";
 import type { ArtifactDownload, ArtifactRangeDownload, CollectionDiagnostic, CollectionRequest, CollectionSubmission, CollectionValidation, DownloadOptions, ExportRequest, Job, PreflightResult, RangeDownloadOptions, RequestOptions, Session, Source, SubmissionOptions, Tracks, WaitOptions } from "./types.js";
 
 export interface ClientOptions {
@@ -12,7 +17,7 @@ export interface ClientOptions {
   /** Useful for instrumentation or a platform fetch adapter. Mutations are never retried. */
   fetch?: typeof globalThis.fetch;
 }
-type Context = { jobId?: string; idempotencyKey?: string };
+type Context = { jobId?: string; idempotencyKey?: string; uploadFingerprint?: ContentFingerprint };
 
 export class CutmyClient {
   readonly #base: URL;
@@ -76,6 +81,7 @@ export class CutmyClient {
     if (json) headers.set("Content-Type", "application/json");
     // Headers takes a ByteString; encode UTF-8 exactly as the Go byte limit does.
     if (context.idempotencyKey) headers.set("Idempotency-Key", Array.from(new TextEncoder().encode(context.idempotencyKey), byte => String.fromCharCode(byte)).join(""));
+    if (context.uploadFingerprint) { headers.set("Upload-SHA256", context.uploadFingerprint.sha256); headers.set("Upload-Size", String(context.uploadFingerprint.size_bytes)); }
     return headers;
   }
   #captureSession(response: Response): void {
@@ -85,7 +91,7 @@ export class CutmyClient {
       if (match) this.#cookie = `cutmy_session=${match[1]}`;
     }
   }
-  async #request<T>(method: string, path: string, data: unknown, kind: string, options: RequestOptions, context: Context = {}, initialize = true): Promise<T> {
+  async #request<T>(method: string, path: string, data: unknown, kind: string, options: RequestOptions, context: Context = {}, initialize = true, jsonLimit = 1 << 20): Promise<T> {
     const scope = budget(options.timeoutMs ?? this.#requestMs, options.signal);
     let response: Response | undefined;
     try {
@@ -99,7 +105,7 @@ export class CutmyClient {
       });
       if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new ApiError("Redirect responses are refused", { code: "redirect_refused", status: response.status, ...context }); }
       this.#captureSession(response);
-      const value = await boundedJSON(response);
+      const value = await boundedJSON(response, jsonLimit);
       if (kind === "collection-submission" && [200,202,207,400,408,410,413,429,500,502,503,504].includes(response.status) && object(value) && value.version === 1 && Array.isArray(value.clips)) {
         const report = decode<CollectionSubmission>(value, kind);
         const retry = retryAfter(response).retryAfterSeconds;
@@ -119,10 +125,42 @@ export class CutmyClient {
     } finally { scope.dispose(); }
   }
   async listSources(options: RequestOptions = {}): Promise<Source[]> { return (await this.#request<{ sources: Source[] }>("GET", "api/v1/sources", undefined, "sources", options)).sources; }
-  importSource(url: string, options: RequestOptions = {}): Promise<Source> { return this.#request("POST", "api/v1/sources", { url }, "source", { ...options, timeoutMs: options.timeoutMs ?? this.#sourceMs }); }
-  upload(file: Blob, filename = "upload", options: RequestOptions = {}): Promise<Source> {
+  importSource(url: string, options: SourceSubmissionOptions = {}): Promise<Source> {
+    if (options.idempotencyKey !== undefined) preparationKey(options.idempotencyKey);
+    return this.#request("POST", "api/v1/sources", { url }, "source", { ...options, timeoutMs: options.timeoutMs ?? this.#sourceMs }, options.idempotencyKey === undefined ? {} : { idempotencyKey: options.idempotencyKey });
+  }
+  upload(file: Blob, filename = "upload", options: SourceSubmissionOptions = {}): Promise<Source> {
+    if (options.idempotencyKey !== undefined) preparationKey(options.idempotencyKey);
+    if (options.fingerprint && options.idempotencyKey === undefined) throw new TypeError("Fingerprint requires a source preparation key");
+    const fingerprint = options.idempotencyKey === undefined ? undefined : uploadFingerprint(options.fingerprint);
+    if (fingerprint && file.size !== fingerprint.size_bytes) throw new TypeError("Upload size differs from fingerprint");
     const form = new FormData(); form.append("file", file, filename);
-    return this.#request("POST", "api/v1/uploads", form, "source", { ...options, timeoutMs: options.timeoutMs ?? this.#sourceMs });
+    return this.#request("POST", "api/v1/uploads", form, "source", { ...options, timeoutMs: options.timeoutMs ?? this.#sourceMs }, options.idempotencyKey === undefined ? {} : { idempotencyKey: options.idempotencyKey, ...(fingerprint ? { uploadFingerprint: fingerprint } : {}) });
+  }
+  async getSourcePreparation(key: string, options: RequestOptions = {}): Promise<SourcePreparationReceipt> {
+    preparationKey(key);
+    return preparationReceipt(await this.#request("GET", `api/v1/source-preparations/${endpointID(key)}`, undefined, "object", options), key);
+  }
+  async retimeSubtitles(request: SubtitleRequest, options: RequestOptions = {}): Promise<SubtitleResult> {
+    const body = subtitleRequest(request);
+    return subtitleResult(await this.#request("POST", "api/v1/subtitles/retime", body, "object", options, {}, true, 64 << 20), body);
+  }
+  async getProject(id: string, options: RequestOptions = {}): Promise<AgentProject> {
+    const result = projectResult(await this.#request("GET", `api/v1/projects/${endpointID(id)}`, undefined, "object", options, {}, true, 16 << 20));
+    if (result.id !== id) throw new ApiError("Project response identity differs", { code: "invalid_response" });
+    for (const entry of result.jobs) decode(entry.job, "job");
+    return result;
+  }
+  async createProject(request: ProjectCreateRequest, options: RequestOptions = {}): Promise<AgentProject> { return projectResult(await this.#request("POST", "api/v1/projects", request, "object", options, {}, true, 16 << 20)); }
+  async editProject(id: string, request: ProjectEditRequest, options: RequestOptions = {}): Promise<AgentProject> { return projectResult(await this.#request("PUT", `api/v1/projects/${endpointID(id)}`, request, "object", options, {}, true, 16 << 20)); }
+  async createProjectHandoff(id: string, options: RequestOptions = {}): Promise<ProjectHandoff> {
+    const value = await this.#request<unknown>("POST", `api/v1/projects/${endpointID(id)}/handoffs`, {}, "object", options);
+    if (!object(value) || value.project_id !== id || typeof value.token !== "string" || !/^[A-Za-z0-9_-]{20,256}$/.test(value.token) || typeof value.expires_at !== "string") throw new ApiError("Invalid scoped handoff", { code: "invalid_response" });
+    return { project_id: id, token: value.token, expires_at: value.expires_at };
+  }
+  submitProjectCollection(id: string, request: { revision: number; clip_ids: string[] }, options: RequestOptions & { retryFailed?: boolean; idempotencyKey?: string } = {}): Promise<CollectionSubmission> {
+    if (options.retryFailed) preparationKey(options.idempotencyKey);
+    return this.#request("POST", `api/v1/projects/${endpointID(id)}/collections${options.retryFailed ? "/retry" : ""}`, request, "collection-submission", options, options.idempotencyKey === undefined ? {} : { idempotencyKey: options.idempotencyKey });
   }
   getSource(id: string, options: RequestOptions = {}): Promise<Source> { return this.#request("GET", `api/v1/sources/${endpointID(id)}`, undefined, "source", options); }
   getTracks(id: string, options: RequestOptions = {}): Promise<Tracks> { return this.#request("GET", `api/v1/sources/${endpointID(id)}/tracks`, undefined, "tracks", { ...options, timeoutMs: options.timeoutMs ?? this.#sourceMs }); }

@@ -1,6 +1,7 @@
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute } from 'node:path';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 const args = process.argv.slice(2);
 const flag = name => args[args.indexOf(name) + 1];
 const command = args[1];
@@ -34,6 +35,11 @@ if (args[0] === 'orphan-worker') {
   console.log(JSON.stringify(command === 'collection' ? { ...collectionResult, incomplete: true } : { outputs: [output], incomplete: true }));
   console.error(JSON.stringify({ error: { code: 'future_local_error', message: 'Public failure' } }));
   process.exitCode = 1;
+} else if (command === 'subtitles') {
+  const path = flag('--request'), request = JSON.parse(await readFile(path, 'utf8'));
+  if (process.platform !== 'win32' && (((await stat(path)).mode & 0o777) !== 0o600 || ((await stat(dirname(path))).mode & 0o777) !== 0o700)) throw new Error('Unsafe subtitle request');
+  const text = request.text;
+  console.log(JSON.stringify({ version: 1, outputs: request.outputs.map(output => ({ clip_id: output.clip_id, format: request.output_format ?? request.format, text, cue_count: 1, sha256: process.env.SDK_BAD_SUBTITLE_HASH ? '0'.repeat(64) : createHash('sha256').update(text).digest('hex') })) }));
 } else if (command === 'inspect') {
   console.log(JSON.stringify({ duration_ms: 5000, tracks: [{ index: 0, type: 'video', codec: 'h264', default: false }], input: flag('--input') }));
 } else {

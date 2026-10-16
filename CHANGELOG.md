@@ -4,24 +4,28 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
-## 1.4.0 - 2026-10-15
-
-Release candidate prepared; tag, signed-consumer publication and deployment are
-pending. The latest published release remains 1.3.0.
+## 1.4.0 - 2026-10-16
 
 ### Added
 - Complete resumable HTTP collections in Python and the Node SDK: validation, bounded incremental admission, saved exact idempotent submissions, polling/backoff and verified streamed downloads. Private owner/state checkpoints recover process interruption without repeating completed work.
 - Genuine ranged transfer continuation with prefix hashes, immutable artifact receipts and exclusive publication recovery. Completed files are rehashed; conflicting scope or modified files are refused. Retained revisions count toward project output budgets.
 - Collection types, low-level validation/submission, local CLI collection wrappers, selected revisions/drafts and public progress/partial diagnostics in both SDKs. The browser TypeScript entry stays separate from the Node durable runner.
-- Required installed-package acceptance for 15 clips, lost committed replies, interrupted transfers, OS-killed consumers, replay, two revised clips and selected drafts, with independent media/backend-byte verification. Packages remain development candidates; see the [1.4.0 candidate](docs/release-1.4.0.md).
+- Required installed-package acceptance for 15 clips, lost committed replies, interrupted transfers, OS-killed consumers, isolated failed-clip repair, scoped review, replay, two revised clips and selected drafts, with independent media/backend-byte verification. See the [1.4.0 release scope](docs/release-1.4.0.md).
 - The [real-interview verification](verification/2026-10-15-sdk-collections/README.md) records both installed SDKs completing 15 clips after interrupted transfer/processes, preserving server retry delays and producing exactly 19 render attempts after two revisions/two drafts. Independent comparisons verify source frames and speech; private state and media stay outside Git.
+- Durable opt-in source preparation saves the owner and upload/import intent before submission; owner-scoped preparation receipts recover lost committed replies. Full uploaded-byte fingerprints distinguish content identity from provider metadata.
+- Scoped agent projects preserve native collection plans and stable clip IDs across SDK/browser review. Single-use temporary handoffs grant a separate browser session access only to the chosen project; revision checks, expiry and revocation preserve owner isolation.
+- Explicit failed-clip retry with saved attempt identities and trusted project synchronization retains completed media and adopts reviewed jobs without duplicate rendering. Collection reports retain safe worker causes, job IDs and processing progress.
+- Supplied SRT/WebVTT can be transformed into per-clip subtitle sidecars from actual segment maps through Go, CLI and both SDKs. Reordered/repeated cuts, cue clipping, output hashes and bounded expansion are supported without transcription or caption burn-in.
+- Installable Python wheel/source and Node package assets with a separate signed SDK manifest join the versioned GitHub release; package-registry publication remains separate. The signed consumer requires all 18 assets for 1.4.0 while retaining the 13-asset contract for earlier releases.
 
 ### Changed
 - Run complete PR source checks once through the immutable archive resolver instead of starting a duplicate standalone workflow. Preserve all five native/SDK targets, production-family media, race checks and archive recovery.
 - Cancel superseded PR archive/hosting runs and stale main source/hosting pushes; retain tag publication and manual verification runs.
+- Migration 008 adds bounded preparation receipts, source fingerprints, scoped projects, grants and retry records; migrations 001–007 remain immutable.
 
 ### Fixed
 - Collection cancellation bounds stalled Python JSON reads and TLS handshakes even when socket shutdown does not wake the operation. High-resolution elapsed deadlines keep expired collection waits consistent on Windows Python 3.10; valid fragmented responses remain supported.
+- Python stops on an expired completed artifact instead of polling until the collection deadline. Repeated revisions no longer save history that subsequent restoration refuses.
 
 ## 1.3.0 - 2026-10-15
 

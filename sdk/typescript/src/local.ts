@@ -6,6 +6,8 @@ import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { ApiError, LocalError } from "./errors.js";
 import { decode, JSON_LIMIT, object, positive } from "./protocol.js";
+import { subtitleRequest, subtitleResult } from "./subtitles.js";
+import type { SubtitleRequest, SubtitleResult } from "./types.js";
 import type { CutmyClient } from "./client.js";
 import type { BatchResult, CollectionPlan, DownloadOptions, InspectedSource, LocalCollectionOptions, LocalCollectionResult, LocalCollectionValidation, LocalPreflightResult, Plan, RequestOptions, Source } from "./types.js";
 
@@ -50,6 +52,19 @@ export class LocalCutmy {
   executePlan(plan: Plan, output: string, options: RequestOptions = {}): Promise<BatchResult> { return this.#plan("batch", plan, output, options); }
   validateCollection(plan: CollectionPlan, output: string, options: LocalCollectionOptions = {}): Promise<LocalCollectionValidation> { return this.#plan("collection validate", plan, output, options, options); }
   executeCollection(plan: CollectionPlan, output: string, options: LocalCollectionOptions = {}): Promise<LocalCollectionResult> { return this.#plan("collection export", plan, output, options, options); }
+  async retimeSubtitles(request: SubtitleRequest, options: RequestOptions = {}): Promise<SubtitleResult> {
+    const body = subtitleRequest(request), timeout = positive(options.timeoutMs ?? 120000, "timeoutMs"), deadline = performance.now() + timeout;
+    const directory = await mkdtemp(join(tmpdir(), "cutmy-sdk-subtitles-"));
+    try {
+      const path = join(directory, "request.json"), file = await open(path, "wx", 0o600);
+      try { await file.writeFile(JSON.stringify(body)); } finally { await file.close(); }
+      const remaining = Math.floor(deadline - performance.now());
+      if (remaining <= 0) throw new LocalError("Subtitle operation timed out", { code: "timeout" });
+      const result = await this.#run(["subtitles", "retime", "--request", path, "--timeout", `${remaining}ms`], "object", remaining, options.signal, 64 << 20);
+      try { return await subtitleResult(result, body); }
+      catch (error) { if (error instanceof ApiError) throw new LocalError("Local subtitle result identity, size or hash differs", { code: "invalid_response" }); throw error; }
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  }
   async #plan<T>(command: string, plan: Plan | CollectionPlan, output: string, options: RequestOptions, collection?: LocalCollectionOptions): Promise<T> {
     const timeout = positive(options.timeoutMs ?? (command === "batch" || command === "collection export" ? 30 * 60_000 : 120_000), "timeoutMs");
     if (!plan.input || !output) throw new TypeError("plan.input and output are required");
@@ -86,7 +101,7 @@ export class LocalCutmy {
     } catch (error) { if (error instanceof LocalError) throw error; throw new LocalError("The local plan could not be prepared", { code: "filesystem_error" }); }
     finally { if (directory) await rm(directory, { recursive: true, force: true }); }
   }
-  #run<T>(args: string[], kind: string, timeoutMs: number, signal?: AbortSignal): Promise<T> {
+  #run<T>(args: string[], kind: string, timeoutMs: number, signal?: AbortSignal, stdoutLimit = JSON_LIMIT): Promise<T> {
     if (signal?.aborted) return Promise.reject(new LocalError("The operation was cancelled", { code: "cancelled" }));
     return new Promise((resolveResult, reject) => {
       const child = spawn(this.#binary, [...this.#prefix, "--json-errors", ...args], { cwd: this.#cwd, env: this.#env, shell: false, windowsHide: true, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] });
@@ -121,7 +136,7 @@ export class LocalCutmy {
       const timer = setTimeout(() => stop("timeout"), timeoutMs);
       const collect = (chunk: Buffer, out: boolean) => {
         if (out) stdoutSize += chunk.length; else stderrSize += chunk.length;
-        if ((out ? stdoutSize : stderrSize) > JSON_LIMIT) { stop("response_too_large"); return; }
+        if ((out ? stdoutSize : stderrSize) > (out ? stdoutLimit : JSON_LIMIT)) { stop("response_too_large"); return; }
         (out ? stdout : stderr).push(chunk);
       };
       child.stdout.on("data", chunk => collect(chunk as Buffer, true));

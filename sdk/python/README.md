@@ -5,10 +5,11 @@ applications. Python 3.10 or later; no runtime dependencies. Requests and result
 use JSON-compatible typed dictionaries, so the same plans can be saved, reviewed,
 or passed between tools without a framework or an agent-specific protocol.
 
-This is the unpublished `1.4.0.dev0` SDK. Install from this repository:
+Release `1.4.0` includes a wheel and source archive as signed GitHub release
+assets. Install the wheel when that release is published:
 
 ```sh
-python -m pip install ./sdk/python
+python -m pip install https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.0/cutmyvideo-1.4.0-py3-none-any.whl
 ```
 
 The preflight methods require a core build with the preflight API/CLI. Local
@@ -103,8 +104,10 @@ Persist it before submitting. If `APIError` reports a transport failure, timeout
 or server error, the mutation may already have committed: recover by calling
 `create_job` with the **same owner and key**. Reusing a retained key returns the
 original job, even if the request body changes; use a fresh key for different
-work. Individual HTTP calls do not retry mutations automatically. Uploads and URL imports have no
-idempotency guarantee: consult `list_sources()` before deciding to repeat one.
+work. Individual HTTP calls do not retry mutations automatically. Unkeyed uploads
+and imports retain their ordinary one-shot behavior. For recoverable preparation,
+use the separate durable source workflow below; it saves an intent and key before
+uploading or importing.
 
 `wait_for_job` returns the succeeded job; failed or cancelled jobs raise
 `JobError` with `job`, `job_id`, and ready `artifacts`. Unknown future statuses are
@@ -160,8 +163,9 @@ submissions with the saved owner, key and exact body. It observes quota and
 `Retry-After` diagnostics while continuing accepted jobs. Both run/resume accept
 `timeout`, `poll_interval` (minimum one second), `cancel_event`, `on_progress`,
 `max_output_bytes` (default 10 GiB across retained outputs), and
-`admission_batch_size` (default 3, configurable 1..128). It never retries an
-upload/import, changes export settings, deletes remote sources or cancels jobs.
+`admission_batch_size` (default 3, configurable 1..128). The collection runner
+takes an existing source ID. It does not upload/import, change export settings,
+delete remote sources or cancel jobs.
 
 Admission retry delays apply to every later submission in the project, including
 previously unsubmitted IDs and uncertain retries. This shared delay survives
@@ -195,16 +199,118 @@ resume; tampering preserves the file and gives a clear error for caller repair.
 Progress receives public ready `outputs`, `pending`, `source_id`, `rendition`
 and `phase` after a state checkpoint. Download details include `clip_id`,
 `artifact_id`, `offset`, `total_size`, `resumed`; pending rows expose `stage`,
-`downloaded_bytes`, `total_bytes`. `download_interrupted` follows a failed
+`downloaded_bytes`, `total_bytes`. Pending jobs also retain `job_id`,
+`job_status`, the worker stage, `progress_ms` and a bounded worker
+`error_code`/`message` when available. `download_interrupted` follows a failed
 transfer checkpoint before retry; `output_ready` follows durable publication.
 A callback exception stops with `CollectionError.report`, retaining state.
 Reports/errors never include the owner capability. State JSON is bounded to
-4 MiB; other JSON remains bounded to 1 MiB. Publication requires hard links.
+4 MiB; ordinary metadata JSON is bounded to 1 MiB, project responses to 16 MiB
+and subtitle responses to 64 MiB. Publication requires hard links. Advisory
+revision history retains the latest 128 entries; verified old files remain.
+Projects retain at most 1024 completed receipts and 1024 unfinished transfers;
+`receipt_limit` stops new publication before writing an unreadable state.
 
 Collection validation/submission `APIError.diagnostic` retains only the public
 `code`, `message`, `clip_id` and `field` repair fields. Durable failures include
 the attributed clip's field in `CollectionError.report.pending`; unknown
 response fields are discarded.
+
+## Recoverable source preparation and clip repair
+
+```python
+prepared = client.prepare_source(
+    {"kind": "upload", "path": "interview.mp4"}, "private/source-preparation",
+    timeout=7200,
+)
+# An import uses {"kind": "import", "url": "https://..."} instead.
+# After interruption, use the same server and private directory:
+prepared = CutmyClient("https://your-cutmy-server.example").resume_source("private/source-preparation")
+request["source_id"] = prepared["source_id"]
+```
+
+Use the same configured server URL when constructing a fresh client. Source preparation and collections
+use separate private directories. Preparation saves the owner, exact intent and
+idempotency key before its first POST. Resume first looks up that receipt, so a
+lost successful upload/import reply recovers the same source without duplication.
+A ready upload carries a verified content SHA256/size; metadata-only imports may
+carry a provider identity instead, which is not a content hash. If an upload
+must be retried, local bytes must still match its saved fingerprint. A transfer
+may restart from the beginning; upload-byte resume is not promised. The same
+whole-cycle timeout and cancellation checks bound hashing, waits and upload IO.
+Deleting the source is explicit; a retained receipt never silently creates a
+replacement source. `SourcePreparationError.report` preserves safe progress.
+Explicit preparation and scoped project-retry keys require 1–128 visible ASCII
+bytes without spaces; exact `.` and `..` path segments are reserved. Invalid
+keys are refused before creating a private project.
+
+Terminal failed, cancelled or expired clips require an explicit repair decision:
+
+```python
+repaired = client.resume_collection("private/interview-project", retry_failed=["clip-15"])
+```
+
+Each chosen clip receives a new private attempt key, saved before submission.
+An uncertain reply resumes that same attempt. The other fourteen verified
+outputs remain in place, and retrying a completed clip is refused. Polling a
+succeeded job whose artifacts have expired ends with `artifact_expired` rather
+than waiting until the whole deadline. Repair and request revision are separate
+resume calls; resolve an uncertain original attempt before either.
+
+## Browser handoff and portable edits
+
+Choose and privately persist `collection_key` before the first collection run.
+The same key lets `create_project` recover a lost creation reply without
+overwriting subsequent browser edits:
+
+```python
+project = client.create_project({**request, "collection_key": saved_collection_key,
+    "clip_jobs": [{"clip_id": output["clip_id"], "job_id": output["job_id"]} for output in repaired["outputs"]]})
+handoff = client.create_project_handoff(project["id"])
+# Deliver the short-lived handoff["token"] only to the intended browser user.
+# The browser uses its own session; never transfer owner.json or the root key.
+current = client.resume_collection("private/interview-project", project_id=project["id"])
+```
+
+Explicit project sync verifies the configured server, owner, fixed source and
+each current clip's normalized request before adopting server jobs. It follows
+the server's current selection and reuses matching browser renders. Further
+submissions/retries use that project's scoped routes and revision checks.
+Conflicting simultaneous `request=`/`project_id=` revisions fail explicitly;
+saved uncertain submissions must be resolved first. To change a synchronized
+project, call `edit_project` with its latest `revision`, then sync again.
+
+`export_portable_project(request, source)` and
+`import_portable_project(document, explicitly_selected_source)` exchange
+`cutmy.collection.project` version 1 edit documents. They contain clip decisions
+and optional source fingerprint/title/duration, not server IDs, owner credentials,
+keys or source paths/URLs. Portable metadata grants no access to another source.
+
+## Existing SRT/VTT sidecars
+
+Retiming uses supplied subtitle text and the actual segment maps of verified
+ready outputs; it performs no transcription and changes no rendered media:
+
+```python
+from pathlib import Path
+
+sidecars = client.retime_subtitles({"version": 1, "format": "srt",
+    "text": Path("interview.srt").read_text(encoding="utf-8"),
+    "outputs": [{"clip_id": item["clip_id"], "segments": item["segments"]}
+                for item in current["outputs"]]})
+for item in sidecars["outputs"]:
+    with Path("sidecars", item["clip_id"] + "." + item["format"]).open("x", encoding="utf-8") as file:
+        file.write(item["text"])
+```
+
+Create the chosen sidecar directory first. The SDK verifies each result's clip
+identity, format and SHA256; this explicit exclusive write preserves existing
+files. Sidecars live outside the private media receipt journal/byte budget.
+`LocalCutmy.retime_subtitles` uses the same request/result with the local binary;
+local collection execution has no durable runner. Requests allow 512 KiB of
+UTF-8 text, up to 128 clips/128 segments each, 4096 total segments and 8 MiB of
+combined output text. VTT STYLE/REGION/inline timestamps are rejected; cue settings
+require VTT output. Set `output_format` explicitly to convert SRT/VTT.
 
 ## Reports, timeouts, and downloads
 
@@ -220,8 +326,9 @@ requests, 600 seconds for uploads/imports and downloads; use `timeout=120` for a
 longer preflight. Constructor options `request_timeout`, `upload_timeout`, and
 `download_timeout` change these defaults. Deadlines cover initialization, DNS,
 connection/TLS, headers, and all streamed chunks; they are not reset per chunk.
-JSON requests/plans, HTTP JSON responses, and local command output are limited to
-1 MiB per document/stream.
+Ordinary JSON requests/plans, HTTP JSON responses and command output are limited
+to 1 MiB per document/stream. Project responses and subtitle transformation use
+the larger explicit caps documented above; stderr retains its ordinary bound.
 
 Uploads and downloads stream in bounded chunks. Downloads use the configured
 server's artifact-ID endpoint, ignoring `download_url`; redirects are refused.

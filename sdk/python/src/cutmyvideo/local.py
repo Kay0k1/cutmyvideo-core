@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence, cast
 
 from .client import _positive
-from .errors import LocalError
-from .types import BatchResult, CollectionPlan, LocalCollectionPreflight, LocalCollectionResult, LocalPreflightResult, LocalSourceInfo, Plan
+from .errors import APIError, LocalError
+from .types import BatchResult, CollectionPlan, LocalCollectionPreflight, LocalCollectionResult, LocalPreflightResult, LocalSourceInfo, Plan, SubtitleRequest, SubtitleResult
 
 _LIMIT = 1 << 20
 
@@ -81,6 +81,21 @@ class LocalCutmy:
                 flags += ["--clips", ",".join(ids)]
         return self._plan_operation(["collection", operation], plan, output, timeout, flags)
 
+    def retime_subtitles(self, request: SubtitleRequest | Mapping[str, Any], *, timeout: float = 120) -> SubtitleResult:
+        from .subtitles import subtitle_request, subtitle_result
+        body = subtitle_request(request)
+        with tempfile.TemporaryDirectory(prefix="cutmy-sdk-subtitles-") as directory:
+            path = Path(directory) / "request.json"
+            with path.open("xb") as file:
+                if os.name != "nt":
+                    os.chmod(path, 0o600)
+                file.write(json.dumps(body, ensure_ascii=False, allow_nan=False).encode())
+            result = self._run(["subtitles", "retime"], ["--request", str(path)], timeout, max_json_bytes=64 << 20)
+        try:
+            return cast(SubtitleResult, subtitle_result(result, body))
+        except APIError:
+            raise LocalError("Local subtitle result identity, size or hash differs", code="invalid_response") from None
+
     def _plan_operation(self, command: str | list[str], plan: Mapping[str, Any], output: str | os.PathLike[str],
                         timeout: float, extra: list[str] | None = None) -> dict[str, Any]:
         _positive(timeout, "timeout")
@@ -142,7 +157,7 @@ class LocalCutmy:
                 process.kill()
         process.wait()
 
-    def _run(self, command: str | list[str], arguments: list[str], timeout: float) -> dict[str, Any]:
+    def _run(self, command: str | list[str], arguments: list[str], timeout: float, *, max_json_bytes: int = _LIMIT) -> dict[str, Any]:
         timeout = _positive(timeout, "timeout")
         argv = self._binary + ["--json-errors"] + ([command] if isinstance(command, str) else command) + arguments + ["--timeout", f"{timeout:.9f}s"]
         kwargs: dict[str, Any] = {"stdout": subprocess.PIPE, "stderr": subprocess.PIPE, "stdin": subprocess.DEVNULL}
@@ -165,7 +180,7 @@ class LocalCutmy:
                     chunk = stream.read1(64 << 10)
                     if not chunk:
                         return
-                    if len(buffer) + len(chunk) > _LIMIT:
+                    if len(buffer) + len(chunk) > (max_json_bytes if buffer is capture[0] else _LIMIT):
                         exceeded.set()
                         return
                     buffer.extend(chunk)
@@ -230,6 +245,13 @@ class LocalCutmy:
             valid = (output.get("valid") is True and output.get("version") == 1
                      and not isinstance(output.get("version"), bool) and isinstance(output.get("clips"), list)
                      and isinstance(output.get("selected_clip_ids"), list))
+        elif command == ["subtitles", "retime"]:
+            from .subtitles import subtitle_result
+            try:
+                subtitle_result(output)
+            except APIError:
+                raise LocalError("Local subtitle result identity, size or hash differs", code="invalid_response") from None
+            valid = True
         elif command == "preflight":
             valid = (output.get("valid") is True and output.get("version") == 1
                      and not isinstance(output.get("version"), bool)

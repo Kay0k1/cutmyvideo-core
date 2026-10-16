@@ -1,4 +1,4 @@
-import type { Artifact, BatchResult, CollectionDiagnostic, CollectionReport, Job } from "./types.js";
+import type { Artifact, BatchResult, CollectionDiagnostic, CollectionReport, Job, SourcePreparationReport } from "./types.js";
 
 export class CutmyError extends Error {
   readonly code: string;
@@ -37,6 +37,13 @@ export class CollectionError extends CutmyError {
   readonly report: CollectionReport;
   constructor(code: string, report: CollectionReport, message = "Collection execution stopped; saved work can be resumed") {
     super(message, { code }); this.name = "CollectionError"; this.report = report;
+  }
+}
+export class SourcePreparationError extends CutmyError {
+  readonly report: SourcePreparationReport;
+  constructor(code: string, report: SourcePreparationReport) {
+    super("Source preparation stopped; saved intent can be resumed", { code });
+    this.name = "SourcePreparationError"; this.report = structuredClone(report);
   }
 }
 export class LocalError extends CutmyError {

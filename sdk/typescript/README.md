@@ -3,15 +3,11 @@
 TypeScript clients for local `cutmy` execution and the cutmyvideo-core HTTP API.
 The package has no runtime dependencies. Node 20.19 or newer is required for the
 Node entry; the main HTTP entry also works in browsers with modern Fetch APIs.
-This is the unpublished `1.4.0-dev.0` development package.
-
-Build and install a package from this checkout:
+Release `1.4.0` includes a signed npm tarball as a GitHub release asset. Install
+it when that release is published:
 
 ```sh
-cd sdk/typescript
-npm ci
-npm pack
-npm install /absolute/path/to/cutmyvideo-sdk-1.4.0-dev.0.tgz
+npm install https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.0/cutmyvideo-sdk-1.4.0.tgz
 ```
 
 ## Local files
@@ -190,7 +186,8 @@ directory private, including crash leftovers. These are sensitive recovery files
 not artifacts for sharing, Git or diagnostic uploads. SDK state is versioned and
 language-specific; Python and TypeScript projects cannot share a state directory.
 Configured server and saved owner conflicts are refused before a collection call.
-The runner never automatically repeats an uncertain source upload.
+The collection runner takes an existing source ID. Recoverable upload/import is
+available through the separate source-preparation entry below.
 
 State checkpoints synchronize bytes and use atomic publication. Completed files
 are SHA-256 verified on every resume; outputs include immutable artifact IDs in
@@ -218,6 +215,111 @@ Public progress includes `output_ready`, `download_checkpoint` and
 `download: { clip_id, artifact_id, offset, total_size, resumed }` after the prefix
 has been synchronized and checkpointed. Progress callbacks may be asynchronous
 and receive independent public report values.
+
+Pending rows include the admitted `job_id`, `job_status`, worker `stage`,
+`progress_ms` and bounded `error_code`/`message` when available. Unknown response
+fields are excluded. A succeeded job with no remaining ready artifact ends with
+`artifact_expired`; an explicit repair can create a new attempt. State is bounded
+to 4 MiB and 4096 retained receipt entries. New transfers stop with `receipt_limit`
+before exceeding that restore limit; existing verified files stay available.
+
+## Recoverable source preparation and repair
+
+```ts
+import { prepareSource, resumeSource } from '@cutmyvideo/sdk/sources';
+
+const prepared = await prepareSource(client,
+  { kind: 'upload', path: './interview.mp4' }, './private/source-preparation',
+  { timeoutMs: 7_200_000 });
+// Imports use { kind: 'import', url: 'https://...' } instead.
+const recovered = await resumeSource(new CutmyClient({ baseUrl: client.serverUrl }),
+  './private/source-preparation');
+```
+
+Use a separate private directory from the collection project. Preparation saves
+the original owner, exact intent and key before its first POST. A fresh process
+looks up that receipt before trying work again; losing an upload/import reply
+recovers the same source. Content fingerprints contain verified SHA256/size.
+Provider fingerprints identify metadata-only imports and are not content hashes.
+A required upload retry checks the local bytes against their original fingerprint
+and can restart the transfer; upload-byte resume is not promised. The whole
+cycle deadline and `signal` bound hashing, polling, waits and upload IO. A deleted
+source is not silently replaced. `SourcePreparationError.report` contains safe
+progress; private keys, owner capability and local input paths are excluded.
+Explicit preparation and scoped project-retry keys require 1–128 visible ASCII
+bytes without spaces; exact `.` and `..` path segments are reserved. Invalid
+keys are refused before creating a private project.
+
+Repair only explicitly chosen failed/cancelled/expired clips:
+
+```ts
+const repaired = await resumeCollection(client, './private/interview-project',
+  { retryFailed: ['clip-15'] });
+```
+
+A private new attempt key is checkpointed before submission and reused after an
+uncertain reply. Fourteen other verified outputs remain intact. Completed clips
+cannot be retried. Resolve unknown submissions first; request revision and
+`retryFailed` are separate resume calls.
+
+## Browser handoff and portable edit documents
+
+Persist `savedCollectionKey` privately before the first run and pass it as the
+run's `idempotencyKey`. Project creation reuses that identity and can recover a
+lost creation reply without overwriting subsequent browser edits:
+
+```ts
+const project = await client.createProject({ ...request,
+  collection_key: savedCollectionKey,
+  clip_jobs: repaired.outputs.map(output => ({ clip_id: output.clip_id, job_id: output.job_id })) });
+const handoff = await client.createProjectHandoff(project.id);
+// Deliver handoff.token only to the intended browser user. Never share owner.json.
+const current = await resumeCollection(client, './private/interview-project',
+  { projectId: project.id });
+```
+
+The browser uses its own session and the short-lived scoped token, not the SDK's
+owner cookie/root key. Explicit project sync checks the configured server, owner,
+fixed source and each normalized current request before adopting browser jobs.
+It follows the saved server selection and reuses matching renders. Later
+submissions and retries use scoped project routes and revision checks. A supplied
+`request` conflicting with `projectId` fails explicitly, and an uncertain saved
+submission must be resolved before adoption. Change synchronized project edits
+through `editProject` with its latest `revision`, then sync again.
+
+The browser-compatible main entry exports `exportPortableProject(request, source)`
+and `importPortableProject(document, explicitlySelectedSource)`. Their
+`cutmy.collection.project` version 1 envelope has clip decisions plus optional
+fingerprint/title/duration. It excludes server resource IDs, owner credentials,
+keys and source paths/URLs, and grants no authority to look up another source.
+
+## Existing SRT/VTT sidecars
+
+Use external subtitle text and the actual segment maps from verified ready
+outputs. Retiming performs no transcription or media rendering:
+
+```ts
+import { readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+const sidecars = await client.retimeSubtitles({ version: 1, format: 'srt',
+  text: await readFile('./interview.srt', 'utf8'),
+  outputs: current.outputs.map(output => ({ clip_id: output.clip_id, segments: output.segments })) });
+for (const item of sidecars.outputs)
+  await writeFile(join('./sidecars', item.clip_id + '.' + item.format), item.text,
+    { encoding: 'utf8', flag: 'wx' });
+```
+
+Create the chosen sidecar directory first. The SDK verifies result identities,
+formats and SHA256. Exclusive writes preserve existing files; sidecars are
+outside the private media journal and its byte budget. `LocalCutmy.retimeSubtitles`
+uses the same contract with an installed core binary. Local execution does not
+promise a durable runner. Subtitle text is limited to 512 KiB UTF-8, with up to
+128 clips/128 segments each, 4096 total segments and 8 MiB combined output text.
+VTT STYLE/REGION/inline timestamps are rejected; cue settings require VTT output.
+Use `output_format` to convert SRT/VTT. Requests are capped at 4 MiB, subtitle
+responses at 64 MiB and project responses at 16 MiB; ordinary metadata retains
+its 1 MiB limit.
 
 For a manual agent loop, the browser-compatible main client exposes
 `validateCollection(request)` and
@@ -260,12 +362,14 @@ privacy for these methods as for single-job plans.
   boundaries; use artifact `actual_start_ms`, `actual_end_ms` and `segments`.
 - `createJob` requires an explicit key containing 1–128 UTF-8 bytes and no control
   characters. Changing work requires a new key. Retention/deletion can remove
-  recovery information. The SDK never automatically retries a mutation.
+  recovery information. Ordinary low-level methods never retry mutations;
+  durable runners recover only their saved exact intents.
 - `ApiError` exposes stable `code`, HTTP `status`, `retryAfterSeconds` when supplied,
   and available `jobId` /
   `idempotencyKey`. Transport failures, timeouts and unsuccessful submissions may
-  have committed: recover submissions with the saved key. For uncertain
-  upload/import outcomes, check `listSources()` before repeating them.
+  have committed: recover submissions with the saved key. Unkeyed upload/import
+  calls need caller reconciliation; `prepareSource`/`resumeSource` provide the
+  separate durable keyed workflow.
 - `waitForJob` polls at least once per second. Its timeout or AbortSignal stops
   waiting, leaving the server job active; use `cancelJob` explicitly to cancel it.
   Failed/cancelled jobs throw `JobError` with the full job and ready partial files.
@@ -275,8 +379,9 @@ privacy for these methods as for single-job plans.
 - Request, source and download defaults are 30 seconds, 2 minutes and 5 minutes.
   Downloads retain their deadline through stream consumption. Override with
   `timeoutMs` per operation and use `signal` for caller cancellation. JSON
-  responses and CLI stdout/stderr are bounded to 1 MiB; optional `maxBytes`
-  limits downloads using both advertised and actual bytes.
+  responses and CLI stdout/stderr ordinarily stay within 1 MiB. Project/subtitle
+  methods use the explicit larger response caps above; stderr keeps its ordinary
+  bound. Optional `maxBytes` limits downloads using advertised and actual bytes.
 - Unknown response fields, diagnostic codes, track reasons, preflight check
   statuses and job states are preserved. An unknown job state continues polling
   within the waiting deadline; it is not treated as a successful export.

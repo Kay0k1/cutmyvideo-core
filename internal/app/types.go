@@ -136,33 +136,37 @@ func remoteSourceBudget(c Config) int64 {
 }
 
 type Source struct {
-	MediaRemoved     bool       `json:"media_removed"`
-	ID               string     `json:"id"`
-	ExpiresAt        *time.Time `json:"expires_at"`
-	RetentionBlocked bool       `json:"retention_blocked"`
-	Title            string     `json:"title"`
-	DurationMS       int64      `json:"duration_ms"`
-	Kind             string     `json:"kind"`
-	Provider         string     `json:"provider"`
-	ProviderVideoID  *string    `json:"provider_video_id"`
-	SourceURL        *string    `json:"source_url"`
-	PreviewKind      string     `json:"preview_kind"`
-	ThumbnailPath    string     `json:"-"`
-	PreviewURL       *string    `json:"preview_url"`
-	EmbedURL         *string    `json:"embed_url"`
-	ThumbnailURL     *string    `json:"thumbnail_url"`
-	Width            int        `json:"width,omitempty"`
-	Height           int        `json:"height,omitempty"`
-	Tracks           []Track    `json:"tracks,omitempty"`
+	Fingerprint      *SourceFingerprint `json:"fingerprint,omitempty"`
+	MediaRemoved     bool               `json:"media_removed"`
+	ID               string             `json:"id"`
+	ExpiresAt        *time.Time         `json:"expires_at"`
+	RetentionBlocked bool               `json:"retention_blocked"`
+	Title            string             `json:"title"`
+	DurationMS       int64              `json:"duration_ms"`
+	Kind             string             `json:"kind"`
+	Provider         string             `json:"provider"`
+	ProviderVideoID  *string            `json:"provider_video_id"`
+	SourceURL        *string            `json:"source_url"`
+	PreviewKind      string             `json:"preview_kind"`
+	ThumbnailPath    string             `json:"-"`
+	PreviewURL       *string            `json:"preview_url"`
+	EmbedURL         *string            `json:"embed_url"`
+	ThumbnailURL     *string            `json:"thumbnail_url"`
+	Width            int                `json:"width,omitempty"`
+	Height           int                `json:"height,omitempty"`
+	Tracks           []Track            `json:"tracks,omitempty"`
 	// Display dimensions are computed only by fresh local inspection. They are
 	// not persisted in the source table or exposed by HTTP source responses.
-	DisplayWidth  int    `json:"-"`
-	DisplayHeight int    `json:"-"`
-	Path          string `json:"-"`
-	URL           string `json:"-"`
-	Owner         string `json:"-"`
-	StorageToken  string `json:"-"`
-	ProviderID    string `json:"-"`
+	DisplayWidth      int    `json:"-"`
+	DisplayHeight     int    `json:"-"`
+	Path              string `json:"-"`
+	URL               string `json:"-"`
+	Owner             string `json:"-"`
+	StorageToken      string `json:"-"`
+	ProviderID        string `json:"-"`
+	PreparationKey    string `json:"-"`
+	PreparationClaim  string `json:"-"`
+	PreparationPathID string `json:"-"`
 }
 
 type Range struct {

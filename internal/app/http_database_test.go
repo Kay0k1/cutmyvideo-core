@@ -111,7 +111,15 @@ func TestAPIDatabasePoolWaitsAreBoundedAndRecover(t *testing.T) {
 				}
 				requestCookie = &http.Cookie{Name: cookie.Name, Value: base64.RawURLEncoding.EncodeToString(identity)}
 			}
-			server.Handler().ServeHTTP(response, databaseRequest(tc.method, tc.path, tc.body, requestCookie))
+			request := databaseRequest(tc.method, tc.path, tc.body, requestCookie)
+			if tc.method == "POST" && tc.path == "/api/v1/uploads" {
+				// Source preparation is opt-in through the caller key. Supply its
+				// valid metadata so this control reaches the bounded receipt lookup,
+				// rather than failing the new request guard before touching the pool.
+				request.Header.Set("Upload-SHA256", strings.Repeat("a", 64))
+				request.Header.Set("Upload-Size", "1")
+			}
+			server.Handler().ServeHTTP(response, request)
 			results <- result{tc.method + " " + tc.path, response, time.Since(started)}
 		}()
 	}

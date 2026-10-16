@@ -46,8 +46,10 @@ def collection_inputs():
         "go.mod", "go.sum", "scripts/check-sdks.py", "scripts/sdk_checks_test.py",
         "scripts/sdk-smoke.py", "scripts/sdk-smoke.mjs",
         "scripts/sdk-collection-acceptance.py", "scripts/sdk-collection-acceptance.mjs",
+        "scripts/sdk-agent-project-acceptance.py", "scripts/sdk-agent-project-acceptance.mjs",
         "scripts/sdk-collection-acceptance-verify.py", "scripts/sdk-collection-acceptance-verify-test.py",
         "internal/app/sdk_integration_test.go", "internal/app/sdk_collections_integration_test.go",
+        "internal/app/sdk_agent_projects_integration_test.go",
         "sdk/python/README.md", "sdk/python/pyproject.toml", "sdk/python/src/cutmyvideo/py.typed",
         "sdk/typescript/README.md", "sdk/typescript/package.json", "sdk/typescript/package-lock.json",
         "sdk/typescript/tsconfig.json")]
@@ -159,11 +161,13 @@ def main():
     env["CUTMY_SDK_JS_ENTRY"] = str(package / "dist/index.js")
     env["CUTMY_SDK_LOCAL_JS_ENTRY"] = str(package / "dist/local.js")
     env["CUTMY_SDK_COLLECTION_JS_ENTRY"] = str(package / "dist/collections.js")
+    env["CUTMY_SDK_SOURCE_JS_ENTRY"] = str(package / "dist/sources.js")
     run([node, "--test", *map(str, sorted((ts_root / "test").glob("*.test.mjs")))],
         cwd=consumer, env=env, log=output / "typescript-installed-tests.log")
     (consumer / "types.ts").write_text('''import { CutmyClient, type CollectionRequest } from "@cutmyvideo/sdk";
 import { LocalCutmy } from "@cutmyvideo/sdk/local";
 import { runCollection, resumeCollection } from "@cutmyvideo/sdk/collections";
+import { prepareSource, resumeSource } from "@cutmyvideo/sdk/sources";
 const client = new CutmyClient({baseUrl: "http://127.0.0.1:8080"});
 const local = new LocalCutmy({binary: "cutmy"});
 void client.preflight({source_id: "src", ranges: [{start_ms: 0, end_ms: 1000}], format: "mp4", quality: "best", cut_mode: "accurate"});
@@ -172,6 +176,8 @@ void client.validateCollection(request);
 void client.submitCollection(request, {idempotencyKey: "saved-key"});
 void runCollection(client, request, "/private/project", {timeoutMs: 1800000, onProgress: report => { console.log(report.outputs.map(output => output.clip_id)); }});
 void resumeCollection(client, "/private/project", {request});
+void prepareSource(client, {kind: "upload", path: "/media/interview.mp4"}, "/private/source");
+void resumeSource(client, "/private/source");
 void local.validateCollection({...request.plan, input: "/media/interview.mp4"}, "/media/clips");
 void local.executeCollection({...request.plan, input: "/media/interview.mp4"}, "/media/clips", {clipIds: ["answer"], rendition: "draft"});
 ''', encoding="utf-8")
@@ -188,6 +194,7 @@ void local.executeCollection({...request.plan, input: "/media/interview.mp4"}, "
             parser.error("--http requires an isolated TEST_DATABASE_URL")
         top_level.add("TestInstalledSDKHTTPWorkflow")
         top_level.add("TestInstalledSDKCollectionHTTPWorkflow")
+        top_level.add("TestInstalledSDKAgentProjectWorkflow")
     required = top_level | {f"{name}/{language}" for name in top_level for language in ("python", "typescript")}
     selector = "^(" + "|".join(sorted(top_level)) + ")$"
     run(["go", "test", "-json", "-race", "-count=1", "-timeout=15m" if args.http else "-timeout=3m", "./internal/app", "-run", selector],

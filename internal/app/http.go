@@ -73,9 +73,12 @@ func (s *Server) Handler() http.Handler {
 		writeJSON(w, 200, map[string]bool{"ok": true})
 	})
 	mux.HandleFunc("GET /api/v1/session", s.session)
+	s.registerProjectRoutes(mux)
 	mux.HandleFunc("GET /api/v1/sources", s.withSession(s.listSources))
 	mux.HandleFunc("POST /api/v1/sources", s.withSession(s.addSource))
 	mux.HandleFunc("POST /api/v1/uploads", s.withSession(s.upload))
+	mux.HandleFunc("GET /api/v1/source-preparations/{key}", s.withSession(s.sourcePreparation))
+	mux.HandleFunc("POST /api/v1/subtitles/retime", s.withSession(s.retimeSubtitles))
 	mux.HandleFunc("DELETE /api/v1/sources/{id}", s.withSession(s.deleteSource))
 	mux.HandleFunc("GET /api/v1/sources/{id}", s.withSession(s.source))
 	mux.HandleFunc("GET /api/v1/sources/{id}/media", s.withSession(s.sourceMedia))
@@ -113,7 +116,7 @@ func (s *Server) Handler() http.Handler {
 				return
 			}
 		}
-		if (r.Method == "POST" || r.Method == "DELETE") && !s.validOrigin(r) {
+		if (r.Method == "POST" || r.Method == "DELETE" || r.Method == "PUT" || r.Method == "PATCH") && !s.validOrigin(r) {
 			writeError(w, 403, "origin_rejected", "This request must come from the same site")
 			return
 		}
@@ -226,7 +229,7 @@ func (s *Server) withSession(next ownerHandler) http.HandlerFunc {
 			writeError(w, 429, "rate_limit", "Too many requests; wait a minute")
 			return
 		}
-		if (r.Method == "POST" || r.Method == "DELETE") && !s.allow("mutations:"+ip, s.Config.MutationsPerMinute) {
+		if (r.Method == "POST" || r.Method == "DELETE" || r.Method == "PUT" || r.Method == "PATCH") && !s.allow("mutations:"+ip, s.Config.MutationsPerMinute) {
 			writeError(w, 429, "rate_limit", "Too many changes; wait a minute")
 			return
 		}
@@ -353,6 +356,12 @@ func (s *Server) addSourceWithClient(w http.ResponseWriter, r *http.Request, own
 		writeError(w, 400, "invalid_url", "The link is too long")
 		return
 	}
+	preparation, wrapped, proceed := s.startSourcePreparation(w, r, owner, sourcePreparationIntent{Kind: "import", URL: u.String()})
+	if !proceed {
+		return
+	}
+	w = wrapped
+	defer preparation.finish()
 	timeout := s.Config.SourceTimeout
 	if !isPlatformHost(u.Hostname()) {
 		timeout = max(timeout, uploadTimeout(s.Config))
@@ -365,8 +374,9 @@ func (s *Server) addSourceWithClient(w http.ResponseWriter, r *http.Request, own
 		return
 	}
 	defer s.endSource(owner)
-	v := Source{ID: newID("src"), Owner: owner, StorageToken: s.sourceToken(owner), URL: u.String(), Kind: "direct"}
-	s.sourceIdentity(owner, v.ID)
+	v := Source{ID: preparationSource(preparation), Owner: owner, StorageToken: s.sourceToken(owner), URL: u.String(), Kind: "direct"}
+	preparation.attach(&v)
+	s.sourceIdentity(owner, sourceFileIdentity(v))
 	platform := isPlatformHost(u.Hostname())
 	if !platform {
 		req, _ := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
@@ -397,7 +407,7 @@ func (s *Server) addSourceWithClient(w http.ResponseWriter, r *http.Request, own
 				writeError(w, 413, "source_too_large", "The source exceeds the download limit")
 				return
 			}
-			file, path, e := makeSourceFile(s.Config, v.ID)
+			file, path, e := makeSourceFile(s.Config, sourceFileIdentity(v))
 			if e != nil {
 				internalError(w, e)
 				return
@@ -409,7 +419,8 @@ func (s *Server) addSourceWithClient(w http.ResponseWriter, r *http.Request, own
 					_ = removeSourcePreparation(path, v.Path)
 				}
 			}()
-			if e = copyBounded(file, resp.Body, s.Config.MaxSourceBytes); e != nil {
+			digest := sha256.New()
+			if e = copyBounded(io.MultiWriter(file, digest), resp.Body, s.Config.MaxSourceBytes); e != nil {
 				if sourceTimedOut(ctx, e) {
 					writeError(w, 504, "source_timeout", "Source download timed out; try again or upload your file")
 				} else if errors.Is(e, errSourceTooLarge) {
@@ -419,6 +430,12 @@ func (s *Server) addSourceWithClient(w http.ResponseWriter, r *http.Request, own
 				}
 				return
 			}
+			stat, statErr := file.Stat()
+			if statErr != nil {
+				internalError(w, statErr)
+				return
+			}
+			v.Fingerprint = &SourceFingerprint{Kind: "content", SHA256: hex.EncodeToString(digest.Sum(nil)), SizeBytes: stat.Size()}
 			if e = file.Close(); e != nil {
 				internalError(w, e)
 				return
@@ -507,6 +524,8 @@ func (s *Server) addSourceWithClient(w http.ResponseWriter, r *http.Request, own
 			v.ThumbnailURL = &thumbnail
 		}
 		completeSourcePresentation(&v)
+		identity := sha256.Sum256([]byte(v.URL))
+		v.Fingerprint = &SourceFingerprint{Kind: "provider", Provider: v.Provider, ProviderID: v.ProviderID, CanonicalURLSHA256: hex.EncodeToString(identity[:])}
 		if e = s.databaseAddSource(ctx, v); e != nil {
 			if errors.Is(e, ErrSourceCommitUncertain) {
 				s.holdSourceReservation(owner)
@@ -592,6 +611,20 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request, owner string) {
 }
 
 func (s *Server) uploadWithPublisher(w http.ResponseWriter, r *http.Request, owner string, publish func(context.Context, Source) error) {
+	intent, valid := s.uploadPreparationIntent(w, r)
+	if !valid {
+		return
+	}
+	preparation, wrapped, proceed := s.startSourcePreparation(w, r, owner, intent)
+	if !proceed {
+		return
+	}
+	w = wrapped
+	defer preparation.finish()
+	if intent.SizeBytes > s.Config.MaxSourceBytes {
+		writeError(w, 413, "source_too_large", "The upload exceeds the file size limit")
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), uploadTimeout(s.Config))
 	defer cancel()
 	r = r.WithContext(ctx)
@@ -634,12 +667,13 @@ func (s *Server) uploadWithPublisher(w http.ResponseWriter, r *http.Request, own
 		}
 		return
 	}
-	v := Source{ID: newID("src"), Owner: owner, StorageToken: s.sourceToken(owner), Kind: "upload", Title: filepath.Base(part.FileName())}
-	s.sourceIdentity(owner, v.ID)
+	v := Source{ID: preparationSource(preparation), Owner: owner, StorageToken: s.sourceToken(owner), Kind: "upload", Title: filepath.Base(part.FileName())}
+	preparation.attach(&v)
+	s.sourceIdentity(owner, sourceFileIdentity(v))
 	if len(v.Title) > 200 {
 		v.Title = "Uploaded video"
 	}
-	file, path, err := makeSourceFile(s.Config, v.ID)
+	file, path, err := makeSourceFile(s.Config, sourceFileIdentity(v))
 	if err != nil {
 		internalError(w, err)
 		return
@@ -651,7 +685,8 @@ func (s *Server) uploadWithPublisher(w http.ResponseWriter, r *http.Request, own
 			_ = removeSourcePreparation(path, v.Path)
 		}
 	}()
-	if err = copyBounded(file, part, s.Config.MaxSourceBytes); err != nil {
+	digest := sha256.New()
+	if err = copyBounded(io.MultiWriter(file, digest), part, s.Config.MaxSourceBytes); err != nil {
 		var tooLarge *http.MaxBytesError
 		if sourceTimedOut(ctx, err) {
 			writeError(w, 504, "source_timeout", "Upload timed out; try again with a smaller file")
@@ -660,6 +695,16 @@ func (s *Server) uploadWithPublisher(w http.ResponseWriter, r *http.Request, own
 		} else {
 			writeError(w, 400, "invalid_upload", "The upload was interrupted; try uploading the file again")
 		}
+		return
+	}
+	stat, statErr := file.Stat()
+	if statErr != nil {
+		internalError(w, statErr)
+		return
+	}
+	v.Fingerprint = &SourceFingerprint{Kind: "content", SHA256: hex.EncodeToString(digest.Sum(nil)), SizeBytes: stat.Size()}
+	if err = verifyUploadedFingerprint(preparation, v.Fingerprint); err != nil {
+		writeError(w, 422, "source_fingerprint_mismatch", "The received file does not match Upload-SHA256 and Upload-Size")
 		return
 	}
 	if err = file.Close(); err != nil {
@@ -905,6 +950,7 @@ func (s *Server) job(w http.ResponseWriter, r *http.Request, owner string) {
 		lookupError(w, err)
 		return
 	}
+	rewriteProjectJob(r.Context(), &j)
 	writeJSON(w, 200, j)
 }
 func (s *Server) cancelJob(w http.ResponseWriter, r *http.Request, owner string) {
@@ -962,6 +1008,10 @@ func serveFile(w http.ResponseWriter, r *http.Request, path, name string, attach
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
+	return decodeJSONLimit(w, r, target, 1<<20)
+}
+
+func decodeJSONLimit(w http.ResponseWriter, r *http.Request, target any, maxBytes int64) error {
 	// JSON metadata is small. Do not give stalled JSON bodies the server's
 	// much longer media-upload timeout, which retains a connection/goroutine.
 	deadline := time.Now().Add(jsonReadTimeout)
@@ -979,7 +1029,7 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
 			_ = controller.SetReadDeadline(time.Time{})
 		}
 	}()
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(target); err != nil {

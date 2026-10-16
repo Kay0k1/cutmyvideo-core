@@ -141,12 +141,16 @@ func newID(prefix string) string {
 	return prefix + "_" + hex.EncodeToString(b)
 }
 
-const sourceSelect = `SELECT id,owner,title,duration_ms,kind,path,url,width,height,embed_url,thumbnail_url,provider_id,provider,thumbnail_path,created_at,EXISTS(SELECT 1 FROM jobs WHERE source_id=sources.id),media_removed FROM sources`
+const sourceSelect = `SELECT id,owner,title,duration_ms,kind,path,url,width,height,embed_url,thumbnail_url,provider_id,provider,thumbnail_path,created_at,EXISTS(SELECT 1 FROM jobs WHERE source_id=sources.id),media_removed,(SELECT fingerprint FROM source_fingerprints WHERE source_id=sources.id AND owner=sources.owner) FROM sources`
 
 func scanSource(row pgx.Row, c Config) (Source, error) {
 	var v Source
 	var created time.Time
-	err := row.Scan(&v.ID, &v.Owner, &v.Title, &v.DurationMS, &v.Kind, &v.Path, &v.URL, &v.Width, &v.Height, &v.EmbedURL, &v.ThumbnailURL, &v.ProviderID, &v.Provider, &v.ThumbnailPath, &created, &v.RetentionBlocked, &v.MediaRemoved)
+	var fingerprint []byte
+	err := row.Scan(&v.ID, &v.Owner, &v.Title, &v.DurationMS, &v.Kind, &v.Path, &v.URL, &v.Width, &v.Height, &v.EmbedURL, &v.ThumbnailURL, &v.ProviderID, &v.Provider, &v.ThumbnailPath, &created, &v.RetentionBlocked, &v.MediaRemoved, &fingerprint)
+	if err == nil && len(fingerprint) > 0 {
+		err = json.Unmarshal(fingerprint, &v.Fingerprint)
+	}
 	if err == nil && c.SourceTTL > 0 && !v.RetentionBlocked {
 		expires := created.Add(c.SourceTTL)
 		v.ExpiresAt = &expires

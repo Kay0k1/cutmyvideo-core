@@ -41,3 +41,11 @@ platform metadata resolution claims. No SQL connection remains occupied during
 upstream extraction; source deletion cascades its optional claim. Positions 1–6
 remain immutable. `007_schema.json` records the expected catalog, checked against
 the actual isolated PostgreSQL catalog by migration integration tests.
+
+`008_20261016_agent_projects_v1.sql` adds owner-scoped source preparation
+receipts, verified source fingerprints, bounded single-source projects and
+single-recipient handoff grants. Retry intents retain separate per-clip job
+identities before admission. Existing source/job/artifact rows and migrations
+1–7 remain unchanged. `008_schema.json` captures the actual isolated PostgreSQL
+17 catalog, including all new tables, indexes and constraints; schema 7 upgrade
+and unchanged-current-startup tests verify the append-only transition.

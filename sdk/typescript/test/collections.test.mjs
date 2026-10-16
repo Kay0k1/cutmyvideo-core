@@ -12,7 +12,7 @@ import test from 'node:test';
 const mainEntry = process.env.CUTMY_SDK_JS_ENTRY ? pathToFileURL(process.env.CUTMY_SDK_JS_ENTRY).href : new URL('../dist/index.js', import.meta.url).href;
 const collectionsEntry = process.env.CUTMY_SDK_COLLECTION_JS_ENTRY ? pathToFileURL(process.env.CUTMY_SDK_COLLECTION_JS_ENTRY).href : new URL('../dist/collections.js', import.meta.url).href;
 const localEntry = process.env.CUTMY_SDK_LOCAL_JS_ENTRY ? pathToFileURL(process.env.CUTMY_SDK_LOCAL_JS_ENTRY).href : new URL('../dist/local.js', import.meta.url).href;
-const { CutmyClient, ApiError, CollectionError } = await import(mainEntry);
+const { CutmyClient, ApiError, CollectionError, exportPortableProject, importPortableProject } = await import(mainEntry);
 const { runCollection, resumeCollection } = await import(collectionsEntry);
 const { LocalCutmy, LocalError } = await import(localEntry);
 const cookie = 'a'.repeat(43);
@@ -31,6 +31,7 @@ async function fixture(t, config = {}) {
     try {
       if (req.url === '/api/v1/session') { res.setHeader('set-cookie', 'cutmy_session=' + cookie + '; Path=/; HttpOnly'); return json(res, { ok: true, limits }); }
       assert.equal(req.headers.cookie, 'cutmy_session=' + cookie);
+      if (req.method === 'GET' && req.url === '/api/v1/projects/project-1' && config.project) return json(res, config.project);
       if (req.url === '/api/v1/collections/validate') {
         const data = await readBody(req);
         if (config.validationError) return json(res, { error: { code: 'invalid_collection', message: 'Fix this clip range', clip_id: 'clip0', field: 'ranges', session_cookie: 'private-unknown-cookie', owner: { private: 'private-unknown-owner' } } }, 400);
@@ -47,6 +48,10 @@ async function fixture(t, config = {}) {
             const n = jobs.size + 1, id = 'job-' + n, artifactID = 'artifact-' + n, payload = Buffer.alloc(config.large ? 180000 : 100, n);
             const artifact = { id: artifactID, filename: 'untrusted/path.mp4', size_bytes: payload.length, download_url: 'https://foreign.invalid/private', actual_start_ms: 0, actual_end_ms: 500, expires_at: null, segments: [], track_manifest: [] };
             job = { id, status: config.failedClip === clip.id ? 'failed' : 'succeeded', stage: 'done', message: '', storage_wait_until: null, items: [{ id: 'item-' + n, label: '', start_ms: 0, end_ms: 500, status: config.failedClip === clip.id ? 'failed' : 'succeeded', artifact: config.failedClip === clip.id ? null : artifact }] };
+            if (config.workerDiagnostic && config.failedClip === clip.id) {
+              job.stage = 'processing';
+              Object.assign(job.items[0], { error_code: 'job_timeout', message: 'Processing deadline exceeded', progress_ms: 250, unknown_secret: 'private-unknown-worker' });
+            }
             jobs.set(id, job); identities.set(identity, job); bytes.set(artifactID, payload);
           }
           return { clip_id: clip.id, label: '', requested_duration_ms: 500, request: normalized, retryable: false, job };
@@ -114,6 +119,43 @@ test('numeric and nonlexical clip IDs follow plan order across run, selection an
   const reordered = structuredClone(value); reordered.plan.clips.reverse(); reordered.clip_ids = ['1', 'a'];
   const again = await resumeCollection(new CutmyClient({ baseUrl: f.baseUrl }), root, { request: reordered }); assert.deepEqual(again.outputs.map(output => output.clip_id), ['a', '1']); assert.equal(f.jobs.size, 4);
   for (const output of again.outputs) assert.equal(done.outputs.find(prior => prior.clip_id === output.clip_id).job_id, output.job_id);
+});
+
+test('portable edit documents exclude authority and require an explicit matching source', () => {
+  const fingerprint = { kind: 'content', sha256: hash('source'), size_bytes: 6 };
+  const source = { id: 'source-1', title: 'Interview', duration_ms: 120000, fingerprint, source_url: 'private-url', session_cookie: 'private-cookie' };
+  const document = exportPortableProject(request(2), source);
+  assert(!JSON.stringify(document).includes('private-')); assert(!Object.hasOwn(document, 'source_id'));
+  assert.deepEqual(importPortableProject(document, source), request(2));
+  assert.throws(() => importPortableProject(document, { ...source, fingerprint: { ...fingerprint, sha256: '0'.repeat(64) } }), /fingerprint/);
+  assert.throws(() => importPortableProject({ ...document, session_cookie: 'private-cookie' }, source), /portable/i);
+  for (const mutate of [body => { body.plan.session_cookie = 'private-cookie'; }, body => { body.plan.clips[0].label = { session_cookie: 'private-cookie' }; }]) {
+    const unsafe = request(2); mutate(unsafe); assert.throws(() => exportPortableProject(unsafe, source), /edit fields/);
+  }
+  assert.throws(() => exportPortableProject(request(2), { ...source, title: { session_cookie: 'private-cookie' } }), error => error instanceof ApiError && error.code === 'invalid_response');
+});
+
+test('retained receipt limit refuses a new transfer without making the project unreadable', async t => {
+  const root = join(await directory(t), 'project'), f = await fixture(t);
+  const done = await runCollection(f.client, request(), root), original = await readFile(done.outputs[0].path);
+  const statePath = join(root, 'state.json'), state = JSON.parse(await readFile(statePath, 'utf8'));
+  // Intent receipts reserve bytes but have no prefix file. A bounded fixture
+  // reaches the real restore/append boundary without thousands of media jobs.
+  for (let i = 0; i < 4095; i++) {
+    const id = 'retained-' + i;
+    state.receipts[id] = { clip_id: 'clip0', job_id: 'retained-job-' + i, artifact_id: id, rendition: 'final',
+      path: 'files/clip0.final.' + id + '.mp4', part: 'parts/' + id + '.00000000-0000-0000-0000-000000000000.part',
+      size_bytes: 1, offset: 0, prefix_sha256: hash(Buffer.alloc(0)), phase: 'intent', segments: [], track_manifest: [] };
+  }
+  await writeFile(statePath, JSON.stringify(state));
+  const edited = request(); edited.plan.clips[0].ranges[0].end_ms += 50;
+  for (const options of [{ request: edited }, {}]) {
+    await assert.rejects(resumeCollection(new CutmyClient({ baseUrl: f.baseUrl }), root, options), error => error.code === 'receipt_limit');
+    const saved = JSON.parse(await readFile(statePath, 'utf8'));
+    assert.equal(Object.keys(saved.receipts).length, 4096);
+    assert.deepEqual(await readFile(done.outputs[0].path), original);
+  }
+  assert.equal(f.jobs.size, 2);
 });
 
 test('accepted job polling observes the minimum interval while batches are submitted', async t => {
@@ -379,6 +421,67 @@ test('main entry import closure contains no Node built-ins and low-level malform
     return new Response(JSON.stringify({ version: 1, complete: true, rendition: 'final', clips: [{ clip_id: 'clip0', request: {}, job: { id: 'job-1' }, retryable: false }] }), { status: 202 });
   } });
   await assert.rejects(client.submitCollection(request(), { idempotencyKey: 'saved-key' }), error => error instanceof ApiError && error.code === 'invalid_response');
+});
+
+test('project adoption uses exact current requests, preserves thirteen files and respects a two-clip selection with historical jobs', async t => {
+  const root = join(await directory(t), 'project'), f = await fixture(t), body = request(15), key = 'private-workflow-key';
+  const first = await runCollection(f.client, body, root, { idempotencyKey: key, timeoutMs: 30000 });
+  const jobs = new Map(first.outputs.map(item => [item.clip_id, f.jobs.get(item.job_id)]));
+  const changed = request(15); for (const clip of changed.plan.clips.slice(0, 2)) clip.ranges[0].end_ms += 20;
+  const submission = await f.client.submitCollection({ ...changed, clip_ids: ['clip0','clip1'] }, { idempotencyKey: key });
+  for (const item of submission.clips) jobs.set(item.clip_id, item.job);
+  function dto(value) {
+    const selected = new Set(chosen(value).map(clip => clip.id));
+    return { version: 1, id: 'project-1', revision: 2, ...value, rendition: 'final', source: { id: value.source_id, duration_ms: 100000, title: 'Interview' },
+      clips: chosen(value).map(clip => ({ clip_id: clip.id, request: effective(value, clip) })),
+      jobs: value.plan.clips.map(clip => ({ clip_id: clip.id, request: effective(value, clip), job: jobs.get(clip.id), current: selected.has(clip.id) })),
+    };
+  }
+  f.config.project = dto(changed);
+  const before = f.calls.filter(call => call.method === 'POST').length;
+  const result = await resumeCollection(new CutmyClient({ baseUrl: f.baseUrl }), root, { projectId: 'project-1', timeoutMs: 30000 });
+  assert.equal(result.outputs.length, 15); assert.equal(f.jobs.size, 17); assert.equal(f.calls.filter(call => call.method === 'POST').length, before);
+  assert.deepEqual(result.outputs.filter(item => !['clip0','clip1'].includes(item.clip_id)), first.outputs.filter(item => !['clip0','clip1'].includes(item.clip_id)));
+  const selected = { ...changed, clip_ids: ['clip0','clip1'] }; f.config.project = dto(selected);
+  const subset = await resumeCollection(new CutmyClient({ baseUrl: f.baseUrl }), root, { projectId: 'project-1', timeoutMs: 10000 });
+  assert.deepEqual(subset.outputs.map(item => item.clip_id), ['clip0','clip1']);
+  f.config.project.jobs[0].request = { ...f.config.project.jobs[0].request, ranges: [{ start_ms: 7000, end_ms: 8000 }] };
+  await assert.rejects(resumeCollection(new CutmyClient({ baseUrl: f.baseUrl }), root, { projectId: 'project-1' }), error => error.code === 'project_conflict');
+  assert.equal(f.calls.filter(call => call.method === 'POST').length, before);
+});
+
+test('retryFailed retains fourteen verified outputs and reconciles an uncertain new attempt key', async t => {
+  const root = join(await directory(t), 'project'), f = await fixture(t, { failedClip: 'clip14', workerDiagnostic: true });
+  let initial;
+  await assert.rejects(runCollection(f.client, request(15), root, { timeoutMs: 30000 }), error => {
+    initial = error.report;
+    const pending = error.report.pending.find(item => item.clip_id === 'clip14');
+    assert.equal(pending.error_code, 'job_timeout'); assert.equal(pending.message, 'Processing deadline exceeded');
+    assert.equal(pending.progress_ms, 250); assert.equal(pending.stage, 'processing'); assert(f.jobs.has(pending.job_id));
+    assert(!JSON.stringify(error.report).includes('private-unknown-worker'));
+    return error instanceof CollectionError && error.code === 'failed';
+  });
+  assert.equal(initial.outputs.length, 14);
+  f.config.failedClip = undefined; f.config.loseReply = true;
+  await assert.rejects(resumeCollection(new CutmyClient({ baseUrl: f.baseUrl }), root, {
+    retryFailed: ['clip14'], timeoutMs: 30000,
+    onProgress: report => { if (report.phase === 'submission_uncertain') throw new Error('Stop after lost retry reply'); },
+  }), error => error instanceof CollectionError && error.code === 'callback_error');
+  const state = JSON.parse(await readFile(join(root, 'state.json')));
+  assert.equal(state.intent_key, state.attempt_keys.clip14);
+  const result = await resumeCollection(new CutmyClient({ baseUrl: f.baseUrl }), root, { timeoutMs: 30000 });
+  assert.equal(result.complete, true); assert.equal(f.jobs.size, 16);
+  assert.deepEqual(result.outputs.filter(item => item.clip_id !== 'clip14'), initial.outputs);
+  const retryPosts = f.calls.filter(call => call.method === 'POST' && call.key === state.attempt_keys.clip14);
+  assert.equal(retryPosts.length, 2); assert.deepEqual(retryPosts[0].body, retryPosts[1].body);
+  assert.deepEqual(retryPosts[0].body.clip_ids, ['clip14']);
+  const changed = request(15); changed.plan.clips[0].ranges[0].end_ms += 5;
+  const revised = await resumeCollection(new CutmyClient({ baseUrl: f.baseUrl }), root, { request: changed, timeoutMs: 30000 });
+  assert.equal(f.jobs.size, 17);
+  assert.deepEqual(revised.outputs.find(item => item.clip_id === 'clip14'), result.outputs.find(item => item.clip_id === 'clip14'));
+  const before = f.calls.filter(call => call.method === 'POST' && call.url === '/api/v1/collections').length;
+  await assert.rejects(resumeCollection(new CutmyClient({ baseUrl: f.baseUrl }), root, { retryFailed: ['clip14'] }), error => error.code === 'retry_not_failed');
+  assert.equal(f.calls.filter(call => call.method === 'POST' && call.url === '/api/v1/collections').length, before);
 });
 
 test('local collection wrappers pass literal selection/rendition and retain partial collection outputs', async t => {

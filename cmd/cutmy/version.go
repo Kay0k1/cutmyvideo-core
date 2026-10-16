@@ -23,6 +23,7 @@ Usage:
   cutmy preflight --plan cuts.json --output ./clips
   cutmy collection validate --plan collection.json --output ./clips
   cutmy collection export --plan collection.json --output ./clips --rendition draft
+  cutmy subtitles retime --request subtitles.json
   cutmy server                 Start the HTTP API (PostgreSQL required)
   cutmy worker                 Process queued exports
   cutmy maintenance            Run one bounded storage cleanup cycle

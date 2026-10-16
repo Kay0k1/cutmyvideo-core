@@ -19,6 +19,7 @@ export function decode<T>(value: unknown, kind: string): T {
   if (valid) {
     const v = value as Record<string, unknown>;
     switch (kind) {
+      case "object": valid = true; break;
       case "source": valid = typeof v.id === "string" && typeof v.duration_ms === "number"; break;
       case "sources": valid = Array.isArray(v.sources) && v.sources.every(x => object(x) && typeof x.id === "string" && typeof x.duration_ms === "number"); break;
       case "tracks": case "inspect": valid = Array.isArray(v.tracks) && v.tracks.every(x => object(x) && Number.isInteger(x.index) && typeof x.type === "string" && typeof x.codec === "string" && typeof x.default === "boolean") && (kind !== "inspect" || typeof v.duration_ms === "number"); break;
@@ -80,9 +81,9 @@ export function delay(ms: number, signal: AbortSignal): Promise<void> {
     signal.addEventListener("abort", abort, { once: true });
   });
 }
-export async function boundedJSON(response: Response): Promise<unknown> {
+export async function boundedJSON(response: Response, maximum = JSON_LIMIT): Promise<unknown> {
   const advertised = response.headers.get("content-length");
-  if (advertised && /^\d+$/.test(advertised) && Number(advertised) > JSON_LIMIT) {
+  if (advertised && /^\d+$/.test(advertised) && Number(advertised) > maximum) {
     await response.body?.cancel();
     throw new ApiError("The server response exceeded the JSON limit", { code: "response_too_large", status: response.status });
   }
@@ -95,7 +96,7 @@ export async function boundedJSON(response: Response): Promise<unknown> {
       const next = await reader.read();
       if (next.done) break;
       size += next.value.byteLength;
-      if (size > JSON_LIMIT) { await reader.cancel(); throw new ApiError("The server response exceeded the JSON limit", { code: "response_too_large", status: response.status }); }
+      if (size > maximum) { await reader.cancel(); throw new ApiError("The server response exceeded the JSON limit", { code: "response_too_large", status: response.status }); }
       chunks.push(next.value);
     }
   } finally { reader.releaseLock(); }

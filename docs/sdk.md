@@ -5,30 +5,38 @@ self-hosted HTTP API. They have no runtime dependencies. The API client owns
 one private session; the local client runs the same version 1 cutting plans as
 the CLI. Neither client decides which moments to cut or changes encoding quality.
 
-The 1.4.0 SDK candidate adds [complete, resumable clip collections](sdk-collections.md)
-to the 1.3.0 SDK foundation. Packages use development versions and have not been
-published to PyPI or npm. Use core 1.3.0
-or a matching current source build for preflight; the 1.2.0 binary does not contain
-that command or endpoint. See the [project overview](../README.en.md#versions)
-for release status and the [architecture](architecture.md) for dependencies.
+Version 1.4.0 adds [complete, resumable clip collections](sdk-collections.md),
+durable source preparation, explicit failed-clip repair, scoped project review
+and [supplied subtitle sidecars](subtitle-sidecars.md). Basic preflight and
+collection execution work with core 1.3.0; source preparation, project review and
+subtitle operations require core 1.4.0. The 1.2.0 binary has no preflight command.
+See the [project overview](../README.en.md#versions) for release status and the
+[architecture](architecture.md) for dependencies.
 
-## Install the candidate packages
+## Install versioned packages
 
 Python 3.10 or newer:
 
 ```sh
-python -m pip install ./sdk/python
+python -m pip install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.0/cutmyvideo-1.4.0-py3-none-any.whl'
 ```
 
 Node.js 20.19 or newer, with an ESM project:
 
 ```sh
-cd sdk/typescript
-npm ci
-npm run build
-npm pack
-# Install the resulting .tgz in the consuming project.
+npm install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.0/cutmyvideo-sdk-1.4.0.tgz'
 ```
+
+These are GitHub release assets, not claims of publication to PyPI/npm. No source
+checkout or SDK build is needed. The release also contains the Python source
+distribution, `SDK-MANIFEST.json` and `sdk-provenance.sigstore.json`. They bind the
+exact distributions to the reviewed source and installed HTTP/worker acceptance.
+Follow [release verification](releases.md#consumer-verification-of-a-new-signed-release)
+before installation. The final tag/draft/consumer protocol must complete before
+these URLs become a published installation entry point.
+
+For development, use `python -m pip install ./sdk/python`; the TypeScript package
+can be built with `npm ci && npm pack` in `sdk/typescript`.
 
 Use the [Python package guide](../sdk/python/README.md) and
 [TypeScript package guide](../sdk/typescript/README.md) for complete options.

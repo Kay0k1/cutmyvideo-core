@@ -28,9 +28,11 @@ def request(count=15):
 class Server:
     def __init__(self):
         self.jobs, self.files, self.posts, self.ranges, self.requests = {}, {}, [], [], []
+        self.projects = {}
         self.post_times = []
         self.lose_submit, self.break_download, self.malformed_range, self.ignore_range = False, False, False, False
         self.partial, self.terminal = False, False
+        self.failed_clips = set()
         self.invalid_validation = False
         self.compressed_download = False
         self.encodings = []
@@ -76,6 +78,9 @@ class Server:
                     return self.reply({"error": {"code": "unauthorized"}}, 401)
                 if self.path == "/api/v1/sources/source":
                     return self.reply({"id": "source", "duration_ms": 120000})
+                if self.path.startswith("/api/v1/projects/") and self.command == "GET":
+                    project = outer.projects.get(self.path.rsplit("/", 1)[1])
+                    return self.reply(project) if project else self.reply({"error": {"code": "not_found"}}, 404)
                 if self.path == "/api/v1/collections/validate":
                     body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                     if outer.invalid_validation:
@@ -100,7 +105,7 @@ class Server:
                             continue
                         content = (fingerprint.encode() * 10000)[:180000]
                         outer.files[aid] = content
-                        status = "failed" if outer.terminal else "succeeded"
+                        status = "failed" if outer.terminal or clip["id"] in outer.failed_clips else "succeeded"
                         artifact = {"id": aid, "filename": "../../ignored", "size_bytes": len(content), "download_url": "https://untrusted.invalid/secret", "segments": [], "track_manifest": []}
                         job = {"id": jid, "status": status, "stage": status, "message": "", "items": [{"status": status, "artifact": artifact if status == "succeeded" else None}]}
                         outer.jobs[jid] = job
@@ -198,6 +203,54 @@ class CollectionTests(unittest.TestCase):
         self.addCleanup(self.directory.cleanup)
         self.project = Path(self.directory.name) / "project"
         self.client = CutmyClient(self.server.url)
+
+    def test_transfer_limit_preserves_a_readable_project_and_completed_files(self):
+        done = self.client.run_collection(request(1), self.project)
+        saved_output = Path(done["outputs"][0]["path"])
+        original = saved_output.read_bytes()
+        state_path = self.project / "state.json"
+        state = json.loads(state_path.read_text())
+        # Retained zero-byte prefixes need no media or open file descriptors.
+        # This exercises the same restore/append boundary as many old revisions.
+        for i in range(1024):
+            aid = "retained_" + str(i)
+            state["parts"][aid] = {"artifact_id": aid, "clip_id": "clip0", "job_id": "retained_job_" + str(i),
+                "size_bytes": 1, "offset": 0, "sha256": hashlib.sha256(b"").hexdigest(), "last_modified": None,
+                "part": "parts/" + aid + ".part", "path": "files/clip0.final." + aid + ".mp4"}
+        state_path.write_text(json.dumps(state))
+        edited = request(1)
+        edited["plan"]["clips"][0]["ranges"][0]["end_ms"] += 50
+        for revision in (edited, None):
+            with self.assertRaises(CollectionError) as caught:
+                CutmyClient(self.server.url).resume_collection(self.project, request=revision)
+            self.assertEqual(caught.exception.code, "receipt_limit")
+            saved = json.loads(state_path.read_text())
+            self.assertEqual(len(saved["parts"]), 1024)
+            self.assertEqual(len(saved["receipts"]), 1)
+            self.assertEqual(saved_output.read_bytes(), original)
+        # Also cover the completed-receipt ceiling independently of parts.
+        # Tiny retained files model old revisions without extra render jobs.
+        state = json.loads(state_path.read_text())
+        state["parts"] = {}
+        for i in range(1023):
+            aid = "finished_" + str(i)
+            relative = "files/clip0.final." + aid + ".mp4"
+            file_path = self.project / relative
+            file_path.write_bytes(b"x")
+            if os.name != "nt": file_path.chmod(0o600)
+            state["receipts"][aid] = {"artifact_id": aid, "clip_id": "clip0", "job_id": "finished_job_" + str(i),
+                "complete": True, "size_bytes": 1, "sha256": hashlib.sha256(b"x").hexdigest(), "path": relative,
+                "segments": [], "track_manifest": []}
+        state_path.write_text(json.dumps(state))
+        for _ in range(2):
+            with self.assertRaises(CollectionError) as caught:
+                CutmyClient(self.server.url).resume_collection(self.project)
+            self.assertEqual(caught.exception.code, "receipt_limit")
+            saved = json.loads(state_path.read_text())
+            self.assertEqual(len(saved["receipts"]), 1024)
+            self.assertEqual(saved["parts"], {})
+            self.assertEqual(saved_output.read_bytes(), original)
+        self.assertEqual(len(self.server.jobs), 2)
 
     def crash_process(self, patch, body=None):
         code = """
@@ -649,6 +702,57 @@ _Cycle.checkpoint = checkpoint
         self.assertTrue(result["complete"])
         self.assertEqual(self.server.encodings, ["identity", "identity"])
 
+    def test_expired_succeeded_artifact_is_terminal_without_deadline_polling(self):
+        original = self.client.get_job
+        def expired(job_id, **options):
+            job = copy.deepcopy(original(job_id, **options))
+            job["items"][0].update(artifact=None, message="Result expired")
+            return job
+        with patch.object(self.client, "get_job", expired):
+            with self.assertRaises(CollectionError) as failed:
+                self.client.run_collection(request(1), self.project, timeout=10)
+        self.assertEqual(failed.exception.code, "artifact_expired")
+        self.assertEqual(sum(map(len, self.server.poll_times.values())), 1)
+        pending = failed.exception.report["pending"][0]
+        self.assertFalse(pending["retryable"])
+        self.assertEqual(pending["job_status"], "succeeded")
+        self.assertIn(pending["job_id"], self.server.jobs)
+
+    def test_more_than_128_public_revisions_remain_resumable(self):
+        def stop(report):
+            if report["phase"] in ("created", "revised"):
+                raise RuntimeError("Intentional checkpoint interruption")
+        with self.assertRaises(CollectionError):
+            self.client.run_collection(request(1), self.project, on_progress=stop)
+        for index in range(130):
+            body = request(1)
+            body["plan"]["clips"][0]["label"] = str(index)
+            with self.assertRaises(CollectionError) as interrupted:
+                CutmyClient(self.server.url).resume_collection(self.project, request=body, on_progress=stop)
+            self.assertEqual(interrupted.exception.code, "progress_interrupted")
+        self.assertEqual(len(json.loads((self.project / "state.json").read_text())["history"]), 128)
+        result = CutmyClient(self.server.url).resume_collection(self.project, timeout=10)
+        self.assertTrue(result["complete"])
+        self.assertEqual(len(self.server.jobs), 1)
+
+    def test_worker_diagnostics_and_progress_are_public_and_whitelisted(self):
+        self.server.terminal = True
+        original = self.client.get_job
+        def detailed(job_id, **options):
+            job = copy.deepcopy(original(job_id, **options))
+            job.update(stage="processing", secret=TOKEN)
+            job["items"][0].update(error_code="job_timeout", message="Processing deadline exceeded", progress_ms=250, secret=TOKEN)
+            return job
+        with patch.object(self.client, "get_job", detailed):
+            with self.assertRaises(CollectionError) as failed:
+                self.client.run_collection(request(1), self.project, timeout=10)
+        pending = failed.exception.report["pending"][0]
+        self.assertEqual((pending["stage"], pending["progress_ms"], pending["error_code"], pending["message"]),
+                         ("processing", 250, "job_timeout", "Processing deadline exceeded"))
+        self.assertIn(pending["job_id"], self.server.jobs)
+        self.assertNotIn(TOKEN, json.dumps(failed.exception.report))
+        self.assertNotIn(TOKEN, (self.project / "state.json").read_text())
+
     def test_structured_non2xx_and_terminal_jobs(self):
         self.server.partial = True
         response = self.client.submit_collection(request(1), idempotency_key="stable")
@@ -660,6 +764,46 @@ _Cycle.checkpoint = checkpoint
             self.client.run_collection(request(1), self.project, timeout=30)
         self.assertEqual(failed.exception.code, "job_failed")
         self.assertFalse(failed.exception.report["complete"])
+
+    def test_retry_failed_preserves_fourteen_outputs_and_recovers_lost_attempt_reply(self):
+        self.server.failed_clips.add("clip14")
+        with self.assertRaises(CollectionError) as failed:
+            self.client.run_collection(request(15), self.project, timeout=30)
+        original = {item["clip_id"]: (item["job_id"], item["sha256"]) for item in failed.exception.report["outputs"]}
+        self.assertEqual(len(original), 14)
+        self.server.failed_clips.clear()
+        self.server.lose_submit = True
+        def stop(report):
+            if report["phase"] == "submission_uncertain":
+                raise RuntimeError("Interrupted after committed retry lost its reply")
+        with self.assertRaises(CollectionError) as interrupted:
+            CutmyClient(self.server.url).resume_collection(self.project, retry_failed=["clip14"], timeout=30, on_progress=stop)
+        self.assertEqual(interrupted.exception.code, "progress_interrupted")
+        state = json.loads((self.project / "state.json").read_text())
+        self.assertEqual(state["uncertain_key"], state["attempt_keys"]["clip14"])
+        result = CutmyClient(self.server.url).resume_collection(self.project, timeout=30)
+        self.assertTrue(result["complete"])
+        self.assertEqual(len(self.server.jobs), 16)
+        self.assertEqual({item["clip_id"]: (item["job_id"], item["sha256"]) for item in result["outputs"] if item["clip_id"] != "clip14"}, original)
+        retry_posts = [(key, body) for key, body in self.server.posts if key == state["attempt_keys"]["clip14"]]
+        self.assertEqual(len(retry_posts), 2)
+        self.assertEqual(retry_posts[0], retry_posts[1])
+        self.assertEqual(retry_posts[0][1]["clip_ids"], ["clip14"])
+        revised = request(15)
+        revised["plan"]["clips"][0]["ranges"][0]["end_ms"] += 5
+        changed = CutmyClient(self.server.url).resume_collection(self.project, request=revised, timeout=30)
+        self.assertEqual(len(self.server.jobs), 17)
+        retried = next(item for item in result["outputs"] if item["clip_id"] == "clip14")
+        preserved = next(item for item in changed["outputs"] if item["clip_id"] == "clip14")
+        self.assertEqual((retried["job_id"], retried["sha256"]), (preserved["job_id"], preserved["sha256"]))
+
+    def test_retry_rejects_completed_clips_without_new_submission(self):
+        self.client.run_collection(request(1), self.project, timeout=10)
+        before = len(self.server.posts)
+        with self.assertRaises(CollectionError) as refused:
+            CutmyClient(self.server.url).resume_collection(self.project, retry_failed=["clip0"])
+        self.assertEqual(refused.exception.code, "retry_not_failed")
+        self.assertEqual(len(self.server.posts), before)
 
     def test_collection_repair_diagnostic_excludes_unknown_response_fields(self):
         self.server.invalid_validation = True

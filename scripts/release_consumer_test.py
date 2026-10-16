@@ -69,7 +69,7 @@ def make_fixture(directory):
         linux_archive_recovery={'required_groups': 9, 'decoded_media_observations': 11,
             'schema_versions': ['20261005-storage-queue-v3', '20261010-cache-retention-v1',
                                 '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1',
-                                '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1'],
+                                '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1', '20261016-agent-projects-v1'],
             'binary_sha256': manifest['archives'][0]['contents']['cutmy']['sha256'], 'report_sha256': 'c' * 64})
     sbom = t.spdx(source, manifest, go_sum=inputs['go.sum'], notices=inputs['THIRD_PARTY_NOTICES.md'], project_license=inputs['LICENSE'])
     trust = t.make_trust(source, manifest, sbom, verdict, run)

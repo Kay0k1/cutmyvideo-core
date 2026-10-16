@@ -23,6 +23,26 @@ _EMPTY = hashlib.sha256(b"").hexdigest()
 _RANGE = re.compile(r"^bytes ([0-9]+)-([0-9]+)/([0-9]+)$")
 
 
+def _job_progress(job: Mapping[str, Any]) -> dict[str, Any]:
+    """Retain public worker fields only, never an arbitrary response object."""
+    result: dict[str, Any] = {}
+    stage = job.get("stage")
+    if isinstance(stage, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", stage):
+        result["job_stage"] = stage
+    for item in job.get("items", []):
+        progress = item.get("progress_ms")
+        if isinstance(progress, int) and not isinstance(progress, bool) and 0 <= progress <= (1 << 53) - 1:
+            result["progress_ms"] = progress
+        code = item.get("error_code")
+        if item.get("status") in ("failed", "cancelled") and isinstance(code, str) and re.fullmatch(r"[a-z0-9_]{1,128}", code):
+            result["error_code"] = code
+            message = item.get("message")
+            if isinstance(message, str) and len(message.encode()) <= 4096:
+                result["worker_message"] = message
+            break
+    return result
+
+
 class _Cycle:
     def __init__(self, client: CutmyClient, project: Project, *, timeout: float = 1800,
                  poll_interval: float = 1, cancel_event: threading.Event | None = None,
@@ -56,8 +76,13 @@ class _Cycle:
             else:
                 part = self.state.get("parts", {}).get(artifact_id, {})
                 pending.append({"clip_id": cid, "code": clip.get("code", "pending"), "retryable": clip.get("retryable", True),
-                                "stage": "downloading" if part else ("queued" if clip.get("job_id") else "admission"),
+                                "stage": "downloading" if part else clip.get("job_stage", clip.get("job_status", "queued" if clip.get("job_id") else "admission")),
                                 "downloaded_bytes": part.get("offset", 0), "total_bytes": part.get("size_bytes", 0)})
+                for field in ("job_id", "job_status", "progress_ms", "error_code"):
+                    if field in clip:
+                        pending[-1][field] = clip[field]
+                if clip.get("worker_message"):
+                    pending[-1]["message"] = clip["worker_message"]
                 detail = diagnostic(clip.get("diagnostic"))
                 if detail:
                     pending[-1].update({key: detail[key] for key in ("field", "message") if key in detail})
@@ -173,6 +198,29 @@ class _Cycle:
                 or not isinstance(state.get("history"), list) or len(state["history"]) > 128):
             raise ValueError("Saved project structure is invalid")
         self.state = state
+        attempts = state.setdefault("attempt_keys", {})
+        if (not isinstance(attempts, dict) or len(attempts) > 1024
+                or any(clip_id(cid) != cid or not self.valid_key(key) for cid, key in attempts.items())):
+            raise ValueError("Saved retry attempts are invalid")
+        if state.get("uncertain_key") is not None and not self.valid_key(state["uncertain_key"]):
+            raise ValueError("Saved uncertain attempt key is invalid")
+        if state.get("project_id") is not None:
+            if (not isinstance(state["project_id"], str) or not OPAQUE_ID.fullmatch(state["project_id"])
+                    or isinstance(state.get("project_revision"), bool) or not isinstance(state.get("project_revision"), int) or state["project_revision"] < 1):
+                raise ValueError("Saved server project scope is invalid")
+        project_retries = state.get("project_retry_keys", {})
+        if not isinstance(project_retries, dict) or any(cid not in state["clips"] or not self.valid_key(key) for cid, key in project_retries.items()):
+            raise ValueError("Saved project retry scope is invalid")
+        route = state.get("uncertain_project")
+        if route is not None and (not isinstance(route, dict) or set(route) != {"id", "revision", "retry"}
+                                  or route["id"] != state.get("project_id") or route["revision"] != state.get("project_revision")
+                                  or isinstance(route["revision"], bool) or not isinstance(route["revision"], int)
+                                  or not isinstance(route["retry"], bool) or state.get("uncertain") is None):
+            raise ValueError("Saved project submission scope is invalid")
+        if state.get("retry_requested") is not None:
+            self.retry_ids(state["retry_requested"])
+        if state.get("retry_active") is not None:
+            self.retry_ids(state["retry_active"])
         for field in ("admission_retry_at", "submit_retry_at"):
             if field in state and (isinstance(state[field], bool) or not isinstance(state[field], (float, int))
                                   or not math.isfinite(state[field]) or state[field] < 0):
@@ -184,6 +232,15 @@ class _Cycle:
                     or row.get("retryable") is not None and not isinstance(row["retryable"], bool)
                     or row.get("code") is not None and not isinstance(row["code"], str)):
                 raise ValueError("Saved clip job/request is invalid")
+            for field in ("job_stage", "job_status", "error_code"):
+                value = row.get(field)
+                if value is not None and (not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", value)):
+                    raise ValueError("Saved worker progress/diagnostic is invalid")
+            if row.get("progress_ms") is not None and (isinstance(row["progress_ms"], bool) or not isinstance(row["progress_ms"], int)
+                                                        or not 0 <= row["progress_ms"] <= (1 << 53) - 1):
+                raise ValueError("Saved worker progress is invalid")
+            if row.get("worker_message") is not None and (not isinstance(row["worker_message"], str) or len(row["worker_message"].encode()) > 4096):
+                raise ValueError("Saved worker diagnostic is invalid")
             for field in ("retry_at", "next_poll_at", "download_retry_at"):
                 if field in row and (isinstance(row[field], bool) or not isinstance(row[field], (float, int))
                                      or not math.isfinite(row[field]) or row[field] < 0):
@@ -196,6 +253,8 @@ class _Cycle:
             uncertain_scope = {key: value for key, value in uncertain.items() if key != "clip_ids"}
             if original_scope != uncertain_scope or not set(selection(uncertain)) <= set(selection(body)):
                 raise ValueError("Saved uncertain submission differs from original request scope")
+            if any(self.attempt_key(cid) != state.get("uncertain_key", state["idempotency_key"]) for cid in selection(uncertain)):
+                raise ValueError("Saved uncertain submission differs from clip attempt scope")
         retained_bytes = 0
         for identifier, receipt in state["receipts"].items():
             self.guard()
@@ -221,10 +280,15 @@ class _Cycle:
             if updated["source_id"] != body["source_id"]:
                 raise ValueError("Revisions cannot change project source")
             if updated != body:
+                if self.state.get("project_id"):
+                    self.fail("project_conflict", "Update the server project explicitly, then adopt its current revision")
                 if self.state.get("uncertain"):
                     raise ValueError("Resolve the uncertain original submission before revising")
                 self.state["history"].append({"rendition": body.get("rendition", "final"),
                                               "clips": {cid: clip.get("job_id") for cid, clip in state["clips"].items()}})
+                # History is advisory; verified receipts remain retained. Never
+                # save more entries than a later restore can accept.
+                del self.state["history"][:-128]
                 self.state["request"] = updated
                 self.state["clips"] = {cid: {} for cid in selection(updated)}
                 self.state["validated"] = False
@@ -316,6 +380,89 @@ class _Cycle:
     def transient(self, error: APIError) -> bool:
         return error.code in ("transport_error", "request_timeout", "incomplete_download") or error.status in (408, 429, 500, 502, 503, 504)
 
+    @staticmethod
+    def valid_key(value: Any) -> bool:
+        return isinstance(value, str) and bool(value.strip()) and len(value.encode()) <= 128 and not any(ord(c) < 32 or ord(c) == 127 for c in value)
+
+    def adopt_project(self, project_id: str, revised: Mapping[str, Any] | None) -> None:
+        if not isinstance(project_id, str) or not OPAQUE_ID.fullmatch(project_id):
+            raise ValueError("Project ID is invalid")
+        if self.state.get("uncertain"):
+            self.fail("submission_uncertain", "Resolve the saved exact submission before adopting project changes")
+        project = self.client.get_project(project_id, timeout=self.timeout())
+        body = request_copy({key: project[key] for key in ("source_id", "plan", "rendition", "clip_ids") if key in project})
+        if body["source_id"] != self.state["source_id"]:
+            self.fail("source_conflict", "Remote project belongs to a different source")
+        if revised is not None and request_copy(revised) != body:
+            self.fail("project_conflict", "Explicit request differs from the current remote project revision")
+        expected = {item["clip_id"]: item["request"] for item in project["clips"]}
+        rows: dict[str, Any] = {cid: {} for cid in selection(body)}
+        for item in project["jobs"]:
+            cid = item["clip_id"]
+            if not item["current"]:
+                continue
+            if item["request"] != expected[cid]:
+                self.fail("project_conflict", "Attached job differs from the current effective clip request")
+            job = self.client._job(item["job"])
+            row = {"job_id": job["id"], "job_status": job["status"], "effective_request": copy.deepcopy(item["request"]), "retryable": True, **_job_progress(job)}
+            artifacts = ready_artifacts(job)
+            if len(artifacts) == 1:
+                row["artifact_id"] = artifacts[0]["id"]
+            rows[cid] = row
+        self.state.update(request=body, clips=rows, project_id=project_id, project_revision=project["revision"], validated=all(row.get("job_id") for row in rows.values()))
+        for field in ("diagnostic", "download", "retry_requested", "retry_active"):
+            self.state.pop(field, None)
+        self.state.pop("project_retry_keys", None)
+        self.checkpoint("project_adopted")
+
+    def attempt_key(self, cid: str) -> str:
+        return self.state.get("attempt_keys", {}).get(cid, self.state["idempotency_key"])
+
+    def retry_ids(self, values: Any) -> list[str]:
+        if isinstance(values, (str, bytes)) or not isinstance(values, (list, tuple)) or not values:
+            raise ValueError("retry_failed must contain explicit clip IDs")
+        ids = [clip_id(cid) for cid in values]
+        if len(set(ids)) != len(ids) or any(cid not in self.state["clips"] for cid in ids):
+            raise ValueError("retry_failed must select distinct clips from the saved selection")
+        return ids
+
+    def request_retry(self, values: Any) -> None:
+        ids = self.retry_ids(values)
+        if any(self.completed(self.state["clips"][cid]) for cid in ids):
+            self.fail("retry_not_failed", "Verified completed clips cannot be retried as failures")
+        if self.state.get("retry_requested") and set(ids) != set(self.state["retry_requested"]):
+            self.fail("retry_pending", "Resume the saved retry request before requesting another attempt")
+        self.state["retry_requested"] = ids
+        self.checkpoint("retry_requested")
+
+    def apply_retry(self) -> None:
+        ids = self.state.get("retry_requested")
+        if not ids or self.state.get("uncertain"):
+            return
+        for cid in ids:
+            row = self.state["clips"][cid]
+            if self.completed(row) or not (row.get("job_status") in ("failed", "cancelled") or row.get("code") == "artifact_expired"):
+                self.state.pop("retry_requested", None)
+                self.checkpoint("retry_rejected", notify=False)
+                self.fail("retry_not_failed", "Retry requires a confirmed failed, cancelled or expired clip")
+        attempts = self.state.setdefault("attempt_keys", {})
+        if len(set(attempts) | set(ids)) > 1024:
+            self.state.pop("retry_requested", None)
+            self.checkpoint("retry_rejected", notify=False)
+            self.fail("attempt_limit", "Project retry identity limit reached; existing state retained")
+        for cid in ids:
+            attempts[cid] = "retry-" + secrets.token_hex(24)
+            if self.state.get("project_id"):
+                self.state.setdefault("project_retry_keys", {})[cid] = attempts[cid]
+            self.state["clips"][cid] = {}
+        self.state.pop("retry_requested", None)
+        self.state["retry_active"] = ids
+        self.state.pop("diagnostic", None)
+        self.state["validated"] = False
+        # All attempt identities commit together before any fresh submission.
+        self.checkpoint("retry_prepared")
+        self.verify_scope_and_plan()
+
     def verify_scope_and_plan(self) -> None:
         if self.state.get("validated"):
             return
@@ -335,9 +482,21 @@ class _Cycle:
 
     def submit(self, body: dict[str, Any]) -> None:
         self.state["uncertain"] = copy.deepcopy(body)
+        key = self.state.get("uncertain_key", self.attempt_key(selection(body)[0]))
+        if any(self.attempt_key(cid) != key for cid in selection(body)):
+            self.fail("attempt_conflict", "One submission must contain clips from the same retry attempt")
+        self.state["uncertain_key"] = key
+        if self.state.get("project_id") and not self.state.get("uncertain_project"):
+            retry = all(self.state.get("project_retry_keys", {}).get(cid) == key for cid in selection(body))
+            self.state["uncertain_project"] = {"id": self.state["project_id"], "revision": self.state["project_revision"], "retry": retry}
         self.checkpoint("submitting")
         try:
-            response = self.client.submit_collection(body, idempotency_key=self.state["idempotency_key"], timeout=self.timeout())
+            route = self.state.get("uncertain_project")
+            if route:
+                response = self.client.submit_project_collection(route["id"], revision=route["revision"], clip_ids=selection(body),
+                                                                 retry_failed=route["retry"], idempotency_key=key, timeout=self.timeout())
+            else:
+                response = self.client.submit_collection(body, idempotency_key=key, timeout=self.timeout())
         except APIError as error:
             self.guard()
             if error.retry_after is not None:
@@ -362,9 +521,12 @@ class _Cycle:
                 row.update(job_id=item["job"]["id"], job_status=item["job"]["status"], effective_request=item.get("request", {}), retryable=True)
                 row.pop("code", None)
                 row.pop("diagnostic", None)
+                self.state.get("project_retry_keys", {}).pop(item["clip_id"], None)
             else:
                 row.update(code=item["error"]["code"], diagnostic=diagnostic(item["error"]), retryable=item["retryable"], retry_at=time.time() + retry_delay)
         self.state.pop("uncertain", None)
+        self.state.pop("uncertain_key", None)
+        self.state.pop("uncertain_project", None)
         self.state.pop("submit_retry_at", None)
         self.state["submit_failures"] = 0
         self.checkpoint("submitted")
@@ -399,7 +561,12 @@ class _Cycle:
                     continue
                 row["next_poll_at"] = time.time() + self.poll
                 self._poll_after[row["job_id"]] = row["next_poll_at"]
+                if job["id"] != row["job_id"]:
+                    self.fail("invalid_response", "Saved job lookup returned another job identity")
                 row["job_status"] = job["status"]
+                for field in ("job_stage", "progress_ms", "error_code", "worker_message"):
+                    row.pop(field, None)
+                row.update(_job_progress(job))
                 self.checkpoint("job", notify=False)
                 artifacts = ready_artifacts(job)
                 if artifacts:
@@ -411,15 +578,24 @@ class _Cycle:
                         self.transfer(cid, row, artifact)
                 if job["status"] in ("failed", "cancelled"):
                     row.update(code="job_" + job["status"], retryable=False)
+                elif job["status"] == "succeeded" and not artifacts:
+                    row.update(code="artifact_expired", retryable=False)
+            if self.state.get("retry_requested") and not self.state.get("uncertain"):
+                self.apply_retry()
             terminal = [self.state["clips"][cid] for cid in ordered if self.state["clips"][cid].get("retryable") is False]
-            if terminal:
+            active = self.state.get("retry_active", [])
+            active_pending = any(not self.completed(self.state["clips"][cid]) and self.state["clips"][cid].get("retryable") is not False for cid in active)
+            if active and not active_pending:
+                self.state.pop("retry_active", None)
+                self.checkpoint("retry_settled", notify=False)
+            if terminal and not self.state.get("retry_requested") and not active_pending:
                 self.checkpoint("terminal")
                 self.fail(terminal[0].get("code", "collection_failed"), "Collection has a terminal clip diagnostic; completed files retained")
             if self.report()["complete"]:
                 self.state.pop("download", None)
                 self.checkpoint("complete")
                 return self.report()
-            inflight = sum(bool(row.get("job_id")) and not self.completed(row) for row in self.state["clips"].values())
+            inflight = sum(bool(row.get("job_id")) and not self.completed(row) and row.get("retryable") is not False for row in self.state["clips"].values())
             uncertain = self.state.get("uncertain")
             admission_open = time.time() >= self.state.get("admission_retry_at", 0)
             if uncertain and admission_open and time.time() >= self.state.get("submit_retry_at", 0):
@@ -428,6 +604,8 @@ class _Cycle:
                 wanted = [cid for cid in ordered if not self.state["clips"][cid].get("job_id")
                           and time.time() >= self.state["clips"][cid].get("retry_at", 0)][:self.batch - inflight]
                 if wanted:
+                    key = self.attempt_key(wanted[0])
+                    wanted = [cid for cid in wanted if self.attempt_key(cid) == key]
                     body = copy.deepcopy(self.state["request"])
                     body["clip_ids"] = wanted
                     self.submit(body)
@@ -448,6 +626,8 @@ class _Cycle:
         final = f"files/{cid}.{rendition}.{aid}.{fmt}"
         part = self.state["parts"].get(aid)
         if part is None:
+            if len(self.state["parts"]) >= 1024 or len(self.state["receipts"]) >= 1024:
+                self.fail("receipt_limit", "Project receipt limit reached; saved state remains readable")
             if self.project.path(final).exists():
                 self.fail("output_exists", "Unowned existing final file preserved")
             part = {"artifact_id": aid, "job_id": row["job_id"], "clip_id": cid, "size_bytes": size,
@@ -582,6 +762,8 @@ class _Cycle:
 
     def finish_transfer(self, part: dict[str, Any], artifact: dict[str, Any]) -> None:
         aid = part["artifact_id"]
+        if aid not in self.state["receipts"] and len(self.state["receipts"]) >= 1024:
+            self.fail("receipt_limit", "Project receipt limit reached before publication; saved state retained")
         self.project.publish(part["part"], part["path"], part["size_bytes"], part["sha256"], check=self.guard)
         self.state["receipts"][aid] = {"complete": True, "clip_id": part["clip_id"], "job_id": part["job_id"], "artifact_id": aid,
                                       "path": part["path"], "size_bytes": part["size_bytes"], "sha256": part["sha256"],
@@ -597,12 +779,20 @@ class _Cycle:
 def _run(client: CutmyClient, directory: str | os.PathLike[str], request: Mapping[str, Any] | None,
          resume: bool, key: str | None, options: dict[str, Any]) -> dict[str, Any]:
     cycle: _Cycle | None = None
+    retry_failed = options.pop("retry_failed", None)
+    project_id = options.pop("project_id", None)
     token = _COLLECTION_CANCEL.set((client, options.get("cancel_event")))
     try:
         with Project(directory) as project:
             cycle = _Cycle(client, project, **options)
             if resume:
-                cycle.restore(request)
+                if retry_failed is not None and request is not None:
+                    raise ValueError("Apply a revision and retry failures in separate resume calls")
+                cycle.restore(None if project_id is not None else request)
+                if project_id is not None:
+                    cycle.adopt_project(project_id, request)
+                if retry_failed is not None:
+                    cycle.request_retry(retry_failed)
             else:
                 assert request is not None
                 cycle.initialize(request, key)

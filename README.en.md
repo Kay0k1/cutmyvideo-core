@@ -27,9 +27,9 @@ Local cutting works without a database, accounts or an HTTP server. SQL belongs 
 
 Install CLI archives from the [latest published release](https://github.com/Kay0k1/cutmyvideo-core/releases/latest). Archives support Linux and macOS (amd64/arm64), and Windows (amd64); install FFmpeg separately. Follow [signed-release verification](docs/releases.md#consumer-verification-of-a-new-signed-release) before installation.
 
-**1.3.0** adds editable clip collections, draft assemblies, job preflight and the Python/TypeScript SDK foundation. These are absent from the v1.2.0 binary. SDKs currently use development versions and install from source; PyPI/npm publication is pending. The [changelog](CHANGELOG.md) separates published changes from `Unreleased`.
+**1.4.0** connects durable source preparation, resumable collections, explicit failed-clip repair and scoped agent-to-browser project review. Verified clips survive interruptions, edits submit needed work, and supplied SRT/VTT follows actual output maps. Python and Node install from ready GitHub release packages; PyPI/npm publication remains separate.
 
-The **1.4.0 candidate** adds the complete SDK collection cycle and recovery after interruption: ready clips survive, transfers continue from verified offsets, and revisions submit only needed work. [Agent workflow](docs/sdk-collections.md) · [Release preparation](docs/release-1.4.0.md).
+Collections, drafts and preflight were introduced in **1.3.0**; the new preparation/project operations require API 1.4.0. [SDK installation](docs/sdk.md) · [Agent workflow](docs/sdk-collections.md) · [1.4.0 scope](docs/release-1.4.0.md) · [Changelog](CHANGELOG.md).
 
 <a id="local-trimming"></a>
 
