@@ -77,7 +77,7 @@ jobs:
           python scripts/check-sdks.py --output "$RUNNER_TEMP/sdk-evidence"
       - name: Retain installed package evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sdk-${{ matrix.runner }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/sdk-evidence
@@ -128,7 +128,7 @@ jobs:
           python scripts/check-sdks.py --http --output "$RUNNER_TEMP/sdk-http-evidence"
       - name: Retain HTTP consumer evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sdk-http-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/sdk-http-evidence
@@ -239,7 +239,7 @@ jobs:
           "$python_command" scripts/check-native-results.py native-media-tests.jsonl native-process-tests.jsonl native-service-tests.jsonl native-storage-tests.jsonl native-media-contract-tests.jsonl
       - name: Retain native runtime evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-${{ matrix.runner }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -297,7 +297,7 @@ jobs:
           python3 scripts/check-native-results.py --draft-cache-service bookworm-draft-cache-service-tests.jsonl
       - name: Retain production-family media evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bookworm-media-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -357,7 +357,7 @@ jobs:
           python3 scripts/check-native-results.py --preflight-contract preflight-contract-tests.jsonl
       - name: Retain preflight contract evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: preflight-contract-${{ github.run_id }}-${{ github.run_attempt }}
           path: preflight-contract-tests.jsonl
@@ -392,7 +392,7 @@ jobs:
           python3 scripts/check-native-results.py --agent-project-recovery agent-project-recovery-tests.jsonl
       - name: Retain schema8 recovery proof
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: agent-project-recovery-${{ github.run_id }}-${{ github.run_attempt }}
           path: agent-project-recovery-tests.jsonl
@@ -407,7 +407,7 @@ jobs:
         run: make recovery-check
       - name: Retain redacted upgrade and recovery evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: recovery-verification-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/recovery-verification.json
@@ -415,7 +415,7 @@ jobs:
           retention-days: 3
       - name: Retain recovery contract test events
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: recovery-contract-${{ github.run_id }}-${{ github.run_attempt }}
           path: recovery-contract-tests.jsonl
