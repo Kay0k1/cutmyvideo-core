@@ -80,9 +80,9 @@ class TrustControls(unittest.TestCase):
     def test_deterministic_actual_composition_license_file_hashes_and_main_version(self):
         a, b = self.sbom(), self.sbom()
         self.assertEqual(m.canonical(a), m.canonical(b))
-        self.assertEqual(len(a['packages']), 13)
+        self.assertEqual(len(a['packages']), 7 + len(self.deps))
         self.assertEqual(len(a['files']), 7)
-        self.assertEqual(len(a['relationships']), 55)
+        self.assertEqual(len(a['relationships']), 5 * (5 + len(self.deps)))
         main = next(p for p in a['packages'] if p['name'] == self.source['module'])
         self.assertEqual(main['versionInfo'], '(devel)')
         self.assertIn(self.source['version'], main['comment'])
@@ -92,6 +92,26 @@ class TrustControls(unittest.TestCase):
         self.assertFalse(any(p['name'] in ('FFmpeg', 'PostgreSQL', 'Node.js') for p in a['packages']))
         for f in a['files']:
             self.assertTrue(m.HASH.fullmatch(f['checksums'][0]['checksumValue']))
+
+    def test_linux_only_module_has_one_package_and_only_linux_dependency_edges(self):
+        changed = deepcopy(self.manifest)
+        for row in changed['archives']:
+            if row['os'] != 'linux':
+                row['go_build_info']['Deps'] = [dep for dep in row['go_build_info']['Deps']
+                                                if dep['Path'] != 'golang.org/x/sys']
+        doc = self.sbom(changed)
+        modules = [p for p in doc['packages'] if p['name'] == 'golang.org/x/sys']
+        self.assertEqual(len(modules), 1)
+        self.assertEqual(modules[0]['versionInfo'], 'v0.42.0')
+        self.assertEqual(modules[0]['licenseDeclared'], 'BSD-3-Clause')
+        references = [r for r in doc['relationships'] if r['relatedSpdxElement'] == modules[0]['SPDXID']]
+        self.assertEqual(len(references), 2)
+        self.assertEqual({r['relationshipType'] for r in references}, {'DEPENDS_ON'})
+        self.assertEqual({r['spdxElementId'] for r in references},
+                         {t.identifier('Binary', 'linux/amd64'), t.identifier('Binary', 'linux/arm64')})
+        self.assertEqual(len(doc['packages']), 7 + len(self.deps))
+        self.assertEqual(len(doc['files']), 7)
+        self.assertEqual(len(doc['relationships']), 5 * (5 + len(self.deps)) - 3)
 
     def test_missing_extra_duplicate_and_unsupported_targets(self):
         for rows in (self.manifest['archives'][:-1], self.manifest['archives'] + [deepcopy(self.manifest['archives'][0])]):
@@ -126,6 +146,12 @@ class TrustControls(unittest.TestCase):
         self.assertEqual(t.reviewed_license(notices, 'example.invalid/mod', 'v1.0.0'), 'NOASSERTION')
         known = (self.repo / 'THIRD_PARTY_NOTICES.md').read_text()
         self.assertEqual(t.reviewed_license(known.replace('Copyright (c) 2019', 'Different copyright'), 'github.com/jackc/pgpassfile', 'v1.0.0'), 'NOASSERTION')
+        heading = '## golang.org/x/sys v0.42.0\n'
+        before, after = known.split(heading, 1)
+        changed = before + heading + after.replace('Copyright 2009', 'Changed copyright', 1)
+        self.assertEqual(t.reviewed_license(changed, 'golang.org/x/sys', 'v0.42.0'), 'NOASSERTION')
+        changed = known.replace(heading, '## golang.org/x/sys v0.43.0\n', 1)
+        self.assertEqual(t.reviewed_license(changed, 'golang.org/x/sys', 'v0.43.0'), 'NOASSERTION')
 
     def test_duplicate_spdx_ids_relationships_missing_refs_and_invalid_hash(self):
         mutations = [lambda d: d['packages'].append(deepcopy(d['packages'][0])),

@@ -154,7 +154,7 @@ func runCommand(ctx context.Context, path string, args ...string) ([]byte, error
 
 func runCommandOutput(ctx context.Context, path string, args []string, stdout io.Writer) error {
 	cmd := exec.CommandContext(ctx, path, args...)
-	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=/nonexistent", "LANG=C.UTF-8", "LC_ALL=C.UTF-8"}
+	cmd.Env = mediaProcessEnvironment()
 	cmd.WaitDelay = 2 * time.Second
 	stderr := &limitedBuffer{limit: 16 << 10}
 	cmd.Stdout = stdout

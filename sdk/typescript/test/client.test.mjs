@@ -163,20 +163,48 @@ test('artifact downloads stream through the protected ID route and enforce actua
 });
 
 test('download rejects advertised oversize, times out stalled bodies and cleans unconsumed streams', async t => {
-  let mode = 'size';
   const { client } = await fixture(t, (_req, res) => {
-    if (mode === 'size') { res.writeHead(200, { 'content-length': '10000' }); res.end('x'); }
-    else { res.writeHead(200); res.write('x'); }
+    res.writeHead(200, { 'content-length': '10000' }); res.end('x');
   });
   await assert.rejects(client.downloadArtifact('x', { maxBytes: 10 }), e => e.code === 'download_too_large');
-  mode = 'stall';
-  const download = await client.downloadArtifact('x', { timeoutMs: 40 });
+
+  // Keep the real 40ms total budget, without assuming TCP headers arrive first.
+  // The controlled fetch resolves immediately; only its body remains unfinished.
+  const transfers = [];
+  const streaming = new CutmyClient({ baseUrl: 'https://example.test', fetch: async url => {
+    if (String(url).endsWith('/session')) return Response.json({ ok: true, limits });
+    assert.equal(new URL(url).pathname, '/api/v1/artifacts/x/download');
+    let observeCancellation;
+    const transfer = { cancelled: new Promise(resolve => { observeCancellation = resolve; }), cancelCalls: 0 };
+    transfer.body = new ReadableStream({
+      start(controller) { controller.enqueue(new TextEncoder().encode('x')); },
+      cancel() { transfer.cancelCalls++; observeCancellation(); },
+    });
+    transfers.push(transfer);
+    return new Response(transfer.body);
+  } });
+  async function cancellationComplete(transfer) {
+    let guard;
+    try {
+      await Promise.race([transfer.cancelled, new Promise((_, reject) => {
+        guard = setTimeout(() => reject(new Error('underlying stream was not cancelled')), 5000);
+      })]);
+      // Drain the cancellation/finally microtasks before inspecting reader cleanup.
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(transfer.cancelCalls, 1);
+      assert.equal(transfer.body.locked, false);
+    } finally { clearTimeout(guard); }
+  }
+  const download = await streaming.downloadArtifact('x', { timeoutMs: 40 });
   await assert.rejects(consume(download.stream), e => e.code === 'timeout');
-  const unconsumed = await client.downloadArtifact('x', { timeoutMs: 40 });
-  await new Promise(resolve => setTimeout(resolve, 60));
+  await cancellationComplete(transfers[0]);
+  const unconsumed = await streaming.downloadArtifact('x', { timeoutMs: 40 });
+  await cancellationComplete(transfers[1]);
   await assert.rejects(consume(unconsumed.stream), e => e.code === 'timeout');
-  const cancelled = await client.downloadArtifact('x');
+  const cancelled = await streaming.downloadArtifact('x');
   await cancelled.cancel();
+  await cancellationComplete(transfers[2]);
+  assert.equal(transfers.length, 3);
 });
 
 test('explicit Node capability resumption is validated and never serialized', async t => {

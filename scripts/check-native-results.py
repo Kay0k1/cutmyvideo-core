@@ -102,6 +102,7 @@ UNIVERSAL_MEDIA_REQUIRED = {
     "TestOwnedMP3ReaderKeepsIOBoundAndCancellation",
     "TestJoinedAccurateDiscoveryPreservesReorderedVFRAndSilence",
     "TestJoinedAccurateDiscoveryPreservesDualInputClocks",
+    "TestJoinedAccurateDiscoveryDecoderBudgetPreservesEncoding",
     "TestCopyJoinAudioPacketCopyPreservesClocks",
     "TestCopyJoinAudioPreservesFineSourcePacketClocks",
     "TestCopyPacketDropPreservesUnknownPresentationTimestamps",
@@ -121,6 +122,24 @@ UNIVERSAL_MEDIA_REQUIRED = {
     "TestCopyPacketTrimEligibilityPreservesUnprovenClockPaths",
 }
 
+
+# Pool lifecycle must retain explicit operator settings and acquired work while
+# retiring only genuinely released idle connections on every native service host.
+POOL_SERVICE_REQUIRED = {
+    "TestStorePoolIdleDefaultsPreserveExplicitDurations",
+    "TestStorePoolInvalidIdleDurationsRemainParserErrors",
+    "TestStorePoolIdleRetirementPreservesAcquiredTransaction",
+}
+
+# Transfer observation is portable; the same owner/project metadata lookup also
+# requires an actual PostgreSQL service on every native host and on Bookworm.
+DRAFT_CACHE_TRANSFER_REQUIRED = {
+    "TestDraftCacheWrappedFullTransferAndFlushError",
+    "TestDraftCacheTransferWriterPreservesInterfacesAndCountsErrors",
+    "TestDraftCacheFullTransferGuards",
+    "TestDraftCacheSourceAndFinalServingUnchanged",
+}
+DRAFT_CACHE_DATABASE_REQUIRED = {"TestDraftCacheMetadataOwnerLegacyAndScopedDownload"}
 
 # Preflight must run on real media and expose deferred checks without rendering.
 PREFLIGHT_ENGINE_REQUIRED = {
@@ -144,6 +163,11 @@ PREFLIGHT_MEDIA_REQUIRED = {
     "TestPreflightCapabilitiesParseExactLists",
     "TestPreflightCapabilitiesFailuresAreBoundedAndCancelable",
     "TestPreflightLocalRejectsChangingInput",
+    "TestPreflightLocalBatchSharesFreshInspectionAndCapabilities",
+    "TestPreflightLocalBatchPreservesClipErrorsAndOrdering",
+    "TestPreflightLocalBatchDeferredFailuresAndCancellation",
+    "TestPreflightLocalBatchRejectsChangedSourceAndTools",
+    "TestPreflightLocalBatchRetainsOnlyRelevantCapabilityNames",
 }
 
 # The collection workflow must execute on every native platform; HTTP contract
@@ -162,6 +186,7 @@ COLLECTION_SERVICE_REQUIRED = {
     "TestHTTPCollectionsRemoteValidationAndGuards",
     "TestHTTPCollectionsSubmitRetryAndSelectedEdit",
     "TestHTTPCollectionsLocalPreflightAndDraft",
+    "TestHTTPCollectionsBatchPreflightRejectsLateClipBeforeAdmission",
     "TestHTTPCollectionsPartialFailureRecovery",
     "TestHTTPCollectionsRetainedRecoveryAfterSourceChanges",
 }
@@ -204,7 +229,8 @@ AGENT_PROJECT_CONTRACT_REQUIRED = {"TestHTTPAgentProjectPublicContract", "TestHT
 
 REQUIRED = [
     {"TestEngineInspectAndExportActualMedia", "TestConcurrentPublicationHasExactlyOneCompleteWinner", "TestCLIInspectAndClipActualMedia", "TestCLIBatchSavedPlanRelativeInputAndJoinedAudio", "TestPlanRoundTripActualOutputsAndPartialPublication"},
-    {"TestProcessCancellationTerminatesDescendants", "TestProcessOutputStopsUnboundedProducer"},
+    {"TestProcessCancellationTerminatesDescendants", "TestProcessOutputStopsUnboundedProducer",
+     "TestProcessEnvironmentSanitizesRealChild", "TestProcessEnvironmentArenaBoundsAndPlatforms"},
     {"TestNativeServiceUploadExportAndDownload", "TestPreviewMediaPolicyUpgradeDoesNotReuseLegacyCache",
      "TestLocalMediaDimensionsRefreshFencesLegacyDecoderCapacity",
      "TestLocalMediaDimensionsRefreshPreservesIdentityAndCancellation",
@@ -269,6 +295,8 @@ REQUIRED[4].update(UNIVERSAL_MEDIA_REQUIRED)
 
 REQUIRED[0].update(PREFLIGHT_ENGINE_REQUIRED | PREFLIGHT_CLI_REQUIRED)
 REQUIRED[2].update(PREFLIGHT_SERVICE_REQUIRED)
+REQUIRED[2].update(POOL_SERVICE_REQUIRED)
+REQUIRED[2].update(DRAFT_CACHE_TRANSFER_REQUIRED | DRAFT_CACHE_DATABASE_REQUIRED)
 REQUIRED[4].update(PREFLIGHT_MEDIA_REQUIRED)
 REQUIRED[0].update(COLLECTION_ENGINE_REQUIRED | COLLECTION_CLI_REQUIRED)
 REQUIRED[2].update(COLLECTION_SERVICE_REQUIRED)
@@ -302,6 +330,7 @@ BOOKWORM_REQUIRED.update(NEW_MEDIA_REQUIRED)
 BOOKWORM_REQUIRED.update(EFFICIENT_CUTTING_MEDIA_REQUIRED)
 BOOKWORM_REQUIRED.update(UNIVERSAL_MEDIA_REQUIRED)
 BOOKWORM_REQUIRED.update(PREFLIGHT_MEDIA_REQUIRED)
+BOOKWORM_REQUIRED.update(DRAFT_CACHE_TRANSFER_REQUIRED)
 
 
 def verify_report(filename, names, packages):
@@ -324,6 +353,9 @@ if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "--bookworm":
         verify_report(sys.argv[2], BOOKWORM_REQUIRED, {APP_PACKAGE})
         print(f"Bookworm's {len(BOOKWORM_REQUIRED)} required media and timeline checks passed without skips.")
+    elif len(sys.argv) == 3 and sys.argv[1] == "--draft-cache-service":
+        verify_report(sys.argv[2], DRAFT_CACHE_DATABASE_REQUIRED, {APP_PACKAGE})
+        print("Bookworm draft artifact ownership, project scope and ZIP checks passed without skips.")
     elif len(sys.argv) == 3 and sys.argv[1] == "--preflight-contract":
         verify_report(sys.argv[2], PREFLIGHT_CONTRACT_REQUIRED | COLLECTION_CONTRACT_REQUIRED | AGENT_PROJECT_CONTRACT_REQUIRED, {APP_PACKAGE})
         print("Preflight, collection, agent project and subtitle public-handler OpenAPI samples passed without skips.")

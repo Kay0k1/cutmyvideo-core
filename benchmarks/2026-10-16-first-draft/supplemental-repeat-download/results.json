@@ -1,0 +1,136 @@
+{
+  "benchmark": {
+    "additional_calibration_requests_excluded_from_reported_means": true,
+    "both_paths_use_same_candidate_build": true,
+    "command": "go test -p=2 -mod=readonly -run=\"^$\" -bench=\"^BenchmarkDraftCacheRealHTTPRepeatedSyntheticDownload$\" -benchtime=20x -count=3 -timeout=120s ./internal/app",
+    "counts_per_path": 3,
+    "database_or_authentication_lookup_measured": false,
+    "iterations_per_measurement": 20,
+    "name": "BenchmarkDraftCacheRealHTTPRepeatedSyntheticDownload",
+    "order_balanced": false,
+    "path_order": [
+      "ordinary-final",
+      "draft"
+    ],
+    "payload": "synthetic repeated ASCII x bytes, written and fsynced before timers",
+    "payload_bytes": 4194304,
+    "real_http_loopback": true,
+    "working_directory": "/src"
+  },
+  "candidate": {
+    "benchmark_source_path": "internal/app/http_draft_cache_test.go",
+    "benchmark_source_sha256": "d184c442cd102387f2e9d801e8b7fa5dca40263f13afbde3e213b3ae3d2bff7d",
+    "commit": "4531d7e2b63cf81421ca48da1d1f216b4e53bd00",
+    "runtime_image_id": "sha256:d19fe885ec1159c8050e3a87c9f9cce4f01a16b789dfecbd27341a1995f33d32",
+    "tested_native_intermediate_image_id": "sha256:0246b75da9d725d6b83fb96ae7fa4f07627ddb964652040e89badcb6d302a592",
+    "version": "perf-first-draft-M7"
+  },
+  "completion": {
+    "actual_exit_code": 0,
+    "all_six_raw_measurements_retained": true,
+    "normal_go_pass_and_package_completion_verified": true,
+    "oom_killed": false,
+    "owned_container_removed": true
+  },
+  "environment": {
+    "GOMAXPROCS": 2,
+    "GOMEMLIMIT": "384MiB",
+    "arch": "amd64",
+    "container_cpu_quota_cores": 1.5,
+    "container_memory_max_bytes": 1073741824,
+    "container_memory_plus_swap_max_bytes": 1073741824,
+    "container_pids_limit": 128,
+    "container_root_read_only": true,
+    "container_swap_allowance_bytes": 0,
+    "cpu_model": "AMD Ryzen 9 5950X 16-Core Processor",
+    "external_network_available": false,
+    "filesystem": "ext4",
+    "go_build_cache": "untimed writable copy of the tested intermediate image cache",
+    "go_version": "go1.27.2",
+    "network": "none with container-local loopback",
+    "os": "linux",
+    "temporary_files": "private disk-backed bind mount"
+  },
+  "interpretation": {
+    "aggregate_memory_improvement_measured": false,
+    "cold_cache_state_asserted": false,
+    "fifteen_clip_export_time_measured": false,
+    "first_usable_draft_goal_measured": false,
+    "formal_performance_acceptance": false,
+    "performance_claim_ready": false,
+    "repeat_download_cost_is_adverse_and_retained": true,
+    "scope": "synthetic repeated HTTP serving path only",
+    "service_level_guarantee": false
+  },
+  "kind": "supplemental_synthetic_repeated_http_download",
+  "measurements": [
+    {
+      "MB_per_second_decimal": "800.36",
+      "iterations": 20,
+      "measurement": 1,
+      "ns_per_operation": 5240532,
+      "path": "ordinary-final"
+    },
+    {
+      "MB_per_second_decimal": "688.08",
+      "iterations": 20,
+      "measurement": 2,
+      "ns_per_operation": 6095654,
+      "path": "ordinary-final"
+    },
+    {
+      "MB_per_second_decimal": "471.99",
+      "iterations": 20,
+      "measurement": 3,
+      "ns_per_operation": 8886390,
+      "path": "ordinary-final"
+    },
+    {
+      "MB_per_second_decimal": "154.16",
+      "iterations": 20,
+      "measurement": 1,
+      "ns_per_operation": 27207957,
+      "path": "draft"
+    },
+    {
+      "MB_per_second_decimal": "276.00",
+      "iterations": 20,
+      "measurement": 2,
+      "ns_per_operation": 15196632,
+      "path": "draft"
+    },
+    {
+      "MB_per_second_decimal": "266.09",
+      "iterations": 20,
+      "measurement": 3,
+      "ns_per_operation": 15763003,
+      "path": "draft"
+    }
+  ],
+  "performance_claim_ready": false,
+  "retained_original_evidence_sha256": {
+    "build_provenance": "096497559a5ea1de224046e9d144ba5e9d66380be31fa39216083ed5492f0b9f",
+    "closed_window": "b3a09bb5c8f53caf092498692542b16c14e1bff8ba691ed1510ea7f1885654e6",
+    "production_family_native_receipt": "9f1dbfc82bb50b2d3c73061cdc6fe608519d374050123d7652065d9171d0c293",
+    "raw_stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "raw_stdout": "e4a5a859c6a163d1263839733ed9a8818f4ad53619c04088c4b5ca702313ed2a",
+    "result": "d087ffcdc3f74594755656fdd79704c4545fea65e9a3d9bb813e5c0ebcd8f566"
+  },
+  "schema_version": 1,
+  "status": "completed_descriptive_observation",
+  "summary": {
+    "aggregation": "median of three Go ns/op means per path, each from 20 operations; not p50 individual-request latency",
+    "draft_median_ms_per_operation": 15.763003,
+    "draft_median_ns_per_operation": 15763003,
+    "draft_minus_ordinary_median_ms_per_operation": 9.667349,
+    "draft_over_ordinary_median_ratio": 2.585941229603911,
+    "observed_direction": "draft path slower",
+    "ordinary_final_median_ms_per_operation": 6.095654,
+    "ordinary_final_median_ns_per_operation": 6095654
+  },
+  "timestamps": {
+    "container_finished_at_utc": "2026-10-16T15:50:56.134346575Z",
+    "container_started_at_utc": "2026-10-16T15:50:52.187262215Z",
+    "intent_recorded_at_utc": "2026-10-16T15:50:51.975630+00:00"
+  }
+}

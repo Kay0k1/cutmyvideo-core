@@ -4,6 +4,29 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
+## 1.4.1 - 2026-10-16
+
+### Changed
+- HTTP collection validation and submission share one fresh source inspection and a bounded parsed FFmpeg capability snapshot within each request. Every clip retains its own settings, track and geometry checks before any new job is admitted.
+- Reused checks verify the original source and configured FFmpeg/FFprobe file identities before and after reuse, preserve cancellation and error ordering, and retain explicit deferred diagnostics when tool capabilities cannot be verified. The single-job preflight remains fresh for each call.
+- Native release gates require the batch freshness, clip diagnostics, bounded capability cache, cancellation and changed-file regressions on every supported platform. Production-family media gates also require the batch checks, and native HTTP tests verify that a later clip failure admits no earlier work.
+- Bound native glibc allocator arenas on Linux using a trusted CPU-budget-derived value. Preserve the minimal subprocess environment, export settings and output verification; require real-child environment and arena/platform regression gates on every native target.
+- Use one video-input decoder thread for accurate joined exports at normalized codec budgets of one or two threads. Preserve encoder/filter budgets, explicit larger budgets, separate audio inputs, MP3, stream copy and single-range paths; require real native export and decoding regressions.
+- Retire released idle database-pool connections after 5 seconds, checking every second by default. Preserve explicit connection-string durations, pool capacity and minimums, acquired transactions and the separate worker notification connection; require native service lifecycle regressions.
+- On Linux, allow kernel file-cache reclamation after a complete, error-checked draft MP4 attachment response. Preserve the durable file, ownership, ranged continuation, final/source/ZIP serving and other platforms; repeated readers can require disk I/O.
+- Advance Python and TypeScript release metadata and package installation links to 1.4.1 while preserving existing SDK APIs and durable project formats.
+
+The [registered 24-run interview comparison](benchmarks/2026-10-16-first-draft/README.md)
+meets the first-draft goal in both fresh and primed process strata. By matched-pair
+medians, the first
+downloaded, independently verified draft is 72.2–74.2% faster, all drafts finish
+18.0–19.7% faster, and the final phase finishes 20.3–20.9% faster. The complete
+30-output cycle improves by 18.8–20.0%; actual common-parent kernel peak memory
+falls 6.4–6.7%, with no higher maximum. All 180 paired final files have identical
+encoded SHA256 hashes. These controlled results start with a ready 720p interview;
+they exclude upload, transcription and public-network latency. Repeat full draft
+downloads can cost additional disk I/O; the separate adverse observation is retained.
+
 ## 1.4.0 - 2026-10-16
 
 ### Added

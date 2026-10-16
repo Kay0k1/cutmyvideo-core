@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "kind": "prepared_prospective_v6_tools_not_executed",
+  "real_inventory_frozen_by_author": false,
+  "new_real_cohort_registered_by_author": false,
+  "native_or_remote_work_executed_by_author": false,
+  "repository_or_original_frozen_helpers_modified": false,
+  "new_source_sha256": {
+    "controller-cohort-v6.py": "191bad9d4881ab6064350352dfe9e0207b62259f5500f07c6c80d768a1e33006",
+    "quality-reuse-v6.py": "70dd0663b9950d0e9b756474e3ab038cc7ab2005ffe054d11cac1ec84c950eeb",
+    "launch-cohort.py": "32567f180745f3a378cc3b82e76711d3cde328df767df8343fde6a1bd468834e"
+  },
+  "preserved_source_sha256": {
+    "controller-cohort.py": "f6717e36dbc34b4ef89019776f3bc65f3648bb6a3743a9bf1d032eaf82c4332d",
+    "controller-cohort-v5.py": "1226acb834fd177027e1140f96d1a4edc609e61a7c68ef1c068402ad8861ca67",
+    "quality-reuse.py": "92b73d276b0adfdf93c97fd985574b50d9306a45f88f32e5b7d4e0f2622ef2f1"
+  },
+  "method_decision_sha256": "019f13d749a006999ea7270d144a2172f3d31c7a1f79cea12c3ce8ccb6e9881c",
+  "author_pure_offline_controls": {
+    "controller": {"passed": 26, "failed": 0, "skipped": 0},
+    "quality": {"passed": 24, "failed": 0, "skipped": 0},
+    "launcher": {"passed": 7, "failed": 0, "skipped": 0},
+    "all_child_process_creation_forbidden": true
+  },
+  "supporting_files_sha256": {
+    "controller_cohort_v6_test.py": "895e1d4bb1b2067498e2a633a1f7ce2a7b82fcaf95e1db6e1046c0e12a6d5fca",
+    "test-quality-reuse-v6.py": "0475d0eef1fdb80044cb38886f1877d2f4904a6e0660a649e88b5eb330f2a8a3",
+    "test-launch-cohort.py": "9a4c250ba6cfa79c35c602b46e1b45b84b09af31bf77058c3d6a572a578c4d85",
+    "controller-v6-method.md": "f93e77dedd0ede5c9ce339a4c9cf3c2d22d31e7e911cee3d8b4cc8f53238467b",
+    "quality-reuse-v6-method.md": "8b68ec371d6bb9df710ac340056b0332d14c2d01f17b7a2dbda4bdb2cc43907e",
+    "detached-coordinator-method.md": "beecaf5b61c52da817c17616a62c51c3afaefa3dd454ce2a4b36e15730175a46",
+    "controller-v6-offline-controls.log": "cb9a43c1f34ed1b572779a46d788d0ad32f460bd31c06a6d53397a85a2106f50",
+    "quality-reuse-v6-offline-controls.log": "ad2c56280b6e52bfce21a3741cf2858b07aab2c3bf591127e8248141313f8c38",
+    "launcher-offline-controls.log": "3817f5d531656b6b04dd85ab2f2108eaedbf0d39bb9f176c8fd49ccbb3c09385"
+  },
+  "independent_launcher_review_sha256": "a2e305d918907f9e9da09c29b97b570b5fbd37e556cbb1a4cf939f980ea46309",
+  "actual_host_systemd_properties_not_yet_physically_exercised_by_author": true,
+  "old_m2_rejection_not_reclassified": true,
+  "new_v6_requires_positive_common_parent_memory_gain": true,
+  "all_five_original_role_memory_outcomes_remain_diagnostic": true,
+  "performance_claim_ready": false
+}

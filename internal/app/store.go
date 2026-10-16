@@ -115,7 +115,7 @@ func OpenStore(ctx context.Context, url string) (*Store, error) {
 func storePoolConfig(raw string) (*pgxpool.Config, error) {
 	// Parse through pgx so URL and keyword connection strings both retain
 	// their explicit pool settings. pgxpool removes these runtime parameters
-	// while parsing, making an explicit maximum indistinguishable afterward.
+	// while parsing, making explicit settings indistinguishable afterward.
 	connection, err := pgx.ParseConfig(raw)
 	if err != nil {
 		return nil, err
@@ -129,6 +129,15 @@ func storePoolConfig(raw string) (*pgxpool.Config, error) {
 		// container has a small quota. Each API/worker needs a bounded pool;
 		// preserve larger operator-requested minimums and explicit maxima.
 		config.MaxConns = max(4, config.MinConns, config.MinIdleConns)
+	}
+	if _, explicit := connection.RuntimeParams["pool_max_conn_idle_time"]; !explicit {
+		// Release spare connections left by brief concurrent SQL operations.
+		// Pool health checks only retire idle resources; acquired connections
+		// and the worker's separate notification connection remain unaffected.
+		config.MaxConnIdleTime = 5 * time.Second
+	}
+	if _, explicit := connection.RuntimeParams["pool_health_check_period"]; !explicit {
+		config.HealthCheckPeriod = time.Second
 	}
 	return config, nil
 }
@@ -421,6 +430,25 @@ func (s *Store) ArtifactPath(ctx context.Context, id, owner string) (string, str
 		err = ErrNotFound
 	}
 	return path, name, err
+}
+
+// artifactDownloadMetadata retains the artifact owner's existing lookup policy.
+// Classification belongs to the original immutable job request, not a project's
+// current plan or the filename. Unknown/legacy metadata cannot enable the hint.
+func (s *Store) artifactDownloadMetadata(ctx context.Context, id, owner string) (string, string, bool, error) {
+	var path, name string
+	var draft bool
+	err := s.DB.QueryRow(ctx, `SELECT a.path,a.filename,
+ COALESCE(j.request->>'rendition','')='draft'
+ AND COALESCE(j.request->>'format','')='mp4'
+ AND COALESCE(j.request->>'cut_mode','')='accurate'
+ AND COALESCE(j.request->>'output_mode','') IN ('','separate','joined')
+ FROM artifacts a LEFT JOIN jobs j ON j.id=a.job_id AND j.owner=a.owner
+ WHERE a.id=$1 AND a.owner=$2`, id, owner).Scan(&path, &name, &draft)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = ErrNotFound
+	}
+	return path, name, draft, err
 }
 
 func (s *Store) Recover(ctx context.Context) error {

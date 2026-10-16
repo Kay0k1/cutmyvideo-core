@@ -1,0 +1,39 @@
+{
+  "actual_systemd_remote_or_native_execution": false,
+  "existing_pure_tests": 7,
+  "files_sha256": {
+    "controller-cohort-v6.py": "191bad9d4881ab6064350352dfe9e0207b62259f5500f07c6c80d768a1e33006",
+    "launch-cohort.py": "32567f180745f3a378cc3b82e76711d3cde328df767df8343fde6a1bd468834e",
+    "launcher-engine-additional-controls.log": "07272f0cd8d496a4b44964832409175fcc7c434d5587715cf635d4df8e4d2d3c",
+    "launcher-engine-review-controls.log": "1cde5fc2f25bce7db1bfa6dea8acc94f9bee6ebf57683db636f151a25faee961",
+    "review-launcher-controls.py": "0ce528da2c801ad69f2b8db4b1ca19bde0ddf5956d4509caab863a226cc4fac6",
+    "test-launch-cohort.py": "9a4c250ba6cfa79c35c602b46e1b45b84b09af31bf77058c3d6a572a578c4d85"
+  },
+  "independent_additional_pure_tests": 4,
+  "kind": "independent_cache_only_detached_launcher_review",
+  "limits": [
+    "Only source and mocked metadata were checked; no actual target systemd instance was queried.",
+    "Actual target must satisfy normalized systemctl fields plus controller raw cgroup/rlimit guards before first measured sample.",
+    "A launched flag means systemd launch accepted, not completed cohort/acceptance; final actual exit and all sample/content receipts remain mandatory."
+  ],
+  "performance_claim_ready": false,
+  "result": "PASS_no_concrete_blocker_found",
+  "reviewed_invariants": [
+    "exact frozen launcher/controller/registration bytes and prospective instrumentation policy",
+    "run-once immutable durable intent before systemd launch, private bounded log, no takeover/retry on lost reply",
+    "exclusive shared lock available before launch and released for detached controller; competitor makes controller fail closed",
+    "exact owned generated unit identity/description and outside measured parent cgroup",
+    "128MiB/0swap/10percentCPU/64tasks/4hour/RemainAfterExit/8MiB RLIMIT requested and normalized unit metadata checked",
+    "controller independently checks actual cgroup limits/self identity/rlimit before samples",
+    "status handles retained exited unit and never starts/stops a resource",
+    "failure keeps intent/evidence, no automatic cleanup or production action"
+  ],
+  "schema_version": 1,
+  "systemd_property_format_assumptions": [
+    "CPUQuotaPerSecUSec=100ms",
+    "RuntimeMaxUSec=4h",
+    "MemoryMax=134217728",
+    "LimitFSIZE=8388608",
+    "RemainAfterExit=yes"
+  ]
+}

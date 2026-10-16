@@ -1,0 +1,22 @@
+{
+  "title": "Interview WMF.ogv",
+  "source_page": "https://commons.wikimedia.org/wiki/File:Interview_WMF.ogv",
+  "author": "Wikimedia Deutschland (WMDE)",
+  "license": "CC BY-SA 3.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/3.0",
+  "original": {
+    "size_bytes": 60337298,
+    "sha256": "cf63145d228d669e76934686d80590ac5848c43a6a3361817a0ae2fa7e599c14"
+  },
+  "prepared_source": {
+    "size_bytes": 82242740,
+    "sha256": "0f9e167eea8a4c503396cf819edd5e356c94858befef12a8e3667cea22d27fca",
+    "duration": "516.912472",
+    "nominal_frame_rate": "25/1",
+    "average_frame_rate": "316225/12902"
+  },
+  "preparation": "Full interview converted from Theora/Vorbis to H.264/AAC at its original 1280x720 geometry and variable frame timing, CRF20/veryfast. No cuts or synthetic speech were added.",
+  "measured_workload": "15 separate clips, each with two ordered ranges totalling 9000 milliseconds; all 15 drafts followed by all 15 finals. Source upload and preparation precede the primary draft clock.",
+  "media_files_in_repository": false,
+  "fixture_sha256": "686005efd644b86a0ddf41442458c10b223e58b5c1950c59915bdd9c3fc90ae5"
+}

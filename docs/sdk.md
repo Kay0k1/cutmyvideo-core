@@ -13,18 +13,23 @@ subtitle operations require core 1.4.0. The 1.2.0 binary has no preflight comman
 See the [project overview](../README.en.md#versions) for release status and the
 [architecture](architecture.md) for dependencies.
 
+Version 1.4.1 preserves these SDK APIs and durable project formats. Its server
+optimizations accelerate collection checks and exports; the
+[15-clip comparison](../benchmarks/2026-10-16-first-draft/README.md) uses the same
+released 1.4.0 client on both sides to measure that server change independently.
+
 ## Install versioned packages
 
 Python 3.10 or newer:
 
 ```sh
-python -m pip install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.0/cutmyvideo-1.4.0-py3-none-any.whl'
+python -m pip install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.1/cutmyvideo-1.4.1-py3-none-any.whl'
 ```
 
 Node.js 20.19 or newer, with an ESM project:
 
 ```sh
-npm install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.0/cutmyvideo-sdk-1.4.0.tgz'
+npm install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.1/cutmyvideo-sdk-1.4.1.tgz'
 ```
 
 These are GitHub release assets, not claims of publication to PyPI/npm. No source

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cutmyvideo"
-version = "1.4.0"
+version = "1.4.1"
 description = "Typed local and HTTP clients for cutmyvideo-core"
 readme = "README.md"
 license = {text = "MIT"}

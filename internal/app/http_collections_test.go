@@ -288,6 +288,53 @@ func TestHTTPCollectionsLocalPreflightAndDraft(t *testing.T) {
 	}
 }
 
+func TestHTTPCollectionsBatchPreflightRejectsLateClipBeforeAdmission(t *testing.T) {
+	_ = mediaConfig(t)
+	store, config, server, cookie, owner := httpPreflightFixture(t)
+	source := addHTTPPreflightVideo(t, store, config, owner)
+	config.MaxRanges = 128
+	commands := countMediaCommands(t, &config)
+	server.Config = config
+	request := CollectionRequest{SourceID: source.ID, Plan: CollectionPlan{Version: 1}}
+	for i := range 15 {
+		clip := CollectionClip{ID: fmt.Sprintf("clip-%02d", i+1), Ranges: []Range{{StartMS: int64(i * 20), EndMS: int64(i*20 + 500)}}}
+		if i%3 == 1 {
+			clip.Options.Crop = &Crop{X: .25, Y: 0, Width: .5, Height: 1}
+		}
+		if i%3 == 2 {
+			value := true
+			clip.Options.NoAudio = &value
+		}
+		request.Plan.Clips = append(request.Plan.Clips, clip)
+	}
+	for attempt := range 2 {
+		w := httpCollectionRequest(t, server, cookie, "/api/v1/collections/validate", request, "")
+		var validation CollectionValidation
+		if err := json.Unmarshal(w.Body.Bytes(), &validation); err != nil || w.Code != http.StatusOK || !validation.Valid || len(validation.Clips) != 15 {
+			t.Fatalf("batch validation failed: status=%d err=%v body=%s", w.Code, err, w.Body.String())
+		}
+		if got := len(commands()); got != (attempt+1)*5 {
+			t.Fatalf("HTTP request did not use one fresh probe/four listings: got %d commands after %d requests", got, attempt+1)
+		}
+		assertHTTPPreflightNoWork(t, store, 0)
+	}
+	// A valid range but missing explicit audio track is discovered during media
+	// preflight, after all earlier clips have been checked. Nothing is admitted.
+	index := 99
+	request.Plan.Clips[14].Options.NoAudio = nil
+	request.Plan.Clips[14].Options.AudioTrack = &index
+	failed := collectionSubmissionReport(t, httpCollectionRequest(t, server, cookie, "/api/v1/collections", request, "late-invalid-clip"), http.StatusUnprocessableEntity)
+	for _, clip := range failed.Clips {
+		if clip.Job != nil || clip.Error.Code != "audio_track_unavailable" || clip.Error.ClipID != "clip-15" || clip.Error.Field != "options.audio_track" {
+			t.Fatal("late preflight blocker lost attribution or admitted an earlier clip", clip)
+		}
+	}
+	if got := len(commands()); got != 15 {
+		t.Fatalf("failed batch ran unexpected extra tool processes: %d", got)
+	}
+	assertHTTPPreflightNoWork(t, store, 0)
+}
+
 func TestHTTPCollectionsPartialFailureRecovery(t *testing.T) {
 	store, server, cookie, owner, request := remoteCollectionFixture(t, 2)
 	request.ClipIDs = []string{"clip-1"}

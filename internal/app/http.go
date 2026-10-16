@@ -963,10 +963,17 @@ func (s *Server) cancelJob(w http.ResponseWriter, r *http.Request, owner string)
 	s.job(w, r, owner)
 }
 func (s *Server) download(w http.ResponseWriter, r *http.Request, owner string) {
-	type location struct{ path, name string }
+	type location struct {
+		path, name string
+		draft      bool
+	}
 	result, err := apiDatabase(r.Context(), func(ctx context.Context) (location, error) {
-		path, name, err := s.Store.ArtifactPath(ctx, r.PathValue("id"), owner)
-		return location{path, name}, err
+		if !draftCacheHintSupported {
+			path, name, err := s.Store.ArtifactPath(ctx, r.PathValue("id"), owner)
+			return location{path: path, name: name}, err
+		}
+		path, name, draft, err := s.Store.artifactDownloadMetadata(ctx, r.PathValue("id"), owner)
+		return location{path: path, name: name, draft: draft}, err
 	})
 	if err != nil {
 		lookupError(w, err)
@@ -975,10 +982,14 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request, owner string) 
 	// Large results can outlive the server's ordinary ten-minute response limit.
 	// ServeContent retains HTTP range/If-Range support for interrupted downloads.
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(12 * time.Hour))
-	serveFile(w, r, result.path, result.name, true)
+	serveFileWithDraftHint(w, r, result.path, result.name, true, result.draft)
 }
 
 func serveFile(w http.ResponseWriter, r *http.Request, path, name string, attachment bool) {
+	serveFileWithDraftHint(w, r, path, name, attachment, false)
+}
+
+func serveFileWithDraftHint(w http.ResponseWriter, r *http.Request, path, name string, attachment, draft bool) {
 	f, err := os.Open(path)
 	if err != nil {
 		writeError(w, 404, "expired", "The file has expired or is no longer available")
@@ -1003,6 +1014,10 @@ func serveFile(w http.ResponseWriter, r *http.Request, path, name string, attach
 	w.Header().Set("Content-Type", contentType)
 	if !attachment {
 		privateSourceFileHeaders(w, name, info)
+	}
+	if attachment && draft && draftCacheHintSupported {
+		serveDraftArtifactContent(w, r, name, info, f, discardCompletedDraftCache)
+		return
 	}
 	http.ServeContent(w, r, name, info.ModTime(), contextReadSeeker{r.Context(), f})
 }

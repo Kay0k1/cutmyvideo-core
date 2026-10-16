@@ -389,7 +389,7 @@ class CutmyClient:
             threading.Thread(target=cancel_transfer, daemon=True).start()
         response = None
         try:
-            outgoing = {"Accept": "application/json", "User-Agent": "cutmyvideo-python/1.4.0"}
+            outgoing = {"Accept": "application/json", "User-Agent": "cutmyvideo-python/1.4.1"}
             if self._cookie:
                 outgoing["Cookie"] = "cutmy_session=" + self._cookie
             if headers:
