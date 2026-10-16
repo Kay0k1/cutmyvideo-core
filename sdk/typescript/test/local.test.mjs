@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -105,4 +106,14 @@ test('Node file upload is disk-backed and download publishes exclusively with cl
   assert.equal(await readFile(output, 'utf8'), 'media bytes');
   await assert.rejects(downloadArtifactToFile(client, 'artifact-1', join(cwd, 'oversize'), { maxBytes: 2 }), e => e.code === 'download_too_large');
   assert.deepEqual((await readdir(cwd)).sort(), ['result.mp4', 'source.mov']);
+});
+
+test('owned Windows tree helpers are bounded and reaped before cancellation retains earlier results', () => {
+  const entry = process.env.CUTMY_SDK_LOCAL_JS_ENTRY ? pathToFileURL(process.env.CUTMY_SDK_LOCAL_JS_ENTRY).href : new URL('../dist/local.js', import.meta.url).href;
+  const result = spawnSync(process.execPath, [fileURLToPath(new URL('./local-killer-control.mjs', import.meta.url)), entry], { encoding: 'utf8', timeout: 12000, maxBuffer: 64 << 10 });
+  assert.equal(result.error, undefined);
+  assert.equal(result.status, 0, result.stderr);
+  const receipt = JSON.parse(result.stdout);
+  assert.equal(receipt.ok, true); assert.equal(receipt.scenarios, 3); assert(receipt.helpers === 5 || receipt.helpers === 6);
+  assert.equal(receipt.primary_code, 'cancelled'); assert.equal(receipt.partial_output_retained, true);
 });

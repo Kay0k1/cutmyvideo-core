@@ -256,10 +256,19 @@ func (s *Server) submitCollection(w http.ResponseWriter, r *http.Request, owner 
 	pending := make([]PreparedCollectionClip, 0, len(clips))
 	for i, clip := range clips {
 		result.Clips[i] = CollectionClipSubmission{ClipID: clip.ID, Label: clip.Label, RequestedMS: clip.RequestedMS, Request: clip.Request}
-		job, err := apiDatabase(r.Context(), func(ctx context.Context) (Job, error) {
-			return s.Store.JobByIdempotencyKey(ctx, owner, collectionJobKey(key, clip))
-		})
+		job, retainedProjectJob := scopedProjectExistingJob(r.Context(), clip)
+		var err error
+		if !retainedProjectJob {
+			job, err = apiDatabase(r.Context(), func(ctx context.Context) (Job, error) {
+				return s.Store.JobByIdempotencyKey(ctx, owner, collectionJobKey(key, clip))
+			})
+		}
 		if err == nil {
+			if err = s.recordScopedProjectJob(r.Context(), owner, clip.ID, job); err != nil {
+				lookupError(w, err)
+				return
+			}
+			rewriteProjectJob(r.Context(), &job)
 			result.Clips[i].Job = &job
 		} else if errors.Is(err, ErrNotFound) {
 			pending = append(pending, clip)
@@ -343,6 +352,11 @@ func (s *Server) submitCollection(w http.ResponseWriter, r *http.Request, owner 
 			writeCollectionSubmission(w, result, status)
 			return
 		}
+		if err = s.recordScopedProjectJob(r.Context(), owner, clip.ID, job); err != nil {
+			lookupError(w, err)
+			return
+		}
+		rewriteProjectJob(r.Context(), &job)
 		result.Clips[i].Job = &job
 	}
 	writeCollectionSubmission(w, result, http.StatusAccepted)

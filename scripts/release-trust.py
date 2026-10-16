@@ -42,7 +42,7 @@ GO_NOTICE = '07e803b805ec67f8d2a26183c1a1e3bd7ef8f0c7c44cd4b35c7b775980630c4c'
 PROJECT_LICENSE = 'dbd22263d7218a09000bf90ab07b53de55b246220392696d52e71b4b0b4b1548'
 SCHEMAS = frozenset({'20261005-storage-queue-v3', '20261010-cache-retention-v1',
                     '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1',
-                    '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1'})
+                    '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1', '20261016-agent-projects-v1'})
 # Reviewed archive-gate inventory; changing native scenarios requires a new review.
 NATIVE_GROUP_CHECK_COUNTS = (('archive', 4), ('version', 3), ('cli', 4), ('media', 18),
                              ('process', 3), ('service', 13), ('deletion', 6))

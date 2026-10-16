@@ -27,6 +27,8 @@ from urllib.parse import quote, urlsplit
 
 from .errors import APIError, WaitCancelled, WaitTimeout, JobError
 from .types import Artifact, CollectionRequest, CollectionRunReport, CollectionSubmission, CollectionValidation, ExportRequest, Job, PreflightResult, Source, TrackReport
+from .types import (AgentProject, ProjectCreateRequest, ProjectEditRequest, ProjectHandoff, SourcePreparationInput,
+                    SourcePreparationReceipt, SourcePreparationReport, SubtitleRequest, SubtitleResult)
 
 _JSON_LIMIT = 1 << 20
 _CHUNK = 64 << 10
@@ -188,6 +190,36 @@ class _HTTPConnection(http.client.HTTPConnection):
             self.response_class = partial(_CancellableResponse, deadline=self.deadline, cancel_event=self.cancel_event)
         return super().getresponse()
 
+    def send(self, data: Any) -> None:
+        if self.cancel_event is None:
+            return super().send(data)
+        if self.sock is None:
+            self.connect()
+        assert self.sock is not None
+        self.sock.setblocking(False)
+        remaining = memoryview(data)
+        while remaining:
+            if self.cancel_event.is_set():
+                raise APIError("Source upload cancelled", code="collection_cancelled")
+            _remaining(self.deadline)
+            try:
+                count = self.sock.send(remaining)
+                if count <= 0:
+                    raise OSError("Connection closed while sending request")
+                remaining = remaining[count:]
+                continue
+            except ssl.SSLWantReadError:
+                event = selectors.EVENT_READ
+            except (BlockingIOError, ssl.SSLWantWriteError):
+                event = selectors.EVENT_WRITE
+            with selectors.DefaultSelector() as readiness:
+                readiness.register(self.sock, event)
+                while True:
+                    if self.cancel_event.is_set():
+                        raise APIError("Source upload cancelled", code="collection_cancelled")
+                    if readiness.select(min(.05, _remaining(self.deadline))):
+                        break
+
 
 class _HTTPSConnection(_HTTPConnection):
     def connect(self) -> None:
@@ -320,7 +352,8 @@ class CutmyClient:
                   destination: Path | None = None, max_bytes: int | None = None,
                   session: bool = True, collection_response: bool = False,
                   receive: Callable[..., Any] | None = None,
-                  cancel_event: threading.Event | None = None) -> Any:
+                  cancel_event: threading.Event | None = None,
+                  json_limit: int = _JSON_LIMIT) -> Any:
         active = _COLLECTION_CANCEL.get()
         if cancel_event is None and active is not None and active[0] is self:
             cancel_event = active[1]
@@ -356,7 +389,7 @@ class CutmyClient:
             threading.Thread(target=cancel_transfer, daemon=True).start()
         response = None
         try:
-            outgoing = {"Accept": "application/json", "User-Agent": "cutmyvideo-python/1.4.0.dev0"}
+            outgoing = {"Accept": "application/json", "User-Agent": "cutmyvideo-python/1.4.0"}
             if self._cookie:
                 outgoing["Cookie"] = "cutmy_session=" + self._cookie
             if headers:
@@ -402,7 +435,7 @@ class CutmyClient:
                 if response.status != 200:
                     raise APIError("Expected a complete artifact response", code="invalid_response", status=response.status)
                 return self._save_download(response, connection, deadline, destination, max_bytes)
-            payload = self._read_bounded(response, connection, deadline, _JSON_LIMIT)
+            payload = self._read_bounded(response, connection, deadline, json_limit)
             try:
                 data = json.loads(payload)
             except (ValueError, UnicodeDecodeError):
@@ -531,7 +564,7 @@ class CutmyClient:
 
     def _json(self, method: str, path: str, request: Mapping[str, Any] | None = None,
               *, timeout: float | None = None, default: float | None = None,
-              headers: Mapping[str, str] | None = None) -> Any:
+              headers: Mapping[str, str] | None = None, json_limit: int = _JSON_LIMIT) -> Any:
         deadline = self._deadline(timeout, self.request_timeout if default is None else default)
         outgoing = dict(headers or {})
         body = None
@@ -540,7 +573,7 @@ class CutmyClient:
             if len(body) > 1 << 20:
                 raise ValueError("JSON request exceeds 1 MiB")
             outgoing["Content-Type"] = "application/json"
-        return self._exchange(method, path, deadline, body=body, headers=outgoing)
+        return self._exchange(method, path, deadline, body=body, headers=outgoing, json_limit=json_limit)
 
     def session(self, *, timeout: float | None = None) -> Mapping[str, Any]:
         """Get public limits; retains the same private owner session."""
@@ -558,11 +591,15 @@ class CutmyClient:
             raise APIError("Server returned an invalid source list", code="invalid_response")
         return [self._source(source) for source in data["sources"]]
 
-    def import_source(self, url: str, *, timeout: float | None = None) -> Source:
+    def import_source(self, url: str, *, timeout: float | None = None, idempotency_key: str | None = None) -> Source:
+        from ._source_protocol import key_headers
         return self._source(self._json("POST", "/api/v1/sources", {"url": url}, timeout=timeout,
-                                      default=self.upload_timeout))
+                                      default=self.upload_timeout, headers=key_headers(idempotency_key)))
 
-    def upload_source(self, path: str | os.PathLike[str], *, timeout: float | None = None) -> Source:
+    def upload_source(self, path: str | os.PathLike[str], *, timeout: float | None = None,
+                      idempotency_key: str | None = None, fingerprint: Mapping[str, Any] | None = None) -> Source:
+        from ._source_protocol import key_headers
+        headers = key_headers(idempotency_key, fingerprint, upload=True)
         deadline = self._deadline(timeout, self.upload_timeout)
         file_path = Path(path)
         boundary = "cutmy-" + secrets.token_hex(24)
@@ -576,8 +613,76 @@ class CutmyClient:
             if not stat.S_ISREG(info.st_mode):
                 raise ValueError("Upload requires a regular local file")
             return self._source(self._exchange("POST", "/api/v1/uploads", deadline,
-                                               headers={"Content-Type": "multipart/form-data; boundary=" + boundary},
+                                               headers={"Content-Type": "multipart/form-data; boundary=" + boundary, **headers},
                                                stream=(prefix, file, suffix, info.st_size)))
+
+    def get_source_preparation(self, key: str, *, timeout: float | None = None) -> SourcePreparationReceipt:
+        from ._source_protocol import key_headers, preparation
+        key_headers(key)
+        return cast(SourcePreparationReceipt, preparation(self._json("GET", "/api/v1/source-preparations/" + self._id(key), timeout=timeout), key))
+
+    def prepare_source(self, source: SourcePreparationInput | Mapping[str, Any], directory: str | os.PathLike[str], *,
+                       idempotency_key: str | None = None, timeout: float = 7200,
+                       cancel_event: threading.Event | None = None,
+                       on_progress: Callable[[Mapping[str, Any]], None] | None = None) -> SourcePreparationReport:
+        from .sources import prepare_source
+        return cast(SourcePreparationReport, prepare_source(self, source, directory, idempotency_key=idempotency_key, timeout=timeout,
+                              cancel_event=cancel_event, on_progress=on_progress))
+
+    def resume_source(self, directory: str | os.PathLike[str], *, timeout: float = 7200,
+                      cancel_event: threading.Event | None = None,
+                      on_progress: Callable[[Mapping[str, Any]], None] | None = None) -> SourcePreparationReport:
+        from .sources import resume_source
+        return cast(SourcePreparationReport, resume_source(self, directory, timeout=timeout, cancel_event=cancel_event, on_progress=on_progress))
+
+    def retime_subtitles(self, request: SubtitleRequest | Mapping[str, Any], *, timeout: float | None = None) -> SubtitleResult:
+        from .subtitles import subtitle_request, subtitle_result
+        body = subtitle_request(request)
+        response = self._exchange("POST", "/api/v1/subtitles/retime", self._deadline(timeout, self.request_timeout),
+                                  body=json.dumps(body, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode(),
+                                  headers={"Content-Type": "application/json"}, json_limit=64 << 20)
+        return cast(SubtitleResult, subtitle_result(response, body))
+
+    def get_project(self, project_id: str, *, timeout: float | None = None) -> AgentProject:
+        from .projects import project_result
+        result = project_result(self._exchange("GET", "/api/v1/projects/" + self._id(project_id), self._deadline(timeout, self.request_timeout), json_limit=16 << 20))
+        if result["id"] != project_id:
+            raise APIError("Project response identity differs", code="invalid_response")
+        for item in result["jobs"]:
+            self._job(item["job"])
+        return cast(AgentProject, result)
+
+    def create_project(self, request: ProjectCreateRequest | Mapping[str, Any], *, timeout: float | None = None) -> AgentProject:
+        from .projects import project_result
+        return cast(AgentProject, project_result(self._json("POST", "/api/v1/projects", request, timeout=timeout, json_limit=16 << 20)))
+
+    def edit_project(self, project_id: str, request: ProjectEditRequest | Mapping[str, Any], *, timeout: float | None = None) -> AgentProject:
+        from .projects import project_result
+        return cast(AgentProject, project_result(self._json("PUT", "/api/v1/projects/" + self._id(project_id), request, timeout=timeout, json_limit=16 << 20)))
+
+    def submit_project_collection(self, project_id: str, *, revision: int, clip_ids: list[str],
+                                  retry_failed: bool = False, idempotency_key: str | None = None,
+                                  timeout: float | None = None) -> CollectionSubmission:
+        from ._collection_protocol import submission
+        suffix = "/collections/retry" if retry_failed else "/collections"
+        headers = {"Content-Type": "application/json"}
+        if retry_failed:
+            from ._source_protocol import key_headers
+            if idempotency_key is None:
+                raise ValueError("Explicit project retry requires a saved attempt key")
+            headers.update(key_headers(idempotency_key))
+        body = json.dumps({"revision": revision, "clip_ids": clip_ids}, separators=(",", ":")).encode()
+        result = self._exchange("POST", "/api/v1/projects/" + self._id(project_id) + suffix,
+                                self._deadline(timeout, self.request_timeout), body=body, headers=headers, collection_response=True)
+        return cast(CollectionSubmission, submission(result, self._job))
+
+    def create_project_handoff(self, project_id: str, *, timeout: float | None = None) -> ProjectHandoff:
+        data = self._json("POST", "/api/v1/projects/" + self._id(project_id) + "/handoffs", {}, timeout=timeout)
+        if (data.get("project_id") != project_id or not isinstance(data.get("token"), str)
+                or not 20 <= len(data["token"]) <= 256 or not all(c.isascii() and (c.isalnum() or c in "-_") for c in data["token"])
+                or not isinstance(data.get("expires_at"), str)):
+            raise APIError("Invalid scoped handoff response", code="invalid_response")
+        return cast(ProjectHandoff, {key: data[key] for key in ("project_id", "token", "expires_at")})
 
     def get_source(self, source_id: str, *, timeout: float | None = None) -> Source:
         return self._source(self._json("GET", "/api/v1/sources/" + self._id(source_id), timeout=timeout))
@@ -649,13 +754,15 @@ class CutmyClient:
 
     def resume_collection(self, directory: str | os.PathLike[str], *,
                           request: CollectionRequest | Mapping[str, Any] | None = None,
+                          retry_failed: list[str] | tuple[str, ...] | None = None,
+                          project_id: str | None = None,
                           timeout: float = 1800, poll_interval: float = 1,
                           cancel_event: threading.Event | None = None,
                           on_progress: Callable[[CollectionRunReport], None] | None = None,
                           max_output_bytes: int = 10 << 30, admission_batch_size: int = 3) -> CollectionRunReport:
         """Restore saved owner/key and verify files before continuing or revising."""
         from .collections import resume_collection
-        return cast(CollectionRunReport, resume_collection(self, directory, request=request, timeout=timeout,
+        return cast(CollectionRunReport, resume_collection(self, directory, request=request, retry_failed=retry_failed, project_id=project_id, timeout=timeout,
                     poll_interval=poll_interval, cancel_event=cancel_event, on_progress=on_progress,
                     max_output_bytes=max_output_bytes, admission_batch_size=admission_batch_size))
 

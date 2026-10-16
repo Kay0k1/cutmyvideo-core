@@ -1,5 +1,7 @@
 """Public JSON shapes. Strings remain open for additive server values."""
 
+from __future__ import annotations
+
 from typing import TypedDict
 
 
@@ -114,6 +116,49 @@ class Source(_SourceRequired, total=False):
     width: int
     height: int
     tracks: list[Track]
+    fingerprint: SourceFingerprint
+
+
+class ContentFingerprint(TypedDict):
+    kind: str
+    sha256: str
+    size_bytes: int
+
+
+class ProviderFingerprint(TypedDict):
+    kind: str
+    provider: str
+    provider_id: str
+    canonical_url_sha256: str
+
+
+SourceFingerprint = ContentFingerprint | ProviderFingerprint
+
+
+class SourcePreparationInput(TypedDict, total=False):
+    kind: str
+    path: str
+    url: str
+
+
+class SourcePreparationReport(TypedDict, total=False):
+    complete: bool
+    phase: str
+    source_id: str
+    source: Source
+    fingerprint: SourceFingerprint
+    error: CollectionDiagnostic
+
+
+class SourcePreparationReceipt(TypedDict, total=False):
+    version: int
+    key: str
+    state: str
+    source_id: str
+    source: Source
+    fingerprint: SourceFingerprint
+    retry_after_ms: int
+    error: CollectionDiagnostic
 
 
 class _TrackReportRequired(TypedDict):
@@ -132,6 +177,32 @@ class Segment(TypedDict):
     source_end_ms: int
     output_start_ms: int
     output_end_ms: int
+
+
+class SubtitleMap(TypedDict):
+    clip_id: str
+    segments: list[Segment]
+
+
+class SubtitleRequest(TypedDict, total=False):
+    version: int
+    format: str
+    text: str
+    output_format: str
+    outputs: list[SubtitleMap]
+
+
+class SubtitleOutput(TypedDict):
+    clip_id: str
+    format: str
+    text: str
+    cue_count: int
+    sha256: str
+
+
+class SubtitleResult(TypedDict):
+    version: int
+    outputs: list[SubtitleOutput]
 
 
 class _ArtifactRequired(TypedDict):
@@ -322,6 +393,10 @@ class _CollectionPendingRequired(TypedDict):
 
 class CollectionPending(_CollectionPendingRequired, total=False):
     stage: str
+    job_id: str
+    job_status: str
+    progress_ms: int
+    error_code: str
     downloaded_bytes: int
     total_bytes: int
     field: str
@@ -349,3 +424,48 @@ class _CollectionRunRequired(TypedDict):
 class CollectionRunReport(_CollectionRunRequired, total=False):
     download: CollectionDownload
     diagnostic: CollectionDiagnostic
+
+
+class ProjectClip(TypedDict):
+    clip_id: str
+    request: ExportRequest
+
+
+class ProjectJob(ProjectClip):
+    current: bool
+    job: Job
+
+
+class AgentProject(CollectionRequest, total=False):
+    version: int
+    id: str
+    revision: int
+    source: Source
+    clips: list[ProjectClip]
+    jobs: list[ProjectJob]
+    expires_at: str
+    access_expires_at: str
+
+
+class ProjectClipJob(TypedDict):
+    clip_id: str
+    job_id: str
+
+
+class ProjectCreateRequest(CollectionRequest, total=False):
+    collection_key: str
+    job_ids: list[str]
+    clip_jobs: list[ProjectClipJob]
+
+
+class ProjectEditRequest(TypedDict, total=False):
+    revision: int
+    plan: CollectionPlan
+    clip_ids: list[str]
+    rendition: str
+
+
+class ProjectHandoff(TypedDict):
+    project_id: str
+    token: str
+    expires_at: str

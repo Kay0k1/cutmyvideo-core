@@ -167,6 +167,41 @@ COLLECTION_SERVICE_REQUIRED = {
 }
 COLLECTION_CONTRACT_REQUIRED = {"TestHTTPCollectionsPublicContract"}
 
+AGENT_PROJECT_SERVICE_REQUIRED = {
+    "TestSourcePreparationsUploadLostReplyReplayAndFingerprint",
+    "TestSourcePreparationLeaseFencingAndRetainedReceipt",
+    "TestSourcePreparationKeyGrammarForPathsAndHeaders",
+    "TestSourcePreparationsDirectAndProviderIdentityReplay",
+    "TestHTTPAgentProjectHandoffIsolationEditsAndRepair",
+    "TestHTTPAgentProjectExpiryAndPutMutationAdmission",
+    "TestHTTPAgentProjectCreationRecoveryAndConcurrentHandoff",
+    "TestHTTPAgentProjectAttachedArtifactsAndRange",
+    "TestHTTPAgentProjectExplicitBindingsPreserveIdenticalClips",
+    "TestHTTPAgentProjectExpandedPlanLimitIsCorrectiveAndAtomic",
+    "TestAgentProjectPersistenceLimitRecognizesOnlyKnownConstraints",
+}
+AGENT_PROJECT_STORAGE_REQUIRED = {
+    "TestAgentProjectsMigrationPreserves007RowsAndRestartsWithoutWrites",
+    "TestAgentProjectsRuntimeGrantsPermitCRUDWithoutOwnership",
+}
+AGENT_PROJECT_RECOVERY_REQUIRED = {
+    "TestAgentProjectsPreviousBinaryRefuses008WithoutWrites",
+    "TestAgentProjectsRuntimeGrantsPermitCRUDWithoutOwnership",
+    "TestAgentProjectsCoordinated008BackupRestorePreservesRowsAndMedia",
+}
+SUBTITLE_SERVICE_REQUIRED = {
+    "TestRetimeSubtitlesActualMapsAndRepeatedReorderedCues",
+    "TestRetimeSubtitlesVTTSettingsAndOverlappingCueIdentity",
+    "TestRetimeSubtitlesConversionAndHalfOpenEmptyOutputs",
+    "TestRetimeSubtitlesRejectsUnsupportedAndMalformedText",
+    "TestRetimeSubtitlesMapValidationAndResourceBounds",
+    "TestRetimeSubtitlesCancellationAndShortOutputClock",
+    "TestSubtitleRetimePublicHandler",
+    "TestSubtitleRetimePublicHandlerAllowsBoundedEscapedText",
+}
+SUBTITLE_CLI_REQUIRED = {"TestCLIRetimeSubtitlesWithoutToolsOrDatabase"}
+AGENT_PROJECT_CONTRACT_REQUIRED = {"TestHTTPAgentProjectPublicContract", "TestHTTPSubtitleRetimePublicContract"}
+
 REQUIRED = [
     {"TestEngineInspectAndExportActualMedia", "TestConcurrentPublicationHasExactlyOneCompleteWinner", "TestCLIInspectAndClipActualMedia", "TestCLIBatchSavedPlanRelativeInputAndJoinedAudio", "TestPlanRoundTripActualOutputsAndPartialPublication"},
     {"TestProcessCancellationTerminatesDescendants", "TestProcessOutputStopsUnboundedProducer"},
@@ -237,6 +272,9 @@ REQUIRED[2].update(PREFLIGHT_SERVICE_REQUIRED)
 REQUIRED[4].update(PREFLIGHT_MEDIA_REQUIRED)
 REQUIRED[0].update(COLLECTION_ENGINE_REQUIRED | COLLECTION_CLI_REQUIRED)
 REQUIRED[2].update(COLLECTION_SERVICE_REQUIRED)
+REQUIRED[0].update(SUBTITLE_CLI_REQUIRED)
+REQUIRED[2].update(AGENT_PROJECT_SERVICE_REQUIRED | SUBTITLE_SERVICE_REQUIRED)
+REQUIRED[3].update(AGENT_PROJECT_STORAGE_REQUIRED)
 
 REQUIRED_PACKAGES = [
     {ENGINE_PACKAGE, FS_PACKAGE, CLI_PACKAGE},
@@ -287,8 +325,11 @@ if __name__ == "__main__":
         verify_report(sys.argv[2], BOOKWORM_REQUIRED, {APP_PACKAGE})
         print(f"Bookworm's {len(BOOKWORM_REQUIRED)} required media and timeline checks passed without skips.")
     elif len(sys.argv) == 3 and sys.argv[1] == "--preflight-contract":
-        verify_report(sys.argv[2], PREFLIGHT_CONTRACT_REQUIRED | COLLECTION_CONTRACT_REQUIRED, {APP_PACKAGE})
-        print("Preflight and collection public-handler OpenAPI samples passed without skips.")
+        verify_report(sys.argv[2], PREFLIGHT_CONTRACT_REQUIRED | COLLECTION_CONTRACT_REQUIRED | AGENT_PROJECT_CONTRACT_REQUIRED, {APP_PACKAGE})
+        print("Preflight, collection, agent project and subtitle public-handler OpenAPI samples passed without skips.")
+    elif len(sys.argv) == 3 and sys.argv[1] == "--agent-project-recovery":
+        verify_report(sys.argv[2], AGENT_PROJECT_RECOVERY_REQUIRED, {APP_PACKAGE})
+        print("Schema8 previous-binary refusal, restricted runtime and actual PostgreSQL/media restore passed without skips.")
     else:
         verify(sys.argv[1:])
         print("Native media contract, filesystem, CLI, process tree, API/worker and storage checks passed without skips.")

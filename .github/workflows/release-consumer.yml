@@ -35,7 +35,7 @@ jobs:
   native:
     name: Signed downloads (${{ matrix.os }}-${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 35 # Bounded 25m verification + 5m offline SDK smoke, plus setup/upload.
     permissions:
       contents: write # Required to read the unpublished draft; consumer commands are read-only.
     strategy:
@@ -74,12 +74,50 @@ jobs:
             --manifest-sha256 "$MANIFEST_SHA256" \
             --target-os "$TARGET_OS" --target-arch "$TARGET_ARCH" \
             --evidence "$consumer_evidence_path"
+      - name: Determine whether this authenticated release includes SDK packages
+        id: sdk-release
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          python_command=python3
+          if [ "$RUNNER_OS" = Windows ]; then python_command=python; fi
+          "$python_command" -c 'import os,re; value=re.fullmatch(r"v([0-9]+)\.([0-9]+)\.([0-9]+)(?:-[0-9A-Za-z.-]+)?",os.environ["RELEASE_VERSION"]); assert value; enabled=tuple(map(int,value.group(1,2,3))) >= (1,4,0); open(os.environ["GITHUB_OUTPUT"],"a").write("enabled="+str(enabled).lower()+"\n")'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        if: steps.sdk-release.outputs.enabled == 'true'
+        with:
+          node-version: '20.20.0'
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        if: steps.sdk-release.outputs.enabled == 'true'
+        with:
+          python-version: '3.10'
+      - name: Install the authenticated SDK distributions offline and retime supplied Unicode subtitles
+        if: steps.sdk-release.outputs.enabled == 'true'
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          TARGET_OS: ${{ matrix.os }}
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          python_command=python3
+          if [ "$RUNNER_OS" = Windows ]; then python_command=python; fi
+          consumer_evidence_path=$("$python_command" -c 'import os,sys; from pathlib import Path; sys.stdout.write(str((Path(os.environ["RUNNER_TEMP"]) / "signed-release-consumer").resolve()))')
+          sdk_evidence_path=$("$python_command" -c 'import os,sys; from pathlib import Path; sys.stdout.write(str((Path(os.environ["RUNNER_TEMP"]) / "signed-sdk-install").resolve()))')
+          "$python_command" -B scripts/release-sdk-consumer.py \
+            --version "$RELEASE_VERSION" --expected-commit "$EXPECTED_COMMIT" \
+            --target-os "$TARGET_OS" --target-arch "$TARGET_ARCH" \
+            --evidence "$consumer_evidence_path" --output "$sdk_evidence_path"
       - name: Retain original downloads and bounded command results even on refusal
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: signed-consumer-${{ matrix.os }}-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/signed-release-consumer
+          path: |
+            ${{ runner.temp }}/signed-release-consumer
+            ${{ runner.temp }}/signed-sdk-install
           if-no-files-found: warn
           retention-days: 3
   gate:

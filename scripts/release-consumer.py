@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Authenticate exactly 13 downloaded release assets; never build or run them."""
+"""Authenticate the exact versioned release asset set; never build or run it."""
 import argparse
 import base64
 from contextlib import contextmanager
@@ -109,16 +109,27 @@ def remote_tag(version, commit, deadline=None):
 
 def asset_names(version):
     source = {'version': version}
-    return {m.archive_name(source, os_, arch) for os_, arch in m.TARGETS} | {
+    names = {m.archive_name(source, os_, arch) for os_, arch in m.TARGETS} | {
         'SOURCE.json', 'MANIFEST.json', 'SHA256SUMS', *t.ATTESTED}
+    sdk = load_sdk_verifier()
+    if sdk.has_sdk_release(version):
+        names |= sdk.release_names(version)
+    return names
+
+
+def load_sdk_verifier():
+    spec = importlib.util.spec_from_file_location('consumer_release_sdk', Path(__file__).with_name('release-sdk.py'))
+    sdk = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sdk)
+    return sdk
 
 
 def regular_assets(directory, expected):
     m.require(directory.is_dir() and not directory.is_symlink()
-              and {p.name for p in directory.iterdir()} == expected, 'Expected exactly 13 release assets.')
+              and {p.name for p in directory.iterdir()} == expected, 'Expected the exact versioned release asset set.')
     for name in expected:
         info = (directory / name).lstat()
-        limit = 128 * 1024 * 1024 if name.endswith(('.tar.gz', '.zip')) else JSON_LIMIT
+        limit = 128 * 1024 * 1024 if name.endswith(('.tar.gz', '.zip', '.whl', '.tgz')) else JSON_LIMIT
         m.require(stat.S_ISREG(info.st_mode) and 0 < info.st_size <= limit, 'Nonregular or oversized release asset.')
 
 
@@ -380,6 +391,13 @@ def verify(directory, expected_commit, version):
         # Authenticate all claims before parsing/decompressing archive contents.
         with stage('metadata'):
             identities(scratch, source, manifest, sbom, trust, deadline)
+        sdk_subjects = 0
+        sdk = load_sdk_verifier()
+        if sdk.has_sdk_release(version):
+            with stage('sdk_provenance'):
+                sdk.verify_signed(scratch, source, expected_run=trust['archive_run'],
+                                  command=lambda argv: command_output(argv, OUTPUT_LIMIT, deadline))
+            sdk_subjects = 4
         with stage('archive_content'):
             notices, license_bytes = archives(scratch, source, manifest)
         with stage('composition'):
@@ -390,7 +408,7 @@ def verify(directory, expected_commit, version):
         with stage('tag_after'):
             m.require(remote_tag(version, expected_commit, deadline) == before, 'Remote tag object or peeled commit changed during verification.')
     return {'schema_version': 1, 'ok': True, 'repository': t.REPOSITORY, 'version': version, 'source_commit': expected_commit,
-        'assets': hashes, 'provenance_verified_subjects': 7, 'spdx_verified_subjects': 5, 'remote_tag': before,
+        'assets': hashes, 'provenance_verified_subjects': 7, 'spdx_verified_subjects': 5, 'sdk_provenance_verified_subjects': sdk_subjects, 'remote_tag': before,
         'metadata_scope': 'Recorded BuildInfo, go.sum matching and native/recovery verdict are authenticated publisher claims; '
                           'this consumer checks actual archive/document/BUILD hashes without Go or executing binaries.'}
 

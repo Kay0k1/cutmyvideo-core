@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
     inputs:
       acceptance_mode:
-        description: 'Current006 to007 release upgrade and recovery, or an explicit historical mode'
+        description: 'Current007 to008 release upgrade and recovery, or an explicit historical mode'
         type: choice
-        options: [metadata-resolution-006-to-007, source-media-cleanup-005-to-006, current-installation, same-schema, source-retention-004-to-005]
-        default: metadata-resolution-006-to-007
+        options: [agent-projects-007-to-008, metadata-resolution-006-to-007, source-media-cleanup-005-to-006, current-installation, same-schema, source-retention-004-to-005]
+        default: agent-projects-007-to-008
         required: true
 
 permissions:
@@ -54,6 +54,7 @@ jobs:
           "$RUNNER_TEMP/cutmy-public-venv/bin/python" -B -m unittest discover -s scripts -p current_installation_acceptance_test.py -v 2>&1 | tee "$RUNNER_TEMP/public-current-controls.log"
           "$RUNNER_TEMP/cutmy-public-venv/bin/python" -B -m unittest discover -s scripts -p source_media_cleanup_transition_test.py -v 2>&1 | tee "$RUNNER_TEMP/public-cleanup-controls.log"
           "$RUNNER_TEMP/cutmy-public-venv/bin/python" -B -m unittest discover -s scripts -p metadata_resolution_transition_test.py -v 2>&1 | tee "$RUNNER_TEMP/public-metadata-controls.log"
+          "$RUNNER_TEMP/cutmy-public-venv/bin/python" -B -m unittest discover -s scripts -p agent_projects_transition_test.py -v 2>&1 | tee "$RUNNER_TEMP/public-projects-controls.log"
       - name: Explicit bridge-filter prerequisites on the disposable runner
         run: |
           test "$GITHUB_ACTIONS" = true
@@ -66,7 +67,7 @@ jobs:
       - name: Actual public profile HTTPS, roles, egress, image upgrade and restore
         env:
           ACCEPTANCE_PR_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-          ACCEPTANCE_MODE: ${{ github.event_name != 'workflow_dispatch' && 'metadata-resolution-006-to-007' || inputs.acceptance_mode }}
+          ACCEPTANCE_MODE: ${{ github.event_name != 'workflow_dispatch' && 'agent-projects-007-to-008' || inputs.acceptance_mode }}
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           sudo env \
@@ -82,7 +83,7 @@ jobs:
             --output "$RUNNER_TEMP/public-self-hosting-evidence"
       - name: Require the exact mode groups, raw transition evidence and independent cleanup
         env:
-          ACCEPTANCE_MODE: ${{ github.event_name != 'workflow_dispatch' && 'metadata-resolution-006-to-007' || inputs.acceptance_mode }}
+          ACCEPTANCE_MODE: ${{ github.event_name != 'workflow_dispatch' && 'agent-projects-007-to-008' || inputs.acceptance_mode }}
         run: |
           python3 -B scripts/self-hosting-acceptance.py --mode "$ACCEPTANCE_MODE" --verify-report "$RUNNER_TEMP/public-self-hosting-evidence/acceptance-report.json"
       - name: Retain sanitized public profile evidence only
@@ -98,5 +99,6 @@ jobs:
             ${{ runner.temp }}/public-current-controls.log
             ${{ runner.temp }}/public-cleanup-controls.log
             ${{ runner.temp }}/public-metadata-controls.log
+            ${{ runner.temp }}/public-projects-controls.log
           if-no-files-found: warn
           retention-days: 3

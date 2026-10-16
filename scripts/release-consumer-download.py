@@ -175,7 +175,7 @@ def validate_metadata(value, version, release_id, expected_names):
             and value.get('prerelease') is ('-' in version) and value.get('published_at') is None,
             'draft_release_identity')
     assets = value.get('assets')
-    require(type(assets) is list and len(assets) == 13, 'release_asset_count')
+    require(type(assets) is list and len(assets) == len(expected_names), 'release_asset_count')
     seen_ids, records = set(), {}
     for asset in assets:
         require(type(asset) is dict, 'asset_metadata')

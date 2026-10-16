@@ -8,7 +8,7 @@ Base path: `/api/v1`. Media timestamps are integer milliseconds on the original 
 
 Initialize a session with `GET /session`. The HttpOnly cookie is a bearer capability: keep it private and send it with every subsequent request, including media and downloads. Each request checks ownership; foreign resources return the same 404 as absent ones. Source preparation currently blocks until metadata/staging completes, bounded by the source timeout. Export is asynchronous.
 
-`SOURCE_TIMEOUT` bounds platform metadata preparation. `UPLOAD_TIMEOUT` covers large uploads and direct-file downloads, including admission and media inspection. A stalled transfer returns `504 source_timeout` and removes its partial file. A timeout during final source registration can instead leave a complete source saved; check the owner source list before deciding to upload/import again. Increase the upload budget when allowing large files over slow connections. An interrupted upload returns `400 invalid_upload`; exceeding the byte limit returns `413 source_too_large`.
+`SOURCE_TIMEOUT` bounds platform metadata preparation. `UPLOAD_TIMEOUT` covers large uploads and direct-file downloads, including admission and media inspection. A stalled transfer returns `504 source_timeout` and removes its partial file. A timeout during final source registration can instead leave a complete source saved; recover a keyed preparation through its receipt, or reconcile the owner source list for an unkeyed legacy call. Increase the upload budget when allowing large files over slow connections. An interrupted upload returns `400 invalid_upload`; exceeding the byte limit returns `413 source_too_large`.
 
 JSON request bodies have a separate ten-second read budget (or an earlier request deadline); stalled bodies return `408 request_timeout`. Rejected bodies are not drained indefinitely. GET/HEAD requests with bodies return `400 invalid_request`. Fully consumed requests retain normal connection reuse.
 
@@ -41,8 +41,89 @@ for ordinary database failures. Readiness retains `503 not_ready`.
 | GET | `/jobs/{id}` | Job; clients may poll once per second |
 | POST | `/jobs/{id}/cancel` | Job; running cancellation settles asynchronously |
 | GET | `/artifacts/{id}/download` | Authorized attachment; Range supported |
+| POST | `/collections/validate` | Read-only normalized per-clip checks; `{source_id,plan,clip_ids?,rendition?}` |
+| POST | `/collections` | Per-clip admission/jobs/diagnostics; same body and required `Idempotency-Key` |
+| GET | `/source-preparations/{key}` | Owner-scoped durable preparation receipt; 404 if absent |
+| POST | `/projects` | Create/recover `{source_id,plan,clip_ids?,rendition?,collection_key,clip_jobs?}`; legacy `job_ids` remains supported |
+| GET | `/projects/{id}` | Authorized project, normalized selected requests and attached current/historical jobs |
+| PUT | `/projects/{id}` | Save `{revision,plan,clip_ids?,rendition?}`; stale revision gives 409 |
+| POST | `/projects/{id}/collections` | Submit saved project selection; optional `{revision,clip_ids}` subset |
+| POST | `/projects/{id}/collections/validate` | Read-only scoped validation; same selection/revision shape |
+| POST | `/projects/{id}/collections/retry` | Explicit selected terminal repair; `{revision,clip_ids}` and saved `Idempotency-Key` |
+| POST | `/projects/{id}/handoffs` | Owner issues `{project_id,token,expires_at}` for a recipient browser |
+| POST | `/projects/handoffs/redeem` | Recipient's own session redeems `{token}` into `{project}` |
+| DELETE | `/projects/{id}/grants` | Owner revokes project grants and outstanding handoff tokens |
+| DELETE | `/projects/{id}` | Owner removes project and its access grants |
+| POST | `/subtitles/retime` | Pure supplied SRT/VTT + actual segment maps → sidecar texts and SHA256 |
 
 Health routes `/healthz` and `/readyz` are outside the prefix; readiness checks PostgreSQL. They require no session.
+
+## Recoverable source preparation and scoped projects (1.4.0)
+
+`POST /uploads` and `POST /sources` accept an optional owner-scoped
+`Idempotency-Key` of 1–128 visible ASCII bytes (33–126, no spaces); exact `.` and
+`..` are reserved path segments. A keyed upload additionally
+requires `Upload-SHA256` (64 lowercase hex) and `Upload-Size` (positive bytes).
+The server verifies the complete actual upload against this immutable intent.
+Unkeyed calls retain their earlier behavior. Initial success is 201 `Source`;
+same-key retained replay is 200 `Source`, before another transfer, extractor or
+admission. Changed intent gives 409 `source_preparation_conflict`.
+
+`GET /source-preparations/{key}` returns
+`{version:1,key,state,source_id?,source?,fingerprint?,retry_after_ms?,error?}`.
+States are `processing`, `ready`, `retryable` and `failed`. `processing` includes
+a retry delay; `retryable` permits the same POST/key/intent to reclaim the stable
+source ID. A crashed in-flight claim can require waiting for
+`max(UPLOAD_TIMEOUT,SOURCE_TIMEOUT) + 1 minute`; a committed ready receipt recovers
+immediately. Permanent errors expose bounded public diagnostics. A deleted
+source is `source_unavailable`, never permission to create a duplicate silently.
+Ready receipts remain retained while their source exists.
+
+A source fingerprint is either `{kind:"content",sha256,size_bytes}` for complete
+inspected bytes, or `{kind:"provider",provider,provider_id,canonical_url_sha256}`
+for metadata-only remote identity. The latter is not a content hash. Keep
+preparation keys and private SDK journals out of portable edit documents/logs.
+
+Project creation is idempotent by `(owner,collection_key)`: 201 for creation,
+200 for retained same-source replay with the latest edits, 409 if a different
+source is requested. Explicit `clip_jobs:[{clip_id,job_id}]` binds each attached
+job to the selected clip, including distinct IDs with identical effective cuts.
+Each pair must match owner, fixed source and normalized request. Legacy
+`job_ids` still requires an unambiguous clip match.
+The DTO includes `version`, `id`, `revision`, fixed `source_id`/`source`, `plan`,
+selection/rendition, `clips:[{clip_id,request}]` in selected plan order and
+`jobs:[{clip_id,request,current,job}]`. Jobs outside current selection or with an
+older request may be attached with `current:false`. The server never returns
+the private collection key. Updates use revision compare-and-swap;
+`project_conflict` refuses stale changes.
+
+Scoped submission accepts only a subset of saved selection and adopts attached
+jobs matching the current effective request, including repaired jobs. Explicit
+retry persists its immutable attempt before admission and replays a saved key
+before checking terminal status. It permits current failed/cancelled jobs or
+succeeded jobs with no unexpired ready artifacts, and refuses a succeeded clip
+that still has ready media. This does not change legacy `/jobs` idempotency.
+
+A handoff token expires in ten minutes. Its first recipient redeems it with its
+own ordinary session into a 24-hour grant. That recipient can recover a lost
+redeem reply with the same token until token expiry; another session receives
+404. The owner can revoke grants/tokens. Projects expire after seven days and
+do not extend source retention. A grant authorizes only the fixed project's
+source preview/media/tracks and explicitly attached job/artifact routes under
+`/projects/{id}/...`; it grants no ordinary owner identity, source import/delete
+or access to unrelated resources. Scoped ZIP downloads contain only the anchor
+job's ready artifacts; arbitrary `artifact_id` overrides are refused.
+
+The subtitle endpoint accepts
+`{version:1,format:"srt"|"vtt",text,output_format?,outputs:[{clip_id,segments}]}`
+and returns `{version:1,outputs:[{clip_id,format,text,cue_count,sha256}]}`. Maps
+come from verified actual artifact receipts. It queues no jobs and renders no
+media; a session is still required. JSON request cap is 4 MiB, supplied text
+512 KiB UTF-8 and combined output text 8 MiB, with additional bounded cue/map
+work. Other API request limits remain unchanged. See
+[subtitle details](subtitle-sidecars.md), [SDK recovery examples](sdk-collections.md)
+and [OpenAPI](../api/openapi.yaml) for complete schemas and limits. These
+endpoints require database schema 8.
 
 Binary routes support `206` byte ranges and `304` conditional responses. Failed
 `If-Match`/`If-Unmodified-Since` preconditions return `412` with an empty body.

@@ -48,6 +48,9 @@ func runArgs(args []string, stdout, stderr io.Writer) error {
 	if args[0] == "collection" {
 		return runCollection(args[1:], stdout, stderr)
 	}
+	if args[0] == "subtitles" {
+		return runSubtitles(args[1:], stdout, stderr)
+	}
 	if args[0] == "inspect" {
 		return inspect(args[1:], stdout, stderr)
 	}

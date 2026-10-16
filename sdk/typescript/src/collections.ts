@@ -17,7 +17,7 @@ export interface CollectionRunOptions extends RequestOptions {
   admissionBatchSize?: number;
   onProgress?: (report: CollectionReport) => void | Promise<void>;
 }
-export interface CollectionResumeOptions extends Omit<CollectionRunOptions, "idempotencyKey"> { request?: CollectionRequest }
+export interface CollectionResumeOptions extends Omit<CollectionRunOptions, "idempotencyKey"> { request?: CollectionRequest; retryFailed?: string[]; projectId?: string }
 interface Entry { signature: string; job?: Job; effective?: NormalizedRequest; next_poll_at?: number; error?: { code: string; retryable: boolean; field?: string; message?: string; diagnostic_clip_id?: string } }
 interface Receipt {
   clip_id: string; job_id: string; artifact_id: string; rendition: "final" | "draft";
@@ -30,10 +30,20 @@ interface State {
   owner_sha256: string; idempotency_key: string; request: CollectionRequest;
   clips: Record<string, Entry>; receipts: Record<string, Receipt>;
   validated?: string; intent?: CollectionRequest; next_submit_at?: number;
+  attempt_keys?: Record<string, string>; intent_key?: string;
+  retry_requested?: string[]; retry_active?: string[];
+  project_id?: string; project_revision?: number; project_retry_keys?: Record<string, string>;
+  intent_project?: { id: string; revision: number; retry: boolean };
 }
 const digestPattern = /^[a-f0-9]{64}$/;
 const ownMap = <T>(): Record<string, T> => Object.create(null) as Record<string, T>;
 const CHECKPOINT = 64 << 10;
+const validKey = (key: unknown): key is string => typeof key === "string" && !!key.trim() && Buffer.byteLength(key) <= 128 && !/[\x00-\x1f\x7f]/.test(key);
+const attemptKey = (state: State, id: string): string => state.attempt_keys && Object.hasOwn(state.attempt_keys, id) ? state.attempt_keys[id]! : state.idempotency_key;
+function retryIDs(state: State, values: unknown): string[] {
+  requireValue(Array.isArray(values) && values.length > 0 && values.every(id => typeof id === "string" && selected(state.request).includes(id)) && new Set(values).size === values.length, "invalid_retry_selection");
+  return values;
+}
 
 function copiedRequest(value: CollectionRequest): CollectionRequest {
   let data: string;
@@ -71,7 +81,17 @@ function report(state: State, root: string): CollectionReport {
     const artifacts = entry.job ? readyArtifacts(entry.job) : [];
     const receipt = artifacts.map(artifact => state.receipts[artifact.id]).find(value => value?.phase === "complete");
     if (receipt?.sha256) outputs.push({ clip_id: id, job_id: receipt.job_id, artifact_id: receipt.artifact_id, path: childPath(root, receipt.path), size_bytes: receipt.size_bytes, sha256: receipt.sha256, segments: receipt.segments, track_manifest: receipt.track_manifest });
-    else pending.push({ clip_id: id, code: entry.error?.code ?? (entry.job ? "job_" + entry.job.status : "admission_pending"), retryable: entry.error?.retryable ?? true, ...(entry.error?.field ? { field: entry.error.field } : {}), ...(entry.error?.message ? { message: entry.error.message } : {}), ...(entry.error?.diagnostic_clip_id ? { diagnostic_clip_id: entry.error.diagnostic_clip_id } : {}) });
+    else {
+      const job = entry.job, item = job?.items.find(item => item.status === "failed" || item.status === "cancelled") ?? job?.items[0];
+      const stage = job && /^[A-Za-z0-9_-]{1,128}$/.test(job.stage) ? job.stage : job?.status ?? "admission";
+      const errorCode = item?.error_code && /^[a-z0-9_]{1,128}$/.test(item.error_code) ? item.error_code : undefined;
+      const message = item?.message && Buffer.byteLength(item.message) <= 4096 ? item.message : entry.error?.message;
+      pending.push({ clip_id: id, code: entry.error?.code ?? (job ? "job_" + job.status : "admission_pending"), retryable: entry.error?.retryable ?? true,
+        stage, ...(job ? { job_id: job.id, job_status: job.status } : {}),
+        ...(item && Number.isSafeInteger(item.progress_ms) && item.progress_ms! >= 0 ? { progress_ms: item.progress_ms } : {}),
+        ...(errorCode ? { error_code: errorCode } : {}), ...(message ? { message } : {}),
+        ...(entry.error?.field ? { field: entry.error.field } : {}), ...(entry.error?.diagnostic_clip_id ? { diagnostic_clip_id: entry.error.diagnostic_clip_id } : {}) });
+    }
   }
   return { complete: pending.length === 0, source_id: state.source_id, rendition: state.request.rendition ?? "final", outputs, pending };
 }
@@ -100,7 +120,21 @@ function readState(value: unknown): State {
   if (state.intent) {
     state.intent = copiedRequest(state.intent);
     requireValue(state.intent.source_id === state.source_id && selected(state.intent).every(id => state.clips[id]?.signature === signature(state.intent!, id)), "invalid_state");
+    requireValue(selected(state.intent).every(id => attemptKey(state, id) === (state.intent_key ?? state.idempotency_key)), "invalid_state");
   }
+  if (state.attempt_keys !== undefined) {
+    requireValue(object(state.attempt_keys) && Object.keys(state.attempt_keys).length <= 1024 && Object.entries(state.attempt_keys).every(([id, key]) => clipID(id) && validKey(key)), "invalid_state");
+    state.attempt_keys = Object.assign(ownMap<string>(), state.attempt_keys);
+  }
+  if (state.intent_key !== undefined) requireValue(validKey(state.intent_key), "invalid_state");
+  if (state.project_id !== undefined) requireValue(safeID(state.project_id) && Number.isSafeInteger(state.project_revision) && state.project_revision! > 0, "invalid_state");
+  if (state.project_retry_keys !== undefined) {
+    requireValue(object(state.project_retry_keys) && Object.entries(state.project_retry_keys).every(([id, key]) => Object.hasOwn(state.clips, id) && validKey(key)), "invalid_state");
+    state.project_retry_keys = Object.assign(ownMap<string>(), state.project_retry_keys);
+  }
+  if (state.intent_project !== undefined) requireValue(object(state.intent_project) && state.intent && state.intent_project.id === state.project_id && Number.isSafeInteger(state.intent_project.revision) && state.intent_project.revision === state.project_revision && typeof state.intent_project.retry === "boolean", "invalid_state");
+  if (state.retry_requested) retryIDs(state, state.retry_requested);
+  if (state.retry_active) retryIDs(state, state.retry_active);
   if (state.next_submit_at !== undefined) requireValue(Number.isSafeInteger(state.next_submit_at) && state.next_submit_at >= 0, "invalid_state");
   return state;
 }
@@ -154,7 +188,7 @@ async function restore(client: CutmyClient, root: string, signal: AbortSignal): 
   return state;
 }
 
-async function cycle(client: CutmyClient, directory: string, options: CollectionRunOptions, initial?: CollectionRequest, revision?: CollectionRequest): Promise<CollectionReport> {
+async function cycle(client: CutmyClient, directory: string, options: CollectionRunOptions, initial?: CollectionRequest, revision?: CollectionRequest, retryFailed?: string[], projectId?: string): Promise<CollectionReport> {
   const interval = positive(options.pollIntervalMs ?? 1000, "pollIntervalMs");
   requireValue(interval >= 1000, "invalid_poll_interval");
   const maximum = options.maxOutputBytes ?? 10 * 1024 ** 3;
@@ -180,8 +214,32 @@ async function cycle(client: CutmyClient, directory: string, options: Collection
     root = await projectDirectory(directory, initial !== undefined);
     unlock = await writerLock(root);
     state = initial ? await initialize(client, root, copiedRequest(initial), options, scope.controller.signal) : await restore(client, root, scope.controller.signal);
+    if (retryFailed && revision) fail("retry_revision_conflict");
     if (revision && state.intent) fail("submission_uncertain");
-    if (revision) { applyRequest(state, copiedRequest(revision)); await checkpoint(); }
+    if (projectId) {
+      requireValue(safeID(projectId), "invalid_project");
+      if (state.intent) fail("submission_uncertain");
+      const project = await client.getProject(projectId, { signal: scope.controller.signal });
+      const body = copiedRequest({ source_id: project.source_id, plan: project.plan, rendition: project.rendition, ...(project.clip_ids ? { clip_ids: project.clip_ids } : {}) });
+      requireValue(body.source_id === state.source_id, "source_conflict");
+      if (revision) requireValue(canonical(copiedRequest(revision)) === canonical(body), "project_conflict");
+      const expected = new Map(project.clips.map(clip => [clip.clip_id, clip.request]));
+      applyRequest(state, body);
+      for (const id of selected(body)) state.clips[id] = { signature: signature(body, id) };
+      for (const item of project.jobs) {
+        if (!item.current) continue;
+        requireValue(canonical(item.request) === canonical(expected.get(item.clip_id)), "project_conflict");
+        state.clips[item.clip_id] = { signature: signature(body, item.clip_id), job: item.job, effective: item.request };
+      }
+      state.project_id = projectId; state.project_revision = project.revision;
+      delete state.project_retry_keys; delete state.retry_requested; delete state.retry_active;
+      if (selected(body).every(id => state!.clips[id]!.job)) state.validated = sha256(canonical(body));
+      await checkpoint();
+    } else if (revision) {
+      const body = copiedRequest(revision);
+      if (state.project_id && canonical(body) !== canonical(state.request)) fail("project_conflict");
+      applyRequest(state, body); await checkpoint();
+    }
     // Rehash prior completed files before requests, including earlier revisions.
     for (const receipt of Object.values(state.receipts)) {
       childPath(root, receipt.part); const final = childPath(root, receipt.path);
@@ -192,6 +250,12 @@ async function cycle(client: CutmyClient, directory: string, options: Collection
       }
     }
     requireValue(Object.values(state.receipts).reduce((sum, receipt) => sum + receipt.size_bytes, 0) <= maximum, "output_limit");
+    if (retryFailed !== undefined) {
+      const ids = retryIDs(state, retryFailed);
+      requireValue(!ids.some(id => report(state!, root).outputs.some(output => output.clip_id === id)), "retry_not_failed");
+      requireValue(!state.retry_requested || canonical([...state.retry_requested].sort()) === canonical([...ids].sort()), "retry_pending");
+      state.retry_requested = ids; await checkpoint();
+    }
     await progress("resumed");
 
     const transfer = async (id: string, job: Job, artifact: Artifact, effective: NormalizedRequest) => {
@@ -202,6 +266,7 @@ async function cycle(client: CutmyClient, directory: string, options: Collection
       const reservedSize = Object.values(state!.receipts).filter(x => x.artifact_id !== artifact.id).reduce((sum, x) => sum + x.size_bytes, 0);
       requireValue(artifact.size_bytes <= maximum - reservedSize, "output_limit");
       if (!receipt) {
+        requireValue(Object.keys(state!.receipts).length < 4096, "receipt_limit");
         const format = effective.format;
         requireValue(["mp4","mp3","mkv"].includes(format), "invalid_response");
         const rendition = state!.request.rendition ?? "final";
@@ -304,31 +369,54 @@ async function cycle(client: CutmyClient, directory: string, options: Collection
             throw error;
           }
         }
-        if (entry.job.status === "failed" || entry.job.status === "cancelled") { entry.error = { code: entry.job.status, retryable: false }; await checkpoint(); fail(entry.job.status); }
-        if (entry.job.status === "succeeded" && readyArtifacts(entry.job).length === 0) { entry.error = { code: "artifact_expired", retryable: false }; await checkpoint(); fail("artifact_expired"); }
+        if (entry.job.status === "failed" || entry.job.status === "cancelled") { entry.error = { code: entry.job.status, retryable: false }; await checkpoint(); }
+        if (entry.job.status === "succeeded" && readyArtifacts(entry.job).length === 0) { entry.error = { code: "artifact_expired", retryable: false }; await checkpoint(); }
+      }
+      if (state.retry_requested && !state.intent) {
+        const ids = state.retry_requested;
+        if (!ids.every(id => ["failed","cancelled"].includes(state!.clips[id]!.job?.status ?? "") || state!.clips[id]!.error?.code === "artifact_expired")) {
+          delete state.retry_requested; await checkpoint(); fail("retry_not_failed");
+        }
+        const attempts = Object.assign(ownMap<string>(), state.attempt_keys ?? {});
+        if (new Set([...Object.keys(attempts), ...ids]).size > 1024) { delete state.retry_requested; await checkpoint(); fail("attempt_limit"); }
+        for (const id of ids) {
+          attempts[id] = "retry-" + randomUUID(); state.clips[id] = { signature: signature(state.request, id) };
+          if (state.project_id) { state.project_retry_keys ??= ownMap<string>(); state.project_retry_keys[id] = attempts[id]!; }
+        }
+        state.attempt_keys = attempts; state.retry_active = ids; delete state.retry_requested; delete state.validated;
+        await checkpoint(); await progress("retry_prepared"); continue;
       }
       const value = report(state, root);
       requireValue(Object.values(state.receipts).reduce((sum, receipt) => sum + receipt.size_bytes, 0) <= maximum, "output_limit");
       if (value.complete) { await progress("complete"); return value; }
-      const pending = selected(state.request).filter(id => !state!.clips[id]!.job);
-      const blocked = pending.find(id => state!.clips[id]!.error?.retryable === false);
-      if (blocked) fail(state.clips[blocked]!.error!.code);
-      const outstanding = selected(state.request).filter(id => state!.clips[id]!.job && value.pending.some(clip => clip.clip_id === id)).length;
+      const activePending = state.retry_active?.some(id => value.pending.some(clip => clip.clip_id === id && clip.retryable));
+      if (state.retry_active && !activePending) { delete state.retry_active; await checkpoint(); }
+      const terminal = value.pending.find(clip => !clip.retryable);
+      if (terminal && !state.retry_requested && !activePending) fail(terminal.code);
+      const pending = selected(state.request).filter(id => !state!.clips[id]!.job && state!.clips[id]!.error?.retryable !== false);
+      const outstanding = selected(state.request).filter(id => state!.clips[id]!.job && value.pending.some(clip => clip.clip_id === id && clip.retryable)).length;
       const available = Math.max(0, admission - outstanding);
       if ((state.intent || (pending.length && available > 0)) && Date.now() >= (state.next_submit_at ?? 0)) {
-        const submission = state.intent ?? { ...state.request, clip_ids: pending.slice(0, Math.min(batch, available)) };
-        if (!state.intent) { state.intent = copiedRequest(submission); await checkpoint(); }
+        const wanted = pending.slice(0, Math.min(batch, available));
+        const key = state.intent_key ?? (state.intent ? state.idempotency_key : attemptKey(state, wanted[0]!));
+        const submission = state.intent ?? { ...state.request, clip_ids: wanted.filter(id => attemptKey(state!, id) === key) };
+        if (!state.intent) {
+          state.intent = copiedRequest(submission); state.intent_key = key;
+          if (state.project_id) state.intent_project = { id: state.project_id, revision: state.project_revision!, retry: selected(submission).every(id => state!.project_retry_keys && Object.hasOwn(state!.project_retry_keys, id) && state!.project_retry_keys[id] === key) };
+          await checkpoint();
+        }
         try {
-          const response = await client.submitCollection(submission, { idempotencyKey: state.idempotency_key, signal: scope.controller.signal });
+          const route = state.intent_project;
+          const response = route ? await client.submitProjectCollection(route.id, { revision: route.revision, clip_ids: selected(submission) }, { retryFailed: route.retry, idempotencyKey: key, signal: scope.controller.signal }) : await client.submitCollection(submission, { idempotencyKey: key, signal: scope.controller.signal });
           const expected = selected(submission), seen = new Set<string>();
           requireValue(response.rendition === (submission.rendition ?? "final") && response.clips.length === expected.length && response.clips.every((clip, index) => clip.clip_id === expected[index]), "invalid_response");
           for (const clip of response.clips) {
             requireValue(expected.includes(clip.clip_id) && !seen.has(clip.clip_id) && object(clip.request) && clip.request.source_id === state.source_id, "invalid_response"); seen.add(clip.clip_id);
             const entry = state.clips[clip.clip_id]!;
-            if (clip.job) { requireValue(safeID(clip.job.id), "invalid_response"); entry.job = clip.job; entry.effective = clip.request; delete entry.error; }
+            if (clip.job) { requireValue(safeID(clip.job.id), "invalid_response"); entry.job = clip.job; entry.effective = clip.request; delete entry.error; if (state.project_retry_keys) delete state.project_retry_keys[clip.clip_id]; }
             else { requireValue(clip.error, "invalid_response"); entry.error = { code: clip.error.code, retryable: clip.retryable, message: clip.error.message, ...(clip.error.field ? { field: clip.error.field } : {}), ...(clip.error.clip_id ? { diagnostic_clip_id: clip.error.clip_id } : {}) }; }
           }
-          delete state.intent; failures = 0;
+          delete state.intent; delete state.intent_key; delete state.intent_project; failures = 0;
           state.next_submit_at = Date.now() + Math.max(interval, (response.retry_after_seconds ?? 0) * 1000);
           await checkpoint(); await progress("submitted"); changed = true;
         } catch (error) {
@@ -378,7 +466,7 @@ export function runCollection(client: CutmyClient, request: CollectionRequest, d
   return cycle(client, directory, options, request);
 }
 export function resumeCollection(client: CutmyClient, directory: string, options: CollectionResumeOptions = {}): Promise<CollectionReport> {
-  return cycle(client, directory, options, undefined, options.request);
+  return cycle(client, directory, options, undefined, options.request, options.retryFailed, options.projectId);
 }
 export { CollectionError } from "./errors.js";
 export type { CollectionReport, CollectionRequest } from "./types.js";

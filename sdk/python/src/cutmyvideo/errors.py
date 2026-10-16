@@ -63,6 +63,16 @@ class CollectionError(CutmyError):
         self.directory = directory
 
 
+class SourcePreparationError(CutmyError):
+    """A durable source preparation stopped; its private intent is retained."""
+
+    def __init__(self, message: str, *, code: str, report: Mapping[str, Any], directory: str):
+        import copy
+        super().__init__(message, code=code)
+        self.report = copy.deepcopy(dict(report))
+        self.directory = directory
+
+
 def ready_artifacts(job: Mapping[str, Any]) -> list[Artifact]:
     """Only succeeded items expose downloadable artifacts, including partial jobs."""
     return [item["artifact"] for item in job.get("items", [])

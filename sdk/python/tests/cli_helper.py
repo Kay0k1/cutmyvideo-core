@@ -1,6 +1,7 @@
 """Portable subprocess fixture, invoked with the running Python executable."""
 
 import json
+import hashlib
 import os
 import pathlib
 import subprocess
@@ -8,6 +9,18 @@ import sys
 import time
 
 mode, *arguments = sys.argv[1:]
+if mode == "subtitles":
+    if arguments[:3] != ["--json-errors", "subtitles", "retime"]:
+        raise RuntimeError("Expected subtitle command")
+    path = pathlib.Path(arguments[arguments.index("--request") + 1])
+    if os.name != "nt" and (path.stat().st_mode & 0o777 != 0o600 or path.parent.stat().st_mode & 0o777 != 0o700):
+        raise RuntimeError("Unsafe subtitle request")
+    request = json.loads(path.read_text(encoding="utf-8"))
+    text = request["text"]
+    result = {"version": 1, "outputs": [{"clip_id": item["clip_id"], "format": request.get("output_format", request["format"]), "text": text,
+               "cue_count": 1, "sha256": "0" * 64 if os.environ.get("SDK_BAD_SUBTITLE_HASH") else hashlib.sha256(text.encode()).hexdigest()} for item in request["outputs"]]}
+    print(json.dumps(result, ensure_ascii=True))
+    raise SystemExit()
 if mode == "child":
     time.sleep(30)
     raise SystemExit()

@@ -34,6 +34,21 @@ export interface CollectionOptions {
 export interface CollectionClip { id: string; label?: string; ranges: Range[]; options?: CollectionOptions }
 export interface CollectionPlan { version: 1; input?: string; options?: CollectionOptions; clips: CollectionClip[] }
 export interface CollectionRequest { source_id: string; plan: CollectionPlan; clip_ids?: string[]; rendition?: "final" | "draft" }
+export interface ContentFingerprint { kind: "content"; sha256: string; size_bytes: number }
+export interface ProviderFingerprint { kind: "provider"; provider: string; provider_id: string; canonical_url_sha256: string }
+export type SourceFingerprint = ContentFingerprint | ProviderFingerprint;
+export type SourcePreparationInput = { kind: "upload"; path: string } | { kind: "import"; url: string };
+export interface SourcePreparationReceipt { version: 1; key: string; state: "processing" | "ready" | "retryable" | "failed"; source_id?: string; source?: Source; fingerprint?: SourceFingerprint; retry_after_ms?: number; error?: { code: string; message: string; retryable: boolean } }
+export interface SourcePreparationReport { complete: boolean; phase: string; source_id?: string; source?: Source; fingerprint?: SourceFingerprint; error?: { code: string; message?: string; retryable: boolean } }
+export interface SourceSubmissionOptions extends RequestOptions { idempotencyKey?: string; fingerprint?: ContentFingerprint }
+export interface SubtitleRequest { version: 1; format: "srt" | "vtt"; text: string; output_format?: "srt" | "vtt"; outputs: { clip_id: string; segments: Segment[] }[] }
+export interface SubtitleResult { version: 1; outputs: { clip_id: string; format: "srt" | "vtt"; text: string; cue_count: number; sha256: string }[] }
+export interface PortableProject { kind: "cutmy.collection.project"; version: 1; source: { fingerprint?: SourceFingerprint; duration_ms?: number; title?: string }; plan: CollectionPlan; clip_ids?: string[]; rendition?: "final" | "draft" }
+export interface ProjectClipJob { clip_id: string; job_id: string }
+export interface ProjectCreateRequest extends CollectionRequest { collection_key: string; job_ids?: string[]; clip_jobs?: ProjectClipJob[] }
+export interface ProjectEditRequest { revision: number; plan: CollectionPlan; clip_ids?: string[]; rendition?: "final" | "draft" }
+export interface AgentProject extends CollectionRequest { version: 1; id: string; revision: number; source: Source; rendition: "final" | "draft"; clips: { clip_id: string; request: NormalizedRequest }[]; jobs: { clip_id: string; current: boolean; request: NormalizedRequest; job: Job }[]; expires_at?: string; access_expires_at?: string }
+export interface ProjectHandoff { project_id: string; token: string; expires_at: string }
 export interface CollectionDiagnostic { code: string; message: string; clip_id?: string; field?: string; [key: string]: unknown }
 export interface CollectionValidation {
   version: 1; valid: true; rendition: "final" | "draft"; requested_duration_ms: number;
@@ -62,7 +77,7 @@ export interface CollectionFile {
 }
 export interface CollectionReport {
   complete: boolean; source_id: string; rendition: "final" | "draft"; outputs: CollectionFile[];
-  pending: { clip_id: string; code: string; retryable: boolean; field?: string; message?: string; diagnostic_clip_id?: string }[];
+  pending: { clip_id: string; code: string; retryable: boolean; stage?: string; job_id?: string; job_status?: string; progress_ms?: number; error_code?: string; field?: string; message?: string; diagnostic_clip_id?: string }[];
   phase?: string;
   download?: { clip_id: string; artifact_id: string; offset: number; total_size: number; resumed: boolean };
 }
@@ -89,6 +104,7 @@ export interface Source extends SourceInfo {
   provider_video_id: string | null; source_url: string | null;
   preview_kind: string; preview_url: string | null; embed_url: string | null; thumbnail_url: string | null;
   expires_at: string | null; retention_blocked: boolean; media_removed?: boolean; tracks?: Track[];
+  fingerprint?: SourceFingerprint;
 }
 export interface Tracks { tracks: Track[]; display_width?: number; display_height?: number; [key: string]: unknown }
 export interface Session {

@@ -1,0 +1,313 @@
+{
+  "all_required_consumers_passed_without_skips": true,
+  "browser_driver": {
+    "companion_candidate_commit": "1cf0fe799dfe0dc0f1268cb1ded856fa1bc9442b",
+    "path": "e2e/agent-project-review-consumer.mjs",
+    "repository": "Kay0k1/cutmyvideo-web",
+    "sha256": "5096884a7634c8b523cd675a2fc8be163f878f30b8c09f3364542f8e5185538c"
+  },
+  "cli_sha256": "17f98e41f1734cbe7a1f6e72e384a999efeef3a27a1cc195cafb5f18446e63ca",
+  "cross_sdk_reviewed_media_hashes_equal": true,
+  "evidence_digests": {
+    "installed": {
+      "installed_sdk_tests_jsonl_sha256": "6fdf30c149f5e50e4503337d652578cc3e312628eafe5ccbbc6f9a82c5f7f34c",
+      "python_tests_log_sha256": "4c81f3483c32bcbdbfb56629aa8488bbba0ee37014552c6b5dd18c989d8e9f5d",
+      "typescript_installed_tests_log_sha256": "fcc994364107cc1b59953d3f025eea1e80b2a37cf1b0baeede4abf7deb5feda7",
+      "typescript_tests_log_sha256": "f5ea4601b57895a70ed7ba7caf7012349b58c53dd4e02f91f6ef05278a81dce2"
+    },
+    "project_independent_content_sha256": "dc05f2a1000c308546b658679d5acf9bf66faf2db976c397b3254f20125ee2d4",
+    "python": {
+      "browser_receipt_sha256": "f1ac05932b9195db27661d3ca0b98b542f44b048de699fcbd10acd2998abebbd",
+      "browser_screenshot_sha256": "45661bd95cf5f0af5b326d9d7424a951f8f33cfc9d62bb026b5b59b196acb6e6",
+      "collection_independent_content_sha256": "d7dd68508173576fd8618606aca3fc342951ad74127833b932e12c50e0990a5e",
+      "collection_receipt_sha256": "c7f3f3c4a26a0a20205dc6906f573ec84477fa9a0198780f05975cb9a51acdf5",
+      "collection_requests_sha256": "686005efd644b86a0ddf41442458c10b223e58b5c1950c59915bdd9c3fc90ae5",
+      "project_receipt_sha256": "1a8cf92fef321924d540f7f5db1dccdc8726f6a6440c8d65c1a6991b989c5a5b",
+      "project_requests_sha256": "e1ececde5c37a021dd09eba9986e03e5a14236e3e211452a7a28d2b184894bbf"
+    },
+    "typescript": {
+      "browser_receipt_sha256": "30fa7ad9bc8ac75733ca54820990d63609064a4f8bf4c6270b96cf56224700c4",
+      "browser_screenshot_sha256": "01fc62d02530036419ff4ff7963e9cabf8f733c3688f5a0642411fb37c31addb",
+      "collection_independent_content_sha256": "d7dd68508173576fd8618606aca3fc342951ad74127833b932e12c50e0990a5e",
+      "collection_receipt_sha256": "886e98849b2b2d699079bb2372de3f042d0b293769a07c5556c7d3ef2907840b",
+      "collection_requests_sha256": "686005efd644b86a0ddf41442458c10b223e58b5c1950c59915bdd9c3fc90ae5",
+      "project_receipt_sha256": "ff3288f56d1dfb3e98947490541009f2b7864107e1fa15503c6fdc99fcc54863",
+      "project_requests_sha256": "99f873afde0f8edd91748729f955ab11663f9e5df3878d28e8a0adf850bffa7a"
+    }
+  },
+  "fixture": {
+    "author": "Wikimedia Deutschland",
+    "duration_seconds": 516.912472,
+    "height": 720,
+    "license": "CC BY-SA 3.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/3.0",
+    "normalized_sha256": "0f9e167eea8a4c503396cf819edd5e356c94858befef12a8e3667cea22d27fca",
+    "normalized_size_bytes": 82242740,
+    "page": "https://commons.wikimedia.org/wiki/File:Interview_WMF.ogv",
+    "width": 1280
+  },
+  "frozen_sdk_acceptance_inputs_sha256": {
+    "go.mod": "d200d8c9e25d6b64ef8cda6bbfdb4fda8e6dcf774b847bd3ce8f1627148e0eb9",
+    "go.sum": "33e140fee2bda380c73cc0be9314c676ccc848e864fc0f4741907283459994ba",
+    "internal/app/sdk_agent_projects_integration_test.go": "50aa501ad226d382917a31597130b0ac07d703373727580994fdabab47a56d0b",
+    "internal/app/sdk_collections_integration_test.go": "c64f46a810e305c07b8c997da7525ba1b81f7a858975c09ffc32ef8b981e8f38",
+    "internal/app/sdk_integration_test.go": "95db3ba78b9952fdf471d9477e7b7322cde28c3db8d468c2ebd59a54e15dbe5e",
+    "scripts/check-sdks.py": "85ac0877989954059e781ddec8930992a9945aea8beb5dff15f084deafb9c005",
+    "scripts/sdk-agent-project-acceptance.mjs": "5d4a7296f24ef17e387273aedb1da3fc36b400956497b1ce8232f81b398217a3",
+    "scripts/sdk-agent-project-acceptance.py": "89324ffb0b5f1298ebe5cb6959bc453ccad50776cdfb1b35c72c7809208e7bd3",
+    "scripts/sdk-collection-acceptance-verify-test.py": "0ecce0224d7945f8ff0bdb47a4ab2de1c7eec978560e94af99dc972e140f0cd0",
+    "scripts/sdk-collection-acceptance-verify.py": "cb50448cc01390879778b41d73610e776a854b8e45675b895e23bc6d63a5d455",
+    "scripts/sdk-collection-acceptance.mjs": "aae99cb0fdf3378e5b37291acad7e822481e623fcee4f5c619117623315b4c40",
+    "scripts/sdk-collection-acceptance.py": "5207cf8207659a2d66fecbdf879e138f8eeff07226a808ae073fe2974fd1c807",
+    "scripts/sdk-smoke.mjs": "6831d461b235e92a0430eaadb3584fa116063b325e197662e1d07a134880fdb9",
+    "scripts/sdk-smoke.py": "bf03f23687738f8733d8f6ca8d86b30575c498964cc0f90713618054f428cc6f",
+    "scripts/sdk_checks_test.py": "d5bcedc28ad1ca14962cb9290b5894e3c4f698479a9fc4b19251004a8785636c",
+    "sdk/python/README.md": "d17002330c6fa8786819e23c342c3819c3e778e3b0d2b0cc373f5fa6288e4fb6",
+    "sdk/python/pyproject.toml": "f984d0a0a5cdf41fad392c64fb187ada97b4d43ded96b37f2f507f12d7f3c462",
+    "sdk/python/src/cutmyvideo/__init__.py": "3861bd1db1f276968f5c2743211edcd284fa5db2f82b03cd8160c4aee99fb11c",
+    "sdk/python/src/cutmyvideo/_collection_protocol.py": "b6341a9ea0cf1fd183d728e6e087edf750b061eb17e87253283398febc63f3e1",
+    "sdk/python/src/cutmyvideo/_collection_state.py": "c20b0b07b4294bc5499a5feadbb5fcb441ce93ed1d29d2ee7a765b417d8338ac",
+    "sdk/python/src/cutmyvideo/_source_protocol.py": "d2dfddb07119cb8b814efe8d49ec05f6c9f46228f2fc0514e554ace2e4dee5bf",
+    "sdk/python/src/cutmyvideo/client.py": "fcc25da4ec4dba1e07c230716549eba5cccd7c01eaa2c7262121da8a1f291a31",
+    "sdk/python/src/cutmyvideo/collections.py": "8a14999575331d12cdca60f64c2389c64549e4dccc652492ff0c6bdbe9d07ef8",
+    "sdk/python/src/cutmyvideo/errors.py": "990b8d3991b0d3bce2cad5df1dcbe1033afaf7181f2e2e6ba15d29d96509c9bd",
+    "sdk/python/src/cutmyvideo/local.py": "1a88a41f6ff033ce036bbbd932de60b3281dd8eb70e6ab583d18bd44d6ed5d41",
+    "sdk/python/src/cutmyvideo/projects.py": "b3ace7a766f4aa2bc61c047b87728bc87c497a96dbfa9e637df52a251a02d3ff",
+    "sdk/python/src/cutmyvideo/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sdk/python/src/cutmyvideo/sources.py": "fbe6fa1bd62ca6bd7fa32fffde34cda466b9b205eed0859bb5a5f9850a9acaeb",
+    "sdk/python/src/cutmyvideo/subtitles.py": "e455832722e2cdefaee66ad996764968740559d9d5083c914b15950e711d5717",
+    "sdk/python/src/cutmyvideo/types.py": "bac2ab3a30b9ddb78bfc39d02dee2f65d6865687c0714b6b7c4b486ddf6c28a6",
+    "sdk/python/tests/cli_helper.py": "37c8d5c21b0b80fdf878087dc8b3f38c37fd4b6f3a09b14e18efa985815a019c",
+    "sdk/python/tests/test_client.py": "d51fc0a96e110a472c8c42aa089e7f93390f08b308d9d803fa22713f5d5131e2",
+    "sdk/python/tests/test_collections.py": "515367f1c3f607ddd2469219bbed157d137e97654c824e50cbf93255d6091f28",
+    "sdk/python/tests/test_local.py": "4a959bfdd85effdd4b82e5d97b1db1d13abf8a2b8192b599e988baf9eb75324d",
+    "sdk/python/tests/test_projects.py": "9fff8dbf489c7ff9a9c24ab9554a7d6354228126a1e7d35277f85ba0c975709a",
+    "sdk/python/tests/test_sources.py": "afa50e79bffc6f55c44bd7c361b99c4c0a4a837d8f2cc884c5abad0d271efe84",
+    "sdk/python/tests/test_subtitles.py": "7b200530ff11988b68ca8110e86438aa6b4012ea5c09e5d7898a618374518c04",
+    "sdk/typescript/README.md": "987fdf71dbc57c038d910e50851cf8574404b4f4f3926573a72bfe4991f3ada8",
+    "sdk/typescript/package-lock.json": "25e9c80a83c7dcaab6c8f4e7c2f7695c88418484c47761912f015f2c651400e8",
+    "sdk/typescript/package.json": "ee3ad867e89670080d0d3f84928e3b6bc7dc5edeb56e7c68e96efe488198632f",
+    "sdk/typescript/src/client.ts": "1e87da4240e462b42493fa3e2b4da6a6e7795a8bc57419f82d9ab16b1a4e403c",
+    "sdk/typescript/src/collection_store.ts": "c93d7319b18fc4ab0d4d489093218014df2921592bb9c97de57e207d8b2cc142",
+    "sdk/typescript/src/collections.ts": "cf7f807d26e30ea51886dc16e6c68ae35581d10020d24d57c7345f75e4aaeb91",
+    "sdk/typescript/src/errors.ts": "a6e900276cadd32f954d2679dc77dca8b022ea7c6e463bdff87753c84f1315fa",
+    "sdk/typescript/src/index.ts": "2f890995d02ce39a28ed966015b1749b0a796866a1186cc201e1807f688422e3",
+    "sdk/typescript/src/local.ts": "c840153d745b3edeec75157556546442902c340a3567d5b71fcbcce12ba905d3",
+    "sdk/typescript/src/projects.ts": "506a193685dbc4f7b955719e90a75feeb2bf6f69677bf2426f9136aad8f82c97",
+    "sdk/typescript/src/protocol.ts": "ea05e98f928a655b62a56e59cdb24ef08d5d430803a8eb81b265ce51f4d3c211",
+    "sdk/typescript/src/source_protocol.ts": "bad20834dd2700698d01140536a3e57a3c7db04d8f7cfe4ae18f80f987340403",
+    "sdk/typescript/src/sources.ts": "ab9ff5f8ef59f8eeefb5fd84b397a7b5041671b3a600750e6b6ac1f8446dda9c",
+    "sdk/typescript/src/subtitles.ts": "3bee2750975a58ec6ff008819564b8003406b2ab888f70d9416773a78cc5bca7",
+    "sdk/typescript/src/types.ts": "fa5d643de032673b96c7d6a0e156859375f6579abbce8384c269c801fd91fcf0",
+    "sdk/typescript/test/client.test.mjs": "b99328bc07b0f19b072716e8a413b8c18cf22ab0305498d85196a0719c4db16a",
+    "sdk/typescript/test/collections.test.mjs": "3d08a2516c5650f7b2191bd935c525386d7f09d3a58bc30d865df2561cc28f35",
+    "sdk/typescript/test/fake-cli.mjs": "e3a90b2ab45485ce8c5c06880e87591c6bcb4e5da79118f69b372d2c33246182",
+    "sdk/typescript/test/local-killer-control.mjs": "baed8ec8aa1f03c1f45294cbc509ad80611c3d23d103db9d8a81ff327ce5a203",
+    "sdk/typescript/test/local.test.mjs": "f962ae10a61611ee16d998b21581df311520a482ce7f3d35bb468f98dec7f66f",
+    "sdk/typescript/test/sources.test.mjs": "d61e171cbcbf10f80f90a98cbd8a2e61031af0825d5a5591eaecc24ec2c9edbc",
+    "sdk/typescript/test/subtitles.test.mjs": "835e5152b7ae0f911f7942b0af77b23c0e62213cdb2e9661effb9a422fc1ddaa",
+    "sdk/typescript/tsconfig.json": "53e1e4a83685c24bdcf04b01117ecae6943a6566fb9950fc50c8927f641852f0"
+  },
+  "installed_packages": [
+    {
+      "bytes": 43032,
+      "kind": "npm",
+      "name": "cutmyvideo-sdk-1.4.0.tgz",
+      "sha256": "bb6745390627f57b6177bd56a56a1119425c4fa57871a702278d60a3f426412c"
+    },
+    {
+      "bytes": 73435,
+      "kind": "sdist",
+      "name": "cutmyvideo-1.4.0.tar.gz",
+      "sha256": "825262b98fdc1fda92d95e97fc865d795de8a601e9afdff32c4c5c7946c74a0a"
+    },
+    {
+      "bytes": 53016,
+      "kind": "wheel",
+      "name": "cutmyvideo-1.4.0-py3-none-any.whl",
+      "sha256": "683de32ef9e472a1b60c9b831ea0dfba06a93ec8e45c134c7f941e2fd3738b03"
+    }
+  ],
+  "limits": [
+    "Supplied subtitle timing fixture, not transcription or speech-word accuracy.",
+    "Admission backoff and injected failure timings are not a performance benchmark.",
+    "Core snapshot and candidate packages are exact identities, not final main/tag release identities.",
+    "Actual tagged signatures, signed five-platform downloads and production deployment are separate required records."
+  ],
+  "other_local_verification": {
+    "deployment_restore_actual_schema_receipt_sha256": "dec7a127d202beb3d4ac95e687a135168eb9171fb022da1dfc3a88d16f20b5ab",
+    "deployment_restore_local_postgresql_family": "17.11 Bookworm; pinned Alpine repeats in required website CI",
+    "full_source_commit": "9cdf291910064f04ebba91d223a3f9df9cbdeff2",
+    "full_source_log_sha256": "7dd7c046e7bf88064ab230552c2504d98a4a9866b69a287a93506a56df715b69",
+    "full_source_race_and_vulnerability_checks_passed": true,
+    "full_source_scope": "Initial 9cdf implementation only; not whole-source coverage of this later candidate.",
+    "full_source_tree": "127094b3fe1b2a1ade750387c7f245c2433876e6",
+    "public007_to008_independent_review_sha256": "78bac74e235a60e623f008f92803478d212fdca0bfb4c7c478b192bf8861177e",
+    "public007_to008_local_controls": 170,
+    "public007_to008_verification_sha256": "c50cbf3b6819cb78c02192c363c5fc5f7feab69012c63e0575a0ae9703df612e",
+    "schema8_recovery_receipt_sha256": "17611993e71137925ef96fd8961a0c739d4a95f52615441ca82709f6f300abcf",
+    "signed_sdk_independent_review_sha256": "1cff95fe5ca2369b4eafea3a52909ea0c47d53feed8a0d782cb176fb49a4318a"
+  },
+  "previous_record": {
+    "file": "initial-summary.json",
+    "sha256": "e48f0230f971196a73cf63fedd1515f336ee0b2c9bf09340e3dd206108dc0fc3",
+    "source_commit": "9cdf291910064f04ebba91d223a3f9df9cbdeff2"
+  },
+  "record_kind": "immutable_candidate_acceptance",
+  "release_target": "1.4.0",
+  "required_installed_tests": [
+    "TestInstalledSDKAgentProjectWorkflow",
+    "TestInstalledSDKAgentProjectWorkflow/python",
+    "TestInstalledSDKAgentProjectWorkflow/typescript",
+    "TestInstalledSDKCollectionHTTPWorkflow",
+    "TestInstalledSDKCollectionHTTPWorkflow/python",
+    "TestInstalledSDKCollectionHTTPWorkflow/typescript",
+    "TestInstalledSDKCollectionLocalWorkflow",
+    "TestInstalledSDKCollectionLocalWorkflow/python",
+    "TestInstalledSDKCollectionLocalWorkflow/typescript",
+    "TestInstalledSDKHTTPWorkflow",
+    "TestInstalledSDKHTTPWorkflow/python",
+    "TestInstalledSDKHTTPWorkflow/typescript",
+    "TestInstalledSDKLocalWorkflow",
+    "TestInstalledSDKLocalWorkflow/python",
+    "TestInstalledSDKLocalWorkflow/typescript"
+  ],
+  "results": {
+    "python": {
+      "actual_browser_review": true,
+      "artifacts_after_browser_edits": 17,
+      "artifacts_after_repair": 15,
+      "clips": 15,
+      "collection_source_content": {
+        "audio_samples": 38,
+        "frame_samples": 76,
+        "max_frame_mae": 0.7648,
+        "min_audio_correlation": 0.8892,
+        "segments": 38,
+        "silent_segments": 0,
+        "stage_output_receipts": 32,
+        "unique_artifacts": 19
+      },
+      "jobs_after_browser_edits": 18,
+      "jobs_after_repair": 16,
+      "lost_repair_reply_recovered": true,
+      "lost_source_reply_recovered": true,
+      "retained_collection_recovery": {
+        "admission_retry_after_respected": true,
+        "artifacts": 19,
+        "clips": 15,
+        "completed_before_hard_kill": 8,
+        "final_restored_without_new_work": true,
+        "interrupted_artifact_full_gets": 1,
+        "interrupted_download_ranged": true,
+        "jobs": 19,
+        "lost_submit_reply_recovered": true,
+        "partial_admission": true,
+        "render_attempts": 19,
+        "resumed_offset": 2459505
+      },
+      "source_content": {
+        "audio_samples": 30,
+        "clips": 15,
+        "consumer": "python",
+        "frame_samples": 60,
+        "max_frame_mae": 0.4187,
+        "min_audio_correlation": 0.8894,
+        "sidecars": 15
+      },
+      "source_count": 1,
+      "supplied_sidecars": 15,
+      "unchanged_completed_clips": 13
+    },
+    "typescript": {
+      "actual_browser_review": true,
+      "artifacts_after_browser_edits": 17,
+      "artifacts_after_repair": 15,
+      "clips": 15,
+      "collection_source_content": {
+        "audio_samples": 38,
+        "frame_samples": 76,
+        "max_frame_mae": 0.7648,
+        "min_audio_correlation": 0.8892,
+        "segments": 38,
+        "silent_segments": 0,
+        "stage_output_receipts": 32,
+        "unique_artifacts": 19
+      },
+      "jobs_after_browser_edits": 18,
+      "jobs_after_repair": 16,
+      "lost_repair_reply_recovered": true,
+      "lost_source_reply_recovered": true,
+      "retained_collection_recovery": {
+        "admission_retry_after_respected": true,
+        "artifacts": 19,
+        "clips": 15,
+        "completed_before_hard_kill": 8,
+        "final_restored_without_new_work": true,
+        "interrupted_artifact_full_gets": 1,
+        "interrupted_download_ranged": true,
+        "jobs": 19,
+        "lost_submit_reply_recovered": true,
+        "partial_admission": true,
+        "render_attempts": 19,
+        "resumed_offset": 2396026
+      },
+      "source_content": {
+        "audio_samples": 30,
+        "clips": 15,
+        "consumer": "typescript",
+        "frame_samples": 60,
+        "max_frame_mae": 0.4187,
+        "min_audio_correlation": 0.8894,
+        "sidecars": 15
+      },
+      "source_count": 1,
+      "supplied_sidecars": 15,
+      "unchanged_completed_clips": 13
+    }
+  },
+  "runtime_dependencies": 0,
+  "schema_version": 1,
+  "sdk_checks_sha256": "cd133d9c28cb9e730ea2aec5c3a1fd9076c9649a714d0ab78ec8e2a2a28ad9f0",
+  "sdk_manifest_sha256": "640c6adbc49831e7ba3fe493469637316c1a99468a5f6b9d02771a6a7e604dca",
+  "sdk_run_binding": {
+    "acceptance_receipts_sha256": {
+      "collections_python": "c7f3f3c4a26a0a20205dc6906f573ec84477fa9a0198780f05975cb9a51acdf5",
+      "collections_typescript": "886e98849b2b2d699079bb2372de3f042d0b293769a07c5556c7d3ef2907840b",
+      "projects_python": "1a8cf92fef321924d540f7f5db1dccdc8726f6a6440c8d65c1a6991b989c5a5b",
+      "projects_typescript": "ff3288f56d1dfb3e98947490541009f2b7864107e1fa15503c6fdc99fcc54863"
+    },
+    "cli_sha256": "17f98e41f1734cbe7a1f6e72e384a999efeef3a27a1cc195cafb5f18446e63ca",
+    "installed_go_report_sha256": "6fdf30c149f5e50e4503337d652578cc3e312628eafe5ccbbc6f9a82c5f7f34c",
+    "npm_tarball_sha256": "bb6745390627f57b6177bd56a56a1119425c4fa57871a702278d60a3f426412c",
+    "observed_invocation_sha256": "b9da06bfd465810ec80943cee8b7295ceb3802cdb80f7353d2ccdd533bb21df8",
+    "python_sdist_sha256": "825262b98fdc1fda92d95e97fc865d795de8a601e9afdff32c4c5c7946c74a0a",
+    "python_wheel_sha256": "683de32ef9e472a1b60c9b831ea0dfba06a93ec8e45c134c7f941e2fd3738b03",
+    "sdk_checks_sha256": "cd133d9c28cb9e730ea2aec5c3a1fd9076c9649a714d0ab78ec8e2a2a28ad9f0",
+    "sdk_run": "SDK6",
+    "source_commit": "ae99fce692f37b701d0be83c2131c11e78d1230e",
+    "source_sha256": "020959e1edfa1f4f3e3f36339c05aa9d00d93786326090adc8ec20799050f096",
+    "source_tree": "0c6c87e6cc8571fdec688e32aa6b932dc4817f14"
+  },
+  "source": {
+    "commit": "ae99fce692f37b701d0be83c2131c11e78d1230e",
+    "mode": "candidate",
+    "publishable": false,
+    "tree": "0c6c87e6cc8571fdec688e32aa6b932dc4817f14",
+    "version": "v0.0.0-candidate.gae99fce692f37b701d0be83c2131c11e78d1230e"
+  },
+  "source_sha256": "020959e1edfa1f4f3e3f36339c05aa9d00d93786326090adc8ec20799050f096",
+  "tools": {
+    "ffmpeg": "N-127083-g65a3870462-20261001",
+    "go": "1.27.2",
+    "node": "20.20.0",
+    "python": "3.10.12"
+  },
+  "unit_tests": {
+    "python_installed_wheel": 64,
+    "sdist_rebuilt_module_payload_identical": true,
+    "typescript_installed": 63,
+    "typescript_source": 63
+  },
+  "verification_date_utc": "2026-10-16"
+}

@@ -210,7 +210,7 @@ func TestMetadataResolutionMigrationPreserves006RowsAndRestartsWithoutWrites(t *
  'cache',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(c),'xmin',c.xmin::text) ORDER BY source_id) FROM source_metadata_cache c),
  'counters',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(c),'xmin',c.xmin::text) ORDER BY id) FROM storage_counters c),
  'ledger',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(m),'xmin',m.xmin::text) ORDER BY position) FROM app_schema_migrations m WHERE position<=6),
- 'versions',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(v),'xmin',v.xmin::text) ORDER BY version) FROM app_schema_versions v WHERE version<>$1))`, schemaVersion).Scan(&data); err != nil {
+ 'versions',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(v),'xmin',v.xmin::text) ORDER BY version) FROM app_schema_versions v WHERE version NOT IN($1,$2)))`, schemaMigrations[6].version, schemaVersion).Scan(&data); err != nil {
 			t.Fatal(err)
 		}
 		return string(data)
@@ -225,6 +225,46 @@ func TestMetadataResolutionMigrationPreserves006RowsAndRestartsWithoutWrites(t *
 	_ = openMigrationStore(t, f)
 	if after := migrationSnapshot(t, f.db); after != full {
 		t.Fatal("current restart rewrote metadata claims or historical state")
+	}
+}
+
+func TestAgentProjectsMigrationPreserves007RowsAndRestartsWithoutWrites(t *testing.T) {
+	f := newMigrationFixture(t)
+	migrationExec(t, f.db, `CREATE TABLE app_schema_versions(version text PRIMARY KEY)`)
+	for i, m := range schemaMigrations[:7] {
+		migrationExec(t, f.db, migrationSQL(m))
+		sourcePinExec(t, f.db, `INSERT INTO app_schema_versions(version) VALUES($1)`, m.version)
+		if i == 1 {
+			for n := range 2 {
+				sourcePinExec(t, f.db, `INSERT INTO app_schema_migrations(position,version,checksum) VALUES($1,$2,$3)`, n+1, schemaMigrations[n].version, migrationChecksum(schemaMigrations[n]))
+			}
+		} else if i > 1 {
+			sourcePinExec(t, f.db, `INSERT INTO app_schema_migrations(position,version,checksum) VALUES($1,$2,$3)`, i+1, m.version, migrationChecksum(m))
+		}
+	}
+	migrationExec(t, f.db, historicalRows)
+	before := historicalRowsSnapshot(t, f.db)
+	history := func() string {
+		var raw []byte
+		if err := f.db.QueryRow(context.Background(), `SELECT jsonb_build_object('ledger',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(m),'xmin',m.xmin::text) ORDER BY position) FROM app_schema_migrations m WHERE position<=7),'versions',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(v),'xmin',v.xmin::text) ORDER BY version) FROM app_schema_versions v WHERE version<>$1))`, schemaVersion).Scan(&raw); err != nil {
+			t.Fatal(err)
+		}
+		return string(raw)
+	}
+	oldHistory := history()
+	current := openMigrationStore(t, f)
+	assertMigrationLedger(t, current)
+	if after := historicalRowsSnapshot(t, f.db); after != before || history() != oldHistory {
+		t.Fatal("schema8 upgrade rewrote schema7 sources, jobs, artifacts or retained migration history")
+	}
+	var tables int
+	if err := f.db.QueryRow(context.Background(), `SELECT count(*) FROM information_schema.tables WHERE table_schema=current_schema() AND table_name IN ('source_preparations','source_fingerprints','agent_projects','agent_project_jobs','agent_project_handoffs','agent_project_grants','agent_project_retries')`).Scan(&tables); err != nil || tables != 7 {
+		t.Fatal("schema8 tables missing", tables, err)
+	}
+	full := migrationSnapshot(t, f.db)
+	_ = openMigrationStore(t, f)
+	if after := migrationSnapshot(t, f.db); after != full {
+		t.Fatal("current schema8 restart rewrote application or migration state")
 	}
 }
 
@@ -604,6 +644,7 @@ func TestMigrationSQLChecksumsArePinnedAcrossWindowsNewlines(t *testing.T) {
 		"20261011-source-retention-v1":           "b460686dc29fa1a156cbf74ca73da8afd2e4394cc7f2a3d6465f72e047b7c0e0",
 		"20261012-source-media-cleanup-v1":       "e2d36a97a35a158dead1ed47519209ca67eb92fe0a9fffef4ceb9ad50c34d7bb",
 		"20261014-metadata-resolution-leases-v1": "01f421ef7efdf02386f7d284491ccf1bccee2dc3014a24f24b85bcd356dcbc0f",
+		"20261016-agent-projects-v1":             "40990aab92ee4bcdadeae7b7f0f21ad308804f30c054372907c15d2c14a51a92",
 	}
 	for _, migration := range schemaMigrations {
 		t.Run(migration.version, func(t *testing.T) {

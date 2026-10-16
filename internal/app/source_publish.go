@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"os"
@@ -73,13 +74,35 @@ func (s *Store) addSourceTransaction(ctx context.Context, tx pgx.Tx, v Source, s
 	if err != nil {
 		return err
 	}
+	if v.Fingerprint != nil {
+		data, e := json.Marshal(v.Fingerprint)
+		if e != nil {
+			return e
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO source_fingerprints(source_id,owner,fingerprint) VALUES($1,$2,$3)`, v.ID, v.Owner, data); err != nil {
+			return err
+		}
+	}
+	if v.PreparationKey != "" {
+		data, e := json.Marshal(v.Fingerprint)
+		if e != nil {
+			return e
+		}
+		tag, e := tx.Exec(ctx, `UPDATE source_preparations SET state='ready',fingerprint=$4,error_code='',lease_until=clock_timestamp() WHERE owner=$1 AND key=$2 AND source_id=$3 AND claim_token=$5 AND state='processing'`, v.Owner, v.PreparationKey, v.ID, data, v.PreparationClaim)
+		if e != nil {
+			return e
+		}
+		if tag.RowsAffected() != 1 {
+			return ErrNotFound
+		}
+	}
 	for path, size := range sizes {
 		if err = registerStorageFile(ctx, tx, path, v.Owner, "source", v.ID, size); err != nil {
 			return err
 		}
 	}
 	if v.StorageToken != "" {
-		if err = adoptPreparationExtras(ctx, tx, c, v.ID); err != nil {
+		if err = adoptPreparationExtras(ctx, tx, c, sourceFileIdentity(v)); err != nil {
 			return err
 		}
 		tag, e := tx.Exec(ctx, "DELETE FROM storage_reservations WHERE id=$1 AND token=$2 AND expires_at>clock_timestamp()", "source:"+v.Owner, v.StorageToken)
@@ -103,7 +126,7 @@ func (s *Store) addSourceTransaction(ctx context.Context, tx pgx.Tx, v Source, s
 // removes a final name; rejected private preparations may remove their own files.
 func publishSourceMedia(ctx context.Context, c Config, source *Source) error {
 	stage := source.Path
-	final := filepath.Join(c.DataDir, "sources", source.ID+".media")
+	final := filepath.Join(c.DataDir, "sources", sourceFileIdentity(*source)+".media")
 	_, err := fsdurable.Publish(ctx, stage, final)
 	if err == nil || errors.Is(err, fsdurable.ErrPublicationUncertain) {
 		source.Path = final

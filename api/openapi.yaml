@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: cutmyvideo-core HTTP API
-  version: 1.2.0
+  version: 1.4.0
   description: >-
     Manual media selection and asynchronous separate or joined export. Clients
     must ignore unknown response fields and accept unknown additive error codes
@@ -67,7 +67,18 @@ paths:
                     items: {$ref: '#/components/schemas/Source'}
         default: {$ref: '#/components/responses/Error'}
     post:
-      description: JSON body reads are limited to ten seconds or an earlier request deadline; stalled requests return 408 request_timeout. Final source registration can already have committed when a timeout or connection failure is reported; check the same session's source list before deciding to repeat the import. Source imports have no idempotency-key guarantee.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+            pattern: ^(?!\.{1,2}$)[!-~]+$
+          description: Owner-scoped immutable intent key. Persist before the first request and reconcile its receipt before
+            replaying an uncertain response.
+      description: JSON body reads are limited to ten seconds or an earlier request deadline; stalled requests return 408 request_timeout. Final source registration can already have committed when a timeout or connection failure is reported; check the same session's source list before deciding to repeat the import. With an optional Idempotency-Key, the normalized URL is an immutable owner-scoped intent; replay returns the same source (200), changed intent is 409, and GET source-preparations/{key} reconciles uncertain responses. Without a key, legacy imports have no idempotency guarantee.
       requestBody:
         required: true
         content:
@@ -84,12 +95,38 @@ paths:
                   examples: ['https://www.youtube.com/watch?v=aqz-KE-bpKQ', 'youtu.be/aqz-KE-bpKQ', 'https://cdn.example.com/interview.mp4']
       responses:
         '503': {$ref: '#/components/responses/StorageUnavailable'}
+        '200': {$ref: '#/components/responses/Source'}
         '201': {$ref: '#/components/responses/Source'}
         '408': {$ref: '#/components/responses/Error'}
         default: {$ref: '#/components/responses/Error'}
   /api/v1/uploads:
     post:
-      description: Uploads one file within the configured UPLOAD_TIMEOUT, including quota admission, multipart body transfer and media inspection. Timeout returns 504 source_timeout; final source registration can already have committed despite this response, so check the same session's source list before deciding to repeat the upload. Uploads have no idempotency-key guarantee. Interrupted uploads return 400 invalid_upload; oversize uploads return 413 source_too_large.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+            pattern: ^(?!\.{1,2}$)[!-~]+$
+          description: Owner-scoped immutable intent key. Persist before the first request and reconcile its receipt before
+            replaying an uncertain response.
+        - in: header
+          name: Upload-SHA256
+          required: false
+          schema:
+            type: string
+            pattern: ^[0-9a-f]{64}$
+          description: Required with Idempotency-Key; SHA256 of full original file bytes.
+        - in: header
+          name: Upload-Size
+          required: false
+          schema:
+            type: string
+            pattern: ^[1-9][0-9]*$
+          description: Required with Idempotency-Key; full original file size in bytes.
+      description: Uploads one file within the configured UPLOAD_TIMEOUT, including quota admission, multipart body transfer and media inspection. Timeout returns 504 source_timeout; final source registration can already have committed despite this response, so check the same session's source list before deciding to repeat the upload. With an optional Idempotency-Key, Upload-SHA256 and Upload-Size are required; the server verifies the complete bytes and persists the fingerprint with the source. Replay returns the same source (200) before reading its body, changed intent is 409, and GET source-preparations/{key} reconciles uncertain responses. Without a key, legacy uploads have no idempotency guarantee. Interrupted uploads return 400 invalid_upload; oversize uploads return 413 source_too_large.
       requestBody:
         required: true
         content:
@@ -101,6 +138,7 @@ paths:
                 file: {type: string, format: binary}
       responses:
         '503': {$ref: '#/components/responses/StorageUnavailable'}
+        '200': {$ref: '#/components/responses/Source'}
         '201': {$ref: '#/components/responses/Source'}
         default: {$ref: '#/components/responses/Error'}
   /api/v1/sources/{id}:
@@ -404,6 +442,786 @@ paths:
                 oneOf:
                   - {$ref: '#/components/schemas/CollectionError'}
                   - {$ref: '#/components/schemas/CollectionSubmission'}
+  /api/v1/source-preparations/{key}:
+    get:
+      description: Recovers the owner-scoped preparation receipt before repeating an uncertain upload/import. 404
+        means no retained receipt. Processing exposes Retry-After; retryable permits the same intent/key to reclaim
+        an expired or released lease. Ready includes the persisted source/fingerprint; a removed source remains explicit
+        source_unavailable while the receipt is retained. Receipts expire after seven days only when their source
+        is absent; a retained source preserves its key and cannot be duplicated by receipt expiry. Maximum 64 retained
+        receipts per owner.
+      parameters:
+      - in: path
+        name: key
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^(?!\.{1,2}$)[!-~]+$
+      responses:
+        '200':
+          description: Retained source preparation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourcePreparation'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/projects:
+    post:
+      description: 'Creates a seven-day single-source project scoped to explicit owned job IDs. The saved collection_key
+        is its immutable owner-scoped identity: repeat it after a lost reply to recover the same current project without
+        overwriting browser edits; changing its fixed source returns project_conflict. New identity requires a new
+        key. Replay precedes current source/admission checks. At most 20 projects per owner, ten new creations per
+        minute; creation does not render or extend source retention. Only the creator keeps the collection key.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentProjectCreate'
+      responses:
+        '201':
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentProject'
+        '200':
+          description: Current retained project recovered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentProject'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/projects/{project}:
+    parameters:
+    - in: path
+      name: project
+      required: true
+      schema:
+        type: string
+    get:
+      description: Creator or unexpired project recipient only. Includes server-normalized selected expected requests
+        and latest explicitly attached jobs. current is true only when that job matches the current effective clip
+        request; false rows must not be adopted as current outputs. Responses contain no creator cookie or collection
+        key.
+      responses:
+        '200':
+          description: Current scoped project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentProject'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      description: Compare-and-swap saved edits/selection/rendition with revision. Stale revisions return project_conflict.
+        This saves metadata and does not render. Fixed source and collection key cannot be changed. Same-origin and
+        mutation admission checks apply.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentProjectEdit'
+      responses:
+        '200':
+          description: Saved project with incremented revision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentProject'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      description: Creator only. Revokes all project tokens/grants and removes project metadata. Does not delete source,
+        jobs or artifacts.
+      responses:
+        '200':
+          description: Project revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - ok
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/projects/{project}/grants:
+    parameters:
+    - in: path
+      name: project
+      required: true
+      schema:
+        type: string
+    delete:
+      description: Creator only. Revokes all outstanding tokens and browser grants immediately for new requests; retained
+        source/jobs/artifacts stay owned by the creator.
+      responses:
+        '200':
+          description: All project grants revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                required:
+                - ok
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/projects/{project}/handoffs:
+    parameters:
+    - in: path
+      name: project
+      required: true
+      schema:
+        type: string
+    post:
+      description: Creator only. Issues a random single-recipient token, valid ten minutes. Only its hash is stored.
+        At most eight unexpired tokens per project and ten creations per owner per minute. Transport to the browser
+        in a URL fragment only; remove the fragment before any requests, then POST the token in the redeem body. Never
+        put tokens in query parameters, logs, persistent browser storage or owner cookies.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        '201':
+          description: Private handoff; no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - project_id
+                - token
+                - expires_at
+                properties:
+                  project_id:
+                    type: string
+                  token:
+                    type: string
+                    pattern: ^[A-Za-z0-9_-]{43}$
+                  expires_at:
+                    type: string
+                    format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/projects/handoffs/redeem:
+    post:
+      description: Redeems a handoff using the browser’s ordinary session, without replacing its cookie. One recipient
+        receives a project-only grant for at most 24 hours or project expiry. The same recipient can replay the token
+        until token expiry to recover a lost reply without extending the grant; another session receives 404. Bounded
+        to twenty attempts per recipient per minute, twenty grants per recipient and thirty-two recipients per project.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - token
+              additionalProperties: false
+              properties:
+                token:
+                  type: string
+                  pattern: ^[A-Za-z0-9_-]{43}$
+      responses:
+        '200':
+          description: Scoped project granted
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - project
+                properties:
+                  project:
+                    $ref: '#/components/schemas/AgentProject'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/projects/{project}/collections:
+    parameters:
+    - in: path
+      name: project
+      required: true
+      schema:
+        type: string
+    post:
+      description: Submits only the saved current plan/source and selection. Optional revision enforces CAS; optional
+        clip_ids must be a nonempty unique subset of the saved selection. Empty object keeps legacy all-selected behavior.
+        Uses the server-held workflow key; latest attached matching jobs, including explicit repair attempts, are
+        retained. Newly pending clips keep all ordinary collection budgets/admission checks. The browser receives
+        no key. SDKs adopting this project must use this scoped route for pending submissions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentProjectSelection'
+      responses:
+        '202':
+          description: Incremental collection admission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionSubmission'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/projects/{project}/collections/validate:
+    parameters:
+    - in: path
+      name: project
+      required: true
+      schema:
+        type: string
+    post:
+      description: Validates only the saved current plan/source and selection. Optional revision enforces CAS; optional
+        clip_ids must be a nonempty unique subset of the saved selection. Empty object keeps legacy all-selected behavior.
+        Uses the server-held workflow key; latest attached matching jobs, including explicit repair attempts, are
+        retained. Newly pending clips keep all ordinary collection budgets/admission checks. The browser receives
+        no key. SDKs adopting this project must use this scoped route for pending submissions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentProjectSelection'
+      responses:
+        '200':
+          description: Collection validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionValidation'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/projects/{project}/collections/retry:
+    parameters:
+    - in: path
+      name: project
+      required: true
+      schema:
+        type: string
+    post:
+      description: Starts an explicit attempt only for current failed/cancelled clips or succeeded clips with no unexpired
+        ready artifact. Requires a saved revision, selection and caller Idempotency-Key. The immutable attempt receipt
+        is saved before admission. Replaying the same key/body recovers accepted or pending work before current failed-status
+        checks; changed intent returns project_conflict. A new key cannot retry a queued or ready result. Each admitted
+        job is attached to this project for browser/SDK recovery. At most 1024 retained retry receipts and job associations
+        per project.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^(?!\.{1,2}$)[!-~]+$
+        description: Owner-scoped immutable intent key. Persist before the first request and reconcile its receipt
+          before replaying an uncertain response.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentProjectRetry'
+      responses:
+        '202':
+          description: Explicit attempt retained/admitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionSubmission'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/projects/{project}/sources/{id}:
+    parameters:
+    - in: path
+      name: project
+      required: true
+      schema:
+        type: string
+    - $ref: '#/components/parameters/ID'
+    get:
+      responses:
+        '503':
+          $ref: '#/components/responses/DatabaseUnavailable'
+        '200':
+          $ref: '#/components/responses/Source'
+        default:
+          $ref: '#/components/responses/Error'
+      description: 'Project-only access to the fixed source; a different source ID is refused. Ordinary preview/media/tool
+        limits remain unchanged. '
+  /api/v1/projects/{project}/sources/{id}/media:
+    parameters:
+    - in: path
+      name: project
+      required: true
+      schema:
+        type: string
+    - $ref: '#/components/parameters/ID'
+    get:
+      description: Project-only access to the fixed source; a different source ID is refused. Ordinary preview/media/tool
+        limits remain unchanged. Returns 410 source_removed after automatic media cleanup. Original staged bytes;
+        requires owner session. Range supported. Private conditional caching with ETag requires owner and file revalidation
+        on every request.
+      responses:
+        '503':
+          $ref: '#/components/responses/DatabaseUnavailable'
+        '200':
+          description: Media bytes
+        '206':
+          description: Requested byte range
+        '304':
+          description: Authorized preview is unchanged; use the privately cached bytes
+        '412':
+          description: A request precondition failed; empty response body
+        '416':
+          $ref: '#/components/responses/RangeError'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/projects/{project}/sources/{id}/preview:
+    parameters:
+    - in: path
+      name: project
+      required: true
+      schema:
+        type: string
+    - $ref: '#/components/parameters/ID'
+    get:
+      description: Project-only access to the fixed source; a different source ID is refused. Ordinary preview/media/tool
+        limits remain unchanged. Owner-protected H.264/AAC MP4 interval, up to 30 seconds and 16 MiB. Optional 6000
+        ms windows reduce cold foreground latency; their alignment and cache identity are separate from ordinary 30000
+        ms windows. Short foreground requests briefly wait for occupied inspection capacity under the same admission
+        limits. Works for accessible platform recordings and staged files with browser-incompatible codecs. Original
+        source time and fresh upright square-pixel source display dimensions are supplied in response headers, including
+        cache hits and conditional/range responses. Display dimensions describe the original before preview scaling,
+        suitable for normalized crop presets. Aligned windows are retained in a private owner-protected cache for
+        up to 30 idle minutes (512 MiB globally, 128 MiB per owner). Responses remain no-store. Rendering pins the
+        source and uses a bounded reservation; completed cache entries do not pin sources. Duplicate interval requests
+        coalesce.
+      parameters:
+      - in: query
+        name: start_ms
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+      - in: query
+        name: window_ms
+        schema:
+          type: integer
+          enum:
+          - 6000
+          - 30000
+          default: 30000
+        description: Video window length and alignment; omission preserves the ordinary 30-second contract.
+      - in: query
+        name: priority
+        schema:
+          type: string
+          default: foreground
+          examples:
+          - foreground
+          - background
+        description: background prefetch yields rendering capacity to foreground requests; omission or any other value
+          uses foreground priority.
+      - in: query
+        name: audio_track
+        schema:
+          type: integer
+          minimum: 0
+        description: Absolute inspected audio stream index for a staged local source. Its selection is included in
+          the private preview cache identity.
+      - in: query
+        name: no_audio
+        schema:
+          type: boolean
+        description: true renders silent video; cannot be combined with audio_track. Omission selects default audio,
+          otherwise the first audio stream.
+      responses:
+        '503':
+          $ref: '#/components/responses/StorageUnavailable'
+        '200':
+          description: Preview interval
+          headers:
+            X-Source-Display-Width:
+              description: Original upright square-pixel width before preview scaling
+              schema:
+                type: integer
+                minimum: 2
+            X-Source-Display-Height:
+              description: Original upright square-pixel height before preview scaling
+              schema:
+                type: integer
+                minimum: 2
+            X-Preview-Cache:
+              $ref: '#/components/headers/PreviewCache'
+            X-Preview-Start-MS:
+              $ref: '#/components/headers/PreviewStart'
+            X-Preview-End-MS:
+              $ref: '#/components/headers/PreviewEnd'
+          content:
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: Requested preview byte range
+          headers:
+            X-Preview-Cache:
+              $ref: '#/components/headers/PreviewCache'
+            X-Preview-Start-MS:
+              $ref: '#/components/headers/PreviewStart'
+            X-Preview-End-MS:
+              $ref: '#/components/headers/PreviewEnd'
+        '304':
+          description: Authorized preview is unchanged; empty response body
+          headers:
+            X-Preview-Cache:
+              $ref: '#/components/headers/PreviewCache'
+            X-Preview-Start-MS:
+              $ref: '#/components/headers/PreviewStart'
+            X-Preview-End-MS:
+              $ref: '#/components/headers/PreviewEnd'
+        '412':
+          description: A request precondition failed; empty response body
+          headers:
+            X-Preview-Cache:
+              $ref: '#/components/headers/PreviewCache'
+            X-Preview-Start-MS:
+              $ref: '#/components/headers/PreviewStart'
+            X-Preview-End-MS:
+              $ref: '#/components/headers/PreviewEnd'
+        '416':
+          description: Malformed or unsatisfiable preview Range; plain text
+          headers:
+            X-Preview-Cache:
+              $ref: '#/components/headers/PreviewCache'
+            X-Preview-Start-MS:
+              $ref: '#/components/headers/PreviewStart'
+            X-Preview-End-MS:
+              $ref: '#/components/headers/PreviewEnd'
+            Content-Range:
+              schema:
+                type: string
+                pattern: ^bytes \*/[0-9]+$
+          content:
+            text/plain:
+              schema:
+                type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/projects/{project}/sources/{id}/storyboard:
+    parameters:
+    - in: path
+      name: project
+      required: true
+      schema:
+        type: string
+    - $ref: '#/components/parameters/ID'
+    get:
+      description: Project-only access to the fixed source; a different source ID is refused. Ordinary preview/media/tool
+        limits remain unchanged. Owner-protected JPEG search strip for the aligned 30-second source interval. Six
+        fixed 160x90 cells sample source time at start_ms plus 0, 5, 10, 15, 20 and 25 seconds. X-Storyboard-Frames
+        identifies used cells; unused cells near source end are black. Video aspect ratio is preserved within each
+        cell. No audio is prepared. The operation always uses background admission in the shared preview pool and
+        returns server_busy when another renderer is active. It shares private preview cache size/count/expiry limits
+        and source deletion. Preparation is canceled when the request ends; completed bytes remain no-store.
+      parameters:
+      - in: query
+        name: start_ms
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+      - in: query
+        name: priority
+        schema:
+          type: string
+          examples:
+          - background
+        description: Accepted for consistency with preview clients; storyboards always use background admission.
+      responses:
+        '503':
+          $ref: '#/components/responses/StorageUnavailable'
+        '200':
+          description: 960x90 JPEG sprite, at most 256 KiB
+          headers:
+            X-Preview-Cache:
+              $ref: '#/components/headers/PreviewCache'
+            X-Preview-Start-MS:
+              $ref: '#/components/headers/PreviewStart'
+            X-Preview-End-MS:
+              $ref: '#/components/headers/PreviewEnd'
+            X-Storyboard-Step-MS:
+              x-required: true
+              schema:
+                type: integer
+                const: 5000
+            X-Storyboard-Frames:
+              x-required: true
+              schema:
+                type: integer
+                minimum: 1
+                maximum: 6
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: Requested storyboard byte range
+        '304':
+          description: Authorized storyboard is unchanged; empty response body
+        '412':
+          description: A request precondition failed; empty response body
+        '416':
+          $ref: '#/components/responses/RangeError'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/projects/{project}/sources/{id}/waveform:
+    parameters:
+    - in: path
+      name: project
+      required: true
+      schema:
+        type: string
+    - $ref: '#/components/parameters/ID'
+    get:
+      description: Project-only access to the fixed source; a different source ID is refused. Ordinary preview/media/tool
+        limits remain unchanged. Owner-protected peaks for an aligned 30-second source window. One absolute peak per
+        100 ms across every channel of the selected audio track; silent sources return zero peaks with has_audio false.
+        Source timestamps remain global when a remote interval is staged. Always background admission in the shared
+        preview pool, with the same bounded private cache, cancellation and cleanup. No whole-recording decode is
+        started. Removed originals return 410 source_removed.
+      parameters:
+      - in: query
+        name: start_ms
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+      - in: query
+        name: audio_track
+        schema:
+          type: integer
+          minimum: 0
+        description: Absolute audio stream index for staged local media; omission uses default audio, otherwise the
+          first audio stream.
+      - in: query
+        name: no_audio
+        schema:
+          type: boolean
+        description: true returns silence; cannot be combined with audio_track.
+      - in: query
+        name: priority
+        schema:
+          type: string
+          examples:
+          - background
+        description: Accepted for consistency; waveforms always use background admission.
+      responses:
+        '200':
+          description: Bounded JSON waveform, less than 64 KiB; private no-store response
+          headers:
+            X-Preview-Cache:
+              $ref: '#/components/headers/PreviewCache'
+            X-Preview-Start-MS:
+              $ref: '#/components/headers/PreviewStart'
+            X-Preview-End-MS:
+              $ref: '#/components/headers/PreviewEnd'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Waveform'
+        '206':
+          description: Requested waveform byte range
+        '304':
+          description: Authorized waveform is unchanged; empty body
+        '410':
+          $ref: '#/components/responses/Error'
+        '412':
+          description: Failed precondition; empty body
+        '416':
+          $ref: '#/components/responses/RangeError'
+        '503':
+          $ref: '#/components/responses/StorageUnavailable'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/projects/{project}/sources/{id}/tracks:
+    parameters:
+    - in: path
+      name: project
+      required: true
+      schema:
+        type: string
+    - $ref: '#/components/parameters/ID'
+    get:
+      description: Project-only access to the fixed source; a different source ID is refused. Ordinary preview/media/tool
+        limits remain unchanged. Returns 410 source_removed after automatic media cleanup. Fresh owner-protected track
+        inspection for a staged local upload/direct source. Audio indices are absolute source stream indices. Platform
+        sources without a staged file return tracks_unavailable; their deterministic default audio or no-audio export
+        remains available.
+      responses:
+        '200':
+          description: Available source tracks
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - tracks
+                properties:
+                  display_width:
+                    type: integer
+                    minimum: 2
+                    description: Upright square-pixel display width from fresh inspection; omitted for unsupported
+                      geometry or audio-only sources.
+                  display_height:
+                    type: integer
+                    minimum: 2
+                    description: Upright square-pixel display height from fresh inspection; omitted for unsupported
+                      geometry or audio-only sources.
+                  tracks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Track'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/projects/{project}/sources/{id}/thumbnail:
+    parameters:
+    - in: path
+      name: project
+      required: true
+      schema:
+        type: string
+    - $ref: '#/components/parameters/ID'
+    get:
+      description: Project-only access to the fixed source; a different source ID is refused. Ordinary preview/media/tool
+        limits remain unchanged. Owner-protected, bounded and inspected PNG/JPEG thumbnail. Raw CDN URLs are never
+        returned to clients. Private conditional caching with ETag requires owner and file revalidation on every request.
+      responses:
+        '503':
+          $ref: '#/components/responses/DatabaseUnavailable'
+        '200':
+          description: Thumbnail image
+        '206':
+          description: Requested byte range
+        '304':
+          description: Authorized thumbnail is unchanged; use the privately cached image
+        '412':
+          description: A request precondition failed; empty response body
+        '416':
+          $ref: '#/components/responses/RangeError'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/projects/{project}/jobs/{id}:
+    parameters:
+    - in: path
+      name: project
+      required: true
+      schema:
+        type: string
+    - $ref: '#/components/parameters/ID'
+    get:
+      responses:
+        '503':
+          $ref: '#/components/responses/DatabaseUnavailable'
+        '200':
+          $ref: '#/components/responses/Job'
+        default:
+          $ref: '#/components/responses/Error'
+      description: 'Project-only access to explicitly attached jobs/artifacts. Unattached IDs and scope-overriding
+        query parameters are refused. '
+  /api/v1/projects/{project}/jobs/{id}/cancel:
+    parameters:
+    - in: path
+      name: project
+      required: true
+      schema:
+        type: string
+    - $ref: '#/components/parameters/ID'
+    post:
+      description: Project-only access to explicitly attached jobs/artifacts. Unattached IDs and scope-overriding
+        query parameters are refused. Queued and waiting_storage cancellation is immediate; running cancellation settles
+        asynchronously.
+      responses:
+        '503':
+          $ref: '#/components/responses/DatabaseUnavailable'
+        '200':
+          $ref: '#/components/responses/Job'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/projects/{project}/jobs/{id}/download.zip:
+    parameters:
+    - in: path
+      name: project
+      required: true
+      schema:
+        type: string
+    - $ref: '#/components/parameters/ID'
+    get:
+      description: Project-only access to explicitly attached jobs/artifacts. Unattached IDs and scope-overriding
+        query parameters are refused. Streams ready artifacts as an owner-protected ZIP without recompression or a
+        retained archive. Defaults to this job's ready files in item order. Optional artifact_id values include earlier
+        partial-retry successes from the same owner and source, in requested order. All files are checked and opened
+        before streaming; expired or foreign files return an error. Ordered numeric filename prefixes handle duplicate
+        names. An interrupted ZIP must be downloaded again; byte ranges are not supported. This scoped route uses
+        the anchor job’s artifacts only; explicit artifact_id overrides are rejected.
+      responses:
+        '200':
+          description: ZIP of ready files
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '503':
+          $ref: '#/components/responses/DatabaseUnavailable'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/projects/{project}/artifacts/{id}/download:
+    parameters:
+    - in: path
+      name: project
+      required: true
+      schema:
+        type: string
+    - $ref: '#/components/parameters/ID'
+    get:
+      description: Project-only access to explicitly attached jobs/artifacts. Unattached IDs and scope-overriding
+        query parameters are refused. Owner-authorized attachment. Range supported.
+      responses:
+        '503':
+          $ref: '#/components/responses/DatabaseUnavailable'
+        '200':
+          description: Exported file
+        '206':
+          description: Requested byte range
+        '304':
+          description: Authorized file is unchanged; empty response body
+        '412':
+          description: A request precondition failed; empty response body
+        '416':
+          $ref: '#/components/responses/RangeError'
+        default:
+          $ref: '#/components/responses/Error'
   /api/v1/jobs/{id}:
     parameters: [{$ref: '#/components/parameters/ID'}]
     get:
@@ -454,6 +1272,32 @@ paths:
         '412': {description: A request precondition failed; empty response body}
         '416': {$ref: '#/components/responses/RangeError'}
         default: {$ref: '#/components/responses/Error'}
+  /api/v1/subtitles/retime:
+    post:
+      description: >-
+        Pure bounded transformation of supplied UTF-8 SRT/WebVTT against actual
+        source/output segment maps. No source access, media tools, transcription,
+        rendering or file publication. Request JSON is bounded to 4 MiB; supplied
+        text to 512 KiB and 10000 cues; total segments to 4096. Output text across
+        all clips is bounded to 8 MiB/100000 cues and one million candidate
+        intersections. Half-open source intervals may repeat or reorder; output
+        intervals must be ordered and non-overlapping. Timed/style features
+        outside the documented caption subset are explicitly refused.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubtitleRetimeRequest'
+      responses:
+        '200':
+          description: Per-clip UTF-8 text with exact SHA256, including empty sidecars
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubtitleRetimeResult'
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     SessionCookie:
@@ -487,7 +1331,7 @@ components:
         text/plain:
           schema: {type: string}
     DatabaseUnavailable:
-      description: A bounded database operation failed or exceeded its budget. Mutations may already have committed; the same uncertainty can accompany an earlier 408 request_timeout or 504 source_timeout. Recover retained job submissions with the same Idempotency-Key. Check the same session's source list before deciding to repeat an uncertain upload/import; these operations have no idempotency-key guarantee. No blanket retry guarantee is given for other mutations.
+      description: A bounded database operation failed or exceeded its budget. Mutations may already have committed; the same uncertainty can accompany an earlier 408 request_timeout or 504 source_timeout. Recover retained job submissions with the same Idempotency-Key. For keyed uploads/imports, reconcile GET source-preparations/{key} and replay the saved immutable intent/key. Unkeyed legacy uploads/imports have no idempotency guarantee; check their same-session source list before repeating. No blanket retry guarantee is given for other mutations.
       content:
         application/json:
           schema:
@@ -547,6 +1391,7 @@ components:
         id: {type: string}
         expires_at: {type: [string, 'null'], format: date-time, description: 'RFC3339 source retention target, or null while linked jobs pin the source.'}
         retention_blocked: {type: boolean, description: A retained job currently pins this source.}
+        fingerprint: {$ref: '#/components/schemas/SourceFingerprint'}
         media_removed: {type: boolean, default: false, description: Original media was removed after successful export. Metadata and results remain retained; reopen the recording to continue editing.}
         title: {type: string}
         duration_ms: {type: integer, minimum: 1}
@@ -894,3 +1739,314 @@ components:
         items:
           type: array
           items: {$ref: '#/components/schemas/JobItem'}
+
+    SourceFingerprint:
+      description: Typed identity. content is verified complete uploaded/downloaded bytes; provider is metadata identity
+        and is never a claim about media bytes.
+      oneOf:
+      - type: object
+        required:
+        - kind
+        - sha256
+        - size_bytes
+        properties:
+          kind:
+            const: content
+          sha256:
+            type: string
+            pattern: ^[0-9a-f]{64}$
+          size_bytes:
+            type: integer
+            minimum: 1
+      - type: object
+        required:
+        - kind
+        - canonical_url_sha256
+        properties:
+          kind:
+            const: provider
+          provider:
+            type: string
+          provider_id:
+            type: string
+          canonical_url_sha256:
+            type: string
+            pattern: ^[0-9a-f]{64}$
+    SourcePreparation:
+      type: object
+      required:
+      - version
+      - key
+      - state
+      properties:
+        version:
+          const: 1
+          type: integer
+        key:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^(?!\.{1,2}$)[!-~]+$
+        state:
+          type: string
+          enum:
+          - processing
+          - ready
+          - retryable
+          - failed
+        source_id:
+          type: string
+        source:
+          $ref: '#/components/schemas/Source'
+        fingerprint:
+          $ref: '#/components/schemas/SourceFingerprint'
+        retry_after_ms:
+          type: integer
+          minimum: 1
+        error:
+          type: object
+          required:
+          - code
+          - message
+          - retryable
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            retryable:
+              type: boolean
+    AgentProjectCreate:
+      type: object
+      additionalProperties: false
+      required:
+      - source_id
+      - plan
+      - collection_key
+      properties:
+        source_id:
+          type: string
+        plan:
+          $ref: '#/components/schemas/CollectionPlan'
+        clip_ids:
+          type: array
+          maxItems: 128
+          uniqueItems: true
+          items:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9_-]{0,63}$
+        rendition:
+          type: string
+          enum:
+          - final
+          - draft
+          default: final
+        collection_key:
+          type: string
+          minLength: 1
+          x-maxBytes: 128
+        job_ids:
+          type: array
+          maxItems: 128
+          uniqueItems: true
+          items:
+            type: string
+          description: Explicit selected owned jobs, each matching one unambiguous current effective clip request. Includes
+            distinct repair attempts.
+        clip_jobs:
+          type: array
+          maxItems: 128
+          description: Explicit stable clip/job bindings; supports different clips with identical edit decisions. Mutually exclusive with job_ids. Every job must belong to the owner and exactly match its selected clip.
+          items:
+            type: object
+            additionalProperties: false
+            required: [clip_id, job_id]
+            properties:
+              clip_id:
+                type: string
+                pattern: ^[a-z0-9][a-z0-9_-]{0,63}$
+              job_id:
+                type: string
+                minLength: 1
+    AgentProjectEdit:
+      type: object
+      additionalProperties: false
+      required:
+      - revision
+      - plan
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+        plan:
+          $ref: '#/components/schemas/CollectionPlan'
+        clip_ids:
+          type: array
+          maxItems: 128
+          uniqueItems: true
+          items:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9_-]{0,63}$
+        rendition:
+          type: string
+          enum:
+          - final
+          - draft
+          default: final
+    AgentProjectSelection:
+      type: object
+      additionalProperties: false
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+        clip_ids:
+          type: array
+          maxItems: 128
+          uniqueItems: true
+          items:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9_-]{0,63}$
+          minItems: 1
+    AgentProjectRetry:
+      type: object
+      additionalProperties: false
+      required:
+      - revision
+      - clip_ids
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+        clip_ids:
+          type: array
+          maxItems: 128
+          uniqueItems: true
+          items:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9_-]{0,63}$
+          minItems: 1
+    SubtitleRetimeRequest:
+      type: object
+      additionalProperties: false
+      required: [version, format, text, outputs]
+      properties:
+        version: {type: integer, const: 1}
+        format: {type: string, enum: [srt, vtt]}
+        text: {type: string, maxLength: 524288, description: At most 512 KiB of valid UTF-8 supplied text}
+        output_format: {type: string, enum: [srt, vtt], description: Defaults to the input format}
+        outputs:
+          type: array
+          minItems: 1
+          maxItems: 128
+          items:
+            type: object
+            additionalProperties: false
+            required: [clip_id, segments]
+            properties:
+              clip_id: {type: string, pattern: '^[a-z0-9][a-z0-9_-]{0,63}$'}
+              segments:
+                type: array
+                minItems: 1
+                maxItems: 128
+                items: {$ref: '#/components/schemas/ArtifactSegment'}
+    SubtitleRetimeResult:
+      type: object
+      additionalProperties: false
+      required: [version, outputs]
+      properties:
+        version: {type: integer, const: 1}
+        outputs:
+          type: array
+          minItems: 1
+          maxItems: 128
+          items:
+            type: object
+            additionalProperties: false
+            required: [clip_id, format, text, cue_count, sha256]
+            properties:
+              clip_id: {type: string, pattern: '^[a-z0-9][a-z0-9_-]{0,63}$'}
+              format: {type: string, enum: [srt, vtt]}
+              text: {type: string, maxLength: 8388608}
+              cue_count: {type: integer, minimum: 0, maximum: 100000}
+              sha256: {type: string, pattern: '^[0-9a-f]{64}$'}
+    AgentProject:
+      type: object
+      required:
+      - version
+      - id
+      - revision
+      - source_id
+      - source
+      - plan
+      - rendition
+      - jobs
+      - clips
+      - expires_at
+      properties:
+        version:
+          type: integer
+          const: 1
+        id:
+          type: string
+        revision:
+          type: integer
+          minimum: 1
+        source_id:
+          type: string
+        source:
+          $ref: '#/components/schemas/Source'
+        plan:
+          $ref: '#/components/schemas/CollectionPlan'
+        clip_ids:
+          type: array
+          maxItems: 128
+          uniqueItems: true
+          items:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9_-]{0,63}$
+        rendition:
+          type: string
+          enum:
+          - final
+          - draft
+          default: final
+        jobs:
+          type: array
+          maxItems: 128
+          items:
+            type: object
+            required:
+            - clip_id
+            - job
+            - request
+            - current
+            properties:
+              clip_id:
+                type: string
+              job:
+                $ref: '#/components/schemas/Job'
+              request:
+                $ref: '#/components/schemas/ExportRequest'
+              current:
+                type: boolean
+        clips:
+          type: array
+          minItems: 1
+          maxItems: 128
+          items:
+            type: object
+            required:
+            - clip_id
+            - request
+            properties:
+              clip_id:
+                type: string
+              request:
+                $ref: '#/components/schemas/ExportRequest'
+        expires_at:
+          type: string
+          format: date-time
+        access_expires_at:
+          type: string
+          format: date-time

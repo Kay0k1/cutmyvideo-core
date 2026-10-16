@@ -29,6 +29,7 @@ There are no invented `v1`/`v2` markers for those unversioned installations.
 | 5 | `20261011-source-retention-v1` | Adds derived job/preview pin counts, exact membership triggers, an eligible-source index and durable bounded audit progress. Backfills counts while excluding membership writers; leaves original source values, jobs, media and byte accounting intact. |
 | 6 | `20261012-source-media-cleanup-v1` | Adds durable post-success source-media cleanup and read leases; retains source metadata, jobs and result artifacts independently. |
 | 7 | `20261014-metadata-resolution-leases-v1` | Coordinates platform metadata extraction through expiring owner/token leases without keeping SQL connections occupied during upstream work. |
+| 8 | `20261016-agent-projects-v1` | Adds source preparation receipts/fingerprints, scoped collection projects, recipient grants and durable repair attempt identities. Preserves existing source/job/artifact values, media and byte accounting. |
 
 SQL files and expected catalog layouts live in
 [`internal/app/migrations`](../internal/app/migrations). `app_schema_versions`
@@ -163,3 +164,58 @@ The exact 6→7 upgrade also preserves historical rows and migration positions i
 These disposable-database checks establish local compatibility and recovery
 behavior. No position-7 recovery release image, public hosting transition, or
 production rollout has been performed by this work.
+
+## Migration 8: durable agent projects
+
+`008_20261016_agent_projects_v1.sql` adds seven tables for owner-scoped source
+preparation receipts, typed source fingerprints, single-source projects,
+explicit job associations, hashed handoff tokens, recipient grants and repair
+attempt receipts. Positions 1–7 and their SQL/checksums remain immutable. The
+expected position-8 catalog was captured on isolated PostgreSQL 17 and checked
+against fresh and upgraded databases. The exact 7→8 upgrade preserves retained
+source/job/artifact values and the row versions of earlier migration records;
+compatible current startup does not rewrite catalog objects or application rows.
+
+Stop API, worker and maintenance writers and take a coordinated database/media
+backup before the schema-owner upgrade. Runtime grants must include
+SELECT/INSERT/UPDATE/DELETE on all seven new tables; the catalog-based
+`deploy/public-grants.sql` pass includes them automatically. Runtime processes
+still have no schema ownership or CREATE permission. Source preparation and
+repair receipts, project edits and recipient access are part of the database
+backup. Project metadata does not extend original-media retention; restoring
+metadata cannot recreate media already removed by the accepted retention policy.
+
+The v1.3.0 schema-7 binary refuses position 8. Reverting only the image to v1.3.0
+cannot start the service on the upgraded database. Prepare a recovery image that
+understands schema 8, or restore the coordinated pre-upgrade database/media
+backup into a separate installation. Keep the failed upgraded state for
+diagnosis. Removing migration markers, checksums or new tables is not a reverse
+migration. Previous position-7 compatibility and restore evidence does not
+establish this position-8 transition.
+
+The required owned-PostgreSQL17 gate builds the previous binary from the exact
+published v1.3.0 source commit
+`e4a0477b727ccfbbf21f86027fdd07f6ffe78419` with Go 1.27.2. It verifies its
+version/commit/target and executable digest before and after attempting startup.
+This is an exact historical-source compatibility test, separate from verifying
+the bytes of a published archive or a production recovery image. The gate
+requires all three checks to pass without skips:
+
+- `TestAgentProjectsPreviousBinaryRefuses008WithoutWrites`: the schema-7 worker
+  refuses a populated schema-8 database without catalog, row-version, migration
+  history or grant changes; a compatible reopen also performs no writes.
+- `TestAgentProjectsRuntimeGrantsPermitCRUDWithoutOwnership`: a restricted LOGIN
+  starts without writes, creates source/project/handoff/repair rows through the
+  application, and reads, updates and deletes all seven new tables while CREATE
+  remains refused. This also runs on every native platform.
+- `TestAgentProjectsCoordinated008BackupRestorePreservesRowsAndMedia`: an actual
+  custom-format `pg_dump`/`pg_restore` into a fresh owned database and recreated
+  media directory preserves all rows and bytes. A real rendered MP4 fully
+  decodes before and after restore; the source receipt, scoped recipient, lost
+  handoff reply and durable repair replay recover without another render.
+
+`TestAgentProjectsMigrationPreserves007RowsAndRestartsWithoutWrites` independently
+checks the append-only 7→8 catalog transition on every native platform. These
+checks establish disposable-database compatibility and recovery behavior;
+production activation requires its separate deployment, backup and compatible
+recovery-image verification.

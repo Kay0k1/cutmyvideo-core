@@ -229,7 +229,7 @@ again and repeats every signature/subject/predicate check. Missing or changed
 signatures, candidate/manual/PR signing, stale verdicts, dirty sources and moved
 tags refuse a draft. Tags are re-fetched at these boundaries; a changed tag is
 never used to select different build input. Publishing uploads an explicit
-13-file asset list.
+versioned asset list: 13 files through 1.3.0 and 18 starting at 1.4.0.
 
 These attestations authenticate a claim by the GitHub workflow about hashes.
 The trust model includes GitHub OIDC/hosted execution, repository administrators,
@@ -241,8 +241,10 @@ See [GitHub's artifact attestation documentation](https://docs.github.com/en/act
 
 ## Consumer verification of a new signed release
 
-The [consumer verifier](../scripts/release-consumer.py) checks **all 13 already
-downloaded assets** in one command. The 1.x publication process runs this real
+The [consumer verifier](../scripts/release-consumer.py) checks the **exact versioned
+downloaded asset set** in one command: 13 CLI/trust assets through 1.3.0 and 18
+assets starting at 1.4.0, including the separately attested SDK distributions.
+The 1.x publication process runs this real
 verification on all five native targets before finalizing the same draft release
 and asset set. Historical v0.2.1 and unsigned candidates are refused. Mocked
 signature controls remain separate from actual Sigstore verification.
@@ -250,13 +252,14 @@ signature controls remain separate from actual Sigstore verification.
 Install Git, GitHub CLI 2.89.0 (the reviewed JSON output/certificate contract), and CPython 3.10 or
 newer on Linux, macOS or Windows. Obtain the full expected source commit and version
 from the reviewed release independently of the downloaded JSON. Use a reviewed copy
-of these five files in one directory, separate from the release assets:
+of these six files in one directory, separate from the release assets:
 
 - [release-consumer.py](../scripts/release-consumer.py)
 - [release_consumer_process.py](../scripts/release_consumer_process.py)
 - [release_manifest.py](../scripts/release_manifest.py)
 - [release-trust.py](../scripts/release-trust.py)
 - [release-fetch.py](../scripts/release-fetch.py)
+- [release-sdk.py](../scripts/release-sdk.py)
 
 A repository checkout, Bash, Go SDK, FFmpeg, `verdict.json`, GitHub run artifacts and
 packaging artifact IDs are not required. The verifier never downloads release
@@ -269,7 +272,12 @@ trusted roots. This is not an offline verification recipe. See the
 Place exactly the five platform archives plus `SOURCE.json`, `MANIFEST.json`,
 `SHA256SUMS`, `SBOM.spdx.json`, `TRUST.json`, `provenance.sigstore.json`,
 `sbom.sigstore.json` and `ATTESTATIONS.json` in the asset directory. Run this single
-command, replacing the paths, version and reviewed full 40-character commit:
+command, replacing the paths, version and reviewed full 40-character commit.
+For 1.4.0 also include `cutmyvideo-1.4.0-py3-none-any.whl`,
+`cutmyvideo-1.4.0.tar.gz`, `cutmyvideo-sdk-1.4.0.tgz`, `SDK-MANIFEST.json` and
+`sdk-provenance.sigstore.json`. SDK signatures authenticate all four subjects
+(the manifest and three actual packages) under the same reviewed tag workflow;
+the existing CLI/SPDX signatures and strict eight-file archive bundle are unchanged.
 
 ```sh
 python3 /path/to/reviewed-verifier/release-consumer.py --directory /path/to/downloaded-release --version v1.0.2 --expected-commit REVIEWED_FULL_40_CHARACTER_COMMIT
@@ -281,7 +289,7 @@ returns nonzero. Keep this report outside the asset directory. Missing, extra,
 nonregular or changed files fail. The verifier snapshots the original bytes in
 private temporary storage, bounds JSON and archive parsing, then checks the
 original downloads again before success. It needs temporary disk space for the
-13-file snapshot and one bounded expanded archive.
+versioned 13- or 18-file snapshot and one bounded expanded archive.
 
 Refusals expose a fixed stage code, never raw command errors or credentials:
 
@@ -290,7 +298,7 @@ Refusals expose a fixed stage code, never raw command errors or credentials:
 | `expected_identity` | Supply the reviewed full commit and valid release version. |
 | `tool_unavailable` | Install Git and a GitHub CLI supporting the documented policy flags. |
 | `tag_before`, `tag_after` | Confirm connectivity and the reviewed live tag; investigate movement rather than accepting a new commit automatically. |
-| `assets`, `changed_assets`, `local_io` | Check the exact 13 regular files, stable directory, permissions and temporary disk space. |
+| `assets`, `changed_assets`, `local_io` | Check the exact versioned set of regular files, stable directory, permissions and temporary disk space. |
 | `metadata`, `archive_content`, `composition` | Obtain the correct complete release set and investigate malformed or inconsistent bytes. |
 | `provenance`, `spdx` | Check GitHub CLI/trusted-root connectivity and investigate a failed signature, certificate policy or statement; never bypass the check. |
 

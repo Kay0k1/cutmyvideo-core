@@ -52,7 +52,7 @@ class TrustControls(unittest.TestCase):
             linux_archive_recovery={'required_groups': 9, 'decoded_media_observations': 11,
                 'schema_versions': ['20261005-storage-queue-v3', '20261010-cache-retention-v1',
                                     '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1',
-                                    '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1'],
+                                    '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1', '20261016-agent-projects-v1'],
                 'binary_sha256': self.manifest['archives'][0]['contents']['cutmy']['sha256'],
                 'report_sha256': 'c' * 64})
         self.verdict_path = self.root / 'verdict.json'

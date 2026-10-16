@@ -5,30 +5,38 @@ self-hosted HTTP API. They have no runtime dependencies. The API client owns
 one private session; the local client runs the same version 1 cutting plans as
 the CLI. Neither client decides which moments to cut or changes encoding quality.
 
-The 1.4.0 SDK candidate adds [complete, resumable clip collections](sdk-collections.md)
-to the 1.3.0 SDK foundation. Packages use development versions and have not been
-published to PyPI or npm. Use core 1.3.0
-or a matching current source build for preflight; the 1.2.0 binary does not contain
-that command or endpoint. See the [project overview](../README.en.md#versions)
-for release status and the [architecture](architecture.md) for dependencies.
+Version 1.4.0 adds [complete, resumable clip collections](sdk-collections.md),
+durable source preparation, explicit failed-clip repair, scoped project review
+and [supplied subtitle sidecars](subtitle-sidecars.md). Basic preflight and
+collection execution work with core 1.3.0; source preparation, project review and
+subtitle operations require core 1.4.0. The 1.2.0 binary has no preflight command.
+See the [project overview](../README.en.md#versions) for release status and the
+[architecture](architecture.md) for dependencies.
 
-## Install the candidate packages
+## Install versioned packages
 
 Python 3.10 or newer:
 
 ```sh
-python -m pip install ./sdk/python
+python -m pip install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.0/cutmyvideo-1.4.0-py3-none-any.whl'
 ```
 
 Node.js 20.19 or newer, with an ESM project:
 
 ```sh
-cd sdk/typescript
-npm ci
-npm run build
-npm pack
-# Install the resulting .tgz in the consuming project.
+npm install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.0/cutmyvideo-sdk-1.4.0.tgz'
 ```
+
+These are GitHub release assets, not claims of publication to PyPI/npm. No source
+checkout or SDK build is needed. The release also contains the Python source
+distribution, `SDK-MANIFEST.json` and `sdk-provenance.sigstore.json`. They bind the
+exact distributions to the reviewed source and installed HTTP/worker acceptance.
+Follow [release verification](releases.md#consumer-verification-of-a-new-signed-release)
+before installation. The final tag/draft/consumer protocol must complete before
+these URLs become a published installation entry point.
+
+For development, use `python -m pip install ./sdk/python`; the TypeScript package
+can be built with `npm ci && npm pack` in `sdk/typescript`.
 
 Use the [Python package guide](../sdk/python/README.md) and
 [TypeScript package guide](../sdk/typescript/README.md) for complete options.
@@ -134,9 +142,11 @@ the real job snapshot rather than an invented completion percentage.
 
 Submission requires an explicit idempotency key. Persist that key before sending
 the request and reuse it if acknowledgement is lost; a fresh key can create
-another job. The SDK never automatically repeats uploads, imports or mutations.
-The high-level collection runner persists its own key and exact body before
-safe retries; source creation is still never retried automatically.
+another job. Ordinary low-level calls do not automatically repeat uploads,
+imports or mutations. The collection runner persists its key and exact body
+before safe retries. The separate durable source runner recovers or retries only
+its saved identical intent, owner and key through the authoritative preparation
+receipt. Unkeyed upload/import failures still need caller reconciliation.
 Submission errors retain the key, while wait errors retain the job ID. If a
 batch fails or is cancelled, `JobError` includes the terminal job and already
 ready artifacts. `ready_artifacts`/`readyArtifacts` selects downloadable outputs.

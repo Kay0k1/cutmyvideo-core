@@ -37,6 +37,8 @@ type sdkCollectionOutput struct {
 type sdkCollectionReport struct {
 	Complete   bool                  `json:"complete"`
 	SourceID   string                `json:"source_id"`
+	ProjectID  string                `json:"project_id"`
+	Sidecars   []sdkAgentSidecar     `json:"sidecars"`
 	Outputs    []sdkCollectionOutput `json:"outputs"`
 	Event      string                `json:"event"`
 	Checkpoint string                `json:"checkpoint"`

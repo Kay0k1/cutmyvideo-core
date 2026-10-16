@@ -16,6 +16,7 @@ class InstalledSDKResultControls(unittest.TestCase):
         self.addCleanup(self.directory.cleanup)
         self.report = Path(self.directory.name) / "tests.jsonl"
         self.required = {"TestInstalledSDKLocalWorkflow", "TestInstalledSDKHTTPWorkflow", "TestInstalledSDKCollectionLocalWorkflow", "TestInstalledSDKCollectionHTTPWorkflow"}
+        self.required.add("TestInstalledSDKAgentProjectWorkflow")
         self.required |= {f"{name}/{language}" for name in tuple(self.required) for language in ("python", "typescript")}
         self.events = [{"Package": CHECKS.APP_PACKAGE, "Test": name, "Action": "pass"} for name in sorted(self.required)]
         self.events.append({"Package": CHECKS.APP_PACKAGE, "Action": "pass"})

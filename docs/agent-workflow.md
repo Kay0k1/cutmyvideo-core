@@ -6,7 +6,11 @@ engine joins the selected source intervals and applies explicit crop/audio
 settings. Keep the collection JSON as the editable source of truth.
 
 For Python or Node agents, the [resumable SDK workflow](sdk-collections.md) handles
-validation, incremental admission, waiting, downloads and process interruption.
+recoverable source preparation, validation, incremental admission, downloads,
+explicit failed-clip repair and process interruption. It also covers a scoped
+browser handoff and adoption of the editor's current jobs without rerendering
+matching clips. Existing timestamped SRT/VTT can become
+[per-clip subtitle sidecars](subtitle-sidecars.md) using actual export maps.
 The CLI/HTTP steps below remain useful when implementing another client.
 
 This workflow needs a binary containing clip-collection support, FFmpeg/ffprobe
