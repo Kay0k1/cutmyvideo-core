@@ -1,0 +1,36 @@
+{
+  "files": {
+    "interrupted-m6-v1/FAILED.json": {
+      "bytes": 261,
+      "sha256": "d9f216614c2d5508bf85a167b581a5d45ce16c4a070e4b7517dc70d2bf1cf516"
+    },
+    "interrupted-m6-v1/README.md": {
+      "bytes": 1782,
+      "sha256": "5af9a49f11674ff84215a7f2e118bf78eb991854c4c21ab15f2415bd8249080e"
+    },
+    "interrupted-m6-v1/public-timing-progress.json": {
+      "bytes": 8954,
+      "sha256": "e70752fecd3da170962fe69dcf0e41473576781437854e2239006845338f8b1d"
+    },
+    "tools-infra-v2/README.md": {
+      "bytes": 1717,
+      "sha256": "08d856bfe2d43751acf6854472324606e598466f8442cbaaf65566e610d8684a"
+    },
+    "tools-infra-v2/backend-v2-method.md": {
+      "bytes": 3105,
+      "sha256": "97a2162e3eb23319f78dac2eee9756fed213786c71c1d02ae8952a837d8fd449"
+    },
+    "tools-infra-v2/backend-v2.py": {
+      "bytes": 49074,
+      "sha256": "0d150195df271b6ceda2d096bd47f94b821f61e3fe2aced6b5d7f053b15de0c2"
+    },
+    "tools-infra-v2/backend_v2_test.py": {
+      "bytes": 28449,
+      "sha256": "958cd6d3c4a3aa96ad8781f2060de8b447201aab9f7a8818478a8e74f4dc85a1"
+    }
+  },
+  "kind": "first_draft_public_interrupted_cohort_and_infrastructure_supplement",
+  "original_public_tool_inventory_unchanged": true,
+  "performance_claim_ready": false,
+  "schema_version": 1
+}

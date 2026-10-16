@@ -1,0 +1,65 @@
+{
+  "all_five_original_role_zero_increase_results_retained_as_diagnostics": true,
+  "author_pure_control_counts": {
+    "all_child_process_creation_forbidden": true,
+    "controller": {
+      "failed": 0,
+      "passed": 26,
+      "skipped": 0
+    },
+    "launcher": {
+      "failed": 0,
+      "passed": 7,
+      "skipped": 0
+    },
+    "quality": {
+      "failed": 0,
+      "passed": 24,
+      "skipped": 0
+    }
+  },
+  "common_parent_max_candidate_peak_le_max_baseline": true,
+  "common_parent_memory_gain_required_median_ratio_max": 0.98,
+  "formal_and_supplemental_runs_not_pooled": true,
+  "independent_engine_additional_pure_controls": {
+    "failed": 0,
+    "passed": 4,
+    "skipped": 0,
+    "subprocess_creation_forbidden": true
+  },
+  "independent_source_guard_review_sha256": {
+    "V6-INDEPENDENT-GUARD-REVIEW.json": "fb86c28b0bc98a7a48798a4b2a10dbefbcabaf5c881b38ab61e25aed6a13d0df",
+    "launcher-engine-independent-review.json": "a2e305d918907f9e9da09c29b97b570b5fbd37e556cbb1a4cf939f980ea46309"
+  },
+  "kind": "prospective_v6_source_and_pure_control_publication_manifest",
+  "method_decision_sha256": "019f13d749a006999ea7270d144a2172f3d31c7a1f79cea12c3ce8ccb6e9881c",
+  "native_and_timed_work_executed_by_author_for_this_tooling": false,
+  "new_source_sha256": {
+    "controller-cohort-v6.py": "191bad9d4881ab6064350352dfe9e0207b62259f5500f07c6c80d768a1e33006",
+    "launch-cohort.py": "32567f180745f3a378cc3b82e76711d3cde328df767df8343fde6a1bd468834e",
+    "quality-reuse-v6.py": "70dd0663b9950d0e9b756474e3ab038cc7ab2005ffe054d11cac1ec84c950eeb"
+  },
+  "new_v6_registration_and_inventory_not_created_by_author": true,
+  "original_m2_negative_result_not_reclassified": true,
+  "performance_claim_ready": false,
+  "preserved_v4_v5_source_sha256": {
+    "controller-cohort-v5.py": "1226acb834fd177027e1140f96d1a4edc609e61a7c68ef1c068402ad8861ca67",
+    "controller-cohort.py": "f6717e36dbc34b4ef89019776f3bc65f3648bb6a3743a9bf1d032eaf82c4332d",
+    "quality-reuse.py": "92b73d276b0adfdf93c97fd985574b50d9306a45f88f32e5b7d4e0f2622ef2f1"
+  },
+  "real_host_systemd_positive_control_pending": true,
+  "schema_version": 1,
+  "scope": "Prepared tooling only; no genuine V6 inventory, registration, launch, timing or quality acceptance performed by author.",
+  "source_freeze_receipt_sha256": "79a64c4e7c8cc6cf265b835ca134e55017b1d7170d871efb9ed03c893b5ecae6",
+  "source_support_and_control_sha256": {
+    "controller-v6-method.md": "f93e77dedd0ede5c9ce339a4c9cf3c2d22d31e7e911cee3d8b4cc8f53238467b",
+    "controller-v6-offline-controls.log": "cb9a43c1f34ed1b572779a46d788d0ad32f460bd31c06a6d53397a85a2106f50",
+    "controller_cohort_v6_test.py": "895e1d4bb1b2067498e2a633a1f7ce2a7b82fcaf95e1db6e1046c0e12a6d5fca",
+    "detached-coordinator-method.md": "beecaf5b61c52da817c17616a62c51c3afaefa3dd454ce2a4b36e15730175a46",
+    "launcher-offline-controls.log": "3817f5d531656b6b04dd85ab2f2108eaedbf0d39bb9f176c8fd49ccbb3c09385",
+    "quality-reuse-v6-method.md": "8b68ec371d6bb9df710ac340056b0332d14c2d01f17b7a2dbda4bdb2cc43907e",
+    "quality-reuse-v6-offline-controls.log": "ad2c56280b6e52bfce21a3741cf2858b07aab2c3bf591127e8248141313f8c38",
+    "test-launch-cohort.py": "9a4c250ba6cfa79c35c602b46e1b45b84b09af31bf77058c3d6a572a578c4d85",
+    "test-quality-reuse-v6.py": "0475d0eef1fdb80044cb38886f1877d2f4904a6e0660a649e88b5eb330f2a8a3"
+  }
+}

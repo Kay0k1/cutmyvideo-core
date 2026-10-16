@@ -1,0 +1,63 @@
+{
+  "author_manifest_sha256": "79a64c4e7c8cc6cf265b835ca134e55017b1d7170d871efb9ed03c893b5ecae6",
+  "checks_reused_without_repeating": {
+    "author_pure_controls": {
+      "all_child_process_creation_forbidden": true,
+      "controller": {
+        "failed": 0,
+        "passed": 26,
+        "skipped": 0
+      },
+      "launcher": {
+        "failed": 0,
+        "passed": 7,
+        "skipped": 0
+      },
+      "quality": {
+        "failed": 0,
+        "passed": 24,
+        "skipped": 0
+      }
+    },
+    "independent_launcher_pure_controls": {
+      "additional": 4,
+      "existing": 7
+    }
+  },
+  "created_at_utc": "2026-10-16T12:03:34.804352+00:00",
+  "independent_launcher_review_sha256": "a2e305d918907f9e9da09c29b97b570b5fbd37e556cbb1a4cf939f980ea46309",
+  "kind": "independent_prospective_v6_source_and_guard_review",
+  "limitations": [
+    "Source and bounded metadata review only; actual target systemd and raw cgroup guards have not been executed by this reviewer.",
+    "No remote execution, native media work, build, benchmark measurement or production mutation performed.",
+    "Inherited unexpected failed-sample cleanup can require positive-ownership manual completion after client unit garbage collection; original failure and cleanup evidence must remain retained.",
+    "Prepared tools and mocked controls do not establish candidate speed, memory acceptance, media correctness, release readiness or production success."
+  ],
+  "method_decision_sha256": "019f13d749a006999ea7270d144a2172f3d31c7a1f79cea12c3ce8ccb6e9881c",
+  "performance_claim_ready": false,
+  "preserved_source_sha256": {
+    "controller-cohort-v5.py": "1226acb834fd177027e1140f96d1a4edc609e61a7c68ef1c068402ad8861ca67",
+    "controller-cohort.py": "f6717e36dbc34b4ef89019776f3bc65f3648bb6a3743a9bf1d032eaf82c4332d",
+    "quality-reuse.py": "92b73d276b0adfdf93c97fd985574b50d9306a45f88f32e5b7d4e0f2622ef2f1"
+  },
+  "result": "PASS_no_concrete_blocker_found",
+  "reviewed_invariants": [
+    "separately frozen new candidate and full24 ordered alternating matched samples, never pooling rejected M2",
+    "prospective common-parent matched median ratio at most0.98 plus maximum no increase, all original role zero-increase outcomes remain diagnostics",
+    "original timing gates, finite per-role and common resource caps, full30 jobs, host boot/OOM and production unchanged guards",
+    "negative-only futility only after all6 complete stopped fresh pairs, never positive acceptance of12 or start13 after negative decision",
+    "exact immutable launch intent, controller/launcher/registration and instrumentation policy bound before samples",
+    "actual own detached outside service cgroup, kernel limits, systemd invocation and RLIMIT_FSIZE verified by controller before samples",
+    "private retained launch, actual runtime and final instrumentation cost receipts; cost reported separately",
+    "quality requires all24 current manifest/receipt checks, fresh720 file hashes and720 final rehashes, full source/tool/helper scope and exact native provenance for reused bytes",
+    "unknown object invokes unchanged whole30 native verification, actual native executions and prior/current certificate reuse counted separately",
+    "old V4/V5 controller and V5 quality sources physically preserved byte for byte"
+  ],
+  "reviewed_source_sha256": {
+    "controller-cohort-v6.py": "191bad9d4881ab6064350352dfe9e0207b62259f5500f07c6c80d768a1e33006",
+    "launch-cohort.py": "32567f180745f3a378cc3b82e76711d3cde328df767df8343fde6a1bd468834e",
+    "quality-reuse-v6.py": "70dd0663b9950d0e9b756474e3ab038cc7ab2005ffe054d11cac1ec84c950eeb"
+  },
+  "schema_version": 1,
+  "supporting_files_physically_rehashed": 9
+}

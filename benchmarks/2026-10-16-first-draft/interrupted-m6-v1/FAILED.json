@@ -1,0 +1,9 @@
+{
+  "at_utc": "2026-10-16T13:58:48.166895+00:00",
+  "completed_runs": 3,
+  "failure_code": "owned_cgroup_missing",
+  "no_rows_replaced_or_pooled": true,
+  "performance_claim_ready": false,
+  "schema_version": 1,
+  "status": "failed_cohort_evidence_preserved"
+}

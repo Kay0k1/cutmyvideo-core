@@ -1,0 +1,200 @@
+{
+  "files": [
+    {
+      "path": "backend.py",
+      "purpose": "current exact frozen runtime/audit source",
+      "sha256": "0c86c45fb35aed5af9d71b770e63618a97633fb984963964d8b922f11873cbd7",
+      "size_bytes": 43332
+    },
+    {
+      "path": "run-python.py",
+      "purpose": "current exact frozen runtime/audit source",
+      "sha256": "0b9578c2d44bdc4e8f6eea41fbb86a66595524c3fb7bade978b8cf5283481f46",
+      "size_bytes": 24605
+    },
+    {
+      "path": "controller-cohort-v6.py",
+      "purpose": "current exact frozen runtime/audit source",
+      "sha256": "191bad9d4881ab6064350352dfe9e0207b62259f5500f07c6c80d768a1e33006",
+      "size_bytes": 50420
+    },
+    {
+      "path": "quality-reuse-v6.py",
+      "purpose": "current exact frozen runtime/audit source",
+      "sha256": "70dd0663b9950d0e9b756474e3ab038cc7ab2005ffe054d11cac1ec84c950eeb",
+      "size_bytes": 41723
+    },
+    {
+      "path": "launch-cohort.py",
+      "purpose": "current exact frozen runtime/audit source",
+      "sha256": "32567f180745f3a378cc3b82e76711d3cde328df767df8343fde6a1bd468834e",
+      "size_bytes": 12388
+    },
+    {
+      "path": "run-cohort-oracles.py",
+      "purpose": "current exact frozen runtime/audit source",
+      "sha256": "b3a0a890824c6607e28e48bc01456f6b32b07ece1b8b81769b6ccb5c5a743a82",
+      "size_bytes": 20089
+    },
+    {
+      "path": "verify-content.py",
+      "purpose": "current exact frozen runtime/audit source",
+      "sha256": "9d47fc35f1cdba81e54fd080e49aef9ff2bf30fa558df6efa77b240a3a65437f",
+      "size_bytes": 6637
+    },
+    {
+      "path": "full-decode.py",
+      "purpose": "current exact frozen runtime/audit source",
+      "sha256": "88f5fd75724f5f3e518e2f3f21375e087e564e1694c5a08f8c77489cfaa0590a",
+      "size_bytes": 10191
+    },
+    {
+      "path": "content-oracle.py",
+      "purpose": "current exact frozen runtime/audit source",
+      "sha256": "cb50448cc01390879778b41d73610e776a854b8e45675b895e23bc6d63a5d455",
+      "size_bytes": 15598
+    },
+    {
+      "path": "compare-final.py",
+      "purpose": "current exact frozen runtime/audit source",
+      "sha256": "4672403bb28aac0b52b1fce7dad477e87ecad5bfe8c9332e774bf0018fc7f120",
+      "size_bytes": 3514
+    },
+    {
+      "path": "render-v6-report.py",
+      "purpose": "current exact frozen runtime/audit source",
+      "sha256": "52a2b6ea0e91505441edaf2261aff214737b74390aeacac34dfd8ea719c8a547",
+      "size_bytes": 72163
+    },
+    {
+      "path": "controller-cohort.py",
+      "purpose": "historical source preserved by current guards; not a current run entrypoint",
+      "sha256": "f6717e36dbc34b4ef89019776f3bc65f3648bb6a3743a9bf1d032eaf82c4332d",
+      "size_bytes": 29828
+    },
+    {
+      "path": "controller-cohort-v5.py",
+      "purpose": "historical source preserved by current guards; not a current run entrypoint",
+      "sha256": "1226acb834fd177027e1140f96d1a4edc609e61a7c68ef1c068402ad8861ca67",
+      "size_bytes": 37698
+    },
+    {
+      "path": "quality-reuse.py",
+      "purpose": "historical source preserved by current guards; not a current run entrypoint",
+      "sha256": "92b73d276b0adfdf93c97fd985574b50d9306a45f88f32e5b7d4e0f2622ef2f1",
+      "size_bytes": 40692
+    },
+    {
+      "path": "render-formal-report.py",
+      "purpose": "historical source preserved by current guards; not a current run entrypoint",
+      "sha256": "fdbf3e7f11d72b4e14ffab172971ee1c0723fef32efab1201fabf85fdf10eb48",
+      "size_bytes": 21820
+    },
+    {
+      "path": "render-v5-report.py",
+      "purpose": "historical source preserved by current guards; not a current run entrypoint",
+      "sha256": "f8d1a9185af23dbd9d3b72df28c4af9a3a967944584bd1ed9ee1542a0681e35a",
+      "size_bytes": 53062
+    },
+    {
+      "path": "backend_test.py",
+      "purpose": "synthetic offline safety or parser controls, not measurement evidence",
+      "sha256": "7703aaf59a9fa404d5fb07fa168ee60ec3d2c9f4597d6833c01d3b9dce7544a8",
+      "size_bytes": 9883
+    },
+    {
+      "path": "controller_cohort_v6_test.py",
+      "purpose": "synthetic offline safety or parser controls, not measurement evidence",
+      "sha256": "895e1d4bb1b2067498e2a633a1f7ce2a7b82fcaf95e1db6e1046c0e12a6d5fca",
+      "size_bytes": 21660
+    },
+    {
+      "path": "test-quality-reuse-v6.py",
+      "purpose": "synthetic offline safety or parser controls, not measurement evidence",
+      "sha256": "0475d0eef1fdb80044cb38886f1877d2f4904a6e0660a649e88b5eb330f2a8a3",
+      "size_bytes": 20423
+    },
+    {
+      "path": "test-launch-cohort.py",
+      "purpose": "synthetic offline safety or parser controls, not measurement evidence",
+      "sha256": "9a4c250ba6cfa79c35c602b46e1b45b84b09af31bf77058c3d6a572a578c4d85",
+      "size_bytes": 7900
+    },
+    {
+      "path": "test-full-decode.py",
+      "purpose": "synthetic offline safety or parser controls, not measurement evidence",
+      "sha256": "265c2cfe617325138e816c3155e20a7c9a8b16ac63fbc8fe6d6258735bc8fad1",
+      "size_bytes": 4316
+    },
+    {
+      "path": "render_v6_report_test.py",
+      "purpose": "synthetic offline safety or parser controls, not measurement evidence",
+      "sha256": "0e0327509f97957b3e8a163d66852ea56851be9b3e1bac5c1384cd9fc0085b7a",
+      "size_bytes": 53099
+    },
+    {
+      "path": "controller-v6-method.md",
+      "purpose": "prospective method and fixed interface",
+      "sha256": "f93e77dedd0ede5c9ce339a4c9cf3c2d22d31e7e911cee3d8b4cc8f53238467b",
+      "size_bytes": 5265
+    },
+    {
+      "path": "quality-reuse-v6-method.md",
+      "purpose": "prospective method and fixed interface",
+      "sha256": "8b68ec371d6bb9df710ac340056b0332d14c2d01f17b7a2dbda4bdb2cc43907e",
+      "size_bytes": 1772
+    },
+    {
+      "path": "detached-coordinator-method.md",
+      "purpose": "prospective method and fixed interface",
+      "sha256": "beecaf5b61c52da817c17616a62c51c3afaefa3dd454ce2a4b36e15730175a46",
+      "size_bytes": 4103
+    },
+    {
+      "path": "render-v6-report-method.md",
+      "purpose": "prospective method and fixed interface",
+      "sha256": "4fa3d78765bd8ddd1ec6f542b01d0d9e49c0295ffff3df58ff3aed01b5b0f3f5",
+      "size_bytes": 10008
+    },
+    {
+      "path": "MEMORY-PROTOCOL-V6-DECISION.json",
+      "purpose": "bounded source/method/control review provenance; not a measured result",
+      "sha256": "019f13d749a006999ea7270d144a2172f3d31c7a1f79cea12c3ce8ccb6e9881c",
+      "size_bytes": 2221
+    },
+    {
+      "path": "PROSPECTIVE-V6-TOOLS-FROZEN.json",
+      "purpose": "bounded source/method/control review provenance; not a measured result",
+      "sha256": "79a64c4e7c8cc6cf265b835ca134e55017b1d7170d871efb9ed03c893b5ecae6",
+      "size_bytes": 2658
+    },
+    {
+      "path": "V6-PUBLICATION-MANIFEST.json",
+      "purpose": "bounded source/method/control review provenance; not a measured result",
+      "sha256": "a1a7e25321718b2bb31d4ddd534e066545356bd47d4a852f372a2084a596fdd5",
+      "size_bytes": 3352
+    },
+    {
+      "path": "V6-INDEPENDENT-GUARD-REVIEW.json",
+      "purpose": "bounded source/method/control review provenance; not a measured result",
+      "sha256": "fb86c28b0bc98a7a48798a4b2a10dbefbcabaf5c881b38ab61e25aed6a13d0df",
+      "size_bytes": 3695
+    },
+    {
+      "path": "launcher-engine-independent-review.json",
+      "purpose": "bounded source/method/control review provenance; not a measured result",
+      "sha256": "a2e305d918907f9e9da09c29b97b570b5fbd37e556cbb1a4cf939f980ea46309",
+      "size_bytes": 2366
+    },
+    {
+      "path": "RENDER-V6-TOOLS-FROZEN.json",
+      "purpose": "bounded source/method/control review provenance; not a measured result",
+      "sha256": "1ce9b79fc4d155e18e418de2f2fa9ce5b9716603a3a38ff6825e55ecc38bd8f9",
+      "size_bytes": 3029
+    }
+  ],
+  "kind": "prospective_v6_reproduction_source_packet",
+  "performance_claim_ready": false,
+  "schema_version": 1,
+  "scope": "Exact source, synthetic safety controls, method and bounded review evidence only; actual measurements are separate."
+}

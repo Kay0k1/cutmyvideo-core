@@ -27,6 +27,10 @@ Local cutting works without a database, accounts or an HTTP server. SQL belongs 
 
 Install CLI archives from the [latest published release](https://github.com/Kay0k1/cutmyvideo-core/releases/latest). Archives support Linux and macOS (amd64/arm64), and Windows (amd64); install FFmpeg separately. Follow [signed-release verification](docs/releases.md#consumer-verification-of-a-new-signed-release) before installation.
 
+**1.4.1** shares fresh inspection of a ready local source and bounded FFmpeg capability checks within each HTTP collection request. Each new clip retains its own checks before jobs are admitted. Joined exports bound additional decoder memory, and released database connections close after idle time. Final-video encoding settings are preserved. [Change scope](docs/release-1.4.1.md).
+
+By matched-pair medians in the [15-clip ready-interview comparison](benchmarks/2026-10-16-first-draft/README.md), the first downloaded and verified draft arrived 72–74% faster, the complete cycle finished 19–20% faster, and aggregate peak memory fell 6–7%. All 180 paired final files were byte-identical. Source upload and transcription are outside this measurement.
+
 **1.4.0** connects durable source preparation, resumable collections, explicit failed-clip repair and scoped agent-to-browser project review. Verified clips survive interruptions, edits submit needed work, and supplied SRT/VTT follows actual output maps. Python and Node install from ready GitHub release packages; PyPI/npm publication remains separate.
 
 Collections, drafts and preflight were introduced in **1.3.0**; the new preparation/project operations require API 1.4.0. [SDK installation](docs/sdk.md) · [Agent workflow](docs/sdk-collections.md) · [1.4.0 scope](docs/release-1.4.0.md) · [Changelog](CHANGELOG.md).

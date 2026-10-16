@@ -1,0 +1,44 @@
+{
+  "bounded_peer_compatibility_review": "collection_http read current renderer against controller191bad9d and quality70dd0663 field shapes; no concrete mismatch found, no tests or actual execution by peer",
+  "created_at_utc": "2026-10-16T12:07:17.867960+00:00",
+  "files_sha256": {
+    "render-v6-offline-controls.log": "f115c9abe773adce366a5d5f2f8417a0bc635cb230a37059491418adab2d04e1",
+    "render-v6-report-method.md": "4fa3d78765bd8ddd1ec6f542b01d0d9e49c0295ffff3df58ff3aed01b5b0f3f5",
+    "render-v6-report.py": "52a2b6ea0e91505441edaf2261aff214737b74390aeacac34dfd8ea719c8a547",
+    "render_v6_report_test.py": "0e0327509f97957b3e8a163d66852ea56851be9b3e1bac5c1384cd9fc0085b7a"
+  },
+  "kind": "prepared_independent_v6_report_tools_no_genuine_run",
+  "performance_claim_ready": false,
+  "preserved_renderer_sha256": {
+    "render-formal-report.py": "fdbf3e7f11d72b4e14ffab172971ee1c0723fef32efab1201fabf85fdf10eb48",
+    "render-v5-report.py": "f8d1a9185af23dbd9d3b72df28c4af9a3a967944584bd1ed9ee1542a0681e35a"
+  },
+  "pure_controls": {
+    "all_child_process_creation_forbidden": true,
+    "failed": 0,
+    "passed": 35,
+    "skipped": 0,
+    "uses_only_synthetic_nonmedia_metadata": true
+  },
+  "real_cohort_rendered": false,
+  "remote_native_systemd_or_production_execution": false,
+  "reviewed_runtime_source_sha256": {
+    "controller-cohort-v6.py": "191bad9d4881ab6064350352dfe9e0207b62259f5500f07c6c80d768a1e33006",
+    "launch-cohort.py": "32567f180745f3a378cc3b82e76711d3cde328df767df8343fde6a1bd468834e",
+    "quality-reuse-v6.py": "70dd0663b9950d0e9b756474e3ab038cc7ab2005ffe054d11cac1ec84c950eeb"
+  },
+  "schema_version": 1,
+  "v6_guard_review_sha256": "fb86c28b0bc98a7a48798a4b2a10dbefbcabaf5c881b38ab61e25aed6a13d0df",
+  "verified_control_scopes": [
+    "complete24 accepted only after current raw-clock/kernel/image/config/quality/receipt chains agree",
+    "valid complete24 adverse results preserved with readiness false;12/failed/mixed/order-invalid evidence refused",
+    "strict common-parent0.98 median plus nonincreasing maximum; every original all5 role zero-increase result retained as independent RAM diagnostics",
+    "first SHAverified callback, all15draft/all15final/whole30 strict matched-ratio calculations; forged controller summary refused",
+    "actual detached coordinator private intent/placement/launch/caps/final separate cost required",
+    "authenticated wheel vs installed source members physically matched without importing SDK",
+    "full prior decoded source/tool/helper certificate chain reconstructed; whole30 fallback actual execution receipt required; actual-now/prior/current counts distinguish720logical qualifications",
+    "sample/current source-range-map-track/retained native fingerprint/12paired final/baseline-repeat proofs bound by digest",
+    "backend30counts/actualcaps/OOM/no source or helper substitution/production identity/cleanup checked",
+    "source/wheel/metadata before-after integrity; original V4/V5 renderers unchanged; sanitized public output"
+  ]
+}

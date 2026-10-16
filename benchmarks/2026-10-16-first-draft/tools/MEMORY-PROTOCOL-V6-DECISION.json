@@ -1,0 +1,30 @@
+{
+  "all_five_role_raw_peaks_matched_medians_maxima_and_original_strict_zero_increase_outcomes_remain_public_diagnostics": true,
+  "all_original_server_client_parent_caps_no_oom_and_full30_workload_unchanged": true,
+  "candidate_memory_direction": "Bound native glibc allocator arenas according to CPU budget, preserving all encoding arguments; measure and reject if gates or content fail.",
+  "common_parent_actual_kernel_memory_peak_ratio_median_max": 0.98,
+  "common_parent_maximum_candidate_peak_le_maximum_baseline": true,
+  "data_informed_post_m2_change_explicit": true,
+  "decided_at_utc": "2026-10-16T11:36:03.329958+00:00",
+  "draft_final_and_whole_cycle_ratio_median_max": 1.0,
+  "faster_first_draft_pairs_min": 5,
+  "first_draft_ratio_median_max": 0.8,
+  "independent_method_review": "release_audit approved prospective aggregate correction before new measurements; six pairs establish only this controlled workload, not universal safety or SLA",
+  "kind": "prospective_post_m2_memory_protocol_correction",
+  "new_candidate_source_must_differ_from_m2_and_aim_to_reduce_real_parent_memory": true,
+  "new_cohort_must_be_separately_frozen_before_first_measurement": true,
+  "no_acceptance_or_reclassification_of_old_or_incomplete_results": true,
+  "original_m2_rejection_unchanged": true,
+  "original_negative_witness_sha256": "99020198dec72cea02aa065aa9062dac8a1a0c7c11c4ddc0d0445b4bba526668",
+  "original_registration_sha256": "8f408fee2296afeba50a7aa48fc4cca2c031acbb467c746fdca4d9547d75a7e7",
+  "pairs_per_stratum": 6,
+  "performance_claim_ready": false,
+  "reason": "Common-parent kernel memory.peak includes all measured roles simultaneously. Independent lifetime role high-waters are not additive and shared page charging can move between roles; the extra per-role zero-increase condition was stricter than the user overall-memory goal. The new aggregate gate requires a positive2% memory improvement plus no worse maximum.",
+  "samples": 24,
+  "schema_version": 1,
+  "strata": [
+    "ready-fresh-process",
+    "ready-primed-process"
+  ],
+  "user_goal": "At least20% faster first fully downloaded independently verified draft; no worse final export or overall memory; complete clean release and deploy."
+}
