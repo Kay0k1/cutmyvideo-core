@@ -12,6 +12,10 @@ native-platform and signed-release checks against the final source. Earlier
 [1.4 SDK interview evidence](../verification/2026-10-15-sdk-collections/README.md)
 covers the original durable collection cycle; it does not by itself verify the
 new source-preparation/project/subtitle implementation.
+The [new interview acceptance record](../verification/2026-10-16-agent-projects/README.md)
+binds those additions to their frozen implementation, installed distributions
+and actual browser review. The record is candidate evidence; tagged publication
+and signed download checks independently bind the final release source.
 
 ## Agent and editor workflow
 

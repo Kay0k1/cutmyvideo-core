@@ -264,7 +264,28 @@ preexisting installations; never use `down -v` on retained state.
 
 ## Required acceptance before supported status
 
-The default hosted acceptance mode is `metadata-resolution-006-to-007`. It pins
+The default hosted acceptance mode is `agent-projects-007-to-008`. It pins the
+published v1.3.0 schema-007 predecessor
+`e4a0477b727ccfbbf21f86027fdd07f6ffe78419` (tree
+`7bdd2f71eaf9398fb8548ed59834dba88e716a98`) and its complete 259-file
+application inventory. All historical 001–007 SQL/catalog inputs remain
+byte-identical; only the reviewed008 SQL/catalog pair is admitted. The complete
+current application inventory is captured before building and matched against
+the exact source receipts and running images. Changed application code is
+explicitly admitted and bound; this mode makes no unchanged-runtime claim.
+
+All existing public HTTPS, media, isolation, egress, roles and backup checks
+remain required, together with seven project-transition checks. These require
+actual catalogs and ordered histories, unchanged original rows, empty added
+tables at migration, old007 refusal without mutation, a fresh coordinated007
+database/media restoration with retained downloads, and compatible008 recovery.
+All seven new tables must permit actual CRUD over TCP as the restricted runtime
+role. Preparation fingerprints, project decisions, scoped grants and retry
+records must survive restoration. Both restoration directions bind raw records
+to the exact hosted candidate. This disposable-runner acceptance does not
+perform a production deployment.
+
+The historical `metadata-resolution-006-to-007` mode pins
 the schema-006 predecessor `a9c75df83f965bf1d56e2263ca585ab77aeaf305` (tree
 `807d53bc6c19fac787fa0a57415b2ae0aa3a4dd2`) and its complete 218-file application
 inventory. Migration inputs 001–006 remain byte-identical; only the pinned007
