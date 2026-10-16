@@ -203,6 +203,26 @@ class ProjectReceiptControls(unittest.TestCase):
                 f.change_raw(phase, lambda v: v[table][0].update({key: replacement}))
             with self.assertRaises(RuntimeError): f.validate()
 
+    def test_fresh_restored_upload_preserves_its_own_fingerprint_and_retained_identity(self):
+        def fresh(value):
+            value['source_fingerprints'].append(dict(source_id='new-https-upload', owner='other-https-owner',
+                                                    fingerprint=dict(kind='content', sha256='f' * 64, size_bytes=4096)))
+        f = ProjectFixture(self.temp.name)
+        f.change_raw('project_after_startup', fresh)
+        f.validate()
+        for fault in ('missing', 'owner', 'fingerprint', 'duplicate'):
+            with self.subTest(fault=fault):
+                f = ProjectFixture(self.temp.name)
+                f.change_raw('project_after_startup', fresh)
+                def corrupt(value):
+                    rows = value['source_fingerprints']
+                    if fault == 'missing': rows.pop(0)
+                    elif fault == 'owner': rows[0]['owner'] = 'other-https-owner'
+                    elif fault == 'fingerprint': rows[0]['fingerprint']['canonical_url_sha256'] = '0' * 64
+                    else: rows.append(deepcopy(rows[0]))
+                f.change_raw('project_after_startup', corrupt)
+                with self.assertRaises(RuntimeError): f.validate()
+
     def test_reverse_media_guard_image_private_cleanup_and_raw_integrity_required(self):
         for fault in ('files', 'decoded', 'method', 'image', 'guard', 'private', 'manifest'):
             with self.subTest(fault=fault):

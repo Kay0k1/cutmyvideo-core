@@ -112,11 +112,25 @@ export class LocalCutmy {
       const stdout: Buffer[] = [];
       const stderr: Buffer[] = [];
       let forceTimer: ReturnType<typeof setTimeout> | undefined;
+      const killers = new Set<Promise<void>>();
+      const windowsKill = (forced: boolean) => {
+        const killer = spawn(join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe"), ["/pid", `${child.pid}`, "/T", ...(forced ? ["/F"] : [])], { windowsHide: true, stdio: "ignore", shell: false });
+        const fallback = () => { try { child.kill(forced ? "SIGKILL" : "SIGTERM"); } catch { /* The owned child already exited. */ } };
+        const closed: Promise<void> = new Promise(done => {
+          const limit = setTimeout(() => {
+            try { killer.kill("SIGKILL"); } catch { /* The helper already exited. */ }
+            if (forced) fallback();
+          }, forced ? 1000 : this.#grace);
+          killer.once("error", fallback);
+          killer.once("exit", code => { if (forced && code !== 0) fallback(); });
+          killer.once("close", () => { clearTimeout(limit); killers.delete(closed); done(); });
+        });
+        killers.add(closed);
+      };
       const force = () => {
         if (!child.pid) return;
         if (process.platform === "win32") {
-          const killer = spawn(join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe"), ["/pid", `${child.pid}`, "/T", "/F"], { windowsHide: true, stdio: "ignore", shell: false });
-          killer.on("error", () => { child.kill("SIGKILL"); });
+          windowsKill(true);
         } else { try { process.kill(-child.pid, "SIGKILL"); } catch { child.kill("SIGKILL"); } }
       };
       const stop = (code: string) => {
@@ -125,8 +139,7 @@ export class LocalCutmy {
         if (child.pid) {
           if (process.platform === "win32") {
             // Windows has no POSIX SIGTERM; taskkill /T requests tree termination.
-            const killer = spawn(join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe"), ["/pid", `${child.pid}`, "/T"], { windowsHide: true, stdio: "ignore", shell: false });
-            killer.on("error", () => { child.kill(); });
+            windowsKill(false);
           } else { try { process.kill(-child.pid, "SIGTERM"); } catch { child.kill("SIGTERM"); } }
         }
         forceTimer = setTimeout(force, this.#grace);
@@ -142,13 +155,16 @@ export class LocalCutmy {
       child.stdout.on("data", chunk => collect(chunk as Buffer, true));
       child.stderr.on("data", chunk => collect(chunk as Buffer, false));
       child.on("error", () => { spawnFailed = true; });
-      child.on("close", exitCode => {
+      child.on("close", async exitCode => {
         // A launcher can exit after SIGTERM while a descendant ignores it and
         // closes inherited pipes. Finish our own process group before returning.
         if (terminalCode && process.platform !== "win32" && child.pid) {
           try { process.kill(-child.pid, "SIGKILL"); } catch { /* The owned group already exited. */ }
         }
         clearTimeout(timer); if (forceTimer) clearTimeout(forceTimer); signal?.removeEventListener("abort", abort);
+        // Tree helpers remain owned until their bounded termination completes.
+        // Do not let a hung taskkill keep Node alive after the call settles.
+        await Promise.all(killers);
         let result: BatchResult | undefined;
         let value: unknown;
         try { value = JSON.parse(Buffer.concat(stdout).toString("utf8")) as unknown; if (kind === "batch" || kind === "local-collection-result") result = decode<BatchResult>(value, kind); } catch { /* A failure may legitimately have no output JSON. */ }

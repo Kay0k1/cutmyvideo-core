@@ -44,6 +44,8 @@ temporary directories. Arguments are passed directly to the executable without a
 shell. The wrapper waits for process termination on cancellation, first allowing
 graceful termination and then killing the process tree. On Windows, tree
 termination uses `taskkill`; graceful POSIX signal behavior is unavailable.
+Owned termination helpers are reaped before the call settles. A stuck force
+helper has a one-second cleanup budget after the configured grace period.
 Custom Windows launchers must remain running until their descendants exit:
 `taskkill` cannot reliably recover a tree after its launcher has already exited.
 

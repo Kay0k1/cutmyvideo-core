@@ -28,6 +28,7 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 ### Fixed
 - Collection cancellation bounds stalled Python JSON reads and TLS handshakes even when socket shutdown does not wake the operation. High-resolution elapsed deadlines keep expired collection waits consistent on Windows Python 3.10; valid fragmented responses remain supported.
 - Python stops on an expired completed artifact instead of polling until the collection deadline. Repeated revisions no longer save history that subsequent restoration refuses.
+- Node local cancellation bounds and reaps its owned Windows tree-termination helpers before settling, preserving the primary error and earlier completed outputs even when a helper stalls.
 
 ## 1.3.0 - 2026-10-15
 

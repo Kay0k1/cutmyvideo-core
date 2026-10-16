@@ -14,9 +14,22 @@ const limits = { max_source_bytes: 10000000, max_output_bytes: 10000000, max_fet
 function json(response, value, status = 200) { response.writeHead(status, { 'content-type': 'application/json' }); response.end(JSON.stringify(value)); }
 async function fixture(t) {
   const receipts = new Map(), posts = [], calls = [], config = {};
-  const root = await mkdtemp(join(tmpdir(), 'cutmy-source-sdk-')); t.after(() => rm(root, { recursive: true, force: true }));
+  const root = await mkdtemp(join(tmpdir(), 'cutmy-source-sdk-')); let server;
+  t.after(async () => {
+    // Cancelled file-backed uploads can finish releasing Windows handles after
+    // their promise settles. Always close the owned server before removing files.
+    try {
+      if (server) await new Promise((resolve, reject) => {
+        server.close(error => error && error.code !== 'ERR_SERVER_NOT_RUNNING' ? reject(error) : resolve());
+        server.closeAllConnections();
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      await assert.rejects(stat(root), { code: 'ENOENT' });
+    }
+  }, { timeout: 5000 });
   const path = join(root, 'interview.mp4'), payload = Buffer.from('source-fixture'.repeat(100)); await writeFile(path, payload);
-  const server = createServer(async (req, res) => {
+  server = createServer(async (req, res) => {
     calls.push({ method: req.method, path: req.url });
     try {
       if (req.url === '/api/v1/session') { res.setHeader('Set-Cookie', 'cutmy_session=' + cookie); return json(res, { ok: true, limits }); }
@@ -39,7 +52,6 @@ async function fixture(t) {
     } catch { if (!res.headersSent) json(res, { error: { code: 'fixture_error', message: 'Fixture failed' } }, 500); else res.destroy(); }
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  t.after(() => { server.closeAllConnections(); return new Promise(resolve => server.close(resolve)); });
   const baseUrl = 'http://127.0.0.1:' + server.address().port;
   return { root, path, payload, project: join(root, 'project'), config, posts, calls, receipts, baseUrl, client: new CutmyClient({ baseUrl }) };
 }

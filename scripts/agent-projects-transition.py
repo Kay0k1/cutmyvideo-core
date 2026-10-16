@@ -117,8 +117,14 @@ def validate_project_state(snapshot, fixture):
                   'synthetic source and failed job identity was not retained')
     for table in NEW_TABLES:
         rows = fixture['rows'][table]
+        actual = snapshot.get(table)
+        if table == 'source_fingerprints' and isinstance(actual, list):
+            # The base HTTPS restore gate deliberately uploads another source
+            # before this retained-state check. Preserve this fixture's complete
+            # row exactly; unrelated new uploads have their own fingerprints.
+            actual = [row for row in actual if row.get('source_id') == fixture['source_id']]
         proof.require(isinstance(rows, list) and len(rows) == 1
-                      and snapshot.get(table) == rows, 'project/preparation/retry row changed during recovery')
+                      and actual == rows, 'project/preparation/retry row changed during recovery')
     prep, fingerprint, project, attached, handoff, grant, retry = (fixture['rows'][table][0] for table in NEW_TABLES)
     proof.require(prep['owner'] == fingerprint['owner'] == project['owner'] == fixture['owner']
                   and prep['source_id'] == fingerprint['source_id'] == project['source_id'] == fixture['source_id']
