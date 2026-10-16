@@ -52,7 +52,27 @@ func preflightLocalWithQueries(ctx context.Context, c Config, path string, reque
 	if err := preflightSourceUnchanged(absolute, before); err != nil {
 		return PreflightResult{}, err
 	}
-	source := Source{Path: absolute, DurationMS: duration, Tracks: p.tracks()}
+	result, groups, err := prepareLocalPreflight(c, absolute, request, p, duration)
+	if err != nil {
+		return PreflightResult{}, err
+	}
+	if err := checkPreflightCapabilities(ctx, c, groups, &result, query); err != nil {
+		return PreflightResult{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return PreflightResult{}, err
+	}
+	if err := preflightSourceUnchanged(absolute, before); err != nil {
+		return PreflightResult{}, err
+	}
+	finishLocalPreflight(&result)
+	return result, nil
+}
+
+// prepareLocalPreflight owns every report's mutable fields. Both single and
+// batch checks use the same request validation, stream selection and geometry.
+func prepareLocalPreflight(c Config, path string, request ExportRequest, p probeInfo, duration int64) (PreflightResult, []preflightCapabilityGroup, error) {
+	source := Source{Path: path, DurationMS: duration, Tracks: p.tracks()}
 	if video := p.selectedVideo(); video != nil {
 		source.Width, source.Height = video.Width, video.Height
 		source.DisplayWidth, source.DisplayHeight, _ = videoDisplayGeometry(video)
@@ -69,7 +89,7 @@ func preflightLocalWithQueries(ctx context.Context, c Config, path string, reque
 		request.Crop = &value
 	}
 	if err := request.Validate(c, source); err != nil {
-		return PreflightResult{}, &sourceProblem{"invalid_argument", err.Error()}
+		return PreflightResult{}, nil, &sourceProblem{"invalid_argument", err.Error()}
 	}
 	selection := mediaSelection{Video: p.selectedVideo(), Audio: p.selectedAudio()}
 	if request.NoAudio {
@@ -84,16 +104,16 @@ func preflightLocalWithQueries(ctx context.Context, c Config, path string, reque
 			}
 		}
 		if selection.Audio == nil {
-			return PreflightResult{}, &sourceProblem{"audio_track_unavailable", "The selected audio stream index is not available; inspect the source and choose an audio index"}
+			return PreflightResult{}, nil, &sourceProblem{"audio_track_unavailable", "The selected audio stream index is not available; inspect the source and choose an audio index"}
 		}
 	}
 	tracks, err := trackManifest(p, selection, request)
 	if err != nil {
-		return PreflightResult{}, err
+		return PreflightResult{}, nil, err
 	}
 	video, err := validatePreflightSelection(selection, request)
 	if err != nil {
-		return PreflightResult{}, err
+		return PreflightResult{}, nil, err
 	}
 	result := preflightRequestResult(source, request)
 	result.TrackManifest, result.Video = tracks, video
@@ -101,24 +121,18 @@ func preflightLocalWithQueries(ctx context.Context, c Config, path string, reque
 	if video != nil {
 		result.Checks = append(result.Checks, PreflightCheck{Name: "video_geometry", Status: "passed"})
 	}
-	if err := checkPreflightCapabilities(ctx, c, preflightRequiredCapabilities(selection, request, tracks, video), &result, query); err != nil {
-		return PreflightResult{}, err
+	return result, preflightRequiredCapabilities(selection, request, tracks, video), nil
+}
+
+func finishLocalPreflight(result *PreflightResult) {
+	if result.Request.CutMode == "copy" {
+		addPreflightDeferred(result, "copy_boundaries", "copy_boundaries_deferred", "Copy boundaries are determined from source packets and nearby keyframes during export")
+		addPreflightDeferred(result, "copy_container", "copy_container_unverified", "The configured muxer verifies whether the selected codecs can be copied into the requested container during export")
 	}
-	if err := ctx.Err(); err != nil {
-		return PreflightResult{}, err
-	}
-	if err := preflightSourceUnchanged(absolute, before); err != nil {
-		return PreflightResult{}, err
-	}
-	if request.CutMode == "copy" {
-		addPreflightDeferred(&result, "copy_boundaries", "copy_boundaries_deferred", "Copy boundaries are determined from source packets and nearby keyframes during export")
-		addPreflightDeferred(&result, "copy_container", "copy_container_unverified", "The configured muxer verifies whether the selected codecs can be copied into the requested container during export")
-	}
-	addPreflightDeferred(&result, "media_decode", "media_decode_deferred", "Source payload decoding and completed output verification occur during export")
-	addPreflightDeferred(&result, "output_size", "output_size_deferred", "The completed output must satisfy its size limit during export")
-	addPreflightDeferred(&result, "storage", "storage_admission_deferred", "Available storage and execution admission are checked when an export is started")
-	addPreflightDeferred(&result, "publication", "publication_deferred", "Output paths, filesystem capabilities and exclusive publication are checked during execution")
-	return result, nil
+	addPreflightDeferred(result, "media_decode", "media_decode_deferred", "Source payload decoding and completed output verification occur during export")
+	addPreflightDeferred(result, "output_size", "output_size_deferred", "The completed output must satisfy its size limit during export")
+	addPreflightDeferred(result, "storage", "storage_admission_deferred", "Available storage and execution admission are checked when an export is started")
+	addPreflightDeferred(result, "publication", "publication_deferred", "Output paths, filesystem capabilities and exclusive publication are checked during execution")
 }
 
 func preflightSourceUnchanged(path string, before os.FileInfo) error {

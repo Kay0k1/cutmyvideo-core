@@ -198,12 +198,17 @@ func (s *Server) inspectCollection(parent context.Context, source Source, clips 
 		return nil, "", ctx, func() { releaseReader(); cancel() }, err
 	}
 	release := func() { releaseInspection(); releaseReader(); cancel() }
-	reports := make([]PreflightResult, len(clips))
+	requests := make([]ExportRequest, len(clips))
 	for i, clip := range clips {
-		reports[i], err = PreflightLocal(ctx, s.Config, source.Path, clip.Request)
-		if err != nil {
-			return nil, clip.ID, ctx, release, err
+		requests[i] = clip.Request
+	}
+	reports, failed, err := preflightLocalBatch(ctx, s.Config, source.Path, requests)
+	if err != nil {
+		clipID := ""
+		if failed >= 0 && failed < len(clips) {
+			clipID = clips[failed].ID
 		}
+		return nil, clipID, ctx, release, err
 	}
 	if err = ctx.Err(); err != nil {
 		return nil, "", ctx, release, err
