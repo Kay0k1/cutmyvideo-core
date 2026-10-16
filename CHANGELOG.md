@@ -4,6 +4,15 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
+## 1.4.1 - Unreleased
+
+### Changed
+- HTTP collection validation and submission share one fresh source inspection and a bounded parsed FFmpeg capability snapshot within each request. Every clip retains its own settings, track and geometry checks before any new job is admitted.
+- Reused checks verify the original source and configured FFmpeg/FFprobe file identities before and after reuse, preserve cancellation and error ordering, and retain explicit deferred diagnostics when tool capabilities cannot be verified. The single-job preflight remains fresh for each call.
+- Native release gates require the batch freshness, clip diagnostics, bounded capability cache, cancellation and changed-file regressions on every supported platform. Production-family media gates also require the batch checks, and native HTTP tests verify that a later clip failure admits no earlier work.
+
+Performance measurements for the interview draft/final workflow are pending. No speed or memory result is claimed yet.
+
 ## 1.4.0 - 2026-10-16
 
 ### Added

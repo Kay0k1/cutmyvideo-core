@@ -5,11 +5,11 @@ applications. Python 3.10 or later; no runtime dependencies. Requests and result
 use JSON-compatible typed dictionaries, so the same plans can be saved, reviewed,
 or passed between tools without a framework or an agent-specific protocol.
 
-Release `1.4.0` includes a wheel and source archive as signed GitHub release
+Release `1.4.1` includes a wheel and source archive as signed GitHub release
 assets. Install the wheel when that release is published:
 
 ```sh
-python -m pip install https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.0/cutmyvideo-1.4.0-py3-none-any.whl
+python -m pip install https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.1/cutmyvideo-1.4.1-py3-none-any.whl
 ```
 
 The preflight methods require a core build with the preflight API/CLI. Local

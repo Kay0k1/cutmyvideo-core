@@ -3,11 +3,11 @@
 TypeScript clients for local `cutmy` execution and the cutmyvideo-core HTTP API.
 The package has no runtime dependencies. Node 20.19 or newer is required for the
 Node entry; the main HTTP entry also works in browsers with modern Fetch APIs.
-Release `1.4.0` includes a signed npm tarball as a GitHub release asset. Install
+Release `1.4.1` includes a signed npm tarball as a GitHub release asset. Install
 it when that release is published:
 
 ```sh
-npm install https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.0/cutmyvideo-sdk-1.4.0.tgz
+npm install https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.1/cutmyvideo-sdk-1.4.1.tgz
 ```
 
 ## Local files
