@@ -4,7 +4,7 @@ import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promise
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import test from 'node:test';
+import test, { after } from 'node:test';
 
 const { CutmyClient } = await import(process.env.CUTMY_SDK_JS_ENTRY ? pathToFileURL(process.env.CUTMY_SDK_JS_ENTRY).href : '../dist/index.js');
 const { LocalCutmy, LocalError, downloadArtifactToFile, uploadFile } = await import(process.env.CUTMY_SDK_LOCAL_JS_ENTRY ? pathToFileURL(process.env.CUTMY_SDK_LOCAL_JS_ENTRY).href : '../dist/local.js');
@@ -105,4 +105,11 @@ test('Node file upload is disk-backed and download publishes exclusively with cl
   assert.equal(await readFile(output, 'utf8'), 'media bytes');
   await assert.rejects(downloadArtifactToFile(client, 'artifact-1', join(cwd, 'oversize'), { maxBytes: 2 }), e => e.code === 'download_too_large');
   assert.deepEqual((await readdir(cwd)).sort(), ['result.mp4', 'source.mov']);
+});
+
+// Safe lifecycle diagnostics: never serialize reports, environment or socket data.
+after(() => {
+  const handles = process._getActiveHandles().map(handle => ({ type: handle.constructor.name, ...(typeof handle.pid === 'number' ? { pid: handle.pid } : {}), ...(typeof handle.destroyed === 'boolean' ? { destroyed: handle.destroyed } : {}), ...(typeof handle.listening === 'boolean' ? { listening: handle.listening } : {}) }));
+  const timers = process.report.getReport().libuv.filter(handle => handle.type === 'timer').map(handle => ({ type: handle.type, active: handle.is_active, referenced: handle.is_referenced, fires_ms: handle.firesInMsFromNow, repeat: handle.repeat }));
+  process.stderr.write(JSON.stringify({ event: 'local-fixture-resources', resources: process.getActiveResourcesInfo(), handles, requests: process._getActiveRequests().map(request => request.constructor.name), timers }) + '\n');
 });

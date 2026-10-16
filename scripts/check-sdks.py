@@ -162,7 +162,7 @@ def main():
     env["CUTMY_SDK_LOCAL_JS_ENTRY"] = str(package / "dist/local.js")
     env["CUTMY_SDK_COLLECTION_JS_ENTRY"] = str(package / "dist/collections.js")
     env["CUTMY_SDK_SOURCE_JS_ENTRY"] = str(package / "dist/sources.js")
-    run([node, "--test", *map(str, sorted((ts_root / "test").glob("*.test.mjs")))],
+    run([node, "--test", "--test-timeout=120000", *map(str, sorted((ts_root / "test").glob("*.test.mjs")))],
         cwd=consumer, env=env, log=output / "typescript-installed-tests.log")
     (consumer / "types.ts").write_text('''import { CutmyClient, type CollectionRequest } from "@cutmyvideo/sdk";
 import { LocalCutmy } from "@cutmyvideo/sdk/local";
