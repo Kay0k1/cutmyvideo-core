@@ -299,7 +299,7 @@ sidecars = client.retime_subtitles({"version": 1, "format": "srt",
     "outputs": [{"clip_id": item["clip_id"], "segments": item["segments"]}
                 for item in current["outputs"]]})
 for item in sidecars["outputs"]:
-    with Path("sidecars", item["clip_id"] + "." + item["format"]).open("x", encoding="utf-8") as file:
+    with Path("sidecars", item["clip_id"] + "." + item["format"]).open("x", encoding="utf-8", newline="\n") as file:
         file.write(item["text"])
 ```
 

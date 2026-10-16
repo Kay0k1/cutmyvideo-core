@@ -142,9 +142,11 @@ the real job snapshot rather than an invented completion percentage.
 
 Submission requires an explicit idempotency key. Persist that key before sending
 the request and reuse it if acknowledgement is lost; a fresh key can create
-another job. The SDK never automatically repeats uploads, imports or mutations.
-The high-level collection runner persists its own key and exact body before
-safe retries; source creation is still never retried automatically.
+another job. Ordinary low-level calls do not automatically repeat uploads,
+imports or mutations. The collection runner persists its key and exact body
+before safe retries. The separate durable source runner recovers or retries only
+its saved identical intent, owner and key through the authoritative preparation
+receipt. Unkeyed upload/import failures still need caller reconciliation.
 Submission errors retain the key, while wait errors retain the job ID. If a
 batch fails or is cancelled, `JobError` includes the terminal job and already
 ready artifacts. `ready_artifacts`/`readyArtifacts` selects downloadable outputs.

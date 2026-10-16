@@ -2,13 +2,27 @@
 
 This record covers installed Python and Node packages, the real HTTP API,
 PostgreSQL, the worker and an actual browser. The implementation snapshot is
-`9cdf291910064f04ebba91d223a3f9df9cbdeff2`, tree
-`127094b3fe1b2a1ade750387c7f245c2433876e6`. The SDK build materialized that
+`ae99fce692f37b701d0be83c2131c11e78d1230e`, tree
+`0c6c87e6cc8571fdec688e32aa6b932dc4817f14`. The SDK build materialized that
 clean Git snapshot, installed its wheel/source/npm distributions, ran every
 required consumer and sealed the exact tested files without rebuilding them.
 [The bounded summary](summary.json) records source, package, harness and content
-verification digests. This is immutable candidate evidence, separate from final
+verification digests. This is immutable SDK6 candidate evidence, separate from final
 main/tag checks, actual release signatures and production deployment.
+The earlier implementation record remains unchanged as
+[initial-summary.json](initial-summary.json), bound to source
+`9cdf291910064f04ebba91d223a3f9df9cbdeff2`. Its whole-source race and
+vulnerability-check log belongs to that initial snapshot; it is not a
+whole-source SDK6 result. Windows helper follow-up and fixture cleanup are
+separate reviewed changes, covered by the new installed-package checks.
+
+The exact sealed and installed SDK distributions are:
+
+| Kind | Package | SHA256 |
+| --- | --- | --- |
+| npm | cutmyvideo-sdk-1.4.0.tgz | bb6745390627f57b6177bd56a56a1119425c4fa57871a702278d60a3f426412c |
+| sdist | cutmyvideo-1.4.0.tar.gz | 825262b98fdc1fda92d95e97fc865d795de8a601e9afdff32c4c5c7946c74a0a |
+| wheel | cutmyvideo-1.4.0-py3-none-any.whl | 683de32ef9e472a1b60c9b831ea0dfba06a93ec8e45c134c7f941e2fd3738b03 |
 
 ## Interview and workflow
 
@@ -72,7 +86,7 @@ fully decode in the required installed-package harness.
 
 The strict package receipt requires all five parent tests and both language
 subtests of each, with no missing, failed or skipped consumers. Python64 unit
-tests pass against the installed wheel; TypeScript62 pass against both source
+tests pass against the installed wheel; TypeScript63 pass against both source
 and installed distributions. The source distribution rebuilds to the same
 Python module payload as the installed wheel.
 The source snapshot and SDK/acceptance inputs are hashed before and after the

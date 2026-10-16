@@ -228,11 +228,19 @@ func TestInstalledSDKAgentProjectWorkflow(t *testing.T) {
 						continue
 					}
 					if e != nil {
+						if errors.Is(e, context.Canceled) && workerCtx.Err() == context.Canceled {
+							done <- nil
+							return
+						}
 						workerFailure("claim", e)
 						return
 					}
 					var actualKey string
 					if e = store.DB.QueryRow(workerCtx, "SELECT idempotency_key FROM jobs WHERE id=$1", job.ID).Scan(&actualKey); e != nil {
+						if errors.Is(e, context.Canceled) && workerCtx.Err() == context.Canceled {
+							done <- nil
+							return
+						}
 						workerFailure("claimed_job_identity", e)
 						return
 					}
