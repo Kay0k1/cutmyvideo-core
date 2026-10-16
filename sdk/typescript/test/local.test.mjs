@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test, { after } from 'node:test';
@@ -108,8 +108,12 @@ test('Node file upload is disk-backed and download publishes exclusively with cl
 });
 
 // Safe lifecycle diagnostics: never serialize reports, environment or socket data.
-after(() => {
-  const handles = process._getActiveHandles().map(handle => ({ type: handle.constructor.name, ...(typeof handle.pid === 'number' ? { pid: handle.pid } : {}), ...(typeof handle.destroyed === 'boolean' ? { destroyed: handle.destroyed } : {}), ...(typeof handle.listening === 'boolean' ? { listening: handle.listening } : {}) }));
+function lifecycleDiagnostic(phase) {
+  const handles = process._getActiveHandles().map(handle => ({ type: handle.constructor.name, ...(typeof handle.spawnfile === 'string' ? { command: basename(handle.spawnfile) } : {}), ...(typeof handle.pid === 'number' ? { pid: handle.pid } : {}), ...(typeof handle.destroyed === 'boolean' ? { destroyed: handle.destroyed } : {}), ...(typeof handle.listening === 'boolean' ? { listening: handle.listening } : {}) }));
   const timers = process.report.getReport().libuv.filter(handle => handle.type === 'timer').map(handle => ({ type: handle.type, active: handle.is_active, referenced: handle.is_referenced, fires_ms: handle.firesInMsFromNow, repeat: handle.repeat }));
-  process.stderr.write(JSON.stringify({ event: 'local-fixture-resources', resources: process.getActiveResourcesInfo(), handles, requests: process._getActiveRequests().map(request => request.constructor.name), timers }) + '\n');
+  process.stderr.write(JSON.stringify({ event: 'local-fixture-resources', phase, resources: process.getActiveResourcesInfo(), handles, requests: process._getActiveRequests().map(request => request.constructor.name), timers }) + '\n');
+}
+after(() => {
+  lifecycleDiagnostic('after-tests');
+  for (const delay of [1000, 5000]) setTimeout(() => lifecycleDiagnostic('after-' + delay + 'ms'), delay).unref();
 });
