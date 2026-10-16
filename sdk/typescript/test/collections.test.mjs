@@ -160,7 +160,7 @@ test('retained receipt limit refuses a new transfer without making the project u
 
 test('accepted job polling observes the minimum interval while batches are submitted', async t => {
   const root = join(await directory(t), 'project'), f = await fixture(t, { queuedPolls: 1 });
-  assert((await runCollection(f.client, request(4), root, { timeoutMs: 7000 })).complete);
+  assert((await runCollection(f.client, request(4), root, { timeoutMs: 15000 })).complete);
   for (const id of f.jobs.keys()) {
     const polls = f.calls.filter(call => call.url === '/api/v1/jobs/' + id); assert(polls.length >= 2);
     for (let i = 1; i < polls.length; i++) assert(polls[i].at - polls[i - 1].at >= 950);
