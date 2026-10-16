@@ -432,6 +432,25 @@ func (s *Store) ArtifactPath(ctx context.Context, id, owner string) (string, str
 	return path, name, err
 }
 
+// artifactDownloadMetadata retains the artifact owner's existing lookup policy.
+// Classification belongs to the original immutable job request, not a project's
+// current plan or the filename. Unknown/legacy metadata cannot enable the hint.
+func (s *Store) artifactDownloadMetadata(ctx context.Context, id, owner string) (string, string, bool, error) {
+	var path, name string
+	var draft bool
+	err := s.DB.QueryRow(ctx, `SELECT a.path,a.filename,
+ COALESCE(j.request->>'rendition','')='draft'
+ AND COALESCE(j.request->>'format','')='mp4'
+ AND COALESCE(j.request->>'cut_mode','')='accurate'
+ AND COALESCE(j.request->>'output_mode','') IN ('','separate','joined')
+ FROM artifacts a LEFT JOIN jobs j ON j.id=a.job_id AND j.owner=a.owner
+ WHERE a.id=$1 AND a.owner=$2`, id, owner).Scan(&path, &name, &draft)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = ErrNotFound
+	}
+	return path, name, draft, err
+}
+
 func (s *Store) Recover(ctx context.Context) error {
 	_, err := s.DB.Exec(ctx, `UPDATE jobs SET status=CASE WHEN cancel_requested THEN 'cancelled' ELSE 'failed' END,stage='finished',lease_token=NULL,message=CASE WHEN cancel_requested THEN 'Cancelled' ELSE 'Worker recovery limit reached' END,items=(SELECT jsonb_agg(CASE WHEN item->>'status' IN ('queued','running','waiting_storage') THEN item || CASE WHEN cancel_requested THEN '{"status":"cancelled","message":"Cancelled","error_code":"cancelled"}'::jsonb ELSE '{"status":"failed","message":"Worker recovery limit reached","error_code":"server_error"}'::jsonb END ELSE item END) FROM jsonb_array_elements(items) item) WHERE status='running' AND lease_until<now() AND (attempts>=3 OR cancel_requested)`)
 	return err

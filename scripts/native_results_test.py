@@ -110,7 +110,7 @@ class NativeResultsChecks(unittest.TestCase):
             self.assertIn(name, native_results.REQUIRED[2])
             self.assertNotIn(name, native_results.BOOKWORM_REQUIRED)
             self.assertIsNotNone(re.fullmatch(selector, name))
-            self.assertIsNone(re.fullmatch(bookworm_selector, name), "Bookworm media job has no test PostgreSQL")
+            self.assertIsNone(re.fullmatch(bookworm_selector, name), "Pool integration belongs outside the media-only invocation")
             for action in ("missing", "skip", "failed-subtest"):
                 with self.subTest(name=name, action=action):
                     events = [event for event in original if action == "failed-subtest" or event.get("Test") != name]
@@ -124,6 +124,75 @@ class NativeResultsChecks(unittest.TestCase):
                     if action != "failed-subtest":
                         self.assertIn(name, result.stderr)
         path.write_text("".join(json.dumps(event) + "\n" for event in original), encoding="utf-8")
+
+    def test_draft_cache_checks_select_native_and_bookworm_without_silent_database_skips(self):
+        transfer = {
+            "TestDraftCacheWrappedFullTransferAndFlushError",
+            "TestDraftCacheTransferWriterPreservesInterfacesAndCountsErrors",
+            "TestDraftCacheFullTransferGuards",
+            "TestDraftCacheSourceAndFinalServingUnchanged",
+        }
+        database = {"TestDraftCacheMetadataOwnerLegacyAndScopedDownload"}
+        self.assertEqual(native_results.DRAFT_CACHE_TRANSFER_REQUIRED, transfer)
+        self.assertEqual(native_results.DRAFT_CACHE_DATABASE_REQUIRED, database)
+        workflow = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        lines = workflow.splitlines()
+        command = next(line for line in lines if "tee native-service-tests.jsonl" in line)
+        native_selector = re.search(r"-run '([^']+)'", command).group(1)
+        command = next(line for line in lines if "tee bookworm-media-tests.jsonl" in line)
+        media_selector = re.search(r"-run '([^']+)'", command).group(1)
+        command = next(line for line in lines if "tee bookworm-draft-cache-service-tests.jsonl" in line)
+        database_selector = re.search(r"-run '([^']+)'", command).group(1)
+        for name in transfer | database:
+            self.assertIn(name, native_results.REQUIRED[2])
+            self.assertIsNotNone(re.fullmatch(native_selector, name))
+            self.assertEqual(name in native_results.BOOKWORM_REQUIRED, name in transfer)
+            self.assertEqual(re.fullmatch(media_selector, name) is not None, name in transfer)
+            self.assertEqual(re.fullmatch(database_selector, name) is not None, name in database)
+        job = workflow.split("\n  bookworm-media:\n", 1)[1].split("\n  test:\n", 1)[0]
+        self.assertIn("services:\n      postgres:\n        image: postgres:17.11-bookworm", job)
+        self.assertIn('--health-cmd "pg_isready -U cutmy -d cutmy_draft_cache"', job)
+        self.assertIn("TEST_DATABASE_URL: postgres://cutmy:bookworm-test-only@postgres:5432/cutmy_draft_cache?sslmode=disable", job)
+        self.assertIn("scripts/check-native-results.py --draft-cache-service bookworm-draft-cache-service-tests.jsonl", job)
+        self.assertIn("            bookworm-draft-cache-service-tests.jsonl\n", job)
+
+    def test_draft_cache_required_results_reject_missing_skipped_failed_and_truncated_reports(self):
+        native = self.reports[2]
+        original = native.read_text(encoding="utf-8")
+        cases = [(native, native_results.DRAFT_CACHE_TRANSFER_REQUIRED | native_results.DRAFT_CACHE_DATABASE_REQUIRED,
+                  [json.loads(line) for line in original.splitlines()], None)]
+        for filename, required, checked, option in (
+            ("draft-bookworm-media.jsonl", native_results.BOOKWORM_REQUIRED,
+             native_results.DRAFT_CACHE_TRANSFER_REQUIRED, "--bookworm"),
+            ("draft-bookworm-service.jsonl", native_results.DRAFT_CACHE_DATABASE_REQUIRED,
+             native_results.DRAFT_CACHE_DATABASE_REQUIRED, "--draft-cache-service"),
+        ):
+            good = [{"Action": "pass", "Test": name, "Package": native_results.APP_PACKAGE} for name in sorted(required)]
+            good.append({"Action": "pass", "Package": native_results.APP_PACKAGE})
+            cases.append((Path(self.directory.name) / filename, checked, good, option))
+        for path, checked, good, option in cases:
+            invocation = ([sys.executable, str(SCRIPT), option, str(path)] if option else
+                          [sys.executable, str(SCRIPT), *map(str, self.reports)])
+            path.write_text("".join(json.dumps(event) + "\n" for event in good), encoding="utf-8")
+            self.assertEqual(subprocess.run(invocation, capture_output=True, timeout=10).returncode, 0)
+            for name in checked:
+                for action in ("missing", "skip", "fail", "failed-subtest", "truncated-package"):
+                    with self.subTest(report=path.name, name=name, action=action):
+                        if action == "truncated-package":
+                            events = [event for event in good if event.get("Test")]
+                        elif action == "failed-subtest":
+                            events = good + [{"Action": "fail", "Test": name + "/fault", "Package": native_results.APP_PACKAGE}]
+                        else:
+                            events = [event for event in good if event.get("Test") != name]
+                            if action != "missing":
+                                events.append({"Action": action, "Test": name, "Package": native_results.APP_PACKAGE})
+                        path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+                        result = subprocess.run(invocation, capture_output=True, text=True, timeout=10)
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn("incomplete_packages" if action == "truncated-package" else
+                                      "failed/skipped" if action == "failed-subtest" else name, result.stderr)
+            path.write_text("".join(json.dumps(event) + "\n" for event in good), encoding="utf-8")
+        native.write_text(original, encoding="utf-8")
 
     def test_joined_decoder_budget_is_required_on_native_and_bookworm(self):
         name = "TestJoinedAccurateDiscoveryDecoderBudgetPreservesEncoding"
@@ -425,7 +494,7 @@ class NativeResultsChecks(unittest.TestCase):
                  "TestStorageScanSessionReadBatchPreservesNonISODateStyle",
                  "TestStorageScanSessionReadBatchLookupFailureRollsBackAndRecovers")
         self.assertEqual(len(native_results.REQUIRED[3]), 48 + len(native_results.UNIVERSAL_STORAGE_REQUIRED) + len(native_results.AGENT_PROJECT_STORAGE_REQUIRED))
-        self.assertEqual(sum(map(len, native_results.REQUIRED)), 124 + sum(map(len, (native_results.UNIVERSAL_ENGINE_REQUIRED, native_results.UNIVERSAL_SERVICE_REQUIRED, native_results.UNIVERSAL_STORAGE_REQUIRED, native_results.UNIVERSAL_MEDIA_REQUIRED, native_results.PREFLIGHT_ENGINE_REQUIRED, native_results.PREFLIGHT_CLI_REQUIRED, native_results.PREFLIGHT_SERVICE_REQUIRED, native_results.PREFLIGHT_MEDIA_REQUIRED, native_results.POOL_SERVICE_REQUIRED, native_results.COLLECTION_ENGINE_REQUIRED, native_results.COLLECTION_CLI_REQUIRED, native_results.COLLECTION_SERVICE_REQUIRED, native_results.AGENT_PROJECT_SERVICE_REQUIRED, native_results.AGENT_PROJECT_STORAGE_REQUIRED, native_results.SUBTITLE_SERVICE_REQUIRED, native_results.SUBTITLE_CLI_REQUIRED))))
+        self.assertEqual(sum(map(len, native_results.REQUIRED)), 124 + sum(map(len, (native_results.UNIVERSAL_ENGINE_REQUIRED, native_results.UNIVERSAL_SERVICE_REQUIRED, native_results.UNIVERSAL_STORAGE_REQUIRED, native_results.UNIVERSAL_MEDIA_REQUIRED, native_results.PREFLIGHT_ENGINE_REQUIRED, native_results.PREFLIGHT_CLI_REQUIRED, native_results.PREFLIGHT_SERVICE_REQUIRED, native_results.PREFLIGHT_MEDIA_REQUIRED, native_results.POOL_SERVICE_REQUIRED, native_results.DRAFT_CACHE_TRANSFER_REQUIRED, native_results.DRAFT_CACHE_DATABASE_REQUIRED, native_results.COLLECTION_ENGINE_REQUIRED, native_results.COLLECTION_CLI_REQUIRED, native_results.COLLECTION_SERVICE_REQUIRED, native_results.AGENT_PROJECT_SERVICE_REQUIRED, native_results.AGENT_PROJECT_STORAGE_REQUIRED, native_results.SUBTITLE_SERVICE_REQUIRED, native_results.SUBTITLE_CLI_REQUIRED))))
         workflow = SCRIPT.parent.parent / ".github" / "workflows" / "ci.yml"
         commands = [line for line in workflow.read_text(encoding="utf-8").splitlines()
                     if "tee native-storage-tests.jsonl" in line]
