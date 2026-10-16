@@ -144,6 +144,11 @@ PREFLIGHT_MEDIA_REQUIRED = {
     "TestPreflightCapabilitiesParseExactLists",
     "TestPreflightCapabilitiesFailuresAreBoundedAndCancelable",
     "TestPreflightLocalRejectsChangingInput",
+    "TestPreflightLocalBatchSharesFreshInspectionAndCapabilities",
+    "TestPreflightLocalBatchPreservesClipErrorsAndOrdering",
+    "TestPreflightLocalBatchDeferredFailuresAndCancellation",
+    "TestPreflightLocalBatchRejectsChangedSourceAndTools",
+    "TestPreflightLocalBatchRetainsOnlyRelevantCapabilityNames",
 }
 
 # The collection workflow must execute on every native platform; HTTP contract
@@ -162,6 +167,7 @@ COLLECTION_SERVICE_REQUIRED = {
     "TestHTTPCollectionsRemoteValidationAndGuards",
     "TestHTTPCollectionsSubmitRetryAndSelectedEdit",
     "TestHTTPCollectionsLocalPreflightAndDraft",
+    "TestHTTPCollectionsBatchPreflightRejectsLateClipBeforeAdmission",
     "TestHTTPCollectionsPartialFailureRecovery",
     "TestHTTPCollectionsRetainedRecoveryAfterSourceChanges",
 }
