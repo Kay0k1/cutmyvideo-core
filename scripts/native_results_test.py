@@ -39,6 +39,29 @@ class NativeResultsChecks(unittest.TestCase):
         return subprocess.run([sys.executable, str(SCRIPT), *map(str, self.reports if reports is None else reports)],
                               capture_output=True, text=True, timeout=10)
 
+    def test_process_environment_guards_are_required_and_selected(self):
+        names = {"TestProcessEnvironmentSanitizesRealChild", "TestProcessEnvironmentArenaBoundsAndPlatforms"}
+        workflow = SCRIPT.parent.parent / ".github" / "workflows" / "ci.yml"
+        command = next(line for line in workflow.read_text(encoding="utf-8").splitlines()
+                       if "tee native-process-tests.jsonl" in line)
+        selector = re.search(r"-run '([^']+)'", command).group(1)
+        original = self.reports[1].read_text(encoding="utf-8")
+        for name in names:
+            self.assertIn(name, native_results.REQUIRED[1])
+            self.assertIsNotNone(re.fullmatch(selector, name))
+            for action in ("missing", "skip", "failed-subtest"):
+                with self.subTest(name=name, action=action):
+                    events = [json.loads(line) for line in original.splitlines()]
+                    if action != "failed-subtest":
+                        events = [event for event in events if event.get("Test") != name]
+                    if action != "missing":
+                        events.append({"Action": "skip" if action == "skip" else "fail",
+                                       "Test": name if action == "skip" else name + "/fault",
+                                       "Package": native_results.APP_PACKAGE})
+                    self.reports[1].write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+                    self.assertNotEqual(self.run_gate().returncode, 0)
+        self.reports[1].write_text(original, encoding="utf-8")
+
     def test_new_release_features_are_required_and_selected_on_all_native_targets(self):
         workflow = SCRIPT.parent.parent / ".github" / "workflows" / "ci.yml"
         lines = workflow.read_text(encoding="utf-8").splitlines()

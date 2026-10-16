@@ -210,7 +210,8 @@ AGENT_PROJECT_CONTRACT_REQUIRED = {"TestHTTPAgentProjectPublicContract", "TestHT
 
 REQUIRED = [
     {"TestEngineInspectAndExportActualMedia", "TestConcurrentPublicationHasExactlyOneCompleteWinner", "TestCLIInspectAndClipActualMedia", "TestCLIBatchSavedPlanRelativeInputAndJoinedAudio", "TestPlanRoundTripActualOutputsAndPartialPublication"},
-    {"TestProcessCancellationTerminatesDescendants", "TestProcessOutputStopsUnboundedProducer"},
+    {"TestProcessCancellationTerminatesDescendants", "TestProcessOutputStopsUnboundedProducer",
+     "TestProcessEnvironmentSanitizesRealChild", "TestProcessEnvironmentArenaBoundsAndPlatforms"},
     {"TestNativeServiceUploadExportAndDownload", "TestPreviewMediaPolicyUpgradeDoesNotReuseLegacyCache",
      "TestLocalMediaDimensionsRefreshFencesLegacyDecoderCapacity",
      "TestLocalMediaDimensionsRefreshPreservesIdentityAndCancellation",
