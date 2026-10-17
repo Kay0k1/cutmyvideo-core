@@ -103,7 +103,10 @@ func TestProcessTreeFixture(t *testing.T) {
 	if err != nil {
 		os.Exit(3)
 	}
-	if os.WriteFile(marker, []byte(listener.Addr().String()), 0600) != nil {
+	if os.WriteFile(marker+".tmp", []byte(listener.Addr().String()), 0600) != nil {
+		os.Exit(3)
+	}
+	if os.Rename(marker+".tmp", marker) != nil {
 		os.Exit(3)
 	}
 	for {

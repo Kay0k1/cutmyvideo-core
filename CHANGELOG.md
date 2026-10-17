@@ -5,6 +5,8 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 ## Unreleased
 
 ### Fixed
+- Preserve Python SDK request and job-wait timeout diagnostics when a deadline expires before the request timer or next poll can start, closing the unused connection and retaining the last job report.
+- Publish the process-cancellation test fixture's readiness marker atomically, preventing an empty intermediate file from causing a false CI failure while retaining descendant-liveness assertions.
 - Admit scoped collection jobs and their project bindings in one transaction. A full project history returns `project_limit` without leaving hidden queued work; existing jobs and partial submissions remain recoverable.
 - Bound project and source-preparation transaction rollback independently of the request deadline, including stalled database responses.
 - Resolve HLS variants, segments and initialization maps against the final playlist URL after guarded HTTP redirects.
@@ -13,6 +15,7 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 - Show fixed refusal codes in the self-hosting lifecycle wrapper while retaining exit status 1 and redacting private exception details.
 
 ### Changed
+- Separate probe metadata, deterministic track selection and video geometry/filter rules from server configuration, preserving inspection, rendering and diagnostic behavior.
 - Extract supplied subtitle retiming and shared cue indexing from the server package, preserving public Go aliases, text formats, limits and diagnostics.
 - Separate external-tool execution and platform process containment from app configuration, retaining output bounds, cancellation precedence and private error handling.
 - Require standalone media-component dependency and compatibility checks on every native target alongside the existing media, HTTP and process-tree acceptance.
