@@ -85,10 +85,27 @@ authorization fences. `http_projects.go` handles request decoding, rate limits,
 database deadlines, response errors and project-scoped URLs. Storage reads keep
 canonical source/artifact URLs; the HTTP boundary rewrites them for project access.
 
-Media execution, probing and queue coordination still share `internal/app`.
-The public engine therefore retains compile-time dependencies on that package;
-local operations continue to run without opening a database. Extracting the
-pure edit rules establishes a smaller boundary for further media separation.
+`internal/subtitles` owns supplied SRT/VTT retiming, subtitle cue indexing and
+clock formatting. It depends only on the standard library and `internal/edit`;
+it does not open files, run media tools or depend on HTTP or database code.
+The public engine calls it directly, while app aliases preserve the existing
+request/result/error types. Extracted-source SRT parsing remains distinct from
+the stricter supplied-text parser. Source inspection, cache ownership and
+subtitle extraction/muxing remain in the app layer.
+
+`internal/toolrun` owns the sanitized subprocess environment, process-tree
+containment on Unix/Windows, bounded stderr and fixed failure classification.
+It returns elapsed time and the raw process error to its caller. The app layer
+retains worker diagnostics, cancellation precedence, its existing error wrappers
+and stdout policies: buffered inspection is bounded, while streaming operations
+use their own writers and limits. The runner has no server configuration,
+HTTP or database dependency.
+
+Media probing, encoding coordination and queue handling still share
+`internal/app`. The public engine therefore retains compile-time dependencies
+on that package; local operations continue to run without opening a database.
+These smaller internal boundaries support further media separation without
+changing the existing public Go interfaces.
 
 ## Why SQL and JavaScript are here
 
@@ -116,6 +133,8 @@ installing the other language's SDK.
 | `cmd/cutmy/` | Local CLI, API/worker/maintenance entry points |
 | `internal/app/` | Shared media operations and internal server/queue/storage implementation |
 | `internal/edit/` | Standard-library-only edit models, validation and collection normalization |
+| `internal/subtitles/` | Pure supplied-text retiming, cue indexing and clock formatting |
+| `internal/toolrun/` | External tool execution, bounded diagnostics and platform process containment |
 | `internal/app/migrations/` | Versioned SQL and expected database catalog layouts |
 | `internal/fsdurable/` | Durable filesystem publication support |
 | `sdk/python/`, `sdk/typescript/` | Client libraries, package guides and tests |

@@ -121,7 +121,7 @@ func TestLocalKeyframeLookaheadBoundsFallbackAndCacheLimit(t *testing.T) {
 }
 
 func TestSubtitleIndexPreservesSpanningUnsortedRepeatedAndEmptyCues(t *testing.T) {
-	cues := []subtitleCue{{0, 20000, "spanning"}, {1000, 2500, "one"}, {2000, 2000, "empty"}, {3000, 4000, "two"}, {6000, 7000, "three"}}
+	cues := []subtitleCue{{StartMS: 0, EndMS: 20000, Text: "spanning"}, {StartMS: 1000, EndMS: 2500, Text: "one"}, {StartMS: 2000, EndMS: 2000, Text: "empty"}, {StartMS: 3000, EndMS: 4000, Text: "two"}, {StartMS: 6000, EndMS: 7000, Text: "three"}}
 	segments := []ArtifactSegment{{SourceStartMS: 6000, SourceEndMS: 6800}, {SourceStartMS: 1500, SourceEndMS: 3500, OutputStartMS: 800}, {SourceStartMS: 6000, SourceEndMS: 6800, OutputStartMS: 2800}}
 	for _, unordered := range []bool{false, true} {
 		current := append([]subtitleCue(nil), cues...)

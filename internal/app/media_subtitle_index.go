@@ -2,48 +2,16 @@ package app
 
 import (
 	"context"
-	"sort"
+
+	"github.com/Kay0k1/cutmyvideo-core/internal/subtitles"
 )
 
-// Keep at most one small parsed track per operation. Larger source tracks
-// retain their existing disk-backed, one-track-at-a-time processing path.
-const subtitleIndexCacheBytes = 1 << 20
+const subtitleIndexCacheBytes = subtitles.IndexCacheBytes
 
-type subtitleIndex struct {
-	cues   []subtitleCue
-	maxEnd []int64
-}
+type subtitleIndex = subtitles.Index
 
 func newSubtitleIndex(cues []subtitleCue) *subtitleIndex {
-	index := &subtitleIndex{cues: cues}
-	if len(cues) > subtitleIndexCacheBytes/8 {
-		return index
-	}
-	for i := 1; i < len(cues); i++ {
-		if cues[i].StartMS < cues[i-1].StartMS {
-			// Preserve the original order even for unsorted valid text tracks.
-			return index
-		}
-	}
-	index.maxEnd = make([]int64, len(cues))
-	var end int64
-	for i, cue := range cues {
-		end = max(end, cue.EndMS)
-		index.maxEnd[i] = end
-	}
-	return index
-}
-
-func (index *subtitleIndex) intersecting(start, end int64) []subtitleCue {
-	if index.maxEnd == nil {
-		return index.cues
-	}
-	first := sort.Search(len(index.cues), func(i int) bool { return index.maxEnd[i] > start })
-	last := sort.Search(len(index.cues), func(i int) bool { return index.cues[i].StartMS >= end })
-	if first >= last {
-		return nil
-	}
-	return index.cues[first:last]
+	return subtitles.NewIndex(cues)
 }
 
 func sourceSubtitleIndex(ctx context.Context, c Config, source string, stream probeStream) (*subtitleIndex, error) {
@@ -81,7 +49,7 @@ func sourceSubtitleIndex(ctx context.Context, c Config, source string, stream pr
 	// Slice capacity, rather than length, includes append growth slack. Cue
 	// structs occupy at most 32 bytes on supported 32/64-bit targets; allow
 	// fixed index/object overhead too, even when no endpoint index was built.
-	retained := len(data) + cap(cues)*32 + cap(index.maxEnd)*8 + 128
+	retained := len(data) + cap(cues)*32 + cap(index.MaxEnd)*8 + 128
 	for _, cue := range cues {
 		retained += len(cue.Text)
 	}
