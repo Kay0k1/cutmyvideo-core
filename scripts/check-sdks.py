@@ -57,7 +57,7 @@ def collection_inputs():
     for folder, pattern in (("sdk/python/src/cutmyvideo", "*.py"), ("sdk/python/tests", "*.py"),
                             ("sdk/typescript/src", "*.ts"), ("sdk/typescript/test", "*.mjs")):
         paths.extend((ROOT / folder).rglob(pattern))
-    return {str(path.relative_to(ROOT)): sha256(path) for path in sorted(set(paths))}
+    return {path.relative_to(ROOT).as_posix(): sha256(path) for path in sorted(set(paths))}
 
 
 def copy_project_contracts(output, expected_sha256):

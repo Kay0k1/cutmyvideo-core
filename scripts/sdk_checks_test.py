@@ -1,9 +1,10 @@
 """Negative controls for installed SDK acceptance, including omitted prerequisites."""
 import importlib.util
 import json
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import tempfile
 import unittest
+from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location("sdk_checks", Path(__file__).with_name("check-sdks.py"))
 CHECKS = importlib.util.module_from_spec(SPEC)
@@ -58,6 +59,19 @@ class InstalledSDKResultControls(unittest.TestCase):
         self.assertFalse(copied.is_relative_to(CHECKS.ROOT))
         with self.assertRaises(RuntimeError):
             CHECKS.copy_project_contracts(Path(self.directory.name), "0" * 64)
+
+    def test_source_inputs_use_git_paths_for_windows_relative_names(self):
+        # Keep real filesystem access while presenting the relative names as
+        # pathlib does on Windows. The inventory must use Git's slash paths.
+        class WindowsRelativeNames(type(Path())):
+            def relative_to(self, *other, **kwargs):
+                return PureWindowsPath(super().relative_to(*other, **kwargs))
+
+        with patch.object(CHECKS, "ROOT", WindowsRelativeNames(CHECKS.ROOT)):
+            inputs = CHECKS.collection_inputs()
+        self.assertIn(CHECKS.PROJECT_CONTRACTS, inputs)
+        self.assertTrue(all("\\" not in name for name in inputs))
+        self.assertEqual(inputs[CHECKS.PROJECT_CONTRACTS], CHECKS.sha256(CHECKS.ROOT / CHECKS.PROJECT_CONTRACTS))
 
 
 if __name__ == "__main__":
