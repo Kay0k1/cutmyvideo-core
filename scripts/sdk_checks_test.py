@@ -106,7 +106,7 @@ class InstalledSDKScratchControls(unittest.TestCase):
                 CHECKS.main()
             run.assert_not_called()
             inputs.assert_not_called()
-            usage.assert_called_once_with(self.output)
+            usage.assert_called_once_with(self.output.resolve())
             usage.return_value.free = CHECKS.MINIMUM_FREE
             CHECKS.require_output_capacity(self.output)
 
