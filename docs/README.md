@@ -13,7 +13,7 @@ Choose an interface in the README, then follow the relevant guide. The project o
 | [CLI and Go library](usage.md) | Installation, inspect/export, errors, local limits and a complete HTTP example |
 | [Plans, preflight and joined outputs](batch-cutting.md) | Saved JSON plans, checking before execution, output order, audio and subtitles |
 | [Editable clip collections](clip-collections.md) | Independent clips, ordered fragments, draft/final exports, crop and selected IDs |
-| [Agent workflow](agent-workflow.md) | A reproducible interview-to-clips scenario and safe revisions/retries |
+| [Agent workflow](agent-workflow.md) · [Project lifecycle](agent-workflow.md#retention-access-and-recovery) | A reproducible interview-to-clips scenario, safe revisions/retries and independent retention/access deadlines |
 | [Python and TypeScript SDKs](sdk.md) | Versioned package installation, local/API workflows, waiting, recovery and downloads |
 | [Resumable SDK collections](sdk-collections.md) | Source preparation, failed-clip repair, browser handoff/sync, durable downloads and sidecars |
 | [Supplied subtitle sidecars](subtitle-sidecars.md) | External SRT/VTT retiming against actual clip maps, without transcription |
@@ -51,10 +51,13 @@ Choose an interface in the README, then follow the relevant guide. The project o
 
 | Guide | Covers |
 | --- | --- |
-| [Contributing](../CONTRIBUTING.md) | Environment, focused checks, SDK acceptance and pull requests |
+| [Contributing](../CONTRIBUTING.md) · [Command map](../CONTRIBUTING.md#command-map) | Environment, development/check/release entry points, SDK acceptance and pull requests |
+| [HTTP compatibility](../api/COMPATIBILITY.md) | Frozen API baselines and shared collection/project examples across the core and SDKs |
 | [Changelog](../CHANGELOG.md) | Published versions and unreleased features |
 | [CLI releases](releases.md) | Release-page conventions, reproducible packaging and consumer signature verification |
+| [1.4.1 scope and verification](release-1.4.1.md) | Shared collection preflight, native resource bounds and measured draft-export results |
 | [1.4.0 scope and verification](release-1.4.0.md) | Agent projects, schema 8, subtitle sidecars, signed packages and publication boundaries |
+| [Core 1.4.1 audit](core-audit-1.4.1.md) | Original findings, maintenance work, retained regression proofs and completion checks |
 | [Performance](performance.md) | Matched measurements, retained results and limits of speed claims |
 | [Artifact retention](artifacts.md) | Keeping large diagnostics outside the source tree |
 | [Security reporting](../SECURITY.md) | Private vulnerability reports |

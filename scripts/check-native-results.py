@@ -8,6 +8,131 @@ APP_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/app"
 ENGINE_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/pkg/engine"
 FS_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
 CLI_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/cmd/cutmy"
+SUBTITLE_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/subtitles"
+TOOLRUN_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/toolrun"
+MEDIAINFO_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/mediainfo"
+MEDIAEXPORT_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/mediaexport"
+MEDIAPREFLIGHT_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/mediapreflight"
+MEDIASESSION_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/mediasession"
+COREMODEL_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/coremodel"
+MEDIAERROR_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/mediaerror"
+LOCALMEDIA_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/localmedia"
+
+AUDIT_MEDIA_REQUIRED = {
+    "TestHLSManifestRedirectResolvesFinalRelativeReferences",
+    "TestHLSManifestRedirectRetainsTargetGuards",
+    "TestHLSManifestRedirectRetainsRedirectLimit",
+    "TestHLSManifestRedirectRetainsTransferBudgets",
+}
+PLATFORM_ORIGINAL_AUDIO_REQUIRED = {
+    "TestPlatformOriginalAudioSelection",
+    "TestPlatformOriginalAudioRanksSupportedInputs",
+    "TestPlatformOriginalAudioSurvivesExtractorAndCache",
+    "TestPlatformOriginalAudioInvalidatesPreviewCache",
+}
+AUDIT_SERVICE_REQUIRED = {
+    "TestHTTPAgentProjectJobLimitRejectsAdmissionAtomicallyAndRetainsReplay",
+    "TestHTTPAgentProjectConcurrentAdmissionsShareLastBindingSlot",
+    "TestHTTPAgentProjectPartialAdmissionPreservesJobsAtBindingLimit",
+    "TestProjectAdmissionRechecksScopeBeforeCommittingJob",
+    "TestHTTPProjectAndPreparationRollbackHasIndependentBound",
+}
+
+PROJECT_CONTRACT_SERVICE_REQUIRED = {
+    "TestProjectCollectionContractExamples",
+    "TestProjectLifecycleRevokeAndDeletePreserveAcceptedWork",
+    "TestProjectLifecycleAccessExpiryPrecedesAdmissionCleanup",
+    "TestProjectLifecycleLiveProjectAndGrantDoNotPinSource",
+}
+
+EDIT_MODEL_SERVICE_REQUIRED = {
+    "TestEditAdapterPreservesRequestNormalizationOrder",
+    "TestEditAdapterPreservesCollectionErrorChains",
+}
+EDIT_MODEL_ENGINE_REQUIRED = {"TestEngineEditModelPreservesPublicShapes"}
+ENGINE_MEDIA_REQUIRED = {
+    "TestAdvancedCropPlanPublishesActualCroppedOutput",
+    "TestEngineInspectSeparatesCodedAndDisplayDimensions",
+}
+SUBTITLE_MODULE_REQUIRED = {"TestSubtitlePackageHasNoRuntimeDependencies"}
+MEDIA_BOUNDARY_ENGINE_REQUIRED = {"TestEngineSubtitleBoundaryPreservesPublicContracts"}
+TOOLRUN_MODULE_REQUIRED = {
+    "TestToolrunPackageUsesOnlyStandardLibrary",
+    "TestRunOutputPreservesRawFailureAndStreaming",
+    "TestRunOutputPreservesCancellation",
+    "TestDiagnosticCopyCannotBypassMemoryBound",
+}
+TOOLRUN_LIFECYCLE_REQUIRED = {"TestRunOutputCleansDescendantsAfterParentExit"}
+MEDIAINFO_MODULE_REQUIRED = {
+    "TestInfoValidationPreservesProbeBoundaries",
+    "TestInfoDurationAndSelectionPreserveSourceOrder",
+    "TestTrackDecisionPreservesManifestAndErrorContracts",
+    "TestMediaInfoPackageHasPureDependencies",
+}
+MEDIAINFO_ADAPTER_REQUIRED = {
+    "TestMediaInfoErrorBridgePreservesLegacyTypesAndCauses",
+    "TestMediaInfoGeometryPreservesValidationOrder",
+}
+MEDIAEXPORT_MODULE_REQUIRED = {
+    "TestSingleExportPreservesCopyClockAndVerificationOrder",
+    "TestSingleExportPreservesFailurePrecedenceAndErrorIdentity",
+    "TestSingleExportPreservesValidationAndCancellationOrder",
+    "TestSingleExportPreservesRenderProfilesAndIntermediateOutputs",
+    "TestMediaExportPackageHasNoIOOrServiceDependencies",
+}
+MEDIAEXPORT_ADAPTER_REQUIRED = {
+    "TestMediaExportBridgePreservesLegacyErrorsAndRuntime",
+    "TestMediaExportBackendPreservesProcessPaths",
+}
+JOINED_MEDIAEXPORT_REQUIRED = {
+    "TestJoinedExportPreservesAdmissionOrderSubtitlesAndCleanup",
+    "TestJoinedCopyPreservesMeasuredTimelineReuseAndBudget",
+    "TestJoinedAccuratePreservesPlanRestrictionsAndVerification",
+    "TestJoinedCopyAudioPreservesCapabilityFallbackAndStages",
+    "TestJoinedVerificationPreservesBoundsAndCausePrecedence",
+    "TestJoinedPlanPreservesEscapingFingerprintsAndPacketEligibility",
+}
+MEDIAPREFLIGHT_MODULE_REQUIRED = {
+    "TestPreflightPlanPreservesRequestOwnershipAndDecisionOrder",
+    "TestPreflightCapabilitiesPreserveExactTablesAndRequirements",
+    "TestPreflightBatchPreservesUnionAndFailureOrder",
+    "TestMediaPreflightPackageHasNoIOOrServiceDependencies",
+}
+MEDIAPREFLIGHT_ADAPTER_REQUIRED = {
+    "TestMediaPreflightBridgePreservesLegacyShapesAndCauses",
+}
+MEDIASESSION_MODULE_REQUIRED = {
+    "TestSessionPreservesProbeIdentityAndCancellation",
+    "TestSessionPreservesBoundedKeyframeLookahead",
+    "TestSessionPreservesSubtitleCacheOwnershipAndCleanup",
+    "TestSessionReusePreservesIndependentFilesAndFallback",
+    "TestMediaSessionPackageHasNoServiceDependencies",
+}
+SOURCE_SUBTITLE_MODULE_REQUIRED = {
+    "TestExtractedSourceParserPreservesLegacyTolerance",
+}
+MEDIASESSION_ADAPTER_REQUIRED = {
+    "TestMediaSessionBridgePreservesLegacyTypesAndCallbacks",
+}
+COREMODEL_MODULE_REQUIRED = {
+    "TestCoreModelPreservesLegacyValidationAndShapes",
+    "TestCoreModelPackageHasNoServiceDependencies",
+}
+MEDIAERROR_MODULE_REQUIRED = {
+    "TestMediaErrorPreservesClassificationAndCauses",
+    "TestMediaErrorPackageUsesOnlyStandardLibrary",
+}
+LOCALMEDIA_MODULE_REQUIRED = {
+    "TestLocalMediaSessionPreservesOwnershipAndFreshness",
+    "TestLocalMediaProcessPreservesBoundsStreamingAndObserver",
+}
+COREMODEL_MEDIAERROR_ADAPTER_REQUIRED = {
+    "TestCoreModelAndMediaErrorAdaptersPreserveLegacyContracts",
+}
+ENGINE_DEPENDENCY_REQUIRED = {
+    "TestEngineRuntimeDependencyBoundary",
+    "TestEngineExternalConsumerPreservesPublicContracts",
+}
 
 NEW_MEDIA_REQUIRED = {
     "TestWaveformPCMStreamingBoundsAndSplitSamples", "TestWaveformMatchesIndependentAudioTimelineAndOffsets",
@@ -274,7 +399,7 @@ REQUIRED = [
     {"TestMediaContractRotationDisplayGeometry", "TestMediaContractSampleAspectNormalization",
      "TestMediaContractVariableFrameTimestamps", "TestMediaContractHDRToneMappingAndCopy",
      "TestMediaContractDefaultAudioSelection", "TestMediaContractAttachedPicturesAreNotVideo",
-     "TestMediaContractCopyQualityUsesSelectedVideo", "TestEngineInspectSeparatesCodedAndDisplayDimensions",
+     "TestMediaContractCopyQualityUsesSelectedVideo",
      "TestHLSMediaContractRotationAndSAR", "TestHLSMediaContractDefaultAudio", "TestHLSMediaContractHDRTags",
      "TestHLSMediaContractContinuityMetadata", "TestHLSMediaContractFingerprintUsesSelectedTracks",
      "TestHDRCapabilityFailureKeepsProcessCause", "TestHDRFailurePreservesCancellationAndLimits",
@@ -282,8 +407,9 @@ REQUIRED = [
 ]
 
 REQUIRED[0].add("TestParseCrop")
+REQUIRED[0].update(ENGINE_MEDIA_REQUIRED)
 REQUIRED[2].update(NEW_SERVICE_REQUIRED)
-REQUIRED[4].update(NEW_MEDIA_REQUIRED | {"TestAdvancedCropPlanPublishesActualCroppedOutput"})
+REQUIRED[4].update(NEW_MEDIA_REQUIRED)
 REQUIRED[2].update(EFFICIENT_CUTTING_SERVICE_REQUIRED)
 REQUIRED[3].update(EFFICIENT_CUTTING_STORAGE_REQUIRED)
 REQUIRED[4].update(EFFICIENT_CUTTING_MEDIA_REQUIRED)
@@ -303,13 +429,49 @@ REQUIRED[2].update(COLLECTION_SERVICE_REQUIRED)
 REQUIRED[0].update(SUBTITLE_CLI_REQUIRED)
 REQUIRED[2].update(AGENT_PROJECT_SERVICE_REQUIRED | SUBTITLE_SERVICE_REQUIRED)
 REQUIRED[3].update(AGENT_PROJECT_STORAGE_REQUIRED)
+REQUIRED[2].update(AUDIT_SERVICE_REQUIRED)
+REQUIRED[2].update(PROJECT_CONTRACT_SERVICE_REQUIRED)
+REQUIRED[2].update(EDIT_MODEL_SERVICE_REQUIRED)
+REQUIRED[0].update(EDIT_MODEL_ENGINE_REQUIRED)
+REQUIRED[4].update(AUDIT_MEDIA_REQUIRED)
+REQUIRED[4].update(PLATFORM_ORIGINAL_AUDIO_REQUIRED)
+REQUIRED[0].update(SUBTITLE_MODULE_REQUIRED | MEDIA_BOUNDARY_ENGINE_REQUIRED)
+REQUIRED[1].update(TOOLRUN_MODULE_REQUIRED)
+REQUIRED[1].update(TOOLRUN_LIFECYCLE_REQUIRED)
+REQUIRED[0].update(MEDIAINFO_MODULE_REQUIRED)
+REQUIRED[4].update(MEDIAINFO_ADAPTER_REQUIRED)
+REQUIRED[0].update(MEDIAEXPORT_MODULE_REQUIRED)
+REQUIRED[4].update(MEDIAEXPORT_ADAPTER_REQUIRED)
+REQUIRED[0].update(JOINED_MEDIAEXPORT_REQUIRED | MEDIAPREFLIGHT_MODULE_REQUIRED)
+REQUIRED[4].update(MEDIAPREFLIGHT_ADAPTER_REQUIRED)
+REQUIRED[0].update(MEDIASESSION_MODULE_REQUIRED | SOURCE_SUBTITLE_MODULE_REQUIRED)
+REQUIRED[4].update(MEDIASESSION_ADAPTER_REQUIRED)
+REQUIRED[0].update(COREMODEL_MODULE_REQUIRED | MEDIAERROR_MODULE_REQUIRED | LOCALMEDIA_MODULE_REQUIRED | ENGINE_DEPENDENCY_REQUIRED)
+REQUIRED[4].update(COREMODEL_MEDIAERROR_ADAPTER_REQUIRED)
 
 REQUIRED_PACKAGES = [
-    {ENGINE_PACKAGE, FS_PACKAGE, CLI_PACKAGE},
+    {ENGINE_PACKAGE, FS_PACKAGE, CLI_PACKAGE, SUBTITLE_PACKAGE, MEDIAINFO_PACKAGE, MEDIAEXPORT_PACKAGE, MEDIAPREFLIGHT_PACKAGE, MEDIASESSION_PACKAGE, COREMODEL_PACKAGE, MEDIAERROR_PACKAGE, LOCALMEDIA_PACKAGE},
+    {APP_PACKAGE, TOOLRUN_PACKAGE},
     {APP_PACKAGE},
     {APP_PACKAGE},
     {APP_PACKAGE},
-    {APP_PACKAGE, ENGINE_PACKAGE},
+]
+
+# The mixed reports must retain each test's owning package. Adding a standalone
+# module must not let its similarly named test satisfy an engine or app result.
+REQUIRED_TEST_PACKAGES = [
+    {name: (COREMODEL_PACKAGE if name in COREMODEL_MODULE_REQUIRED else
+            MEDIAERROR_PACKAGE if name in MEDIAERROR_MODULE_REQUIRED else
+            LOCALMEDIA_PACKAGE if name in LOCALMEDIA_MODULE_REQUIRED else
+            MEDIASESSION_PACKAGE if name in MEDIASESSION_MODULE_REQUIRED else
+            MEDIAPREFLIGHT_PACKAGE if name in MEDIAPREFLIGHT_MODULE_REQUIRED else
+            MEDIAEXPORT_PACKAGE if name in MEDIAEXPORT_MODULE_REQUIRED | JOINED_MEDIAEXPORT_REQUIRED else
+            MEDIAINFO_PACKAGE if name in MEDIAINFO_MODULE_REQUIRED else
+            SUBTITLE_PACKAGE if name in SUBTITLE_MODULE_REQUIRED | SOURCE_SUBTITLE_MODULE_REQUIRED else
+            CLI_PACKAGE if name.startswith("TestCLI") or name == "TestParseCrop" else
+            FS_PACKAGE if name == "TestConcurrentPublicationHasExactlyOneCompleteWinner" else
+            ENGINE_PACKAGE) for name in REQUIRED[0]},
+    {name: TOOLRUN_PACKAGE if name in TOOLRUN_MODULE_REQUIRED | TOOLRUN_LIFECYCLE_REQUIRED else APP_PACKAGE for name in REQUIRED[1]},
 ]
 
 BOOKWORM_REQUIRED = {
@@ -331,22 +493,27 @@ BOOKWORM_REQUIRED.update(EFFICIENT_CUTTING_MEDIA_REQUIRED)
 BOOKWORM_REQUIRED.update(UNIVERSAL_MEDIA_REQUIRED)
 BOOKWORM_REQUIRED.update(PREFLIGHT_MEDIA_REQUIRED)
 BOOKWORM_REQUIRED.update(DRAFT_CACHE_TRANSFER_REQUIRED)
+BOOKWORM_REQUIRED.update(AUDIT_MEDIA_REQUIRED)
 
 
-def verify_report(filename, names, packages):
+def verify_report(filename, names, packages, test_packages=None):
     events = [json.loads(line) for line in Path(filename).read_text(encoding="utf-8").splitlines() if line.strip()]
     failures = [event for event in events if event.get("Action") in {"fail", "skip"}]
-    passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
+    passed = {(event.get("Package"), event.get("Test")) for event in events if event.get("Action") == "pass"}
     completed = {event.get("Package") for event in events if event.get("Action") == "pass" and not event.get("Test")}
-    if failures or not names <= passed or not packages <= completed:
-        raise SystemExit(f"native verification incomplete: {filename}; missing={sorted(names - passed)}; incomplete_packages={sorted(packages - completed)}; failed/skipped={len(failures)}")
+    expected_packages = test_packages or {}
+    missing = {name for name in names if not any((package, name) in passed for package in
+               ({expected_packages[name]} if name in expected_packages else packages))}
+    if failures or missing or not packages <= completed:
+        raise SystemExit(f"native verification incomplete: {filename}; missing={sorted(missing)}; incomplete_packages={sorted(packages - completed)}; failed/skipped={len(failures)}")
 
 
 def verify(filenames):
     if len(filenames) != len(REQUIRED):
         raise SystemExit("expected media, process, service, storage and media-contract JSON test reports")
-    for filename, names, packages in zip(filenames, REQUIRED, REQUIRED_PACKAGES):
-        verify_report(filename, names, packages)
+    for index, (filename, names, packages) in enumerate(zip(filenames, REQUIRED, REQUIRED_PACKAGES)):
+        test_packages = REQUIRED_TEST_PACKAGES[index] if index < len(REQUIRED_TEST_PACKAGES) else None
+        verify_report(filename, names, packages, test_packages)
 
 
 if __name__ == "__main__":

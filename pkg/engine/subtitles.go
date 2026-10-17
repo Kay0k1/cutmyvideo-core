@@ -2,17 +2,18 @@ package engine
 
 import (
 	"context"
-	"github.com/Kay0k1/cutmyvideo-core/internal/app"
+
+	"github.com/Kay0k1/cutmyvideo-core/internal/subtitles"
 )
 
-type SubtitleRetimeRequest = app.SubtitleRetimeRequest
-type SubtitleRetimeClip = app.SubtitleRetimeClip
-type SubtitleSidecar = app.SubtitleSidecar
-type SubtitleRetimeResult = app.SubtitleRetimeResult
-type SubtitleRetimeError = app.SubtitleRetimeError
+type SubtitleRetimeRequest = subtitles.RetimeRequest
+type SubtitleRetimeClip = subtitles.RetimeClip
+type SubtitleSidecar = subtitles.Sidecar
+type SubtitleRetimeResult = subtitles.RetimeResult
+type SubtitleRetimeError = subtitles.RetimeError
 
 // RetimeSubtitles converts externally supplied SRT/VTT into per-clip sidecars
 // using actual segment maps. It requires no Engine, tools, database or files.
 func RetimeSubtitles(ctx context.Context, request SubtitleRetimeRequest) (SubtitleRetimeResult, error) {
-	return app.RetimeSubtitles(ctx, request)
+	return subtitles.Retime(ctx, request)
 }

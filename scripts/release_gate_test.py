@@ -5,7 +5,7 @@ import importlib.util
 from pathlib import Path
 import unittest
 
-import release_native_test as fixture
+import release_native_test_fixtures as fixture
 
 SPEC = importlib.util.spec_from_file_location('release_gate', Path(__file__).with_name('release-gate.py'))
 gate = importlib.util.module_from_spec(SPEC)

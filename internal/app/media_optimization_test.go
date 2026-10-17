@@ -42,8 +42,8 @@ func TestLocalKeyframeCacheChecksSourceToolStreamAndCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 	tool := filepath.Join(t.TempDir(), "missing-ffprobe")
-	session.keyframeFile = file
-	session.keyframes = []keyframeWindow{{from: 0, until: 5001, stream: 2, tool: tool, frames: []copyKeyframe{{PTS: 0, DTS: -80, HasDTS: true}, {PTS: 2000, DTS: 1920, HasDTS: true}}}}
+	session.KeyframeFile = file
+	session.Keyframes = []keyframeWindow{{From: 0, Until: 5001, Stream: 2, Tool: tool, Frames: []copyKeyframe{{PTS: 0, DTS: -80, HasDTS: true}, {PTS: 2000, DTS: 1920, HasDTS: true}}}}
 	got, err := nearestKeyframe(ctx, Config{FFprobe: tool}, path, 3500, false, 2)
 	if err != nil || got.PTS != 2000 || got.DTS != 1920 {
 		t.Fatalf("warm local lookup: %+v, %v", got, err)
@@ -112,16 +112,16 @@ func TestLocalKeyframeLookaheadBoundsFallbackAndCacheLimit(t *testing.T) {
 		}
 	}
 	entries := 0
-	for _, window := range session.keyframes {
-		entries += len(window.frames)
+	for _, window := range session.Keyframes {
+		entries += len(window.Frames)
 	}
-	if len(session.keyframes) > sessionKeyframeWindows || entries > sessionKeyframeEntries {
-		t.Fatalf("unbounded keyframe cache: %d windows, %d frames", len(session.keyframes), entries)
+	if len(session.Keyframes) > sessionKeyframeWindows || entries > sessionKeyframeEntries {
+		t.Fatalf("unbounded keyframe cache: %d windows, %d frames", len(session.Keyframes), entries)
 	}
 }
 
 func TestSubtitleIndexPreservesSpanningUnsortedRepeatedAndEmptyCues(t *testing.T) {
-	cues := []subtitleCue{{0, 20000, "spanning"}, {1000, 2500, "one"}, {2000, 2000, "empty"}, {3000, 4000, "two"}, {6000, 7000, "three"}}
+	cues := []subtitleCue{{StartMS: 0, EndMS: 20000, Text: "spanning"}, {StartMS: 1000, EndMS: 2500, Text: "one"}, {StartMS: 2000, EndMS: 2000, Text: "empty"}, {StartMS: 3000, EndMS: 4000, Text: "two"}, {StartMS: 6000, EndMS: 7000, Text: "three"}}
 	segments := []ArtifactSegment{{SourceStartMS: 6000, SourceEndMS: 6800}, {SourceStartMS: 1500, SourceEndMS: 3500, OutputStartMS: 800}, {SourceStartMS: 6000, SourceEndMS: 6800, OutputStartMS: 2800}}
 	for _, unordered := range []bool{false, true} {
 		current := append([]subtitleCue(nil), cues...)
@@ -159,8 +159,8 @@ func TestSourceSubtitleIndexReusesOnlyOneBoundedTrack(t *testing.T) {
 	}
 	ctx, session := BeginLocalExport(context.Background(), source)
 	defer session.Close()
-	session.file, _ = os.Stat(source)
-	session.cues[3], session.cues[4] = text, text
+	session.File, _ = os.Stat(source)
+	session.Cues[3], session.Cues[4] = text, text
 	c := Config{FFmpeg: "unused"}
 	first, err := sourceSubtitleIndex(ctx, c, source, probeStream{Index: 3})
 	if err != nil {
@@ -171,7 +171,7 @@ func TestSourceSubtitleIndexReusesOnlyOneBoundedTrack(t *testing.T) {
 		t.Fatalf("parsed source track was not reused: %v", err)
 	}
 	other, err := sourceSubtitleIndex(ctx, c, source, probeStream{Index: 4})
-	if err != nil || other == first || session.subtitleTrack != 4 {
+	if err != nil || other == first || session.SubtitleTrack != 4 {
 		t.Fatalf("track selection crossed parsed cache: %v", err)
 	}
 	large := "1\n00:00:00,500 --> 00:00:02,800\n" + strings.Repeat("x", subtitleIndexCacheBytes) + "\n\n"
@@ -181,7 +181,7 @@ func TestSourceSubtitleIndexReusesOnlyOneBoundedTrack(t *testing.T) {
 	if _, err := sourceSubtitleIndex(ctx, c, source, probeStream{Index: 3}); err != nil {
 		t.Fatal(err)
 	}
-	if session.subtitleIndex != nil {
+	if session.SubtitleIndex != nil {
 		t.Fatal("large source track became a retained parsed cache")
 	}
 	if err := os.WriteFile(source, []byte("changed source"), 0600); err != nil {

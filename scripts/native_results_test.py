@@ -24,12 +24,30 @@ class NativeResultsChecks(unittest.TestCase):
             events = []
             for name in sorted(names):
                 package = native_results.APP_PACKAGE
-                if name.startswith("TestEngine") or name in native_results.PREFLIGHT_ENGINE_REQUIRED | native_results.COLLECTION_ENGINE_REQUIRED:
-                    package = native_results.ENGINE_PACKAGE
-                elif name.startswith("TestCLI"):
+                if name in native_results.COREMODEL_MODULE_REQUIRED:
+                    package = native_results.COREMODEL_PACKAGE
+                elif name in native_results.MEDIAERROR_MODULE_REQUIRED:
+                    package = native_results.MEDIAERROR_PACKAGE
+                elif name in native_results.LOCALMEDIA_MODULE_REQUIRED:
+                    package = native_results.LOCALMEDIA_PACKAGE
+                elif name in native_results.MEDIASESSION_MODULE_REQUIRED:
+                    package = native_results.MEDIASESSION_PACKAGE
+                elif name in native_results.MEDIAPREFLIGHT_MODULE_REQUIRED:
+                    package = native_results.MEDIAPREFLIGHT_PACKAGE
+                elif name in native_results.MEDIAEXPORT_MODULE_REQUIRED | native_results.JOINED_MEDIAEXPORT_REQUIRED:
+                    package = native_results.MEDIAEXPORT_PACKAGE
+                elif name in native_results.MEDIAINFO_MODULE_REQUIRED:
+                    package = native_results.MEDIAINFO_PACKAGE
+                elif name in native_results.SUBTITLE_MODULE_REQUIRED | native_results.SOURCE_SUBTITLE_MODULE_REQUIRED:
+                    package = native_results.SUBTITLE_PACKAGE
+                elif name in native_results.TOOLRUN_MODULE_REQUIRED | native_results.TOOLRUN_LIFECYCLE_REQUIRED:
+                    package = native_results.TOOLRUN_PACKAGE
+                elif name.startswith("TestCLI") or name == "TestParseCrop":
                     package = native_results.CLI_PACKAGE
                 elif name == "TestConcurrentPublicationHasExactlyOneCompleteWinner":
                     package = native_results.FS_PACKAGE
+                elif index == 0:
+                    package = native_results.ENGINE_PACKAGE
                 events.append({"Action": "pass", "Test": name, "Package": package})
             events.extend({"Action": "pass", "Package": package} for package in sorted(native_results.REQUIRED_PACKAGES[index]))
             path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
@@ -38,6 +56,572 @@ class NativeResultsChecks(unittest.TestCase):
     def run_gate(self, reports=None):
         return subprocess.run([sys.executable, str(SCRIPT), *map(str, self.reports if reports is None else reports)],
                               capture_output=True, text=True, timeout=10)
+
+    def assert_required_results_reject_mutations(self, cases, wrong_package, other_report):
+        originals = [path.read_text(encoding="utf-8") for path in self.reports]
+        baseline = [[json.loads(line) for line in text.splitlines()] for text in originals]
+        self.assertEqual(self.run_gate().returncode, 0)
+        for index, package, names in cases:
+            path = self.reports[index]
+            for name in names:
+                for action in ("missing", "skip", "fail", "failed-subtest", "wrong-package", "wrong-report", "incomplete-package"):
+                    with self.subTest(name=name, action=action):
+                        if action == "incomplete-package":
+                            events = [event for event in baseline[index]
+                                      if event.get("Test") or event["Package"] != package]
+                        else:
+                            events = [event for event in baseline[index]
+                                      if action == "failed-subtest" or event.get("Test") != name]
+                        if action in ("skip", "fail", "failed-subtest", "wrong-package"):
+                            wrong = wrong_package(index, package)
+                            events.append({"Action": "pass" if action == "wrong-package" else "fail" if action == "failed-subtest" else action,
+                                           "Test": name + "/fault" if action == "failed-subtest" else name,
+                                           "Package": wrong if action == "wrong-package" else package})
+                        path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+                        if action == "wrong-report":
+                            other = other_report(index)
+                            moved = baseline[other] + [{"Action": "pass", "Test": name, "Package": package}]
+                            self.reports[other].write_text("".join(json.dumps(event) + "\n" for event in moved), encoding="utf-8")
+                        result = self.run_gate()
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn("incomplete_packages" if action == "incomplete-package" else "failed/skipped=1" if action == "failed-subtest" else name, result.stderr)
+                        for report, original in zip(self.reports, originals):
+                            report.write_text(original, encoding="utf-8")
+
+    def test_original_platform_audio_is_required_on_every_native_target(self):
+        required = {"TestPlatformOriginalAudioSelection",
+                    "TestPlatformOriginalAudioRanksSupportedInputs",
+                    "TestPlatformOriginalAudioSurvivesExtractorAndCache",
+                    "TestPlatformOriginalAudioInvalidatesPreviewCache"}
+        self.assertEqual(native_results.PLATFORM_ORIGINAL_AUDIO_REQUIRED, required)
+        self.assertLessEqual(required, native_results.REQUIRED[4])
+        self.assertEqual(native_results.REQUIRED_PACKAGES[4], {native_results.APP_PACKAGE})
+        workflow = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]", workflow)
+        media = next(line for line in workflow.splitlines() if "tee native-media-contract-tests.jsonl" in line)
+        self.assertIn("./internal/app -run ", media)
+        selector = re.search(r"-run '([^']+)'", media).group(1)
+        for name in required:
+            self.assertIsNotNone(re.fullmatch(selector, name))
+        self.assert_required_results_reject_mutations(
+            ((4, native_results.APP_PACKAGE, required),),
+            lambda index, package: native_results.ENGINE_PACKAGE,
+            lambda index: 0)
+
+    def test_process_return_cleanup_is_required_and_rejects_incomplete_native_proof(self):
+        required = {"TestRunOutputCleansDescendantsAfterParentExit"}
+        self.assertEqual(native_results.TOOLRUN_LIFECYCLE_REQUIRED, required)
+        self.assertLessEqual(required, native_results.REQUIRED[1])
+        self.assertIn(native_results.TOOLRUN_PACKAGE, native_results.REQUIRED_PACKAGES[1])
+        for name in required:
+            self.assertEqual(native_results.REQUIRED_TEST_PACKAGES[1][name], native_results.TOOLRUN_PACKAGE)
+        workflow = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]", workflow)
+        process = next(line for line in workflow.splitlines() if "tee native-process-tests.jsonl" in line)
+        self.assertIn("./internal/app ./internal/toolrun", process)
+        selector = re.search(r"-run '([^']+)'", process).group(1)
+        for name in required:
+            self.assertIsNotNone(re.fullmatch(selector, name))
+        self.assert_required_results_reject_mutations(
+            ((1, native_results.TOOLRUN_PACKAGE, required),),
+            lambda index, package: native_results.APP_PACKAGE,
+            lambda index: 0)
+
+    def test_engine_separation_checks_are_required_on_every_native_target(self):
+        coremodel = {"TestCoreModelPreservesLegacyValidationAndShapes",
+                     "TestCoreModelPackageHasNoServiceDependencies"}
+        mediaerror = {"TestMediaErrorPreservesClassificationAndCauses",
+                      "TestMediaErrorPackageUsesOnlyStandardLibrary"}
+        localmedia = {"TestLocalMediaSessionPreservesOwnershipAndFreshness",
+                      "TestLocalMediaProcessPreservesBoundsStreamingAndObserver"}
+        engine = {"TestEngineRuntimeDependencyBoundary",
+                  "TestEngineExternalConsumerPreservesPublicContracts"}
+        adapter = {"TestCoreModelAndMediaErrorAdaptersPreserveLegacyContracts"}
+        self.assertEqual(native_results.COREMODEL_MODULE_REQUIRED, coremodel)
+        self.assertEqual(native_results.MEDIAERROR_MODULE_REQUIRED, mediaerror)
+        self.assertEqual(native_results.LOCALMEDIA_MODULE_REQUIRED, localmedia)
+        self.assertEqual(native_results.ENGINE_DEPENDENCY_REQUIRED, engine)
+        self.assertEqual(native_results.COREMODEL_MEDIAERROR_ADAPTER_REQUIRED, adapter)
+        for names, package in ((coremodel, native_results.COREMODEL_PACKAGE),
+                               (mediaerror, native_results.MEDIAERROR_PACKAGE),
+                               (localmedia, native_results.LOCALMEDIA_PACKAGE),
+                               (engine, native_results.ENGINE_PACKAGE)):
+            self.assertLessEqual(names, native_results.REQUIRED[0])
+            self.assertIn(package, native_results.REQUIRED_PACKAGES[0])
+            for name in names:
+                self.assertEqual(native_results.REQUIRED_TEST_PACKAGES[0][name], package)
+        self.assertLessEqual(adapter, native_results.REQUIRED[4])
+        self.assertEqual(native_results.REQUIRED_PACKAGES[4], {native_results.APP_PACKAGE})
+        workflow = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]", workflow)
+        complete = next(line for line in workflow.splitlines() if "tee native-media-tests.jsonl" in line)
+        for package in ("./internal/coremodel", "./internal/mediaerror", "./internal/localmedia", "./pkg/engine"):
+            self.assertIn(package, complete)
+        self.assertNotIn("-run ", complete)
+        media = next(line for line in workflow.splitlines() if "tee native-media-contract-tests.jsonl" in line)
+        self.assertIn("./internal/app -run ", media)
+        for package in ("./internal/coremodel", "./internal/mediaerror", "./internal/localmedia"):
+            self.assertNotIn(package, media)
+        selector = re.search(r"-run '([^']+)'", media).group(1)
+        for name in adapter:
+            self.assertIsNotNone(re.fullmatch(selector, name))
+
+    def test_engine_separation_results_reject_missing_skipped_failed_and_substituted_proof(self):
+        cases = ((0, native_results.COREMODEL_PACKAGE, native_results.COREMODEL_MODULE_REQUIRED),
+                 (0, native_results.MEDIAERROR_PACKAGE, native_results.MEDIAERROR_MODULE_REQUIRED),
+                 (0, native_results.LOCALMEDIA_PACKAGE, native_results.LOCALMEDIA_MODULE_REQUIRED),
+                 (0, native_results.ENGINE_PACKAGE, native_results.ENGINE_DEPENDENCY_REQUIRED),
+                 (4, native_results.APP_PACKAGE, native_results.COREMODEL_MEDIAERROR_ADAPTER_REQUIRED))
+        self.assert_required_results_reject_mutations(
+            cases,
+            lambda index, package: native_results.APP_PACKAGE if index == 0 else native_results.ENGINE_PACKAGE,
+            lambda index: 4 if index == 0 else 0)
+
+    def test_engine_separation_modules_cannot_satisfy_existing_engine_and_app_checks(self):
+        for package in (native_results.COREMODEL_PACKAGE, native_results.MEDIAERROR_PACKAGE,
+                        native_results.LOCALMEDIA_PACKAGE):
+            for index, name in ((0, "TestEngineInspectAndExportActualMedia"),
+                                (4, "TestMediaContractRotationDisplayGeometry")):
+                with self.subTest(package=package, name=name):
+                    path = self.reports[index]
+                    original = path.read_text(encoding="utf-8")
+                    events = [json.loads(line) for line in original.splitlines()]
+                    events = [{**event, "Package": package} if event.get("Test") == name else event for event in events]
+                    path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+                    result = self.run_gate()
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(name, result.stderr)
+                    path.write_text(original, encoding="utf-8")
+
+    def test_joined_preflight_and_session_checks_are_required_on_every_native_target(self):
+        joined = {"TestJoinedExportPreservesAdmissionOrderSubtitlesAndCleanup",
+                  "TestJoinedCopyPreservesMeasuredTimelineReuseAndBudget",
+                  "TestJoinedAccuratePreservesPlanRestrictionsAndVerification",
+                  "TestJoinedCopyAudioPreservesCapabilityFallbackAndStages",
+                  "TestJoinedVerificationPreservesBoundsAndCausePrecedence",
+                  "TestJoinedPlanPreservesEscapingFingerprintsAndPacketEligibility"}
+        preflight = {"TestPreflightPlanPreservesRequestOwnershipAndDecisionOrder",
+                     "TestPreflightCapabilitiesPreserveExactTablesAndRequirements",
+                     "TestPreflightBatchPreservesUnionAndFailureOrder",
+                     "TestMediaPreflightPackageHasNoIOOrServiceDependencies"}
+        session = {"TestSessionPreservesProbeIdentityAndCancellation",
+                   "TestSessionPreservesBoundedKeyframeLookahead",
+                   "TestSessionPreservesSubtitleCacheOwnershipAndCleanup",
+                   "TestSessionReusePreservesIndependentFilesAndFallback",
+                   "TestMediaSessionPackageHasNoServiceDependencies"}
+        parser = {"TestExtractedSourceParserPreservesLegacyTolerance"}
+        preflight_adapter = {"TestMediaPreflightBridgePreservesLegacyShapesAndCauses"}
+        session_adapter = {"TestMediaSessionBridgePreservesLegacyTypesAndCallbacks"}
+        adapters = preflight_adapter | session_adapter
+        self.assertEqual(native_results.JOINED_MEDIAEXPORT_REQUIRED, joined)
+        self.assertEqual(native_results.MEDIAPREFLIGHT_MODULE_REQUIRED, preflight)
+        self.assertEqual(native_results.MEDIASESSION_MODULE_REQUIRED, session)
+        self.assertEqual(native_results.SOURCE_SUBTITLE_MODULE_REQUIRED, parser)
+        self.assertEqual(native_results.MEDIAPREFLIGHT_ADAPTER_REQUIRED, preflight_adapter)
+        self.assertEqual(native_results.MEDIASESSION_ADAPTER_REQUIRED, session_adapter)
+        for names, package in ((joined, native_results.MEDIAEXPORT_PACKAGE),
+                               (preflight, native_results.MEDIAPREFLIGHT_PACKAGE),
+                               (session, native_results.MEDIASESSION_PACKAGE),
+                               (parser, native_results.SUBTITLE_PACKAGE)):
+            self.assertLessEqual(names, native_results.REQUIRED[0])
+            self.assertIn(package, native_results.REQUIRED_PACKAGES[0])
+            for name in names:
+                self.assertEqual(native_results.REQUIRED_TEST_PACKAGES[0][name], package)
+        self.assertLessEqual(adapters, native_results.REQUIRED[4])
+        self.assertEqual(native_results.REQUIRED_PACKAGES[4], {native_results.APP_PACKAGE})
+        workflow = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]", workflow)
+        complete = next(line for line in workflow.splitlines() if "tee native-media-tests.jsonl" in line)
+        for package in ("./internal/mediaexport", "./internal/mediapreflight", "./internal/mediasession",
+                        "./internal/subtitles", "./pkg/engine"):
+            self.assertIn(package, complete)
+        self.assertNotIn("-run ", complete)
+        media = next(line for line in workflow.splitlines() if "tee native-media-contract-tests.jsonl" in line)
+        self.assertIn("./internal/app -run ", media)
+        self.assertNotIn("./internal/mediapreflight", media)
+        self.assertNotIn("./internal/mediasession", media)
+        selector = re.search(r"-run '([^']+)'", media).group(1)
+        for name in adapters:
+            self.assertIsNotNone(re.fullmatch(selector, name))
+
+    def test_joined_preflight_and_session_results_reject_missing_skipped_failed_and_substituted_proof(self):
+        cases = ((0, native_results.MEDIAEXPORT_PACKAGE, native_results.JOINED_MEDIAEXPORT_REQUIRED),
+                 (0, native_results.MEDIAPREFLIGHT_PACKAGE, native_results.MEDIAPREFLIGHT_MODULE_REQUIRED),
+                 (0, native_results.MEDIASESSION_PACKAGE, native_results.MEDIASESSION_MODULE_REQUIRED),
+                 (0, native_results.SUBTITLE_PACKAGE, native_results.SOURCE_SUBTITLE_MODULE_REQUIRED),
+                 (4, native_results.APP_PACKAGE, native_results.MEDIAPREFLIGHT_ADAPTER_REQUIRED | native_results.MEDIASESSION_ADAPTER_REQUIRED))
+        self.assert_required_results_reject_mutations(
+            cases,
+            lambda index, package: native_results.ENGINE_PACKAGE if index == 0 else native_results.MEDIAEXPORT_PACKAGE,
+            lambda index: 4 if index == 0 else 0)
+
+    def test_joined_preflight_and_session_modules_cannot_satisfy_existing_engine_and_app_checks(self):
+        for package in (native_results.MEDIAEXPORT_PACKAGE, native_results.MEDIAPREFLIGHT_PACKAGE,
+                        native_results.MEDIASESSION_PACKAGE, native_results.SUBTITLE_PACKAGE):
+            for index, name in ((0, "TestEngineInspectAndExportActualMedia"),
+                                (4, "TestMediaContractRotationDisplayGeometry")):
+                with self.subTest(package=package, name=name):
+                    path = self.reports[index]
+                    original = path.read_text(encoding="utf-8")
+                    events = [json.loads(line) for line in original.splitlines()]
+                    events = [{**event, "Package": package} if event.get("Test") == name else event for event in events]
+                    path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+                    result = self.run_gate()
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(name, result.stderr)
+                    path.write_text(original, encoding="utf-8")
+
+    def test_mediaexport_module_and_app_bridges_are_required_on_every_native_target(self):
+        module = {"TestSingleExportPreservesCopyClockAndVerificationOrder",
+                  "TestSingleExportPreservesFailurePrecedenceAndErrorIdentity",
+                  "TestSingleExportPreservesValidationAndCancellationOrder",
+                  "TestSingleExportPreservesRenderProfilesAndIntermediateOutputs",
+                  "TestMediaExportPackageHasNoIOOrServiceDependencies"}
+        adapters = {"TestMediaExportBridgePreservesLegacyErrorsAndRuntime",
+                    "TestMediaExportBackendPreservesProcessPaths"}
+        self.assertEqual(native_results.MEDIAEXPORT_MODULE_REQUIRED, module)
+        self.assertEqual(native_results.MEDIAEXPORT_ADAPTER_REQUIRED, adapters)
+        self.assertLessEqual(module, native_results.REQUIRED[0])
+        self.assertLessEqual(adapters, native_results.REQUIRED[4])
+        self.assertIn(native_results.MEDIAEXPORT_PACKAGE, native_results.REQUIRED_PACKAGES[0])
+        self.assertEqual(native_results.REQUIRED_PACKAGES[4], {native_results.APP_PACKAGE})
+        for name in module:
+            self.assertEqual(native_results.REQUIRED_TEST_PACKAGES[0][name], native_results.MEDIAEXPORT_PACKAGE)
+        workflow = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]", workflow)
+        complete = next(line for line in workflow.splitlines() if "tee native-media-tests.jsonl" in line)
+        for package in ("./internal/mediaexport", "./internal/mediainfo", "./internal/subtitles", "./pkg/engine"):
+            self.assertIn(package, complete)
+        self.assertNotIn("-run ", complete)
+        media = next(line for line in workflow.splitlines() if "tee native-media-contract-tests.jsonl" in line)
+        self.assertIn("./internal/app -run ", media)
+        self.assertNotIn("./internal/mediaexport", media)
+        selector = re.search(r"-run '([^']+)'", media).group(1)
+        for name in adapters:
+            self.assertIsNotNone(re.fullmatch(selector, name))
+
+    def test_mediaexport_results_reject_missing_skipped_failed_and_substituted_proof(self):
+        cases = ((0, native_results.MEDIAEXPORT_PACKAGE, native_results.MEDIAEXPORT_MODULE_REQUIRED),
+                 (4, native_results.APP_PACKAGE, native_results.MEDIAEXPORT_ADAPTER_REQUIRED))
+        self.assert_required_results_reject_mutations(
+            cases,
+            lambda index, package: native_results.ENGINE_PACKAGE if index == 0 else native_results.MEDIAEXPORT_PACKAGE,
+            lambda index: 4 if index == 0 else 0)
+
+    def test_mediaexport_cannot_satisfy_existing_engine_and_app_checks(self):
+        for index, name in ((0, "TestEngineInspectAndExportActualMedia"),
+                            (4, "TestMediaContractRotationDisplayGeometry")):
+            path = self.reports[index]
+            original = path.read_text(encoding="utf-8")
+            events = [json.loads(line) for line in original.splitlines()]
+            events = [{**event, "Package": native_results.MEDIAEXPORT_PACKAGE} if event.get("Test") == name else event for event in events]
+            path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+            result = self.run_gate()
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(name, result.stderr)
+            path.write_text(original, encoding="utf-8")
+
+    def test_mediainfo_module_and_app_bridges_are_required_on_every_native_target(self):
+        module = {"TestInfoValidationPreservesProbeBoundaries",
+                  "TestInfoDurationAndSelectionPreserveSourceOrder",
+                  "TestTrackDecisionPreservesManifestAndErrorContracts",
+                  "TestMediaInfoPackageHasPureDependencies"}
+        adapters = {"TestMediaInfoErrorBridgePreservesLegacyTypesAndCauses",
+                    "TestMediaInfoGeometryPreservesValidationOrder"}
+        self.assertEqual(native_results.MEDIAINFO_MODULE_REQUIRED, module)
+        self.assertEqual(native_results.MEDIAINFO_ADAPTER_REQUIRED, adapters)
+        self.assertLessEqual(module, native_results.REQUIRED[0])
+        self.assertLessEqual(adapters, native_results.REQUIRED[4])
+        self.assertIn(native_results.MEDIAINFO_PACKAGE, native_results.REQUIRED_PACKAGES[0])
+        self.assertEqual(native_results.REQUIRED_PACKAGES[4], {native_results.APP_PACKAGE})
+        for name in module:
+            self.assertEqual(native_results.REQUIRED_TEST_PACKAGES[0][name], native_results.MEDIAINFO_PACKAGE)
+        workflow = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]", workflow)
+        complete = next(line for line in workflow.splitlines() if "tee native-media-tests.jsonl" in line)
+        self.assertIn("./internal/mediainfo", complete)
+        self.assertIn("./pkg/engine", complete)
+        self.assertNotIn("-run ", complete)
+        media = next(line for line in workflow.splitlines() if "tee native-media-contract-tests.jsonl" in line)
+        self.assertIn("./internal/app -run ", media)
+        self.assertNotIn("./internal/mediainfo", media)
+        selector = re.search(r"-run '([^']+)'", media).group(1)
+        for name in adapters:
+            self.assertIsNotNone(re.fullmatch(selector, name))
+
+    def test_mediainfo_results_reject_missing_skipped_failed_and_substituted_proof(self):
+        cases = ((0, native_results.MEDIAINFO_PACKAGE, native_results.MEDIAINFO_MODULE_REQUIRED),
+                 (4, native_results.APP_PACKAGE, native_results.MEDIAINFO_ADAPTER_REQUIRED))
+        self.assert_required_results_reject_mutations(
+            cases,
+            lambda index, package: native_results.ENGINE_PACKAGE if index == 0 else native_results.MEDIAINFO_PACKAGE,
+            lambda index: 4 if index == 0 else 0)
+
+    def test_mediainfo_cannot_satisfy_existing_engine_and_app_checks(self):
+        for index, name in ((0, "TestEngineInspectAndExportActualMedia"),
+                            (4, "TestMediaContractRotationDisplayGeometry")):
+            path = self.reports[index]
+            original = path.read_text(encoding="utf-8")
+            events = [json.loads(line) for line in original.splitlines()]
+            events = [{**event, "Package": native_results.MEDIAINFO_PACKAGE} if event.get("Test") == name else event for event in events]
+            path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+            result = self.run_gate()
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(name, result.stderr)
+            path.write_text(original, encoding="utf-8")
+
+    def test_media_component_checks_are_required_and_selected_on_every_native_target(self):
+        subtitle = {"TestSubtitlePackageHasNoRuntimeDependencies"}
+        engine = {"TestEngineSubtitleBoundaryPreservesPublicContracts"}
+        runner = {"TestToolrunPackageUsesOnlyStandardLibrary",
+                  "TestRunOutputPreservesRawFailureAndStreaming",
+                  "TestRunOutputPreservesCancellation",
+                  "TestDiagnosticCopyCannotBypassMemoryBound"}
+        self.assertEqual(native_results.SUBTITLE_MODULE_REQUIRED, subtitle)
+        self.assertEqual(native_results.MEDIA_BOUNDARY_ENGINE_REQUIRED, engine)
+        self.assertEqual(native_results.TOOLRUN_MODULE_REQUIRED, runner)
+        workflow = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]", workflow)
+        media = next(line for line in workflow.splitlines() if "tee native-media-tests.jsonl" in line)
+        process = next(line for line in workflow.splitlines() if "tee native-process-tests.jsonl" in line)
+        self.assertIn("./internal/subtitles", media)
+        self.assertNotIn("-run ", media)
+        self.assertIn("./internal/app ./internal/toolrun", process)
+        selector = re.search(r"-run '([^']+)'", process).group(1)
+        for index, package, names in ((0, native_results.SUBTITLE_PACKAGE, subtitle),
+                                      (0, native_results.ENGINE_PACKAGE, engine),
+                                      (1, native_results.TOOLRUN_PACKAGE, runner)):
+            self.assertLessEqual(names, native_results.REQUIRED[index])
+            self.assertIn(package, native_results.REQUIRED_PACKAGES[index])
+            for name in names:
+                self.assertEqual(native_results.REQUIRED_TEST_PACKAGES[index][name], package)
+                if index == 1:
+                    self.assertIsNotNone(re.fullmatch(selector, name))
+
+    def test_media_component_results_reject_missing_failed_skipped_and_substituted_proof(self):
+        cases = ((0, native_results.SUBTITLE_PACKAGE, {"TestSubtitlePackageHasNoRuntimeDependencies"}),
+                 (0, native_results.ENGINE_PACKAGE, {"TestEngineSubtitleBoundaryPreservesPublicContracts"}),
+                 (1, native_results.TOOLRUN_PACKAGE, {"TestToolrunPackageUsesOnlyStandardLibrary",
+                  "TestRunOutputPreservesRawFailureAndStreaming", "TestRunOutputPreservesCancellation",
+                  "TestDiagnosticCopyCannotBypassMemoryBound"}))
+        self.assert_required_results_reject_mutations(
+            cases,
+            lambda index, package: native_results.ENGINE_PACKAGE if package == native_results.SUBTITLE_PACKAGE else native_results.SUBTITLE_PACKAGE if index == 0 else native_results.APP_PACKAGE,
+            lambda index: 1 - index)
+
+    def test_new_modules_cannot_satisfy_existing_engine_and_app_requirements(self):
+        for index, name, package in ((0, "TestEngineInspectAndExportActualMedia", native_results.SUBTITLE_PACKAGE),
+                                     (1, "TestProcessCancellationTerminatesDescendants", native_results.TOOLRUN_PACKAGE)):
+            path = self.reports[index]
+            original = path.read_text(encoding="utf-8")
+            events = [json.loads(line) for line in original.splitlines()]
+            events = [{**event, "Package": package} if event.get("Test") == name else event for event in events]
+            path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+            result = self.run_gate()
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(name, result.stderr)
+            path.write_text(original, encoding="utf-8")
+
+    def test_engine_media_checks_run_once_in_the_complete_engine_report(self):
+        names = {"TestAdvancedCropPlanPublishesActualCroppedOutput",
+                 "TestEngineInspectSeparatesCodedAndDisplayDimensions"}
+        self.assertEqual(native_results.ENGINE_MEDIA_REQUIRED, names)
+        self.assertLessEqual(names, native_results.REQUIRED[0])
+        self.assertFalse(names & native_results.REQUIRED[4])
+        self.assertIn(native_results.ENGINE_PACKAGE, native_results.REQUIRED_PACKAGES[0])
+        self.assertEqual(native_results.REQUIRED_PACKAGES[4], {native_results.APP_PACKAGE})
+        workflow = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        complete = next(line for line in workflow.splitlines() if "tee native-media-tests.jsonl" in line)
+        media = next(line for line in workflow.splitlines() if "tee native-media-contract-tests.jsonl" in line)
+        self.assertIn("./pkg/engine", complete)
+        self.assertNotIn("-run ", complete, "The engine report must keep the complete package invocation")
+        self.assertIn("./internal/app -run ", media)
+        self.assertNotIn("./pkg/engine", media)
+        selector = re.search(r"-run '([^']+)'", media).group(1)
+        for name in names:
+            self.assertIsNone(re.fullmatch(selector, name))
+
+    def test_moved_engine_media_checks_reject_missing_skipped_failed_and_incomplete_results(self):
+        path = self.reports[0]
+        original = path.read_text(encoding="utf-8")
+        good = [json.loads(line) for line in original.splitlines()]
+        self.assertEqual(self.run_gate().returncode, 0)
+        for name in native_results.ENGINE_MEDIA_REQUIRED:
+            for action in ("missing", "skip", "fail", "failed-subtest", "incomplete-package"):
+                with self.subTest(name=name, action=action):
+                    if action == "incomplete-package":
+                        events = [event for event in good if event.get("Test") or event["Package"] != native_results.ENGINE_PACKAGE]
+                    else:
+                        events = [event for event in good if action == "failed-subtest" or event.get("Test") != name]
+                        if action != "missing":
+                            events.append({"Action": "fail" if action == "failed-subtest" else action,
+                                           "Test": name + "/fault" if action == "failed-subtest" else name,
+                                           "Package": native_results.ENGINE_PACKAGE})
+                    path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+                    result = self.run_gate()
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("incomplete_packages" if action == "incomplete-package" else
+                                  "failed/skipped=1" if action == "failed-subtest" else name, result.stderr)
+        path.write_text(original, encoding="utf-8")
+
+    def test_moved_engine_media_checks_require_the_engine_package_and_right_report(self):
+        engine, media = self.reports[0], self.reports[4]
+        originals = {path: path.read_text(encoding="utf-8") for path in (engine, media)}
+        good = {path: [json.loads(line) for line in text.splitlines()] for path, text in originals.items()}
+        for name in native_results.ENGINE_MEDIA_REQUIRED:
+            for package in (native_results.CLI_PACKAGE, native_results.FS_PACKAGE,
+                            native_results.APP_PACKAGE, "unrelated/package", None):
+                with self.subTest(name=name, package=package):
+                    events = [{**event, "Package": package} if event.get("Test") == name else event
+                              for event in good[engine]]
+                    engine.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+                    result = self.run_gate()
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(name, result.stderr)
+            with self.subTest(name=name, report="wrong-report"):
+                engine.write_text("".join(json.dumps(event) + "\n" for event in good[engine]
+                                          if event.get("Test") != name), encoding="utf-8")
+                events = good[media] + [{"Action": "pass", "Test": name, "Package": native_results.ENGINE_PACKAGE}]
+                media.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+                result = self.run_gate()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(name, result.stderr)
+            media.write_text(originals[media], encoding="utf-8")
+        engine.write_text(originals[engine], encoding="utf-8")
+
+    def test_media_contract_report_requires_app_results_and_completion(self):
+        path = self.reports[4]
+        good = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        name = "TestMediaContractRotationDisplayGeometry"
+        for action in ("wrong-test-package", "wrong-completed-package"):
+            with self.subTest(action=action):
+                events = [{**event, "Package": native_results.ENGINE_PACKAGE}
+                          if (event.get("Test") == name if action == "wrong-test-package" else not event.get("Test"))
+                          else event for event in good]
+                path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+                result = self.run_gate()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(name if action == "wrong-test-package" else "incomplete_packages", result.stderr)
+
+    def test_audit_regressions_are_required_and_selected_on_native_and_bookworm(self):
+        media = {"TestHLSManifestRedirectResolvesFinalRelativeReferences",
+                 "TestHLSManifestRedirectRetainsTargetGuards",
+                 "TestHLSManifestRedirectRetainsRedirectLimit",
+                 "TestHLSManifestRedirectRetainsTransferBudgets"}
+        service = {"TestHTTPAgentProjectJobLimitRejectsAdmissionAtomicallyAndRetainsReplay",
+                   "TestHTTPAgentProjectConcurrentAdmissionsShareLastBindingSlot",
+                   "TestHTTPAgentProjectPartialAdmissionPreservesJobsAtBindingLimit",
+                   "TestProjectAdmissionRechecksScopeBeforeCommittingJob",
+                   "TestHTTPProjectAndPreparationRollbackHasIndependentBound"}
+        self.assertEqual(native_results.AUDIT_MEDIA_REQUIRED, media)
+        self.assertEqual(native_results.AUDIT_SERVICE_REQUIRED, service)
+        workflow = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]", workflow)
+        for report, required, names in (
+            ("native-media-contract-tests.jsonl", native_results.REQUIRED[4], media),
+            ("native-service-tests.jsonl", native_results.REQUIRED[2], service),
+            ("bookworm-media-tests.jsonl", native_results.BOOKWORM_REQUIRED, media),
+        ):
+            command = next(line for line in workflow.splitlines() if "tee " + report in line)
+            selector = re.search(r"-run '([^']+)'", command).group(1)
+            for name in names:
+                with self.subTest(report=report, name=name):
+                    self.assertIn(name, required)
+                    self.assertIsNotNone(re.fullmatch(selector, name))
+            if report == "bookworm-media-tests.jsonl":
+                for name in service:
+                    self.assertNotIn(name, required)
+                    self.assertIsNone(re.fullmatch(selector, name), "Database tests belong to the service invocation")
+
+    def test_project_contract_and_lifecycle_regressions_are_required_on_every_native_target(self):
+        names = {"TestProjectCollectionContractExamples",
+                 "TestProjectLifecycleRevokeAndDeletePreserveAcceptedWork",
+                 "TestProjectLifecycleAccessExpiryPrecedesAdmissionCleanup",
+                 "TestProjectLifecycleLiveProjectAndGrantDoNotPinSource"}
+        self.assertEqual(native_results.PROJECT_CONTRACT_SERVICE_REQUIRED, names)
+        self.assertLessEqual(names, native_results.REQUIRED[2])
+        workflow = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        command = next(line for line in workflow.splitlines() if "tee native-service-tests.jsonl" in line)
+        selector = re.search(r"-run '([^']+)'", command).group(1)
+        for name in names:
+            with self.subTest(name=name):
+                self.assertIsNotNone(re.fullmatch(selector, name))
+
+    def test_edit_model_compatibility_is_required_on_every_native_target(self):
+        service = {"TestEditAdapterPreservesRequestNormalizationOrder",
+                   "TestEditAdapterPreservesCollectionErrorChains"}
+        engine = {"TestEngineEditModelPreservesPublicShapes"}
+        self.assertEqual(native_results.EDIT_MODEL_SERVICE_REQUIRED, service)
+        self.assertEqual(native_results.EDIT_MODEL_ENGINE_REQUIRED, engine)
+        workflow = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]", workflow)
+        for index, names, report in (
+            (2, service, "native-service-tests.jsonl"),
+            (0, engine, "native-media-tests.jsonl"),
+        ):
+            command = next(line for line in workflow.splitlines() if "tee " + report in line)
+            selector = re.search(r"-run '([^']+)'", command)
+            self.assertLessEqual(names, native_results.REQUIRED[index])
+            if index == 0:
+                self.assertIn("./pkg/engine", command)
+                self.assertIsNone(selector, "engine compatibility runs in the complete native package")
+            else:
+                self.assertIsNotNone(selector)
+                for name in names:
+                    self.assertIsNotNone(re.fullmatch(selector.group(1), name))
+
+    def test_edit_model_compatibility_rejects_missing_skipped_failed_and_nested_failed_results(self):
+        for index, names, package in (
+            (2, native_results.EDIT_MODEL_SERVICE_REQUIRED, native_results.APP_PACKAGE),
+            (0, native_results.EDIT_MODEL_ENGINE_REQUIRED, native_results.ENGINE_PACKAGE),
+        ):
+            path = self.reports[index]
+            original = path.read_text(encoding="utf-8")
+            good = [json.loads(line) for line in original.splitlines()]
+            self.assertEqual(self.run_gate().returncode, 0)
+            for name in names:
+                for action in ("missing", "skip", "fail", "failed-subtest"):
+                    with self.subTest(name=name, action=action):
+                        events = [event for event in good if action == "failed-subtest" or event.get("Test") != name]
+                        if action != "missing":
+                            events.append({"Action": "fail" if action == "failed-subtest" else action,
+                                           "Test": name + "/fault" if action == "failed-subtest" else name,
+                                           "Package": package})
+                        path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+                        result = self.run_gate()
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn("failed/skipped=1" if action == "failed-subtest" else name, result.stderr)
+            path.write_text(original, encoding="utf-8")
+
+    def test_audit_regressions_reject_missing_skipped_and_failed_results(self):
+        bookworm = Path(self.directory.name) / "audit-bookworm.jsonl"
+        bookworm_events = [{"Action": "pass", "Test": name, "Package": native_results.APP_PACKAGE}
+                           for name in sorted(native_results.BOOKWORM_REQUIRED)]
+        bookworm_events.append({"Action": "pass", "Package": native_results.APP_PACKAGE})
+        bookworm.write_text("".join(json.dumps(event) + "\n" for event in bookworm_events), encoding="utf-8")
+        for path, names, option in (
+            (self.reports[4], native_results.AUDIT_MEDIA_REQUIRED, None),
+            (self.reports[2], native_results.AUDIT_SERVICE_REQUIRED, None),
+            (self.reports[2], native_results.PROJECT_CONTRACT_SERVICE_REQUIRED, None),
+            (bookworm, native_results.AUDIT_MEDIA_REQUIRED, "--bookworm"),
+        ):
+            good = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+            invocation = ([sys.executable, str(SCRIPT), option, str(path)] if option else
+                          [sys.executable, str(SCRIPT), *map(str, self.reports)])
+            self.assertEqual(subprocess.run(invocation, capture_output=True, timeout=10).returncode, 0)
+            for name in names:
+                for action in ("missing", "skip", "fail", "failed-subtest"):
+                    with self.subTest(report=path.name, name=name, action=action):
+                        events = [event for event in good if action == "failed-subtest" or event.get("Test") != name]
+                        if action != "missing":
+                            events.append({"Action": "fail" if action == "failed-subtest" else action,
+                                           "Test": name + "/fault" if action == "failed-subtest" else name,
+                                           "Package": native_results.APP_PACKAGE})
+                        path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+                        result = subprocess.run(invocation, capture_output=True, text=True, timeout=10)
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn("failed/skipped=1" if action == "failed-subtest" else name, result.stderr)
+            path.write_text("".join(json.dumps(event) + "\n" for event in good), encoding="utf-8")
 
     def test_process_environment_guards_are_required_and_selected(self):
         names = {"TestProcessEnvironmentSanitizesRealChild", "TestProcessEnvironmentArenaBoundsAndPlatforms"}
@@ -67,7 +651,7 @@ class NativeResultsChecks(unittest.TestCase):
         lines = workflow.read_text(encoding="utf-8").splitlines()
         for index, names, report in ((2, native_results.NEW_SERVICE_REQUIRED | native_results.EFFICIENT_CUTTING_SERVICE_REQUIRED | native_results.UNIVERSAL_SERVICE_REQUIRED, "native-service-tests.jsonl"),
                                      (3, native_results.EFFICIENT_CUTTING_STORAGE_REQUIRED | native_results.UNIVERSAL_STORAGE_REQUIRED, "native-storage-tests.jsonl"),
-                                     (4, native_results.NEW_MEDIA_REQUIRED | native_results.EFFICIENT_CUTTING_MEDIA_REQUIRED | native_results.UNIVERSAL_MEDIA_REQUIRED | {"TestAdvancedCropPlanPublishesActualCroppedOutput"}, "native-media-contract-tests.jsonl")):
+                                     (4, native_results.NEW_MEDIA_REQUIRED | native_results.EFFICIENT_CUTTING_MEDIA_REQUIRED | native_results.UNIVERSAL_MEDIA_REQUIRED, "native-media-contract-tests.jsonl")):
             command = next(line for line in lines if "tee " + report in line)
             selector = re.search(r"-run '([^']+)'", command).group(1)
             original = self.reports[index].read_text(encoding="utf-8")
@@ -420,8 +1004,8 @@ class NativeResultsChecks(unittest.TestCase):
                 self.assertNotEqual(self.run_gate().returncode, 0)
             path.write_text(original, encoding="utf-8")
 
-    def test_new_sdk_geometry_test_is_mandatory_in_contract_report(self):
-        path = self.reports[-1]
+    def test_new_sdk_geometry_test_is_mandatory_in_complete_media_report(self):
+        path = self.reports[0]
         events = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
         events = [event for event in events if event.get("Test") != "TestEngineInspectSeparatesCodedAndDisplayDimensions"]
         path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
@@ -494,7 +1078,7 @@ class NativeResultsChecks(unittest.TestCase):
                  "TestStorageScanSessionReadBatchPreservesNonISODateStyle",
                  "TestStorageScanSessionReadBatchLookupFailureRollsBackAndRecovers")
         self.assertEqual(len(native_results.REQUIRED[3]), 48 + len(native_results.UNIVERSAL_STORAGE_REQUIRED) + len(native_results.AGENT_PROJECT_STORAGE_REQUIRED))
-        self.assertEqual(sum(map(len, native_results.REQUIRED)), 124 + sum(map(len, (native_results.UNIVERSAL_ENGINE_REQUIRED, native_results.UNIVERSAL_SERVICE_REQUIRED, native_results.UNIVERSAL_STORAGE_REQUIRED, native_results.UNIVERSAL_MEDIA_REQUIRED, native_results.PREFLIGHT_ENGINE_REQUIRED, native_results.PREFLIGHT_CLI_REQUIRED, native_results.PREFLIGHT_SERVICE_REQUIRED, native_results.PREFLIGHT_MEDIA_REQUIRED, native_results.POOL_SERVICE_REQUIRED, native_results.DRAFT_CACHE_TRANSFER_REQUIRED, native_results.DRAFT_CACHE_DATABASE_REQUIRED, native_results.COLLECTION_ENGINE_REQUIRED, native_results.COLLECTION_CLI_REQUIRED, native_results.COLLECTION_SERVICE_REQUIRED, native_results.AGENT_PROJECT_SERVICE_REQUIRED, native_results.AGENT_PROJECT_STORAGE_REQUIRED, native_results.SUBTITLE_SERVICE_REQUIRED, native_results.SUBTITLE_CLI_REQUIRED))))
+        self.assertEqual(sum(map(len, native_results.REQUIRED)), 124 + sum(map(len, (native_results.UNIVERSAL_ENGINE_REQUIRED, native_results.UNIVERSAL_SERVICE_REQUIRED, native_results.UNIVERSAL_STORAGE_REQUIRED, native_results.UNIVERSAL_MEDIA_REQUIRED, native_results.PREFLIGHT_ENGINE_REQUIRED, native_results.PREFLIGHT_CLI_REQUIRED, native_results.PREFLIGHT_SERVICE_REQUIRED, native_results.PREFLIGHT_MEDIA_REQUIRED, native_results.POOL_SERVICE_REQUIRED, native_results.DRAFT_CACHE_TRANSFER_REQUIRED, native_results.DRAFT_CACHE_DATABASE_REQUIRED, native_results.COLLECTION_ENGINE_REQUIRED, native_results.COLLECTION_CLI_REQUIRED, native_results.COLLECTION_SERVICE_REQUIRED, native_results.AGENT_PROJECT_SERVICE_REQUIRED, native_results.AGENT_PROJECT_STORAGE_REQUIRED, native_results.SUBTITLE_SERVICE_REQUIRED, native_results.SUBTITLE_CLI_REQUIRED, native_results.AUDIT_MEDIA_REQUIRED, native_results.AUDIT_SERVICE_REQUIRED, native_results.PROJECT_CONTRACT_SERVICE_REQUIRED, native_results.EDIT_MODEL_SERVICE_REQUIRED, native_results.EDIT_MODEL_ENGINE_REQUIRED, native_results.SUBTITLE_MODULE_REQUIRED, native_results.MEDIA_BOUNDARY_ENGINE_REQUIRED, native_results.TOOLRUN_MODULE_REQUIRED, native_results.MEDIAINFO_MODULE_REQUIRED, native_results.MEDIAINFO_ADAPTER_REQUIRED, native_results.MEDIAEXPORT_MODULE_REQUIRED, native_results.MEDIAEXPORT_ADAPTER_REQUIRED, native_results.JOINED_MEDIAEXPORT_REQUIRED, native_results.MEDIAPREFLIGHT_MODULE_REQUIRED, native_results.MEDIAPREFLIGHT_ADAPTER_REQUIRED, native_results.MEDIASESSION_MODULE_REQUIRED, native_results.SOURCE_SUBTITLE_MODULE_REQUIRED, native_results.MEDIASESSION_ADAPTER_REQUIRED, native_results.COREMODEL_MODULE_REQUIRED, native_results.MEDIAERROR_MODULE_REQUIRED, native_results.LOCALMEDIA_MODULE_REQUIRED, native_results.COREMODEL_MEDIAERROR_ADAPTER_REQUIRED, native_results.ENGINE_DEPENDENCY_REQUIRED, native_results.TOOLRUN_LIFECYCLE_REQUIRED, native_results.PLATFORM_ORIGINAL_AUDIO_REQUIRED))))
         workflow = SCRIPT.parent.parent / ".github" / "workflows" / "ci.yml"
         commands = [line for line in workflow.read_text(encoding="utf-8").splitlines()
                     if "tee native-storage-tests.jsonl" in line]

@@ -183,7 +183,7 @@ func testSessionSubtitles(t *testing.T, mode string) {
 	if sourceProbes != 1 || extractions != 1 {
 		t.Fatalf("source probed %d times and track extracted %d times", sourceProbes, extractions)
 	}
-	dir := session.cueDir
+	dir := session.CueDir
 	if dir == "" {
 		t.Fatal("source subtitle copy was not staged")
 	}

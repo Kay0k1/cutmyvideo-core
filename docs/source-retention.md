@@ -118,8 +118,10 @@ Media, track inspection, preview and new exports return owner-checked
 idempotency keys still recover their accepted job, and artifact downloads retain
 the independent artifact expiry policy. The owner’s explicit source DELETE keeps
 its documented destructive cascade; automatic media cleanup never calls it.
-Projects are client-side data and are not deleted by media cleanup. Local CLI/SDK
-input files never participate in this server lifecycle.
+Saved server projects and private SDK directories are not deleted by media
+cleanup; neither extends source retention. See the
+[project lifecycle map](agent-workflow.md#retention-access-and-recovery).
+Local CLI/SDK input files never participate in this server lifecycle.
 
 Native/window asset reads have a global cap of128 renewable leases. Saturation
 returns retryable `503 server_busy`. Admission counts at most128 active rows

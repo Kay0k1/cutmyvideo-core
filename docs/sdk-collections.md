@@ -239,6 +239,8 @@ The recipient redeems the ten-minute token with its own session. It receives a
 24-hour grant for this project, not the agent's cookie, key or other resources.
 An owner can revoke grants. Project metadata expires after seven days; a grant
 does not preserve the original source beyond its retention policy.
+The [lifecycle map](agent-workflow.md#retention-access-and-recovery) distinguishes
+access expiry, physical cleanup and the SDK directory's independent lifetime.
 
 Sync is explicit: configured server/owner and fixed source must match saved
 scope. `clips[].request` describes each currently selected normalized request;

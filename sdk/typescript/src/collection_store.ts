@@ -70,7 +70,7 @@ export async function existsRegular(path: string): Promise<boolean> {
 export async function readJSON(path: string, maximum = STATE_LIMIT): Promise<unknown> {
   // Exclusive checkpoint publication may be killed between link and unlink.
   // Recover only its exact private temporary inode while the caller holds the OS lock.
-  if (["state.json", "owner.json", "initialize.json", "writer.json"].includes(basename(path))) {
+  if (["state.json", "owner.json", "initialize.json", "initialize-source.json", "writer.json"].includes(basename(path))) {
     const info = await lstat(path);
     if (info.isFile() && !info.isSymbolicLink() && privateMode(info) && info.nlink === 2) {
       const names = await readdir(dirname(path));

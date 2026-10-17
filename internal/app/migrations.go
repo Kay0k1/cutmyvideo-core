@@ -6,12 +6,13 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"reflect"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/Kay0k1/cutmyvideo-core/internal/coremodel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -20,7 +21,7 @@ import (
 // ErrSchemaIncompatible means startup refused an unrecognized or inconsistent
 // application schema before making changes. Restoring/deploying a compatible
 // database/binary is an operator decision; this is never permission to reset it.
-var ErrSchemaIncompatible = errors.New("database schema is incompatible with this binary")
+var ErrSchemaIncompatible = coremodel.ErrSchemaIncompatible
 
 const storeStartupTimeout = 30 * time.Second
 const schemaVersion = "20261016-agent-projects-v1"

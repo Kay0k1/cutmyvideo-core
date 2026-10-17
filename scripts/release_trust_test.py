@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
-import release_test as fixture
+import release_test_fixtures as fixture
 
 SPEC = importlib.util.spec_from_file_location('release_trust', Path(__file__).with_name('release-trust.py'))
 t = importlib.util.module_from_spec(SPEC)
@@ -23,9 +23,8 @@ NATIVE_RECEIPT_COUNTS = {('linux', 'amd64'): 53, ('linux', 'arm64'): 53,
 
 class TrustControls(unittest.TestCase):
     def setUp(self):
-        self.fixture = fixture.ReleaseControls()
-        self.fixture.setUp()
-        self.addCleanup(self.fixture.doCleanups)
+        self.fixture = fixture.ReleaseFixture()
+        self.fixture.initialize(self.addCleanup)
         self.repo, self.root = self.fixture.repo, self.fixture.root
         for name in ('go.sum', 'LICENSE', 'THIRD_PARTY_NOTICES.md'):
             (self.repo / name).write_bytes((ROOT / name).read_bytes())
@@ -102,7 +101,7 @@ class TrustControls(unittest.TestCase):
         doc = self.sbom(changed)
         modules = [p for p in doc['packages'] if p['name'] == 'golang.org/x/sys']
         self.assertEqual(len(modules), 1)
-        self.assertEqual(modules[0]['versionInfo'], 'v0.42.0')
+        self.assertEqual(modules[0]['versionInfo'], 'v0.44.0')
         self.assertEqual(modules[0]['licenseDeclared'], 'BSD-3-Clause')
         references = [r for r in doc['relationships'] if r['relatedSpdxElement'] == modules[0]['SPDXID']]
         self.assertEqual(len(references), 2)
@@ -146,10 +145,10 @@ class TrustControls(unittest.TestCase):
         self.assertEqual(t.reviewed_license(notices, 'example.invalid/mod', 'v1.0.0'), 'NOASSERTION')
         known = (self.repo / 'THIRD_PARTY_NOTICES.md').read_text()
         self.assertEqual(t.reviewed_license(known.replace('Copyright (c) 2019', 'Different copyright'), 'github.com/jackc/pgpassfile', 'v1.0.0'), 'NOASSERTION')
-        heading = '## golang.org/x/sys v0.42.0\n'
+        heading = '## golang.org/x/sys v0.44.0\n'
         before, after = known.split(heading, 1)
         changed = before + heading + after.replace('Copyright 2009', 'Changed copyright', 1)
-        self.assertEqual(t.reviewed_license(changed, 'golang.org/x/sys', 'v0.42.0'), 'NOASSERTION')
+        self.assertEqual(t.reviewed_license(changed, 'golang.org/x/sys', 'v0.44.0'), 'NOASSERTION')
         changed = known.replace(heading, '## golang.org/x/sys v0.43.0\n', 1)
         self.assertEqual(t.reviewed_license(changed, 'golang.org/x/sys', 'v0.43.0'), 'NOASSERTION')
 

@@ -261,6 +261,8 @@ func (s *Server) submitCollection(w http.ResponseWriter, r *http.Request, owner 
 	pending := make([]PreparedCollectionClip, 0, len(clips))
 	for i, clip := range clips {
 		result.Clips[i] = CollectionClipSubmission{ClipID: clip.ID, Label: clip.Label, RequestedMS: clip.RequestedMS, Request: clip.Request}
+	}
+	for i, clip := range clips {
 		job, retainedProjectJob := scopedProjectExistingJob(r.Context(), clip)
 		var err error
 		if !retainedProjectJob {
@@ -270,6 +272,12 @@ func (s *Server) submitCollection(w http.ResponseWriter, r *http.Request, owner 
 		}
 		if err == nil {
 			if err = s.recordScopedProjectJob(r.Context(), owner, clip.ID, job); err != nil {
+				if errors.Is(err, errProjectLimit) {
+					diagnostic, status := collectionAdmissionDiagnostic(err)
+					collectionFailPending(&result, diagnostic, false)
+					writeCollectionSubmission(w, result, status)
+					return
+				}
 				lookupError(w, err)
 				return
 			}
@@ -349,16 +357,17 @@ func (s *Server) submitCollection(w http.ResponseWriter, r *http.Request, owner 
 			return
 		}
 		job, err := apiDatabase(r.Context(), func(ctx context.Context) (Job, error) {
-			return s.Store.CreateJobLimited(ctx, owner, clip.Request, collectionJobKey(key, clip), 3, s.Config.MaxActiveJobs)
+			var binding *projectJobBinding
+			if scope, ok := ctx.Value(projectScopeKey{}).(projectScope); ok {
+				binding = &projectJobBinding{Scope: scope, Clip: clip.ID}
+			}
+			return s.Store.createJobLimited(ctx, owner, clip.Request, collectionJobKey(key, clip), 3, s.Config.MaxActiveJobs, binding)
 		})
 		if err != nil {
 			diagnostic, status := collectionAdmissionDiagnostic(err)
-			collectionFailPending(&result, diagnostic, status >= 500 || status == http.StatusTooManyRequests || status == http.StatusRequestTimeout)
+			retryable := !errors.Is(err, errProjectLimit) && (status >= 500 || status == http.StatusTooManyRequests || status == http.StatusRequestTimeout)
+			collectionFailPending(&result, diagnostic, retryable)
 			writeCollectionSubmission(w, result, status)
-			return
-		}
-		if err = s.recordScopedProjectJob(r.Context(), owner, clip.ID, job); err != nil {
-			lookupError(w, err)
 			return
 		}
 		rewriteProjectJob(r.Context(), &job)
@@ -422,6 +431,8 @@ func collectionMediaField(code string) string {
 
 func collectionAdmissionDiagnostic(err error) (CollectionDiagnostic, int) {
 	switch {
+	case errors.Is(err, errProjectLimit):
+		return CollectionDiagnostic{Code: "project_limit", Message: "This project has reached its retained job limit"}, http.StatusTooManyRequests
 	case errors.Is(err, ErrBusy):
 		return CollectionDiagnostic{Code: "job_limit", Message: "Wait for active exports to finish, then retry the same collection key"}, http.StatusTooManyRequests
 	case errors.Is(err, ErrJobTooLarge):

@@ -17,7 +17,7 @@ def _portable_plan(value: Any) -> dict[str, Any]:
             raise ValueError("Portable project contains unknown edit fields")
     def options(item: Any) -> None:
         fields(item, {"format", "quality", "cut_mode", "audio_track", "no_audio", "subtitle_mode", "crop", "clear_crop"})
-        if "crop" in item:
+        if item.get("crop") is not None:
             fields(item["crop"], {"x", "y", "width", "height"})
     fields(value, {"version", "input", "options", "clips"})
     if not isinstance(value.get("clips"), list):

@@ -13,19 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Kay0k1/cutmyvideo-core/internal/coremodel"
+
 	"github.com/jackc/pgx/v5"
 )
 
 // Provider identity intentionally has no content SHA or size. A canonical URL
 // digest identifies a request, not the bytes later resolved by a provider.
-type SourceFingerprint struct {
-	Kind               string `json:"kind"`
-	SHA256             string `json:"sha256,omitempty"`
-	SizeBytes          int64  `json:"size_bytes,omitempty"`
-	Provider           string `json:"provider,omitempty"`
-	ProviderID         string `json:"provider_id,omitempty"`
-	CanonicalURLSHA256 string `json:"canonical_url_sha256,omitempty"`
-}
+type SourceFingerprint = coremodel.SourceFingerprint
 
 type sourcePreparationIntent struct {
 	Kind      string `json:"kind"`
@@ -152,7 +147,7 @@ func (s *Store) claimSourcePreparation(ctx context.Context, owner, key string, i
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(context.Background())
+	defer rollbackStorage(tx)
 	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, "source-preparation:"+owner); err != nil {
 		return nil, err
 	}

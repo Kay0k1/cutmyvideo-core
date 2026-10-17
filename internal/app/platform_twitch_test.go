@@ -119,7 +119,7 @@ func TestTwitchClipsPreferenceDoesNotReplaceOtherProvidersPortraitVideo(t *testi
 	}
 }
 
-func TestTwitchClipsLegacyMetadataKeepsOriginalSelectionAfterCacheRefresh(t *testing.T) {
+func TestTwitchClipsLegacyCachedMetadataKeepsOriginalSelection(t *testing.T) {
 	// This is the complete legacy payload shape: no extractor preference,
 	// aspect-ratio or newly added metadata fields are needed for the repair.
 	legacy := []byte(`{"id":"fixture","title":"Clip","duration":30,"extractor_key":"TwitchClips","formats":[{"format_id":"portrait-1080","url":"https://media.example/portrait.mp4","protocol":"https","ext":"mp4","height":1080},{"format_id":"1080","url":"https://media.example/original.mp4","protocol":"https","ext":"mp4","height":1080}]}`)

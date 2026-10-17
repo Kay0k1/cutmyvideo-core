@@ -4,6 +4,36 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
+### Fixed
+- Preserve Python SDK request and job-wait timeout diagnostics when a deadline expires before the request timer or next poll can start, closing the unused connection and retaining the last job report.
+- Publish the process-cancellation test fixture's readiness marker atomically, preventing an empty intermediate file from causing a false CI failure while retaining descendant-liveness assertions.
+- Admit scoped collection jobs and their project bindings in one transaction. A full project history returns `project_limit` without leaving hidden queued work; existing jobs and partial submissions remain recoverable.
+- Bound project and source-preparation transaction rollback independently of the request deadline, including stalled database responses.
+- Resolve HLS variants, segments and initialization maps against the final playlist URL after guarded HTTP redirects.
+- Recover TypeScript source-preparation journals interrupted between checkpoint hard-link publication and temporary-link removal, retaining the existing private-file checks.
+- Preserve valid `crop: null` inheritance in Python and TypeScript portable project imports and exports.
+- Show fixed refusal codes in the self-hosting lifecycle wrapper while retaining exit status 1 and redacting private exception details.
+
+### Changed
+- Separate complete joined-export coordination, advisory preflight planning and operation-local media sessions from the server package, preserving stream compatibility, copy/accurate clocks, capability and identity fences, bounded caches, independent repeated outputs and public contracts.
+- Separate single-interval export coordination and shared output-budget rules from server configuration, preserving copy clocks, encoder arguments, progress, diagnostic causes and fresh result verification.
+- Separate probe metadata, deterministic track selection and video geometry/filter rules from server configuration, preserving inspection, rendering and diagnostic behavior.
+- Extract supplied subtitle retiming and shared cue indexing from the server package, preserving public Go aliases, text formats, limits and diagnostics.
+- Separate external-tool execution and platform process containment from app configuration, retaining output bounds, cancellation precedence and private error handling.
+- Require standalone media-component dependency and compatibility checks on every native target alongside the existing media, HTTP and process-tree acceptance.
+- Group existing local source and verification-tooling checks, with separate recovery controls and a release trigger/acceptance map.
+- Run native crop and display-geometry engine checks once per platform while preserving their required package/report identities and all media acceptance boundaries.
+- Share synthetic release-test fixtures without importing executable test suites or invoking another test case's setup and cleanup.
+- Separate pure edit models and shared validation from server configuration, preserving public Go shapes, JSON and diagnostic behavior.
+- Move project persistence and transaction handling out of HTTP handlers, retaining authorization, revision checks, lock ordering and database deadlines.
+- Check free SDK verification space before builds and remove only successful runs' disposable installations, preserving packages and verification evidence.
+- Freeze the 1.4.1 HTTP contract alongside the original baseline, with mandatory compatibility checks for collections, projects and the other existing API operations.
+- Share versioned collection and portable-project examples between Go, OpenAPI and both source/installed SDK test suites, preserving their distinct validation responsibilities.
+- Document independent project, access, source, job, artifact and local-state lifetimes; require project expiry, revocation and retained-work regression checks on every native target.
+- Remove unused legacy SQL schema literals; ordered embedded migrations remain the schema source.
+- Exclude local SDK dependencies, build output and generated evidence from the Docker build context.
+- Refresh release/SDK support documentation and add a map of development, verification and release commands.
+
 ## 1.4.1 - 2026-10-16
 
 ### Changed

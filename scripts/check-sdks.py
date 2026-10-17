@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -13,6 +14,35 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/app"
+PROJECT_CONTRACTS = "api/testdata/project-contracts.json"
+MINIMUM_FREE = 2 * 1024 * 1024 * 1024
+
+
+def require_output_capacity(output):
+    free = shutil.disk_usage(output).free
+    if free < MINIMUM_FREE:
+        raise RuntimeError(f"SDK checks require at least 2 GiB free on the output filesystem; "
+                           f"only {free // (1024 * 1024)} MiB available at {output}")
+
+
+def cleanup_disposable(output, owned_output):
+    """Keep release evidence; remove only this successful run's scratch paths."""
+    current = output.lstat()
+    if (current.st_dev, current.st_ino) != (owned_output.st_dev, owned_output.st_ino):
+        raise RuntimeError("SDK evidence directory changed; refusing scratch cleanup")
+    directories = [output / name for name in ("python-consumer", "node-consumer", "python-source", "python-rebuilt")]
+    binary = output / ("cutmy.exe" if os.name == "nt" else "cutmy")
+    # Validate every direct child before removing any. rmtree unlinks nested
+    # symlinks (and Windows junctions), without traversing their targets.
+    for path, expected_type in [(output, stat.S_ISDIR), *[(path, stat.S_ISDIR) for path in directories],
+                                (binary, stat.S_ISREG)]:
+        entry = path.lstat()
+        if (not expected_type(entry.st_mode) or
+                getattr(entry, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)):
+            raise RuntimeError(f"Unsafe SDK scratch path; refusing cleanup: {path}")
+    for path in directories:
+        shutil.rmtree(path)
+    binary.unlink()
 
 
 def verify_go_report(path, required):
@@ -43,7 +73,7 @@ def sha256(path):
 
 def collection_inputs():
     paths = [ROOT / name for name in (
-        "go.mod", "go.sum", "scripts/check-sdks.py", "scripts/sdk_checks_test.py",
+        "go.mod", "go.sum", PROJECT_CONTRACTS, "scripts/check-sdks.py", "scripts/sdk_checks_test.py",
         "scripts/sdk-smoke.py", "scripts/sdk-smoke.mjs",
         "scripts/sdk-collection-acceptance.py", "scripts/sdk-collection-acceptance.mjs",
         "scripts/sdk-agent-project-acceptance.py", "scripts/sdk-agent-project-acceptance.mjs",
@@ -56,7 +86,19 @@ def collection_inputs():
     for folder, pattern in (("sdk/python/src/cutmyvideo", "*.py"), ("sdk/python/tests", "*.py"),
                             ("sdk/typescript/src", "*.ts"), ("sdk/typescript/test", "*.mjs")):
         paths.extend((ROOT / folder).rglob(pattern))
-    return {str(path.relative_to(ROOT)): sha256(path) for path in sorted(set(paths))}
+    return {path.relative_to(ROOT).as_posix(): sha256(path) for path in sorted(set(paths))}
+
+
+def copy_project_contracts(output, expected_sha256):
+    """Installed tests use frozen test input, never a runtime package dependency."""
+    data = (ROOT / PROJECT_CONTRACTS).read_bytes()
+    if hashlib.sha256(data).hexdigest() != expected_sha256:
+        raise RuntimeError("Project contract examples changed before SDK verification")
+    destination = output / "testdata" / "project-contracts.json"
+    destination.parent.mkdir()
+    with destination.open("xb") as stream:
+        stream.write(data)
+    return destination
 
 
 def run(argv, *, cwd, env, log, timeout=300):
@@ -89,8 +131,12 @@ def main():
     if output.is_relative_to(ROOT):
         parser.error("SDK consumer evidence must be outside the checkout")
     output.mkdir(parents=True, exist_ok=False)
+    owned_output = output.lstat()
+    require_output_capacity(output)
     env = dict(os.environ)
     source_inputs = collection_inputs()
+    project_contracts = copy_project_contracts(output, source_inputs[PROJECT_CONTRACTS])
+    env["CUTMY_PROJECT_CONTRACTS"] = str(project_contracts)
     python, node, npm = sys.executable, shutil.which("node"), shutil.which("npm")
     if not node or not npm:
         parser.error("Node.js and npm are required")
@@ -200,12 +246,13 @@ void local.executeCollection({...request.plan, input: "/media/interview.mp4"}, "
     run(["go", "test", "-json", "-race", "-count=1", "-timeout=15m" if args.http else "-timeout=3m", "./internal/app", "-run", selector],
         cwd=ROOT, env=env, log=output / "installed-sdk-tests.jsonl", timeout=960 if args.http else 240)
     verify_go_report(output / "installed-sdk-tests.jsonl", required)
-    if collection_inputs() != source_inputs:
+    if collection_inputs() != source_inputs or sha256(project_contracts) != source_inputs[PROJECT_CONTRACTS]:
         raise RuntimeError("SDK or acceptance inputs changed during verification; rerun from frozen source")
     receipt = {"schema": 1, "required_tests": sorted(required), "python_wheel_sha256": sha256(wheels[0]),
                "python_sdist_sha256": sha256(sdists[0]), "npm_tarball_sha256": sha256(tarballs[0]),
                "cli_sha256": sha256(binary), "installed_consumers": True, "source_inputs_sha256": source_inputs}
     (output / "SDK-CHECKS.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+    cleanup_disposable(output, owned_output)
     print("Built, installed and verified both SDKs against real media and the core.")
 
 
