@@ -362,6 +362,43 @@ class PublicControls(unittest.TestCase):
         with self.assertRaises(c.Refused): e.validate_backend(data.replace(b':DOCKER-USER - [0:0]\n', b''), desired, 'iptables v1.8.9 (nf_tables)')
         with self.assertRaises(c.Refused): e.validate_backend(data, desired, 'nftables v1.1')
 
+    def test_installation_entrypoint_distinguishes_configuration_failures_before_docker(self):
+        config = configuration()
+        for key, value, reason in (('CUTMY_HTTP_PORT', 'invalid', 'loopback_port_invalid'),
+                                   ('CUTMY_PROCESSING_PREFIX', config['CUTMY_DATABASE_PREFIX'], 'networks_overlap')):
+            with self.subTest(reason=reason), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / 'private.env'
+                c.private_write(path, s.config_text({**config, key: value}))
+                args = ['self-host.py', '--config', str(path), '--state', str(Path(directory) / 'state'), 'prepare']
+                out, err = io.StringIO(), io.StringIO()
+                with patch.object(sys, 'argv', args), patch.object(s, 'local_engine') as engine, \
+                        contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as exit:
+                    s.entrypoint()
+                self.assertEqual(exit.exception.code, 1)
+                self.assertEqual(out.getvalue(), '')
+                self.assertEqual(err.getvalue(), 'Public installation operation refused (' + reason + '); '
+                                 'check prerequisites and private configuration.\n')
+                engine.assert_not_called()
+                self.assertFalse((Path(directory) / 'state').exists())
+                for secret in (str(path), *(config[key] for key in c.PASSWORDS)):
+                    self.assertNotIn(secret, err.getvalue())
+
+    def test_installation_entrypoint_redacts_foreign_refusals_and_other_exception_messages(self):
+        private = 'password=super_private_value /root/private/config.env\nsecond line'
+        for error in (c.Refused(private), c.Refused('a' * 81), c.Refused('UPPERCASE'), c.Refused(''),
+                      s.manifest.InvalidRelease(private), OSError(private), ValueError(private),
+                      KeyError(private), TypeError(private), tarfile.ReadError(private)):
+            out, err = io.StringIO(), io.StringIO()
+            with self.subTest(kind=type(error).__name__), patch.object(s, 'main', side_effect=error), \
+                    contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as exit:
+                s.entrypoint()
+            self.assertEqual(exit.exception.code, 1)
+            self.assertEqual(out.getvalue(), '')
+            self.assertEqual(err.getvalue(), 'Public installation operation refused (operation_refused); '
+                             'check prerequisites and private configuration.\n')
+            self.assertNotIn('/root/private/config.env', err.getvalue())
+            self.assertNotIn('super_private_value', err.getvalue())
+
     def test_egress_entrypoint_exposes_only_fixed_refusal_code_and_keeps_exit_contract(self):
         out, err = io.StringIO(), io.StringIO()
         with patch.object(e, 'main', side_effect=c.Refused('owned_policy_missing_or_modified')), \

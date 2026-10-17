@@ -18,15 +18,6 @@ const platformMetadataExpiryMargin = 30 * time.Second
 const platformMetadataDBTimeout = 2 * time.Second
 const platformMetadataResolutionLeaseTTL = 3 * time.Minute
 
-const platformMetadataCacheSchema = `
-CREATE TABLE IF NOT EXISTS source_metadata_cache (
- source_id text PRIMARY KEY REFERENCES sources(id) ON DELETE CASCADE,
- owner text NOT NULL, payload bytea NOT NULL CHECK (octet_length(payload)<=1048576),
- expires_at timestamptz NOT NULL
-);
-CREATE INDEX IF NOT EXISTS source_metadata_cache_expiry_idx ON source_metadata_cache(expires_at);
-`
-
 var errMetadataNotCacheable = errors.New("source metadata is not cacheable")
 
 // ResolvePlatformMetadata shares an owner's recent upstream metadata between

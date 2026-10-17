@@ -1,6 +1,6 @@
 # Security policy
 
-The latest 0.x release and current main branch are the target for security fixes.
+The latest published release and current main branch are the targets for security fixes.
 Older revisions should be upgraded; there is no guaranteed response-time SLA or
 independent security-audit claim. Keep the Go toolchain, media dependencies,
 extractor and container base images updated as well as this repository.

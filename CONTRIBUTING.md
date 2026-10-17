@@ -67,6 +67,37 @@ workflow validation and govulncheck, and verifies third-party notices. It also
 requires actual HTTP/OpenAPI fixtures and their Python tooling. CI does the same
 on Linux and makes no requests to public videos.
 
+### Command map
+
+Run these commands from the repository root. `GO` and `PYTHON` can select the
+executables used by Make; the pinned CI/release Go toolchain is listed above.
+
+| Task | Entry point | Scope and prerequisites |
+| --- | --- | --- |
+| Build or run available Go tests | `make build`, `make test` | Builds `bin/cutmy` or runs `go test ./...`; integration tests can skip without their tools/database. |
+| Format and inspect Go | `make fmt`, `make fmt-check`, `make vet` | `fmt` rewrites Go files; `fmt-check` and `vet` inspect them. |
+| Check documentation or schemas | `make docs-check`, `make api-check` | Python 3 for local Markdown links; API checks also need the pinned OpenAPI tooling above. |
+| Check a working tree | `make check` | Formatting, vet, docs, API/schema compatibility, runner controls, available Go tests and build. |
+| Require source acceptance | `make check-full` | Adds required media/extractor/database prerequisites, uncached race tests, hosting controls, notices, workflow validation and vulnerability checks. |
+| Exercise HTTP/OpenAPI fixtures | `make contract-check` | Runs `api-check` and `TestHTTPPublicContract`; needs the Python contract tooling and disposable `TEST_DATABASE_URL`. |
+| Test SDK source | [SDK unit-test commands](#sdk-checks) | Python 3.10+ or Node 20.19+/npm; no API, database or media rendering. |
+| Test installed SDKs | `make sdk-check SDK_REPORT_DIR=/tmp/new-cutmy-sdk-http-check` | Builds and installs both SDKs, then exercises real local media and API/worker flows; needs pinned build tooling, media tools and disposable `TEST_DATABASE_URL`. Use a new directory outside the checkout. |
+| Check runners and evidence rules | `make native-results-check sdk-controls-check performance-protocol-check release-check hosting-controls-check` | Regression controls for the verification tooling; this does not run the corresponding complete native, benchmark, release or hosting acceptance. |
+| Check notices, workflows or dependencies | `make notices-check`, `make workflows-check`, `make vuln` | Notices use the tracked modules; workflow/vulnerability tools use the pinned versions in Makefile and need network access when fetching tools or vulnerability data. |
+| Verify historical upgrade and restoration | `make recovery-check` | Separate Linux harness; needs full historical Git objects, media tools, PostgreSQL clients and disposable `RECOVERY_DATABASE_URL` with database-creation permission. See [recovery](docs/backup-recovery.md). |
+| Measure retained-row storage capacity | `make storage-capacity-check STORAGE_REPORT_DIR=/tmp/new-cutmy-storage-check` | Opt-in Linux workload with disposable `TEST_DATABASE_URL`; sizes and evidence requirements are in [storage capacity](docs/storage-capacity.md). |
+| Package an approved release tag | `make release VERSION=vX.Y.Z` | Clean tagged checkout and exact Go toolchain; builds CLI archives twice outside the checkout. Signing and publication follow the separate [release protocol](docs/releases.md). |
+
+`make check-full` does not invoke the separate SDK, historical-recovery or
+storage-capacity harnesses. The [Core checks workflow](.github/workflows/ci.yml)
+runs the native source and installed-SDK matrices plus Linux HTTP/worker
+acceptance. [Public self-hosting acceptance](.github/workflows/self-hosting.yml)
+owns its disposable deployment and restoration checks. The
+[archive workflow](.github/workflows/release.yml) and
+[downloaded-release consumers](.github/workflows/release-consumer.yml) enforce the
+existing packaging, signature and publication gates; local packaging alone does
+not complete them.
+
 ### SDK checks
 
 Python SDK tests require Python 3.10+; TypeScript SDK tests require Node.js
@@ -94,7 +125,10 @@ make sdk-check SDK_REPORT_DIR=/tmp/cutmy-sdk-http-check
 Run these inside an isolated Python environment. CI requires installed-package
 acceptance on all five native platforms and a separate HTTP acceptance run;
 passing only source unit tests does not establish package installation or media
-behavior. SDK versions remain development candidates until registry publication.
+behavior. The [published 1.4.1 SDK distributions](docs/sdk.md#install-versioned-packages)
+are signed GitHub release assets: a wheel, Python source archive and npm tarball.
+Current source can contain unreleased fixes; a source version or GitHub release
+does not imply publication to the PyPI/npm registries.
 
 ### Change-specific validation
 

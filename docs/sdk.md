@@ -32,13 +32,14 @@ Node.js 20.19 or newer, with an ESM project:
 npm install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.1/cutmyvideo-sdk-1.4.1.tgz'
 ```
 
-These are GitHub release assets, not claims of publication to PyPI/npm. No source
+These are published assets of [release 1.4.1](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.4.1),
+not claims of publication to the PyPI/npm registries. No source
 checkout or SDK build is needed. The release also contains the Python source
 distribution, `SDK-MANIFEST.json` and `sdk-provenance.sigstore.json`. They bind the
 exact distributions to the reviewed source and installed HTTP/worker acceptance.
 Follow [release verification](releases.md#consumer-verification-of-a-new-signed-release)
-before installation. The final tag/draft/consumer protocol must complete before
-these URLs become a published installation entry point.
+before installation. The linked release has completed that publication protocol;
+a version number in a source checkout alone does not establish a published package.
 
 For development, use `python -m pip install ./sdk/python`; the TypeScript package
 can be built with `npm ci && npm pack` in `sdk/typescript`.

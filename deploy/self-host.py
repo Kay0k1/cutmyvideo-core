@@ -551,9 +551,19 @@ def main():
             print('Fresh-project files restored; apply policy, then initialize before checked up.')
 
 
-if __name__ == '__main__':
+def entrypoint():
     try:
         main()
-    except (Refused, manifest.InvalidRelease, OSError, ValueError, KeyError, TypeError, tarfile.TarError):
-        print('Public installation operation refused; check prerequisites and private configuration.', file=sys.stderr)
+    except (Refused, manifest.InvalidRelease, OSError, ValueError, KeyError, TypeError, tarfile.TarError) as error:
+        # Match the egress helper: only fixed refusal codes may reach output.
+        # Foreign exception text can contain private paths or credentials.
+        reason = str(error) if isinstance(error, Refused) else 'operation_refused'
+        if not re.fullmatch(r'[a-z][a-z0-9_]{0,79}', reason):
+            reason = 'operation_refused'
+        print('Public installation operation refused (' + reason + '); check prerequisites and private configuration.',
+              file=sys.stderr)
         raise SystemExit(1)
+
+
+if __name__ == '__main__':
+    entrypoint()

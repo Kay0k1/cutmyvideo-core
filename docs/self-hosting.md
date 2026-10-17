@@ -54,8 +54,13 @@ bridges are allowed ahead of this project's hooks. Broad, negated, wildcard or
 shadowing dispatch rules remain refusal conditions. The complete conntrack
 `RETURN` rule accepts both iptables serialization orders for the exact two-state
 set `ESTABLISHED,RELATED`; added/duplicate states, negation, flags, other targets
-and changed rule order still refuse. A refusal prints a fixed diagnostic code,
-never a raw exception, command or private configuration.
+and changed rule order still refuse. Both the lifecycle wrapper and egress helper
+print a fixed diagnostic code on refusal and exit with status 1. For example,
+`private_file_permissions_invalid` points to private-file ownership or permissions,
+`networks_overlap` means the configured networks must be distinct, and
+`operation_failed_see_private_service_logs` directs the operator to the private
+service logs. Unclassified failures use `operation_refused`; raw exceptions,
+commands and private configuration are never printed by these entrypoints.
 
 The API and worker run as UID/GID 1000 with read-only roots, dropped capabilities,
 no new privileges and separate private 256 MiB temporary filesystems. The shared
