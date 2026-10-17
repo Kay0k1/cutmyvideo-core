@@ -226,7 +226,7 @@ void client.importCutList({format: "csv", text: "0,1,Scene"});
 void client.exportCutList({format: "csv", cut_list: {version: 1, entries: [{start_ms: 0, end_ms: null, label: "Marker"}]}});
 void local.silencePlan("input.mp4", {threshold_db: -40});
 void local.planCutList({format: "csv", text: "0,,Scene"}, {media: "input.mp4", durationMs: 1000});
-void client.preflight({source_id: "src", ranges: [{start_ms: 0, end_ms: 1000}], audio_normalize: {integrated_lufs: -16, true_peak_dbtp: -1, loudness_range_lu: 11}, canvas: {width: 1080, height: 1920, fit: "contain", background: "#000000"}, audio_replace: {source_id: "owned-upload", offset_ms: 1000}});
+void client.preflight({source_id: "src", ranges: [{start_ms: 0, end_ms: 1000}], format: "mp4", quality: "best", cut_mode: "accurate", audio_normalize: {integrated_lufs: -16, true_peak_dbtp: -1, loudness_range_lu: 11}, canvas: {width: 1080, height: 1920, fit: "contain", background: "#000000"}, audio_replace: {source_id: "owned-upload", offset_ms: 1000}});
 void client.validateCollection(request);
 void client.submitCollection(request, {idempotencyKey: "saved-key"});
 void runCollection(client, request, "/private/project", {timeoutMs: 1800000, onProgress: report => { console.log(report.outputs.map(output => output.clip_id)); }});

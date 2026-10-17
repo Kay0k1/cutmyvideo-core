@@ -150,9 +150,9 @@ class ExportRequest(_ExportRequired, total=False):
     crop: Crop
     cleanup_source: bool
     rendition: str
-    audio_normalize: AudioNormalize
-    canvas: Canvas
-    audio_replace: AudioReplace
+    audio_normalize: AudioNormalize | None
+    canvas: Canvas | None
+    audio_replace: AudioReplace | None
 
 
 class PlanOptions(TypedDict, total=False):
@@ -163,9 +163,9 @@ class PlanOptions(TypedDict, total=False):
     no_audio: bool
     subtitle_mode: str
     crop: Crop
-    audio_normalize: AudioNormalize
-    canvas: Canvas
-    audio_replace: LocalAudioReplace | AudioReplace
+    audio_normalize: AudioNormalize | None
+    canvas: Canvas | None
+    audio_replace: LocalAudioReplace | AudioReplace | None
 
 
 class _PlanRequired(TypedDict):

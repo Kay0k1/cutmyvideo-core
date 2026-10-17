@@ -47,7 +47,7 @@ for name, edit in settings:
         request = {'source_id': source_id, 'ranges': ranges, 'output_mode': 'joined', **options}
         assert client.preflight(request)['valid']
         job = client.create_job(request, idempotency_key='media-python-' + name)
-        artifact = ready_artifacts(client.wait_for_job(job['id'], timeout=45, poll_interval=.1))[0]
+        artifact = ready_artifacts(client.wait_for_job(job['id'], timeout=45, poll_interval=1))[0]
         client.download(artifact, path, max_bytes=16 << 20)
     outputs.append({'name': name, 'path': str(path), 'artifact': artifact})
 segments = outputs[0]['artifact']['segments']

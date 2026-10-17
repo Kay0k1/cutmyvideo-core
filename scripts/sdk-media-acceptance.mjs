@@ -42,7 +42,7 @@ for (const [name, edit] of settings) {
     const request = {source_id: sourceId, ranges, output_mode: 'joined', ...options};
     assert.equal((await client.preflight(request)).valid, true);
     const job = await client.createJob(request, {idempotencyKey: `media-typescript-${name}`});
-    artifact = readyArtifacts(await client.waitForJob(job.id, {timeoutMs: 45000, pollIntervalMs: 100}))[0];
+    artifact = readyArtifacts(await client.waitForJob(job.id, {timeoutMs: 45000, pollIntervalMs: 1000}))[0];
     await downloadArtifactToFile(client, artifact.id, path, {maxBytes: 16 << 20});
   }
   outputs.push({name, path, artifact});
