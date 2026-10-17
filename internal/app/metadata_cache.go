@@ -283,7 +283,9 @@ func readPlatformMetadataCache(ctx context.Context, db dbExecutor, source Source
 
 func cachedPlatformMetadata(source Source, payload []byte, expires time.Time) (platformInfo, bool) {
 	info, ok := decodePlatformMetadata(payload)
-	if !ok {
+	// Older cache rows discarded the extractor's original-audio preference.
+	// Resolve them again instead of silently repeating the old dub selection.
+	if !ok || info.StreamSelectionVersion != platformStreamSelectionVersion {
 		return platformInfo{}, false
 	}
 	info.cachedUntil = expires

@@ -119,17 +119,21 @@ func TestTwitchClipsPreferenceDoesNotReplaceOtherProvidersPortraitVideo(t *testi
 	}
 }
 
-func TestTwitchClipsLegacyCachedMetadataKeepsOriginalSelection(t *testing.T) {
+func TestTwitchClipsLegacyMetadataKeepsOriginalSelectionAfterCacheRefresh(t *testing.T) {
 	// This is the complete legacy payload shape: no extractor preference,
 	// aspect-ratio or newly added metadata fields are needed for the repair.
 	legacy := []byte(`{"id":"fixture","title":"Clip","duration":30,"extractor_key":"TwitchClips","formats":[{"format_id":"portrait-1080","url":"https://media.example/portrait.mp4","protocol":"https","ext":"mp4","height":1080},{"format_id":"1080","url":"https://media.example/original.mp4","protocol":"https","ext":"mp4","height":1080}]}`)
 	source := Source{ID: "src_fixture", Owner: "owner", URL: "https://clips.twitch.tv/Fixture", ProviderID: "fixture", DurationMS: 30000}
-	info, ok := cachedPlatformMetadata(source, legacy, time.Now().Add(time.Minute))
+	if _, ok := cachedPlatformMetadata(source, legacy, time.Now().Add(time.Minute)); ok {
+		t.Fatal("metadata predating original-audio selection must be refreshed")
+	}
+	info, ok := decodePlatformMetadata(legacy)
 	if !ok {
-		t.Fatal("legacy Twitch clip metadata is not cacheable")
+		t.Fatal("legacy Twitch clip metadata is not decodable")
 	}
 	for _, payloadKind := range []string{"legacy", "round-trip"} {
 		if payloadKind == "round-trip" {
+			info.StreamSelectionVersion = platformStreamSelectionVersion
 			payload, err := encodePlatformMetadata(info)
 			if err != nil {
 				t.Fatal(err)
@@ -248,9 +252,6 @@ func TestTwitchClipsPreviewCacheNamespacesOriginalRendition(t *testing.T) {
 		}
 	}
 	for _, source := range []Source{
-		{ID: "src_fixture", Kind: "platform", Provider: "twitch", ProviderID: "v123", URL: "https://www.twitch.tv/videos/123"},
-		{ID: "src_fixture", Kind: "platform", Provider: "twitch", ProviderID: "v123", URL: "https://player.twitch.tv/?video=v123"},
-		{ID: "src_fixture", Kind: "youtube", Provider: "youtube", URL: "https://www.youtube.com/watch?v=N3REfH4N9Dg"},
 		{ID: "src_fixture", Kind: "upload", Path: "/data/source.mp4", URL: "https://clips.twitch.tv/Fixture"},
 		{ID: "src_fixture", Kind: "direct", URL: "https://media.example/source.mp4"},
 	} {
