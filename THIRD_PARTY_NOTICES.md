@@ -244,7 +244,7 @@ rights granted to you under this License for this implementation of Go
 shall terminate as of the date such litigation is filed.
 ```
 
-## golang.org/x/sys v0.42.0
+## golang.org/x/sys v0.44.0
 
 ### LICENSE
 
