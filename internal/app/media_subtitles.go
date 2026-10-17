@@ -72,7 +72,7 @@ func parseSRT(data []byte) ([]subtitleCue, error) {
 		if e != nil || end < start {
 			return nil, fmt.Errorf("invalid text subtitle cue")
 		}
-		cues = append(cues, subtitleCue{start, end, strings.Join(lines[position+1:], "\n")})
+		cues = append(cues, subtitleCue{StartMS: start, EndMS: end, Text: strings.Join(lines[position+1:], "\n")})
 	}
 	return cues, nil
 }

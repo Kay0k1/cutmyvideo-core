@@ -31,18 +31,28 @@ var (
 
 func TestEngineSubtitleBoundaryPreservesPublicContracts(t *testing.T) {
 	t.Run("positional-shapes-and-json", func(t *testing.T) {
-		segment := Segment{1, "label", 1000, 2000, 0, 1000}
-		clip := SubtitleRetimeClip{"answer", []Segment{segment}}
-		request := SubtitleRetimeRequest{1, "srt", "supplied text", "", []SubtitleRetimeClip{clip}}
+		// Local defined shapes preserve positional field checks without using
+		// unkeyed literals of types defined in another package.
+		type (
+			segmentShape Segment
+			clipShape    SubtitleRetimeClip
+			requestShape SubtitleRetimeRequest
+			sidecarShape SubtitleSidecar
+			resultShape  SubtitleRetimeResult
+			errorShape   SubtitleRetimeError
+		)
+		segment := Segment(segmentShape{1, "label", 1000, 2000, 0, 1000})
+		clip := SubtitleRetimeClip(clipShape{"answer", []Segment{segment}})
+		request := SubtitleRetimeRequest(requestShape{1, "srt", "supplied text", "", []SubtitleRetimeClip{clip}})
 		for _, test := range []struct {
 			value any
 			json  string
 		}{
 			{SubtitleRetimeRequest{}, `{"version":0,"format":"","text":"","outputs":null}`},
 			{request, `{"version":1,"format":"srt","text":"supplied text","outputs":[{"clip_id":"answer","segments":[{"index":1,"label":"label","source_start_ms":1000,"source_end_ms":2000,"output_start_ms":0,"output_end_ms":1000}]}]}`},
-			{SubtitleSidecar{"answer", "srt", "text", 1, "hash"}, `{"clip_id":"answer","format":"srt","text":"text","cue_count":1,"sha256":"hash"}`},
-			{SubtitleRetimeResult{1, []SubtitleSidecar{}}, `{"version":1,"outputs":[]}`},
-			{SubtitleRetimeError{"invalid_subtitles", "text"}, `{"code":"invalid_subtitles","field":"text"}`},
+			{SubtitleSidecar(sidecarShape{"answer", "srt", "text", 1, "hash"}), `{"clip_id":"answer","format":"srt","text":"text","cue_count":1,"sha256":"hash"}`},
+			{SubtitleRetimeResult(resultShape{1, []SubtitleSidecar{}}), `{"version":1,"outputs":[]}`},
+			{SubtitleRetimeError(errorShape{"invalid_subtitles", "text"}), `{"code":"invalid_subtitles","field":"text"}`},
 		} {
 			encoded, err := json.Marshal(test.value)
 			if err != nil || string(encoded) != test.json {
