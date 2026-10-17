@@ -49,7 +49,7 @@ class AggregateControls(unittest.TestCase):
                          'go_version': f"go version {self.source['toolchain']} linux/amd64",
                          'schema_versions': ['20261005-storage-queue-v3', '20261010-cache-retention-v1',
                                              '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1',
-                                             '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1', '20261016-agent-projects-v1'],
+                                             '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1', '20261016-agent-projects-v1', '20261018-external-audio-refs-v1'],
                          'upgrade_storage_defaults_checked': 3,
                          'artifacts': [{'label': label, 'bytes': 100, 'sha256': 'e' * 64, 'duration_seconds': 1,
                                         'codecs': {'audio': 'mp3'} if label == 'fresh-after-restore-mp3'
@@ -140,6 +140,35 @@ class AggregateControls(unittest.TestCase):
                         else:
                             check['skip'] = True
                         self.reject(wrong)
+
+    def test_aggregate_requires_every_core15_observation_from_all_five_native_archives(self):
+        for index, native_report in enumerate(self.reports):
+            for name in fixture.n.CORE15_MEDIA_CHECKS:
+                for mutation in ('missing', 'failed', 'skip'):
+                    with self.subTest(target=native_report['target'], name=name, mutation=mutation):
+                        wrong = deepcopy(self.reports)
+                        checks = wrong[index]['groups']['media']['checks']
+                        check = next(item for item in checks if item['name'] == name)
+                        if mutation == 'missing':
+                            checks.remove(check)
+                        elif mutation == 'failed':
+                            check['ok'] = False
+                        else:
+                            check['skip'] = True
+                        self.reject(wrong)
+
+    def test_schema9_archive_recovery_rejects_missing_duplicate_changed_and_historical_schema_lists(self):
+        kwargs = {key: value for key, value in self.kwargs.items() if key not in ('manifest_sha256', 'event_sha')}
+        for mutation in ('missing', 'duplicate', 'changed', 'historical'):
+            with self.subTest(mutation=mutation):
+                value = deepcopy(self.recovery)
+                schemas = value['schema_versions']
+                if mutation == 'missing': schemas.pop(0)
+                elif mutation == 'duplicate': schemas.append(schemas[-1])
+                elif mutation == 'changed': schemas[-1] = '20261018-external-audio-refs-v2'
+                else: value['schema_versions'] = [name for name in schemas if name != '20261018-external-audio-refs-v1']
+                with self.assertRaises((RuntimeError, ValueError)):
+                    gate.validate_recovery(value, self.source, self.manifest, **kwargs)
 
     def test_actual_archive_recovery_passes(self):
         kwargs = {key: value for key, value in self.kwargs.items() if key not in ('manifest_sha256', 'event_sha')}

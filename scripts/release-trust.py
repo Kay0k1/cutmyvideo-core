@@ -44,13 +44,36 @@ LICENSES = {
 }
 GO_NOTICE = '07e803b805ec67f8d2a26183c1a1e3bd7ef8f0c7c44cd4b35c7b775980630c4c'
 PROJECT_LICENSE = 'dbd22263d7218a09000bf90ab07b53de55b246220392696d52e71b4b0b4b1548'
-SCHEMAS = frozenset({'20261005-storage-queue-v3', '20261010-cache-retention-v1',
+LEGACY_SCHEMAS = frozenset({'20261005-storage-queue-v3', '20261010-cache-retention-v1',
                     '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1',
                     '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1', '20261016-agent-projects-v1'})
+SCHEMAS = LEGACY_SCHEMAS | {'20261018-external-audio-refs-v1'}
 # Reviewed archive-gate inventory; changing native scenarios requires a new review.
-NATIVE_GROUP_CHECK_COUNTS = (('archive', 4), ('version', 3), ('cli', 4), ('media', 18),
+NATIVE_GROUP_CHECK_COUNTS = (('archive', 4), ('version', 3), ('cli', 4), ('media', 24),
                              ('process', 3), ('service', 13), ('deletion', 6))
 NATIVE_UNIX_PROCESS_CHECKS = 2
+LEGACY_NATIVE_GROUP_CHECK_COUNTS = (('archive', 4), ('version', 3), ('cli', 4), ('media', 18),
+                                    ('process', 3), ('service', 13), ('deletion', 6))
+
+
+def core15_source(source):
+    # Historical signed releases keep their original sealed acceptance policy.
+    # Current candidate builds have no release SemVer and require today's full
+    # policy; a lower public version cannot downgrade a current candidate gate.
+    if source['mode'] == 'candidate':
+        return True
+    m.require(source['mode'] == 'release', 'Invalid source mode for release policy.')
+    m.release_version(source['version'])
+    version = m.VERSION.fullmatch(source['version'])
+    return tuple(int(value) for value in version.groups()[:3]) >= (1, 5, 0)
+
+
+def native_group_check_counts(source):
+    return NATIVE_GROUP_CHECK_COUNTS if core15_source(source) else LEGACY_NATIVE_GROUP_CHECK_COUNTS
+
+
+def required_schemas(source):
+    return SCHEMAS if core15_source(source) else LEGACY_SCHEMAS
 
 
 def identifier(kind, value):
@@ -201,19 +224,20 @@ def validate_verdict(verdict, source, manifest, run):
     for n in native:
         row = next(r for r in manifest['archives'] if (r['os'], r['arch']) == (n['os'], n['arch']))
         binary = 'cutmy.exe' if n['os'] == 'windows' else 'cutmy'
-        required_checks = sum(count for _, count in NATIVE_GROUP_CHECK_COUNTS)
+        required_counts = native_group_check_counts(source)
+        required_checks = sum(count for _, count in required_counts)
         if n['os'] != 'windows':
             required_checks += NATIVE_UNIX_PROCESS_CHECKS
         m.require(n['archive'] == {k: row[k] for k in ('name', 'sha256', 'bytes')}
                   and n['binary_sha256'] == row['contents'][binary]['sha256']
-                  and type(n['required_groups']) is int and n['required_groups'] == len(NATIVE_GROUP_CHECK_COUNTS)
+                  and type(n['required_groups']) is int and n['required_groups'] == len(required_counts)
                   and type(n['required_checks']) is int and n['required_checks'] == required_checks
                   and m.HASH.fullmatch(n['report_sha256']), 'Native verdict receipt differs.')
     recovery = verdict.get('linux_archive_recovery', {})
     linux = next(r for r in manifest['archives'] if (r['os'], r['arch']) == ('linux', 'amd64'))
     m.require(recovery.get('required_groups') == 9 and recovery.get('decoded_media_observations') == 11
-              and set(recovery.get('schema_versions', [])) == SCHEMAS
-              and len(recovery['schema_versions']) == len(SCHEMAS)
+              and set(recovery.get('schema_versions', [])) == required_schemas(source)
+              and len(recovery['schema_versions']) == len(required_schemas(source))
               and recovery.get('binary_sha256') == linux['contents']['cutmy']['sha256']
               and m.HASH.fullmatch(recovery.get('report_sha256', '')), 'Actual Linux archive recovery verdict missing.')
 

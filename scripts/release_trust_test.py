@@ -17,8 +17,8 @@ t = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(t)
 m = t.m
 ROOT = Path(__file__).resolve().parents[1]
-NATIVE_RECEIPT_COUNTS = {('linux', 'amd64'): 53, ('linux', 'arm64'): 53,
-                         ('darwin', 'amd64'): 53, ('darwin', 'arm64'): 53, ('windows', 'amd64'): 51}
+NATIVE_RECEIPT_COUNTS = {('linux', 'amd64'): 59, ('linux', 'arm64'): 59,
+                         ('darwin', 'amd64'): 59, ('darwin', 'arm64'): 59, ('windows', 'amd64'): 57}
 
 
 class TrustControls(unittest.TestCase):
@@ -51,7 +51,7 @@ class TrustControls(unittest.TestCase):
             linux_archive_recovery={'required_groups': 9, 'decoded_media_observations': 11,
                 'schema_versions': ['20261005-storage-queue-v3', '20261010-cache-retention-v1',
                                     '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1',
-                                    '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1', '20261016-agent-projects-v1'],
+                                    '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1', '20261016-agent-projects-v1', '20261018-external-audio-refs-v1'],
                 'binary_sha256': self.manifest['archives'][0]['contents']['cutmy']['sha256'],
                 'report_sha256': 'c' * 64})
         self.verdict_path = self.root / 'verdict.json'
@@ -227,10 +227,36 @@ class TrustControls(unittest.TestCase):
                 self.assertEqual(observed, expected)
                 self.assertEqual(sum(observed.values()), NATIVE_RECEIPT_COUNTS[(os_, arch)])
 
+    def test_versioned_policy_preserves_historical_signed_releases_without_downgrading_current_candidates(self):
+        for mode, version, current in (('release', 'v1.4.1', False), ('release', 'v1.4.2', False),
+                                       ('release', 'v1.5.0-rc.1', True), ('release', 'v1.5.0', True),
+                                       ('release', 'v2.0.0', True), ('candidate', 'v0.0.0-candidate.g' + 'a'*40, True)):
+            source = dict(self.source, mode=mode, version=version, publishable=mode == 'release')
+            verdict = deepcopy(self.verdict)
+            verdict.update(mode=mode, publishable=source['publishable'], source_sha256=m.digest(m.canonical(source)))
+            for receipt in verdict['native']:
+                receipt['required_checks'] = (57 if receipt['os'] == 'windows' else 59) if current else (51 if receipt['os'] == 'windows' else 53)
+            verdict['linux_archive_recovery']['schema_versions'] = sorted(t.SCHEMAS if current else t.LEGACY_SCHEMAS)
+            with self.subTest(mode=mode, version=version):
+                t.validate_verdict(verdict, source, self.manifest, self.run)
+                self.assertEqual(len(t.required_schemas(source)), 9 if current else 8)
+                wrong = deepcopy(verdict)
+                for receipt in wrong['native']:
+                    receipt['required_checks'] = (51 if receipt['os'] == 'windows' else 53) if current else (57 if receipt['os'] == 'windows' else 59)
+                self.reject(t.validate_verdict, wrong, source, self.manifest, self.run)
+                for mutation in ('missing', 'duplicate', 'wrong', 'other-release-policy'):
+                    wrong = deepcopy(verdict)
+                    schemas = wrong['linux_archive_recovery']['schema_versions']
+                    if mutation == 'missing': schemas.pop()
+                    elif mutation == 'duplicate': schemas.append(schemas[-1])
+                    elif mutation == 'wrong': schemas[-1] = '20261018-external-audio-refs-v2'
+                    else: wrong['linux_archive_recovery']['schema_versions'] = sorted(t.LEGACY_SCHEMAS if current else t.SCHEMAS)
+                    self.reject(t.validate_verdict, wrong, source, self.manifest, self.run)
+
     def test_trust_rejects_old_or_changed_native_group_and_check_counts(self):
         t.validate_verdict(self.verdict, self.source, self.manifest, self.run)
         for index, receipt in enumerate(self.verdict['native']):
-            for mutation in ('old', 'pre_collection', 'missing', 'extra', 'other_platform', 'missing_group', 'extra_group',
+            for mutation in ('old', 'pre_collection', 'pre_core15', 'missing', 'extra', 'other_platform', 'missing_group', 'extra_group',
                              'checks_float', 'groups_float'):
                 with self.subTest(os=receipt['os'], arch=receipt['arch'], mutation=mutation):
                     changed = deepcopy(self.verdict)
@@ -239,8 +265,10 @@ class TrustControls(unittest.TestCase):
                         native['required_checks'] = 37 if receipt['os'] == 'windows' else 39
                     elif mutation == 'pre_collection':
                         native['required_checks'] = 45 if receipt['os'] == 'windows' else 47
+                    elif mutation == 'pre_core15':
+                        native['required_checks'] = 51 if receipt['os'] == 'windows' else 53
                     elif mutation == 'other_platform':
-                        native['required_checks'] = 53 if receipt['os'] == 'windows' else 51
+                        native['required_checks'] = 59 if receipt['os'] == 'windows' else 57
                     elif mutation == 'checks_float':
                         native['required_checks'] = float(native['required_checks'])
                     elif mutation == 'groups_float':

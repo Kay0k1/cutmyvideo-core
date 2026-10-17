@@ -25,6 +25,7 @@ import tempfile
 import time
 from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
 import uuid
+import wave
 
 import release_manifest as m
 
@@ -35,6 +36,11 @@ COLLECTION_MEDIA_CHECKS = (
     'collection_selected_final_edit', 'collection_exclusive_output_preserved',
     'collection_partial_outputs_and_budget', 'collection_draft_final_crop_consistency',
 )
+CORE15_MEDIA_CHECKS = (
+    'silence_analysis_editable_plan', 'measured_audio_normalization',
+    'canvas_contain_padding', 'cut_list_csv_chapter_roundtrip',
+    'video_scene_black_analysis', 'external_audio_timeline',
+)
 REQUIRED_CHECKS = {
     'archive': ('external_source_and_manifest_hash', 'full_five_archive_bundle', 'safe_exact_native_six_files',
                 'embedded_go_and_documents'),
@@ -42,7 +48,7 @@ REQUIRED_CHECKS = {
     'cli': ('help', 'invalid_argument_single_json', 'missing_input_single_json', 'no_database_for_local_cli'),
     'media': ('real_fixture_oracles', 'inspect_coded_and_display_geometry', 'accurate_mp4', 'copy_mp4', 'mp3',
               'full_decode', 'default_audio_880hz', 'rotated_corners', 'existing_output_preserved',
-              'cropped_accurate_mp4', 'crop_copy_refused', 'cropped_saved_plan_joined') + COLLECTION_MEDIA_CHECKS,
+              'cropped_accurate_mp4', 'crop_copy_refused', 'cropped_saved_plan_joined') + COLLECTION_MEDIA_CHECKS + CORE15_MEDIA_CHECKS,
     'process': PROCESS_CHECKS,
     'service': ('real_server_and_worker', 'session_upload_exact_bytes', 'preview_miss_and_hit', 'queued_job_completion',
                 'download_decode_geometry_audio', 'ownership_404', 'range_206', 'same_binary_healthchecks',
@@ -587,10 +593,178 @@ class Native:
         outputs['cropped'] = {'sha256': file_hash(cropped), 'probe': self.probe(cropped)}
         outputs['cropped_joined'] = {'sha256': file_hash(joined), 'probe': self.probe(joined)}
         collection = self.collection_media(env)
+        core15 = self.core15_media(env, batch['outputs'][0]['segments'])
         return ['real_fixture_oracles', 'inspect_coded_and_display_geometry', 'accurate_mp4', 'copy_mp4',
                 'mp3', 'full_decode', 'default_audio_880hz', 'rotated_corners', 'existing_output_preserved',
-                'cropped_accurate_mp4', 'crop_copy_refused', 'cropped_saved_plan_joined', *COLLECTION_MEDIA_CHECKS], {
-                    'fixture': fixture, 'inspect': info, 'outputs': outputs, 'collection': collection}
+                'cropped_accurate_mp4', 'crop_copy_refused', 'cropped_saved_plan_joined', *COLLECTION_MEDIA_CHECKS,
+                *CORE15_MEDIA_CHECKS], {
+                    'fixture': fixture, 'inspect': info, 'outputs': outputs, 'collection': collection, 'core15': core15}
+
+    def core15_media(self, env, actual_segments):
+        # Author PCM directly. The independent timeline/channel oracle cannot
+        # agree with a broken detector merely by running that detector twice.
+        speech = self.work / 'feature-analysis.wav'
+        samples = bytearray()
+        for frame in range(4 * 48000):
+            value = int(12000 * math.sin(2 * math.pi * 997 * frame / 48000)) if (
+                24000 <= frame < 72000 or 120000 <= frame < 168000) else 0
+            samples.extend(struct.pack('<hh', value, -value))
+        with wave.open(str(speech), 'wb') as file:
+            file.setnchannels(2)
+            file.setsampwidth(2)
+            file.setframerate(48000)
+            file.writeframes(samples)
+        speech_sha = file_hash(speech)
+
+        def call(*args):
+            stdout, stderr, _ = self.app(*args, env=env)
+            require(not stderr, 'Feature CLI emitted unexpected diagnostics')
+            return json.loads(stdout)
+
+        silence_args = ('analyze', 'silence', '--input', speech, '--threshold-db', '-40', '--min-silence-ms', '200',
+                        '--keep-before-ms', '100', '--keep-after-ms', '100')
+        silence = call(*silence_args)
+        require(silence['version'] == 1 and silence['audio_track'] == 0
+                and (silence['start_ms'], silence['end_ms'], silence['analyzed_end_ms']) == (0, 4000, 4000)
+                and silence['silence'] == [{'start_ms': 0, 'end_ms': 500}, {'start_ms': 1500, 'end_ms': 2500},
+                                          {'start_ms': 3500, 'end_ms': 4000}]
+                and [(r['start_ms'], r['end_ms']) for r in silence['keep']] == [(400, 1600), (2400, 3600)],
+                'Archived silence analysis lost actual stereo activity, original timestamps or explicit margins')
+        plan = call(*silence_args, '--plan', '--format', 'mp3')
+        require(plan['version'] == 1 and plan['input'] == str(speech)
+                and [(r['start_ms'], r['end_ms']) for r in plan['ranges']] == [(400, 1600), (2400, 3600)],
+                'Archived silence analysis did not produce the existing editable cutting plan')
+        plan['ranges'][1]['start_ms'] = 2300
+        plan_path = self.work / 'feature-silence-plan.json'
+        plan_path.write_bytes(m.canonical(plan))
+        assembled = self.work / 'feature-silence.mp3'
+        batch = call('batch', '--plan', plan_path, '--output', assembled, '--threads', '1')
+        require(len(batch['outputs']) == 1 and batch['outputs'][0]['actual_end_ms'] == 2500,
+                'Archived silence plan ignored the caller edit or failed to export its reviewed intervals')
+        self.decode(assembled)
+        require(abs(float(self.probe(assembled)['format']['duration']) - 2.5) < .2,
+                'Independently decoded edited silence plan has the wrong duration')
+        decoded = self.ff('-i', assembled, '-vn', '-af', 'pan=mono|c0=c0', '-ar', '48000', '-f', 's16le', '-')
+        require(len(decoded) >= 24000 * 2 and len(decoded) % 2 == 0, 'Edited silence plan has no decoded audio')
+        decoded_samples = struct.unpack('<' + 'h' * (len(decoded) // 2), decoded)
+        plan_rms = []
+        for a, b in ((.2, 1.0), (1.2, 1.3), (1.6, 2.2)):
+            chunk = decoded_samples[int(a * 48000):int(b * 48000)]
+            require(chunk, 'Edited silence plan omitted a reviewed audio interval')
+            plan_rms.append(math.sqrt(sum(v * v for v in chunk) / len(chunk)))
+        require(plan_rms[0] > 1000 and plan_rms[1] < 150 and plan_rms[2] > 1000,
+                'Edited silence plan changed independently authored speech/pause placement')
+
+        loudness = call('analyze', 'loudness', '--input', speech)
+        require(loudness['version'] == 1 and loudness['audio_track'] == 0 and loudness['analyzed_end_ms'] == 4000
+                and all(type(loudness[key]) in (int, float) and math.isfinite(loudness[key])
+                        for key in ('integrated_lufs', 'true_peak_dbtp', 'loudness_range_lu')),
+                'Archived loudness report lacks actual selected-track finite measurements')
+        normalized = self.work / 'feature-normalized.mp3'
+        call('clip', '--input', speech, '--output', normalized, '--end', '4', '--audio-normalize',
+             '--normalize-lufs', '-16', '--normalize-true-peak', '-1', '--normalize-lra', '11', '--threads', '1')
+        self.decode(normalized)
+        _, diagnostics, _ = self.commands.run([self.ffmpeg, '-hide_banner', '-nostats', '-i', normalized,
+                                               '-af', 'ebur128=peak=true', '-f', 'null', '-'])
+        summary = diagnostics.decode(errors='replace').rsplit('Summary:', 1)
+        require(len(summary) == 2, 'Independent EBU R128 verifier did not produce its final summary')
+        integrated = re.search(r'I:\s+(-?[0-9.]+) LUFS', summary[1])
+        peak = re.search(r'Peak:\s+(-?[0-9.]+) dBFS', summary[1])
+        require(integrated and peak and abs(float(integrated[1]) + 16) <= 1 and float(peak[1]) <= -.5,
+                'Archived normalization failed independent integrated-loudness/true-peak measurements')
+
+        canvas = self.work / 'feature-canvas.mp4'
+        call('clip', '--input', self.input, '--output', canvas, '--end', '2', '--canvas', '192x192',
+             '--canvas-background', '#0000FF', '--threads', '1')
+        self.decode(canvas)
+        video = self.video(canvas)
+        require((video['width'], video['height']) == (192, 192), 'Archived canvas did not set the encoded dimensions')
+        corners = self.frame(canvas, 192, 192, (1, 3, 0, 2))
+        rgb = self.ff('-i', canvas, '-frames:v', '1', '-pix_fmt', 'rgb24', '-f', 'rawvideo', '-')
+        pad = tuple(rgb[(96 * 192 + 5) * 3:(96 * 192 + 5) * 3 + 3])
+        require(len(rgb) == 192 * 192 * 3 and pad[2] > 220 and pad[0] < 30 and pad[1] < 30,
+                'Archived contain canvas stretched/cropped the picture or lost its explicit background')
+
+        markers = self.work / 'feature-markers.csv'
+        markers.write_text('0,,Начало\n1,,Later\n', encoding='utf-8')
+        cut_list = call('cutlist', 'import', '--format', 'csv', '--input', markers)
+        require(cut_list == {'version': 1, 'entries': [{'start_ms': 0, 'end_ms': None, 'label': 'Начало'},
+                                                     {'start_ms': 1000, 'end_ms': None, 'label': 'Later'}]},
+                'Archived CSV import changed Unicode labels or silently discarded open markers')
+        cut_plan = call('cutlist', 'import', '--format', 'csv', '--input', markers, '--plan',
+                        '--media', self.input, '--duration-ms', '4000')
+        require([(r['start_ms'], r['end_ms']) for r in cut_plan['ranges']] == [(0, 1000), (1000, 4000)],
+                'Archived marker expansion lost its explicit final duration')
+        cut_path = self.work / 'feature-cut-plan.json'
+        cut_path.write_bytes(m.canonical(cut_plan))
+        chapters = call('cutlist', 'export', '--format', 'ffmetadata', '--plan', cut_path)
+        metadata = self.work / 'feature-chapters.txt'
+        metadata.write_text(chapters['text'], encoding='utf-8')
+        reimported = call('cutlist', 'import', '--format', 'ffmetadata', '--input', metadata)
+        require([(r['start_ms'], r['end_ms'], r['label']) for r in reimported['entries']]
+                == [(0, 1000, 'Начало'), (1000, 4000, 'Later')],
+                'Archived chapter metadata failed its Unicode/timestamp round trip')
+        segments_path = self.work / 'feature-actual-segments.json'
+        segments_path.write_bytes(m.canonical(actual_segments))
+        actual_chapters = call('cutlist', 'export', '--format', 'ffmetadata', '--segments', segments_path)
+        require('START=0\nEND=1000\n' in actual_chapters['text']
+                and 'START=1000\nEND=2000\n' in actual_chapters['text'] and 'START=2500' not in actual_chapters['text'],
+                'Archived chapters guessed source bounds instead of using verified output segment clocks')
+
+        scene_source = self.work / 'feature-scenes.mp4'
+        args = []
+        for color in ('black', 'white', 'red', 'black'):
+            args += ['-f', 'lavfi', '-i', f'color=c={color}:s=160x96:r=25:d=1']
+        self.ff(*args, '-filter_complex', '[0:v][1:v][2:v][3:v]concat=n=4:v=1:a=0[v]',
+                '-map', '[v]', '-c:v', 'libx264', '-threads', '1', scene_source)
+        pixels = []
+        for at, expected in ((.5, (0, 0, 0)), (1.5, (255, 255, 255)), (2.5, (255, 0, 0)), (3.5, (0, 0, 0))):
+            pixel = self.ff('-ss', str(at), '-i', scene_source, '-frames:v', '1', '-vf', 'scale=1:1',
+                            '-pix_fmt', 'rgb24', '-f', 'rawvideo', '-')
+            require(len(pixel) == 3 and all(abs(a - b) < 10 for a, b in zip(pixel, expected)),
+                    'Independent video-analysis fixture pixel oracle is invalid')
+            pixels.append(list(pixel))
+        scenes = call('analyze', 'video', '--input', scene_source, '--scene-threshold', '.1', '--min-black-ms', '200')
+        require(scenes['version'] == 1 and scenes['video_track'] == 0 and scenes['analyzed_end_ms'] == 3960
+                and [s['at_ms'] for s in scenes['scenes']] == [1000, 2000, 3000]
+                and all(.1 <= s['score'] <= 1 for s in scenes['scenes'])
+                and scenes['black'] == [{'start_ms': 0, 'end_ms': 1000}, {'start_ms': 3000, 'end_ms': 3960}],
+                'Archived scene/black analysis disagrees with independently authored video boundaries')
+
+        replacement = self.work / 'feature-replacement.wav'
+        with wave.open(str(replacement), 'wb') as file:
+            file.setnchannels(1)
+            file.setsampwidth(2)
+            file.setframerate(48000)
+            file.writeframes(b''.join(struct.pack('<h', int(12000 * math.sin(2 * math.pi * 440 * frame / 48000)))
+                                     for frame in range(48000)))
+        replaced = self.work / 'feature-replaced.mp4'
+        call('clip', '--input', self.input, '--output', replaced, '--end', '3', '--audio-replace', replacement,
+             '--audio-offset-ms', '1000', '--threads', '1')
+        self.decode(replaced)
+        pcm = self.ff('-i', replaced, '-vn', '-ac', '1', '-ar', '48000', '-f', 's16le', '-')
+        require(len(pcm) >= 3 * 48000 * 2 and len(pcm) % 2 == 0, 'Replacement export lost its complete audio timeline')
+        values = struct.unpack('<' + 'h' * (len(pcm) // 2), pcm)
+        rms = []
+        for a, b in ((.2, .8), (1.2, 1.8), (2.2, 2.8)):
+            chunk = values[int(a * 48000):int(b * 48000)]
+            rms.append(math.sqrt(sum(v * v for v in chunk) / len(chunk)))
+        require(rms[0] < 10 and rms[1] > 1000 and rms[2] < 10,
+                'Archived replacement ignored the explicit offset or fabricated/shortened missing tails')
+        chunk = values[int(1.2 * 48000):int(1.8 * 48000)]
+        power = {hz: sum(v * math.sin(2 * math.pi * hz * i / 48000) for i, v in enumerate(chunk)) ** 2
+                     + sum(v * math.cos(2 * math.pi * hz * i / 48000) for i, v in enumerate(chunk)) ** 2
+                 for hz in (440, 880)}
+        require(power[440] > 100 * max(1, power[880]), 'Original selected 880 Hz audio leaked into replacement')
+        require(file_hash(speech) == speech_sha, 'Feature commands changed the independently authored PCM input')
+        return {'silence': silence, 'edited_plan_result': batch, 'edited_plan_rms': plan_rms, 'loudness': loudness,
+                'independent_normalization': {'integrated_lufs': float(integrated[1]), 'true_peak_dbtp': float(peak[1])},
+                'canvas': {'corners': corners, 'padding_rgb': list(pad), 'probe': self.probe(canvas)},
+                'cut_list': cut_list, 'chapters': chapters, 'actual_chapters': actual_chapters,
+                'scenes': scenes, 'scene_fixture_pixels': pixels, 'replacement_rms': rms,
+                'replacement_relative_power': power[440] / max(1, power[880]),
+                'outputs': {path.name: {'sha256': file_hash(path), 'bytes': path.stat().st_size}
+                            for path in (assembled, normalized, canvas, scene_source, replaced)}}
 
     def collection_media(self, env):
         # Authored temporal colors are independent of the reported segment map:
@@ -1056,7 +1230,10 @@ class Native:
     def preserve_media(self):
         destination = self.evidence / 'synthetic-media'
         destination.mkdir(exist_ok=True)
-        for name in ('corners.ppm', 'input.mp4', 'unrotated.mp4', 'accurate.mp4', 'copy.mp4', 'mp3.mp3', 'preview.mp4', 'download.mp4'):
+        for name in ('corners.ppm', 'input.mp4', 'unrotated.mp4', 'accurate.mp4', 'copy.mp4', 'mp3.mp3', 'preview.mp4', 'download.mp4',
+                     'feature-analysis.wav', 'feature-silence-plan.json', 'feature-silence.mp3', 'feature-normalized.mp3',
+                     'feature-canvas.mp4', 'feature-markers.csv', 'feature-cut-plan.json', 'feature-chapters.txt',
+                     'feature-actual-segments.json', 'feature-scenes.mp4', 'feature-replacement.wav', 'feature-replaced.mp4'):
             path = self.work / name
             if path.is_file():
                 shutil.copyfile(path, destination / name)
