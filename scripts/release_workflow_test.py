@@ -115,8 +115,13 @@ def audit(release, source_ci):
         for job in workflow['jobs'].values():
             for step in job.get('steps', []):
                 if step.get('uses', '').startswith('actions/upload-artifact@'):
+                    require(step['with'].get('archive', True) is True,
+                            'Artifact identity must keep the verified ZIP transport')
                     name = step['with']['name']
                     require(RUN in name and ATTEMPT in name, 'Evidence uploads must be run/attempt scoped')
+                if step.get('uses', '').startswith('actions/download-artifact@'):
+                    require(step['with'].get('digest-mismatch', 'error') == 'error',
+                            'Artifact digest mismatches must fail closed')
     for step in gate['steps']:
         if step.get('uses', '').startswith('actions/download-artifact@'):
             selector = step['with'].get('name', step['with'].get('pattern'))
@@ -205,6 +210,21 @@ class WorkflowControls(unittest.TestCase):
                 step = next(step for step in job['steps'] if step.get('uses', '').startswith(action)
                             and ('name' in step.get('with', {}) or 'pattern' in step.get('with', {})))
                 step['with']['pattern' if 'pattern' in step['with'] else 'name'] = 'old-attempt'
+                with self.assertRaises(ValueError):
+                    audit(workflow, source_ci)
+
+    def test_direct_upload_or_tolerated_digest_mismatch_is_rejected(self):
+        for source, action, key, value in (
+                (False, 'upload-artifact', 'archive', False),
+                (True, 'upload-artifact', 'archive', False),
+                (False, 'download-artifact', 'digest-mismatch', 'warn'),
+                (False, 'download-artifact', 'digest-mismatch', 'ignore')):
+            with self.subTest(source=source, action=action, value=value):
+                workflow, source_ci = deepcopy(self.release), deepcopy(self.source_ci)
+                selected = source_ci if source else workflow
+                step = next(step for job in selected['jobs'].values() for step in job.get('steps', [])
+                            if step.get('uses', '').startswith('actions/' + action + '@'))
+                step['with'][key] = value
                 with self.assertRaises(ValueError):
                     audit(workflow, source_ci)
 
