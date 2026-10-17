@@ -3,6 +3,7 @@ package localmedia
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strconv"
 
 	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
@@ -17,6 +18,13 @@ type LoudnessResult = edit.LoudnessResult
 func AnalyzeLoudness(ctx context.Context, c Config, path string, options LoudnessOptions) (LoudnessResult, error) {
 	var result LoudnessResult
 	if err := ctx.Err(); err != nil {
+		return result, err
+	}
+	if path == "" {
+		return result, &mediaerror.Problem{Code: "invalid_argument", Message: "loudness input path is required"}
+	}
+	path, err := filepath.Abs(path)
+	if err != nil {
 		return result, err
 	}
 	before, err := PreflightFileIdentity(path)

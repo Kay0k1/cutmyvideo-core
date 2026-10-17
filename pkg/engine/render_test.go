@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"math"
 	"os"
 	"os/exec"
@@ -113,6 +114,13 @@ func TestRenderCanvasAndExternalAudioTimelineActualMedia(t *testing.T) {
 		if offset < 0 && pcmRMS(pcm, .1, .4) < 1500 || pcmRMS(pcm, 1.1, 1.8) > 10 || offset > 0 && pcmRMS(pcm, .1, .4) > 10 {
 			t.Fatalf("offset %d produced wrong silence/tone windows", offset)
 		}
+	}
+	i, tp, lra := -16.0, -1.0, 11.0
+	combined := plan
+	combined.Ranges = []NamedRange{{EndMS: 4000}}
+	combined.Options.AudioNormalize = &AudioNormalize{IntegratedLUFS: &i, TruePeakDBTP: &tp, LoudnessRangeLU: &lra}
+	if _, err = e.ExecutePlan(ctx, combined, filepath.Join(t.TempDir(), "combined.mp4")); err != nil {
+		t.Fatal("combined canvas, normalization and replacement", err)
 	}
 }
 
@@ -251,5 +259,97 @@ func TestRenderExternalTrackClockAndInputFences(t *testing.T) {
 		if len(entries) != 0 {
 			t.Fatal("source change leaked media", entries)
 		}
+	}
+}
+
+func TestRenderCanvasPreservesKnownHDRAndVariableClocks(t *testing.T) {
+	e := New(Config{FFmpegThreads: 1})
+	ctx := context.Background()
+	for _, name := range []string{"pq-10bit.mp4", "hlg-10bit.mp4", "mono-silence-vfr.mp4"} {
+		t.Run(name, func(t *testing.T) {
+			input := filepath.Join("..", "..", "internal", "app", "testdata", "media-contract", name)
+			output := filepath.Join(t.TempDir(), "canvas.mp4")
+			_, err := e.ExecutePlan(ctx, Plan{Version: 1, Input: input, OutputMode: "joined", Ranges: []NamedRange{{EndMS: 2000}}, Options: AdvancedOptions{Options: Options{Format: "mp4"}, Canvas: &Canvas{Width: 128, Height: 160, Fit: "contain", Background: "#000000"}}}, output)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.HasPrefix(name, "mono") {
+				data, err := exec.Command("ffprobe", "-v", "error", "-select_streams", "v", "-show_frames", "-show_entries", "frame=best_effort_timestamp_time", "-of", "json", output).Output()
+				if err != nil {
+					t.Fatal(err)
+				}
+				var p struct {
+					Frames []struct {
+						PTS string `json:"best_effort_timestamp_time"`
+					} `json:"frames"`
+				}
+				if err = json.Unmarshal(data, &p); err != nil {
+					t.Fatal(err)
+				}
+				want := []float64{0, .04, .2, .32, .6, .8, 1.04, 1.4, 1.96}
+				if len(p.Frames) != len(want) {
+					t.Fatalf("VFR frame count %d want%d", len(p.Frames), len(want))
+				}
+				for i, f := range p.Frames {
+					v, _ := strconv.ParseFloat(f.PTS, 64)
+					if math.Abs(v-want[i]) > .005 {
+						t.Fatalf("VFR frame %d PTS%v want%v", i, v, want[i])
+					}
+				}
+				return
+			}
+			rgb := renderTool(t, "-v", "error", "-i", output, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-")
+			if len(rgb) != 128*160*3 {
+				t.Fatal("wrong HDR canvas dimensions")
+			}
+			last := -1
+			levels := make([]int, 7)
+			for i := range 7 {
+				at := (80*128 + (2*i+1)*128/16) * 3
+				pixel := rgb[at : at+3]
+				levels[i] = int(pixel[0])
+				if math.Abs(float64(pixel[0])-float64(pixel[1])) > 5 || math.Abs(float64(pixel[1])-float64(pixel[2])) > 5 || i == 0 && pixel[0] > 8 || i > 0 && int(pixel[0]) <= last {
+					t.Fatalf("HDR signal became tinted/nonmonotonic: %v", levels)
+				}
+				last = int(pixel[0])
+			}
+			if levels[4] < 190 || levels[4] > 250 || levels[6] < 230 {
+				t.Fatalf("HDR absolute luminance tone map changed: %v", levels)
+			}
+		})
+	}
+}
+
+func TestRenderLoudnessWindowSelectionAndActualCoverage(t *testing.T) {
+	_, _ = renderFixture(t)
+	dir := t.TempDir()
+	source := filepath.Join(dir, "window.wav")
+	renderTool(t, "-v", "error", "-f", "lavfi", "-i", "aevalsrc=if(lt(t\\,2)\\,0.01\\,0.2)*sin(2*PI*1000*t):s=48000:d=4", source)
+	e := New(Config{FFmpegThreads: 1})
+	ctx := context.Background()
+	quiet, err := e.AnalyzeLoudness(ctx, source, LoudnessOptions{EndMS: 1000})
+	if err != nil || quiet.IntegratedLUFS == nil {
+		t.Fatalf("quiet window: %+v %v", quiet, err)
+	}
+	loud, err := e.AnalyzeLoudness(ctx, source, LoudnessOptions{StartMS: 3000, EndMS: 4000})
+	if err != nil || loud.IntegratedLUFS == nil || *loud.IntegratedLUFS-*quiet.IntegratedLUFS < 24 {
+		t.Fatalf("window leaked adjacent loudness: %+v %+v %v", quiet, loud, err)
+	}
+	short := filepath.Join(dir, "short-audio.mp4")
+	renderTool(t, "-v", "error", "-f", "lavfi", "-i", "color=red:size=160x90:rate=25:duration=4", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=2", "-c:v", "libx264", "-threads", "1", "-c:a", "aac", short)
+	coverage, err := e.AnalyzeLoudness(ctx, short, LoudnessOptions{})
+	if err != nil || coverage.EndMS != 4000 || coverage.AnalyzedEndMS < 1900 || coverage.AnalyzedEndMS > 2100 {
+		t.Fatalf("undecoded tail was assumed silent: %+v %v", coverage, err)
+	}
+	multiple := filepath.Join(dir, "two-audio.mka")
+	renderTool(t, "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=4", "-f", "lavfi", "-i", "sine=frequency=880:sample_rate=48000:duration=4", "-filter:a:1", "volume=0.1", "-map", "0:a", "-map", "1:a", "-c:a", "pcm_s16le", multiple)
+	first, err := e.AnalyzeLoudness(ctx, multiple, LoudnessOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected := 1
+	second, err := e.AnalyzeLoudness(ctx, multiple, LoudnessOptions{AudioTrack: &selected})
+	if err != nil || first.AudioTrack != 0 || second.AudioTrack != 1 || first.IntegratedLUFS == nil || second.IntegratedLUFS == nil || *first.IntegratedLUFS-*second.IntegratedLUFS < 18 {
+		t.Fatalf("absolute audio selection ignored: %+v %+v %v", first, second, err)
 	}
 }
