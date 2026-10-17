@@ -49,6 +49,16 @@ class InstalledSDKResultControls(unittest.TestCase):
         with self.assertRaises(ValueError):
             CHECKS.verify_go_report(self.report, self.required)
 
+    def test_shared_contract_examples_are_frozen_outside_the_checkout(self):
+        inputs = CHECKS.collection_inputs()
+        expected = inputs[CHECKS.PROJECT_CONTRACTS]
+        copied = CHECKS.copy_project_contracts(Path(self.directory.name), expected)
+        self.assertEqual(copied.read_bytes(), (CHECKS.ROOT / CHECKS.PROJECT_CONTRACTS).read_bytes())
+        self.assertEqual(CHECKS.sha256(copied), expected)
+        self.assertFalse(copied.is_relative_to(CHECKS.ROOT))
+        with self.assertRaises(RuntimeError):
+            CHECKS.copy_project_contracts(Path(self.directory.name), "0" * 64)
+
 
 if __name__ == "__main__":
     unittest.main()

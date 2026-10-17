@@ -124,6 +124,48 @@ Download ready artifacts using the same private owner session. Upload the
 downloaded media to another editing tool as needed; the artifact URL alone is
 not public access. Keep the original source available until revisions are done.
 
+## Retention, access and recovery
+
+The saved server project, its source and the SDK's private local directory have
+separate lifetimes. Creating, editing or sharing a project does not extend any
+source or artifact deadline. A project or grant alone does not pin the source;
+accepted jobs do, including terminal jobs until their rows are removed.
+
+| Object | Lifetime and access | Cleanup and recovery |
+| --- | --- | --- |
+| Source preparation receipt | Owner/key/immutable intent; seven-day cleanup target. A ready receipt is retained while its source exists. Processing claims use `max(UPLOAD_TIMEOUT,SOURCE_TIMEOUT) + 1 minute`. | Same-key replay recovers retained success or permanent rejection; an interrupted claim can be reclaimed after its lease. Deleting the source does not authorize a silent replacement. Later preparation admission prunes up to 200 old receipts whose lease has expired and source is gone. |
+| Source | `SOURCE_TTL`, default 24 hours, is a target for unpinned sources. Jobs and active media operations can retain it longer. | Maintenance removes eligible source metadata and schedules its files for durable deletion. Optional successful-export media cleanup keeps source metadata with `media_removed:true`; accepted jobs and artifacts remain. |
+| Server project | Seven days from creation. Reads and scoped operations require an unexpired project plus its owner or a live recipient grant. Edits and replays do not renew it. | Expiry hides the project immediately; later project creation prunes up to 200 expired projects. Explicit project DELETE removes its metadata, job links, handoffs, grants and retry intents. It does not cancel or delete the underlying jobs, artifacts or source. |
+| Handoff token | Ten minutes; first redemption binds one recipient. Only the owner issues tokens. | Token expiry prevents redemption, including lost-reply recovery; it does not invalidate an already issued grant. Issuing another token prunes expired tokens for that project. |
+| Recipient grant | Up to 24 hours, capped by project expiry. It authorizes only scoped project routes. | Expiry hides the project from that recipient. Owner revocation deletes the project's grants and tokens immediately; it keeps the project, accepted jobs and outputs. Redemption prunes relevant expired grants. |
+| Job and idempotency key | Accepted work belongs to the source owner. Project/grant expiry, revocation and project DELETE do not cancel it. | A renewable worker lease lasts 45 seconds; recovery permits up to three claims. Retention removes terminal jobs only after their artifacts are gone and `ARTIFACT_TTL` has elapsed since the last job update. Deleting a job also removes its project links and idempotency mapping. |
+| Artifact | A publication-time `ARTIFACT_TTL` deadline, default 24 hours; active jobs pin their results. Access requires the owner or a live grant through an attached project job. | Maintenance removes expired registrations, then retries physical deletion through charged tombstones. Retained jobs/files can recover a lost reply; removed artifacts require explicit repair while the original source is still available. |
+| SDK directory | Private owner capability, saved requests/keys, checkpoints, partial transfers and verified files; no automatic TTL. Python and Node formats are separate. | Resume uses the same directory, server and owner. Server expiry/revocation does not erase downloaded files or local state. A caller timeout stops that caller, while accepted remote jobs continue. |
+
+Access expiry and physical removal are different events. Project, token, grant
+and preparation metadata use the admission cleanup paths above, rather than
+background retention. Expired metadata can therefore remain in PostgreSQL until
+a later eligible admission or explicit deletion; that is not an extension of
+the access or replay guarantee. Source and artifact bytes use the independent
+worker/maintenance lifecycle. Their physical cleanup can lag the retention target.
+
+The browser owner cookie also has its own seven-day maximum age; losing it does
+not delete server work. SDK recovery keeps that capability in private local
+state. A recipient whose grant has ended needs a new owner-issued handoff;
+keeping an old token or project JSON does not restore access. The source owner's
+ordinary job/artifact routes remain available under their own retention rules.
+
+Explicit source DELETE refuses active jobs and protected media operations.
+When allowed, it removes the source, its terminal jobs, artifacts and media.
+An unexpired server project can still expose its saved edit plan and source snapshot,
+but cannot recreate missing source bytes. Likewise, a retained project does not
+preserve job history after normal job retention removes it.
+
+See [source retention and media cleanup](source-retention.md),
+[HTTP retention and ownership](api.md#jobs),
+[resumable SDK recovery](sdk-collections.md#resume-in-another-process) and the
+[upgrade/backup recovery gate](backup-recovery.md) for the detailed guarantees.
+
 ## Reproducible demonstration
 
 The acceptance script generates a real synthetic audiovisual source, validates

@@ -26,6 +26,7 @@ MANIFEST = 'SDK-MANIFEST.json'
 SIGNATURE = 'sdk-provenance.sigstore.json'
 MAX_PACKAGE = 16 * 1024 * 1024
 MAX_JSON = 2 * 1024 * 1024
+PROJECT_CONTRACTS = 'api/testdata/project-contracts.json'
 
 
 def module(name, filename):
@@ -114,6 +115,9 @@ def seal(directory, evidence, source, repo):
               'Full installed SDK HTTP/worker acceptance is required.')
     frozen = receipt.get('source_inputs_sha256')
     m.require(type(frozen) is dict and frozen, 'SDK evidence has no frozen source inputs.')
+    if PROJECT_CONTRACTS in source['files']:
+        m.require(frozen.get(PROJECT_CONTRACTS) == source['files'][PROJECT_CONTRACTS]['sha256'],
+                  'SDK evidence omitted or changed the shared project contract examples.')
     for name, digest in frozen.items():
         m.require(name in source['files'] and source['files'][name]['sha256'] == digest,
                   'SDK checks were not run against the resolved source.')

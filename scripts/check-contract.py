@@ -2,6 +2,7 @@
 """Offline OpenAPI/schema/runtime checks and a conservative compatibility gate."""
 import argparse
 import datetime
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -11,6 +12,19 @@ from jsonschema import Draft202012Validator, FormatChecker, ValidationError, val
 
 ROOT = Path(__file__).resolve().parents[1]
 METHODS = {"get", "post", "delete", "put", "patch", "head", "options", "trace"}
+FROZEN_BASELINES = {
+    "compatibility-v0.2.1.json": "29ecb0640beb8d68d8ced9f3dfe52ef3ce1e210c4711864c60c3e5c8fe010999",
+    "compatibility-v1.4.1.json": "e128b9d885126200ba9a5d1af255fd7069ed2fb88789e077e0075e5556f129ad",
+}
+ANNOTATIONS = {"description", "examples", "example", "title", "default"}
+NAMED_SCHEMA_MAPS = {"properties", "patternProperties", "dependentSchemas", "$defs", "definitions"}
+V141_PROVENANCE = {
+    "tag": "v1.4.1",
+    "commit": "eb24d8e177de977da5e4a34b9b48ecabe14cf635",
+    "path": "api/openapi.yaml",
+    "source_sha256": "d12ceac0881402fb9a625afd3bd1792188bdccdd89b9121e18bec0a19ea477b1",
+    "normalization": "local-refs-without-annotations-v1",
+}
 
 def max_bytes(validator, limit, instance, schema):
     if isinstance(instance, str) and schema.get("x-trimSpace"):
@@ -142,11 +156,14 @@ def sample_check(document, sample):
             raise ValueError(f"unexpected response Content-Type {media_type}")
         validate(document, content[media_type]["schema"], sample.get("body"))
 
-def expanded(document, schema):
-    schema = resolve(document, schema)
+def expanded(document, schema, named=False):
+    # A property's name (for example title/default/description) is contract
+    # data, even when that name is also a JSON Schema annotation keyword.
+    if not named:
+        schema = resolve(document, schema)
     if isinstance(schema, dict):
-        return {k: expanded(document, v) for k, v in schema.items()
-                if k not in {"description", "examples", "example", "title", "default"}}
+        return {k: expanded(document, v, not named and k in NAMED_SCHEMA_MAPS) for k, v in schema.items()
+                if named or k not in ANNOTATIONS}
     if isinstance(schema, list):
         return [expanded(document, v) for v in schema]
     return schema
@@ -165,12 +182,12 @@ def snapshot(document):
             if "requestBody" in operation:
                 body = resolve(document, operation["requestBody"])
                 contract["request_required"] = body.get("required", False)
-                contract["request"] = expanded(document, body.get("content", {}))
+                contract["request"] = expanded(document, body.get("content", {}), named=True)
             contract["responses"] = {}
             contract["response_headers"] = {}
             for status, response in operation["responses"].items():
                 response = resolve(document, response)
-                contract["responses"][status] = expanded(document, response.get("content", {}))
+                contract["responses"][status] = expanded(document, response.get("content", {}), named=True)
                 contract["response_headers"][status] = {}
                 for name, header in response.get("headers", {}).items():
                     header = resolve(document, header)
@@ -289,18 +306,43 @@ def compatibility(baseline, current):
                     compare_schema(header["schema"], current_header["schema"], "response", operation + "/header/" + name, failures)
     return failures
 
+def frozen_baselines():
+    result = []
+    for name, digest in FROZEN_BASELINES.items():
+        raw = (ROOT / "api" / name).read_bytes()
+        if hashlib.sha256(raw).hexdigest() != digest:
+            raise ValueError(name + ": immutable baseline changed; review its provenance and checker pin explicitly")
+        baseline = json.loads(raw)
+        if name == "compatibility-v1.4.1.json":
+            if baseline.get("schema_version") != 1 or baseline.get("provenance") != V141_PROVENANCE:
+                raise ValueError(name + ": unexpected immutable baseline provenance")
+            baseline = snapshot(baseline["document"])
+        result.append((name, baseline))
+    return result
+
+def check_compatibility(document, additional_baseline=None):
+    current = snapshot(document)
+    baselines = frozen_baselines()
+    if additional_baseline:
+        baselines.append((str(additional_baseline), json.loads(additional_baseline.read_text())))
+    return [name + ": " + failure for name, baseline in baselines
+            for failure in compatibility(baseline, current)]
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--spec", type=Path, default=ROOT / "api/openapi.yaml")
     parser.add_argument("--samples", type=Path)
-    parser.add_argument("--baseline", type=Path, default=ROOT / "api/compatibility-v0.2.1.json")
-    parser.add_argument("--write-baseline", type=Path)
+    parser.add_argument("--baseline", type=Path, help="check an additional expanded snapshot; frozen baselines always apply")
+    parser.add_argument("--write-baseline", type=Path, help="export an expanded snapshot for review, without replacing a frozen baseline")
     args = parser.parse_args()
     document = load(args.spec)
     if args.write_baseline:
+        protected = {(ROOT / "api" / name).resolve() for name in FROZEN_BASELINES}
+        if args.write_baseline.resolve() in protected:
+            raise ValueError("cannot overwrite an immutable compatibility baseline; export to a separate review file")
         args.write_baseline.write_text(json.dumps(snapshot(document), indent=2) + "\n")
         return
-    failures = compatibility(json.loads(args.baseline.read_text()), snapshot(document))
+    failures = check_compatibility(document, args.baseline)
     if failures:
         raise ValueError("incompatible public contract changes:\n" + "\n".join(failures))
     samples = json.loads(args.samples.read_text()) if args.samples else []
@@ -309,7 +351,7 @@ def main():
             sample_check(document, sample)
         except (ValidationError, ValueError, KeyError) as error:
             raise ValueError(f"fixture {sample['name']}: {error}") from error
-    print(f"OpenAPI, local references, compatibility and {len(samples)} runtime samples passed")
+    print(f"OpenAPI, local references, both frozen compatibility baselines and {len(samples)} runtime samples passed")
 
 if __name__ == "__main__":
     try:

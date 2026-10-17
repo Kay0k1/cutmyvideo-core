@@ -13,6 +13,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/app"
+PROJECT_CONTRACTS = "api/testdata/project-contracts.json"
 
 
 def verify_go_report(path, required):
@@ -43,7 +44,7 @@ def sha256(path):
 
 def collection_inputs():
     paths = [ROOT / name for name in (
-        "go.mod", "go.sum", "scripts/check-sdks.py", "scripts/sdk_checks_test.py",
+        "go.mod", "go.sum", PROJECT_CONTRACTS, "scripts/check-sdks.py", "scripts/sdk_checks_test.py",
         "scripts/sdk-smoke.py", "scripts/sdk-smoke.mjs",
         "scripts/sdk-collection-acceptance.py", "scripts/sdk-collection-acceptance.mjs",
         "scripts/sdk-agent-project-acceptance.py", "scripts/sdk-agent-project-acceptance.mjs",
@@ -57,6 +58,18 @@ def collection_inputs():
                             ("sdk/typescript/src", "*.ts"), ("sdk/typescript/test", "*.mjs")):
         paths.extend((ROOT / folder).rglob(pattern))
     return {str(path.relative_to(ROOT)): sha256(path) for path in sorted(set(paths))}
+
+
+def copy_project_contracts(output, expected_sha256):
+    """Installed tests use frozen test input, never a runtime package dependency."""
+    data = (ROOT / PROJECT_CONTRACTS).read_bytes()
+    if hashlib.sha256(data).hexdigest() != expected_sha256:
+        raise RuntimeError("Project contract examples changed before SDK verification")
+    destination = output / "testdata" / "project-contracts.json"
+    destination.parent.mkdir()
+    with destination.open("xb") as stream:
+        stream.write(data)
+    return destination
 
 
 def run(argv, *, cwd, env, log, timeout=300):
@@ -91,6 +104,8 @@ def main():
     output.mkdir(parents=True, exist_ok=False)
     env = dict(os.environ)
     source_inputs = collection_inputs()
+    project_contracts = copy_project_contracts(output, source_inputs[PROJECT_CONTRACTS])
+    env["CUTMY_PROJECT_CONTRACTS"] = str(project_contracts)
     python, node, npm = sys.executable, shutil.which("node"), shutil.which("npm")
     if not node or not npm:
         parser.error("Node.js and npm are required")
@@ -200,7 +215,7 @@ void local.executeCollection({...request.plan, input: "/media/interview.mp4"}, "
     run(["go", "test", "-json", "-race", "-count=1", "-timeout=15m" if args.http else "-timeout=3m", "./internal/app", "-run", selector],
         cwd=ROOT, env=env, log=output / "installed-sdk-tests.jsonl", timeout=960 if args.http else 240)
     verify_go_report(output / "installed-sdk-tests.jsonl", required)
-    if collection_inputs() != source_inputs:
+    if collection_inputs() != source_inputs or sha256(project_contracts) != source_inputs[PROJECT_CONTRACTS]:
         raise RuntimeError("SDK or acceptance inputs changed during verification; rerun from frozen source")
     receipt = {"schema": 1, "required_tests": sorted(required), "python_wheel_sha256": sha256(wheels[0]),
                "python_sdist_sha256": sha256(sdists[0]), "npm_tarball_sha256": sha256(tarballs[0]),
