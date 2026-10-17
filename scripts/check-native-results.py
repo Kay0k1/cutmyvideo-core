@@ -24,6 +24,12 @@ AUDIT_MEDIA_REQUIRED = {
     "TestHLSManifestRedirectRetainsRedirectLimit",
     "TestHLSManifestRedirectRetainsTransferBudgets",
 }
+PLATFORM_ORIGINAL_AUDIO_REQUIRED = {
+    "TestPlatformOriginalAudioSelection",
+    "TestPlatformOriginalAudioRanksSupportedInputs",
+    "TestPlatformOriginalAudioSurvivesExtractorAndCache",
+    "TestPlatformOriginalAudioInvalidatesPreviewCache",
+}
 AUDIT_SERVICE_REQUIRED = {
     "TestHTTPAgentProjectJobLimitRejectsAdmissionAtomicallyAndRetainsReplay",
     "TestHTTPAgentProjectConcurrentAdmissionsShareLastBindingSlot",
@@ -428,6 +434,7 @@ REQUIRED[2].update(PROJECT_CONTRACT_SERVICE_REQUIRED)
 REQUIRED[2].update(EDIT_MODEL_SERVICE_REQUIRED)
 REQUIRED[0].update(EDIT_MODEL_ENGINE_REQUIRED)
 REQUIRED[4].update(AUDIT_MEDIA_REQUIRED)
+REQUIRED[4].update(PLATFORM_ORIGINAL_AUDIO_REQUIRED)
 REQUIRED[0].update(SUBTITLE_MODULE_REQUIRED | MEDIA_BOUNDARY_ENGINE_REQUIRED)
 REQUIRED[1].update(TOOLRUN_MODULE_REQUIRED)
 REQUIRED[1].update(TOOLRUN_LIFECYCLE_REQUIRED)

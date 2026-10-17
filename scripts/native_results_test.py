@@ -88,6 +88,40 @@ class NativeResultsChecks(unittest.TestCase):
                         for report, original in zip(self.reports, originals):
                             report.write_text(original, encoding="utf-8")
 
+    def test_original_platform_audio_is_required_on_every_native_target(self):
+        required = {"TestPlatformOriginalAudioSelection",
+                    "TestPlatformOriginalAudioRanksSupportedInputs",
+                    "TestPlatformOriginalAudioSurvivesExtractorAndCache",
+                    "TestPlatformOriginalAudioInvalidatesPreviewCache"}
+        self.assertEqual(native_results.PLATFORM_ORIGINAL_AUDIO_REQUIRED, required)
+        self.assertLessEqual(required, native_results.REQUIRED[4])
+        self.assertEqual(native_results.REQUIRED_PACKAGES[4], {native_results.APP_PACKAGE})
+        workflow = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]", workflow)
+        native = workflow.split("  native:\n", 1)[1].split("  bookworm-media:\n", 1)[0]
+        self.assertIn("python-version: '3.10'", native)
+        extractor = native.split("      - name: Pinned native extractor for offline metadata fixtures\n", 1)[1].split("\n      - ", 1)[0]
+        self.assertIn("shell: python", extractor)
+        self.assertNotIn("if: ", extractor)
+        self.assertIn("filename = 'yt-dlp.exe' if os.name == 'nt' else 'yt-dlp'", extractor)
+        self.assertIn("66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a", extractor)
+        self.assertIn("1fa6733c37ea6fb51c99ad8fe785e7b7e5f3246c9b980230329d4fb72ed8d4d6", extractor)
+        self.assertIn("https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/", extractor)
+        self.assertIn("if hashlib.sha256(data).hexdigest() != expected:", extractor)
+        self.assertIn("'--version'", extractor)
+        self.assertIn(".strip() != '2026.08.19':", extractor)
+        self.assertIn("stream.write(f'CUTMY_TEST_YTDLP={path}\\n')", extractor)
+        self.assertLess(native.index("Pinned native extractor for offline metadata fixtures"), native.index("tee native-media-contract-tests.jsonl"))
+        media = next(line for line in workflow.splitlines() if "tee native-media-contract-tests.jsonl" in line)
+        self.assertIn("./internal/app -run ", media)
+        selector = re.search(r"-run '([^']+)'", media).group(1)
+        for name in required:
+            self.assertIsNotNone(re.fullmatch(selector, name))
+        self.assert_required_results_reject_mutations(
+            ((4, native_results.APP_PACKAGE, required),),
+            lambda index, package: native_results.ENGINE_PACKAGE,
+            lambda index: 0)
+
     def test_process_return_cleanup_is_required_and_rejects_incomplete_native_proof(self):
         required = {"TestRunOutputCleansDescendantsAfterParentExit"}
         self.assertEqual(native_results.TOOLRUN_LIFECYCLE_REQUIRED, required)
@@ -1058,7 +1092,7 @@ class NativeResultsChecks(unittest.TestCase):
                  "TestStorageScanSessionReadBatchPreservesNonISODateStyle",
                  "TestStorageScanSessionReadBatchLookupFailureRollsBackAndRecovers")
         self.assertEqual(len(native_results.REQUIRED[3]), 48 + len(native_results.UNIVERSAL_STORAGE_REQUIRED) + len(native_results.AGENT_PROJECT_STORAGE_REQUIRED))
-        self.assertEqual(sum(map(len, native_results.REQUIRED)), 124 + sum(map(len, (native_results.UNIVERSAL_ENGINE_REQUIRED, native_results.UNIVERSAL_SERVICE_REQUIRED, native_results.UNIVERSAL_STORAGE_REQUIRED, native_results.UNIVERSAL_MEDIA_REQUIRED, native_results.PREFLIGHT_ENGINE_REQUIRED, native_results.PREFLIGHT_CLI_REQUIRED, native_results.PREFLIGHT_SERVICE_REQUIRED, native_results.PREFLIGHT_MEDIA_REQUIRED, native_results.POOL_SERVICE_REQUIRED, native_results.DRAFT_CACHE_TRANSFER_REQUIRED, native_results.DRAFT_CACHE_DATABASE_REQUIRED, native_results.COLLECTION_ENGINE_REQUIRED, native_results.COLLECTION_CLI_REQUIRED, native_results.COLLECTION_SERVICE_REQUIRED, native_results.AGENT_PROJECT_SERVICE_REQUIRED, native_results.AGENT_PROJECT_STORAGE_REQUIRED, native_results.SUBTITLE_SERVICE_REQUIRED, native_results.SUBTITLE_CLI_REQUIRED, native_results.AUDIT_MEDIA_REQUIRED, native_results.AUDIT_SERVICE_REQUIRED, native_results.PROJECT_CONTRACT_SERVICE_REQUIRED, native_results.EDIT_MODEL_SERVICE_REQUIRED, native_results.EDIT_MODEL_ENGINE_REQUIRED, native_results.SUBTITLE_MODULE_REQUIRED, native_results.MEDIA_BOUNDARY_ENGINE_REQUIRED, native_results.TOOLRUN_MODULE_REQUIRED, native_results.MEDIAINFO_MODULE_REQUIRED, native_results.MEDIAINFO_ADAPTER_REQUIRED, native_results.MEDIAEXPORT_MODULE_REQUIRED, native_results.MEDIAEXPORT_ADAPTER_REQUIRED, native_results.JOINED_MEDIAEXPORT_REQUIRED, native_results.MEDIAPREFLIGHT_MODULE_REQUIRED, native_results.MEDIAPREFLIGHT_ADAPTER_REQUIRED, native_results.MEDIASESSION_MODULE_REQUIRED, native_results.SOURCE_SUBTITLE_MODULE_REQUIRED, native_results.MEDIASESSION_ADAPTER_REQUIRED, native_results.COREMODEL_MODULE_REQUIRED, native_results.MEDIAERROR_MODULE_REQUIRED, native_results.LOCALMEDIA_MODULE_REQUIRED, native_results.COREMODEL_MEDIAERROR_ADAPTER_REQUIRED, native_results.ENGINE_DEPENDENCY_REQUIRED, native_results.TOOLRUN_LIFECYCLE_REQUIRED))))
+        self.assertEqual(sum(map(len, native_results.REQUIRED)), 124 + sum(map(len, (native_results.UNIVERSAL_ENGINE_REQUIRED, native_results.UNIVERSAL_SERVICE_REQUIRED, native_results.UNIVERSAL_STORAGE_REQUIRED, native_results.UNIVERSAL_MEDIA_REQUIRED, native_results.PREFLIGHT_ENGINE_REQUIRED, native_results.PREFLIGHT_CLI_REQUIRED, native_results.PREFLIGHT_SERVICE_REQUIRED, native_results.PREFLIGHT_MEDIA_REQUIRED, native_results.POOL_SERVICE_REQUIRED, native_results.DRAFT_CACHE_TRANSFER_REQUIRED, native_results.DRAFT_CACHE_DATABASE_REQUIRED, native_results.COLLECTION_ENGINE_REQUIRED, native_results.COLLECTION_CLI_REQUIRED, native_results.COLLECTION_SERVICE_REQUIRED, native_results.AGENT_PROJECT_SERVICE_REQUIRED, native_results.AGENT_PROJECT_STORAGE_REQUIRED, native_results.SUBTITLE_SERVICE_REQUIRED, native_results.SUBTITLE_CLI_REQUIRED, native_results.AUDIT_MEDIA_REQUIRED, native_results.AUDIT_SERVICE_REQUIRED, native_results.PROJECT_CONTRACT_SERVICE_REQUIRED, native_results.EDIT_MODEL_SERVICE_REQUIRED, native_results.EDIT_MODEL_ENGINE_REQUIRED, native_results.SUBTITLE_MODULE_REQUIRED, native_results.MEDIA_BOUNDARY_ENGINE_REQUIRED, native_results.TOOLRUN_MODULE_REQUIRED, native_results.MEDIAINFO_MODULE_REQUIRED, native_results.MEDIAINFO_ADAPTER_REQUIRED, native_results.MEDIAEXPORT_MODULE_REQUIRED, native_results.MEDIAEXPORT_ADAPTER_REQUIRED, native_results.JOINED_MEDIAEXPORT_REQUIRED, native_results.MEDIAPREFLIGHT_MODULE_REQUIRED, native_results.MEDIAPREFLIGHT_ADAPTER_REQUIRED, native_results.MEDIASESSION_MODULE_REQUIRED, native_results.SOURCE_SUBTITLE_MODULE_REQUIRED, native_results.MEDIASESSION_ADAPTER_REQUIRED, native_results.COREMODEL_MODULE_REQUIRED, native_results.MEDIAERROR_MODULE_REQUIRED, native_results.LOCALMEDIA_MODULE_REQUIRED, native_results.COREMODEL_MEDIAERROR_ADAPTER_REQUIRED, native_results.ENGINE_DEPENDENCY_REQUIRED, native_results.TOOLRUN_LIFECYCLE_REQUIRED, native_results.PLATFORM_ORIGINAL_AUDIO_REQUIRED))))
         workflow = SCRIPT.parent.parent / ".github" / "workflows" / "ci.yml"
         commands = [line for line in workflow.read_text(encoding="utf-8").splitlines()
                     if "tee native-storage-tests.jsonl" in line]

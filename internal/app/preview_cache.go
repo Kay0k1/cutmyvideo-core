@@ -30,6 +30,9 @@ func previewCacheKeyOptions(source Source, start int64, request ExportRequest) s
 	// handling. Leave its charged cache entry to expire, without reusing it.
 	contract := "media-contract-v3:"
 	if source.Path == "" {
+		if page, err := normalizeSourceURL(source.URL); err == nil && isPlatformHost(page.Hostname()) {
+			contract += "original-audio-v1:"
+		}
 		if page, err := normalizeSourceURL(source.URL); err == nil && page.Hostname() == "clips.twitch.tv" {
 			// Both video windows and storyboards must stop reusing the portrait
 			// adaptation after the original Twitch clip selection is repaired.
