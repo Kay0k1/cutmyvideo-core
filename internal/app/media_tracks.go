@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
 	"github.com/Kay0k1/cutmyvideo-core/internal/mediainfo"
@@ -72,14 +71,7 @@ func probeInputSelectionOptions(ctx context.Context, c Config, inputs []mediaInp
 }
 
 func (s mediaSelection) mapArgs(format string) []string {
-	var args []string
-	if format != "mp3" && s.Video != nil {
-		args = append(args, "-map", fmt.Sprintf("%d:%d", s.VideoInput, s.Video.Index))
-	}
-	if s.Audio != nil {
-		args = append(args, "-map", fmt.Sprintf("%d:%d", s.AudioInput, s.Audio.Index))
-	}
-	return args
+	return mediaExportSelection(s).MapArgs(format)
 }
 
 func (p *probeInfo) validateStreams() error {
