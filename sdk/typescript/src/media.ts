@@ -71,7 +71,15 @@ export function renderOptionSets(value: unknown): Record<string, unknown>[] {
   if (Array.isArray(plan.clips)) for (const clip of plan.clips) if (object(clip) && object(clip.options)) rows.push(clip.options);
   return rows;
 }
+/** JSON.stringify would silently replace nonfinite render numbers with null. */
+export function renderFinite(value: unknown): void {
+  for (const options of renderOptionSets(value)) for (const field of ["audio_normalize", "canvas", "audio_replace"]) {
+    const edit = options[field];
+    if (object(edit) && Object.values(edit).some(v => typeof v === "number" && !Number.isFinite(v))) throw new TypeError("Render options require finite numeric values");
+  }
+}
 export function renderReferences<T>(value: T, local = false): T {
+  renderFinite(value);
   for (const options of renderOptionSets(value)) {
     const replacement = options.audio_replace;
     if (replacement === undefined || replacement === null) continue;

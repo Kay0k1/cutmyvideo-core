@@ -1,11 +1,12 @@
 /** Portable edit documents contain no authority, server IDs, keys or paths. */
 import { ApiError } from "./errors.js";
 import { object, JSON_LIMIT } from "./protocol.js";
-import { renderReferences } from "./media.js";
+import { renderFinite, renderReferences } from "./media.js";
 import { publicPreparedSource, sourceFingerprint } from "./source_protocol.js";
 import type { AgentProject, CollectionRequest, PortableProject, Source } from "./types.js";
 
 function copy<T>(value: T): T {
+  renderFinite(value);
   const text = JSON.stringify(value);
   if (new TextEncoder().encode(text).length > JSON_LIMIT) throw new TypeError("Project JSON exceeds 1 MiB");
   return JSON.parse(text) as T;

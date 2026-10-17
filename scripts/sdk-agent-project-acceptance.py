@@ -33,7 +33,7 @@ def emit(value):
 
 
 def main():
-    if version('cutmyvideo')!='1.4.2' or not Path(cutmyvideo.__file__).resolve().is_relative_to(Path(sys.prefix).resolve()):raise ValueError('requires_installed_release_wheel')
+    if version('cutmyvideo')!='1.5.0' or not Path(cutmyvideo.__file__).resolve().is_relative_to(Path(sys.prefix).resolve()):raise ValueError('requires_installed_release_wheel')
     action,input_name,work_name,base=sys.argv[1:]
     parsed=urlsplit(base)
     if parsed.scheme!='http' or parsed.hostname not in ('127.0.0.1','localhost','::1') or parsed.username or parsed.password or parsed.query or parsed.fragment:

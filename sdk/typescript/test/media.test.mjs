@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { stat } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { stat, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { resolve, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 const { CutmyClient, ApiError, exportPortableProject, importPortableProject }=await import(process.env.CUTMY_SDK_JS_ENTRY?pathToFileURL(process.env.CUTMY_SDK_JS_ENTRY).href:'../dist/index.js');
@@ -61,4 +62,29 @@ test('local collection replacement paths resolve before moving the plan without 
  const result=await client.validateCollection(plan,'.',{clipIds:['answer']});
  assert.equal(result.plan.options.audio_replace.input,resolve('audio Привет.wav'));assert.equal(result.plan.clips[0].options.audio_replace.input,resolve('override.wav'));assert.deepEqual(plan,original);
  await assert.rejects(stat(result.plan_path),e=>e.code==='ENOENT');
+});
+
+
+test('nonfinite render numbers cannot turn into null defaults during request or plan copying',async()=>{
+ const { runCollection }=await import(process.env.CUTMY_SDK_COLLECTION_JS_ENTRY?pathToFileURL(process.env.CUTMY_SDK_COLLECTION_JS_ENTRY).href:'../dist/collections.js');
+ let called=false;const client=new CutmyClient({baseUrl:'http://127.0.0.1',fetch:async()=>{called=true;throw Error('unexpected network');}});
+ const ranges=[{start_ms:0,end_ms:1000}],base={source_id:'own',ranges,format:'mp4',quality:'best',cut_mode:'accurate'};
+ for(const edit of [
+  {audio_normalize:{integrated_lufs:-16,true_peak_dbtp:NaN,loudness_range_lu:11}},
+  {canvas:{width:Infinity,height:160,fit:'contain',background:'#000000'}},
+  {audio_replace:{source_id:'audio',offset_ms:NaN}},
+ ]){
+  assert.throws(()=>client.preflight({...base,...edit}),/finite/);
+  assert.throws(()=>client.createJob({...base,...edit},{idempotencyKey:'never-submitted'}),/finite/);
+  const localEdit=edit.audio_replace?{audio_replace:{input:'audio.wav',offset_ms:NaN}}:edit;
+  await assert.rejects(local().preflight({version:1,input:'primary.mp4',ranges,options:localEdit},'output.mp4'),/finite/);
+  const request={source_id:'own',plan:{version:1,options:edit,clips:[{id:'answer',ranges}]}};
+  assert.throws(()=>exportPortableProject(request,source),/finite/);
+  const document={kind:'cutmy.collection.project',version:1,source:{duration_ms:1000},plan:request.plan};
+  assert.throws(()=>importPortableProject(document,source),/finite/);
+  const directory=await mkdtemp(join(tmpdir(),'cutmy-nonfinite-render-'));
+  try{await assert.rejects(runCollection(client,request,directory,{timeoutMs:1000}),error=>error.code==='invalid_request');}
+  finally{await rm(directory,{recursive:true,force:true});}
+ }
+ assert.equal(called,false);
 });

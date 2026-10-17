@@ -125,6 +125,7 @@ export class LocalCutmy {
     const timeout = positive(options.timeoutMs ?? (command === "batch" || command === "collection export" ? 30 * 60_000 : 120_000), "timeoutMs");
     if (!plan.input || !output) throw new TypeError("plan.input and output are required");
     if (options.signal?.aborted) throw new LocalError("The operation was cancelled", { code: "cancelled" });
+    renderReferences(plan,true);
     // Resolve before moving the plan: CLI resolves relative input beside its plan file.
     const data = JSON.parse(JSON.stringify({ ...plan, input: resolve(this.#cwd, plan.input) })) as Plan | CollectionPlan;
     renderReferences(data,true);

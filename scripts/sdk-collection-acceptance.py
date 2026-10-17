@@ -24,7 +24,7 @@ from cutmyvideo import CutmyClient, LocalCutmy, LocalError
 
 
 SDK = "python"
-EXPECTED_VERSION = "1.4.2"
+EXPECTED_VERSION = "1.5.0"
 JSON_LIMIT = 1 << 20
 ACTIONS = {"local", "prepare", "validate", "run", "kill-eight", "kill-download", "resume", "replay", "revise-two", "draft-selected"}
 
