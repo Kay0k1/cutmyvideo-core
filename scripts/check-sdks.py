@@ -75,11 +75,12 @@ def collection_inputs():
     paths = [ROOT / name for name in (
         "go.mod", "go.sum", PROJECT_CONTRACTS, "scripts/check-sdks.py", "scripts/sdk_checks_test.py",
         "scripts/sdk-smoke.py", "scripts/sdk-smoke.mjs",
+        "scripts/sdk-media-acceptance.py", "scripts/sdk-media-acceptance.mjs",
         "scripts/sdk-collection-acceptance.py", "scripts/sdk-collection-acceptance.mjs",
         "scripts/sdk-agent-project-acceptance.py", "scripts/sdk-agent-project-acceptance.mjs",
         "scripts/sdk-collection-acceptance-verify.py", "scripts/sdk-collection-acceptance-verify-test.py",
         "internal/app/sdk_integration_test.go", "internal/app/sdk_collections_integration_test.go",
-        "internal/app/sdk_agent_projects_integration_test.go",
+        "internal/app/sdk_agent_projects_integration_test.go", "internal/app/sdk_media_integration_test.go",
         "sdk/python/README.md", "sdk/python/pyproject.toml", "sdk/python/src/cutmyvideo/py.typed",
         "sdk/typescript/README.md", "sdk/typescript/package.json", "sdk/typescript/package-lock.json",
         "sdk/typescript/tsconfig.json")]
@@ -113,7 +114,7 @@ def check_wheel(path):
     with zipfile.ZipFile(path) as archive:
         names = archive.namelist()
         required_modules = {"cutmyvideo/__init__.py", "cutmyvideo/py.typed", "cutmyvideo/collections.py",
-                            "cutmyvideo/_collection_protocol.py", "cutmyvideo/_collection_state.py"}
+                            "cutmyvideo/_collection_protocol.py", "cutmyvideo/_collection_state.py", "cutmyvideo/media.py"}
         if not required_modules.issubset(names):
             raise RuntimeError("Python wheel is missing its public module or typing marker")
         if not any(name.endswith("/LICENSE") for name in names):
@@ -218,6 +219,14 @@ const client = new CutmyClient({baseUrl: "http://127.0.0.1:8080"});
 const local = new LocalCutmy({binary: "cutmy"});
 void client.preflight({source_id: "src", ranges: [{start_ms: 0, end_ms: 1000}], format: "mp4", quality: "best", cut_mode: "accurate"});
 const request: CollectionRequest = {source_id: "src", plan: {version: 1, options: {format: "mp4", quality: "best", cut_mode: "accurate"}, clips: [{id: "answer", ranges: [{start_ms: 0, end_ms: 1000}]}]}};
+void client.analyzeSilence("src", {threshold_db: -40, min_silence_ms: 500});
+void client.analyzeVideo("src", {scene_threshold: .3});
+void client.analyzeLoudness("src");
+void client.importCutList({format: "csv", text: "0,1,Scene"});
+void client.exportCutList({format: "csv", cut_list: {version: 1, entries: [{start_ms: 0, end_ms: null, label: "Marker"}]}});
+void local.silencePlan("input.mp4", {threshold_db: -40});
+void local.planCutList({format: "csv", text: "0,,Scene"}, {media: "input.mp4", durationMs: 1000});
+void client.preflight({source_id: "src", ranges: [{start_ms: 0, end_ms: 1000}], audio_normalize: {integrated_lufs: -16, true_peak_dbtp: -1, loudness_range_lu: 11}, canvas: {width: 1080, height: 1920, fit: "contain", background: "#000000"}, audio_replace: {source_id: "owned-upload", offset_ms: 1000}});
 void client.validateCollection(request);
 void client.submitCollection(request, {idempotencyKey: "saved-key"});
 void runCollection(client, request, "/private/project", {timeoutMs: 1800000, onProgress: report => { console.log(report.outputs.map(output => output.clip_id)); }});
@@ -234,13 +243,14 @@ void local.executeCollection({...request.plan, input: "/media/interview.mp4"}, "
     binary = output / ("cutmy.exe" if os.name == "nt" else "cutmy")
     run(["go", "build", "-trimpath", "-o", str(binary), "./cmd/cutmy"], cwd=ROOT, env=env, log=output / "core-build.log")
     env.update(CUTMY_REQUIRE_SDK="1", CUTMY_SDK_PYTHON=consumer_python, CUTMY_SDK_NODE=node, CUTMY_SDK_BINARY=str(binary))
-    top_level = {"TestInstalledSDKLocalWorkflow", "TestInstalledSDKCollectionLocalWorkflow"}
+    top_level = {"TestInstalledSDKLocalWorkflow", "TestInstalledSDKCollectionLocalWorkflow", "TestInstalledSDKMediaLocalWorkflow"}
     if args.http:
         if not env.get("TEST_DATABASE_URL"):
             parser.error("--http requires an isolated TEST_DATABASE_URL")
         top_level.add("TestInstalledSDKHTTPWorkflow")
         top_level.add("TestInstalledSDKCollectionHTTPWorkflow")
         top_level.add("TestInstalledSDKAgentProjectWorkflow")
+        top_level.add("TestInstalledSDKMediaHTTPWorkflow")
     required = top_level | {f"{name}/{language}" for name in top_level for language in ("python", "typescript")}
     selector = "^(" + "|".join(sorted(top_level)) + ")$"
     run(["go", "test", "-json", "-race", "-count=1", "-timeout=15m" if args.http else "-timeout=3m", "./internal/app", "-run", selector],

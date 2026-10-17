@@ -3,6 +3,9 @@ import { abortedError, abortable, boundedJSON, budget, decode, delay, endpointID
 import { preparationKey, preparationReceipt, uploadFingerprint } from "./source_protocol.js";
 import { subtitleRequest, subtitleResult } from "./subtitles.js";
 import { projectResult } from "./projects.js";
+import { analysisOptions, analysisResult, cutImport, cutExport, cutList, cutExportResult, renderReferences } from "./media.js";
+import type { AnalysisKind } from "./media.js";
+import type { SilenceOptions, SilenceResult, VideoAnalysisOptions, VideoAnalysisResult, LoudnessOptions, LoudnessResult, CutList, CutListImportRequest, CutListExportRequest, CutListExportResult } from "./types.js";
 import type { AgentProject, ProjectCreateRequest, ProjectEditRequest, ProjectHandoff } from "./types.js";
 import type { ContentFingerprint, SourcePreparationReceipt, SourceSubmissionOptions, SubtitleRequest, SubtitleResult } from "./types.js";
 import type { ArtifactDownload, ArtifactRangeDownload, CollectionDiagnostic, CollectionRequest, CollectionSubmission, CollectionValidation, DownloadOptions, ExportRequest, Job, PreflightResult, RangeDownloadOptions, RequestOptions, Session, Source, SubmissionOptions, Tracks, WaitOptions } from "./types.js";
@@ -151,8 +154,8 @@ export class CutmyClient {
     for (const entry of result.jobs) decode(entry.job, "job");
     return result;
   }
-  async createProject(request: ProjectCreateRequest, options: RequestOptions = {}): Promise<AgentProject> { return projectResult(await this.#request("POST", "api/v1/projects", request, "object", options, {}, true, 16 << 20)); }
-  async editProject(id: string, request: ProjectEditRequest, options: RequestOptions = {}): Promise<AgentProject> { return projectResult(await this.#request("PUT", `api/v1/projects/${endpointID(id)}`, request, "object", options, {}, true, 16 << 20)); }
+  async createProject(request: ProjectCreateRequest, options: RequestOptions = {}): Promise<AgentProject> { return projectResult(await this.#request("POST", "api/v1/projects", renderReferences(request), "object", options, {}, true, 16 << 20)); }
+  async editProject(id: string, request: ProjectEditRequest, options: RequestOptions = {}): Promise<AgentProject> { return projectResult(await this.#request("PUT", `api/v1/projects/${endpointID(id)}`, renderReferences(request), "object", options, {}, true, 16 << 20)); }
   async createProjectHandoff(id: string, options: RequestOptions = {}): Promise<ProjectHandoff> {
     const value = await this.#request<unknown>("POST", `api/v1/projects/${endpointID(id)}/handoffs`, {}, "object", options);
     if (!object(value) || value.project_id !== id || typeof value.token !== "string" || !/^[A-Za-z0-9_-]{20,256}$/.test(value.token) || typeof value.expires_at !== "string") throw new ApiError("Invalid scoped handoff", { code: "invalid_response" });
@@ -163,18 +166,32 @@ export class CutmyClient {
     return this.#request("POST", `api/v1/projects/${endpointID(id)}/collections${options.retryFailed ? "/retry" : ""}`, request, "collection-submission", options, options.idempotencyKey === undefined ? {} : { idempotencyKey: options.idempotencyKey });
   }
   getSource(id: string, options: RequestOptions = {}): Promise<Source> { return this.#request("GET", `api/v1/sources/${endpointID(id)}`, undefined, "source", options); }
+  async #analyze<T>(kind: AnalysisKind, id: string, analysis: unknown, options: RequestOptions): Promise<T> {
+    const body = analysisOptions(kind,analysis);
+    return analysisResult<T>(kind,await this.#request("POST",`api/v1/sources/${endpointID(id)}/analysis/${kind}`,body,"object",{...options,timeoutMs:options.timeoutMs ?? 120000}));
+  }
+  analyzeSilence(id: string, analysis: SilenceOptions = {}, options: RequestOptions = {}): Promise<SilenceResult> { return this.#analyze("silence",id,analysis,options); }
+  analyzeVideo(id: string, analysis: VideoAnalysisOptions = {}, options: RequestOptions = {}): Promise<VideoAnalysisResult> { return this.#analyze("video",id,analysis,options); }
+  analyzeLoudness(id: string, analysis: LoudnessOptions = {}, options: RequestOptions = {}): Promise<LoudnessResult> { return this.#analyze("loudness",id,analysis,options); }
+  async importCutList(request: CutListImportRequest, options: RequestOptions = {}): Promise<CutList> {
+    return cutList(await this.#request("POST","api/v1/cut-lists/import",cutImport(request),"object",options));
+  }
+  async exportCutList(request: CutListExportRequest, options: RequestOptions = {}): Promise<CutListExportResult> {
+    const body = cutExport(request);
+    return cutExportResult(await this.#request("POST","api/v1/cut-lists/export",body,"object",options),body.format);
+  }
   getTracks(id: string, options: RequestOptions = {}): Promise<Tracks> { return this.#request("GET", `api/v1/sources/${endpointID(id)}/tracks`, undefined, "tracks", { ...options, timeoutMs: options.timeoutMs ?? this.#sourceMs }); }
-  preflight(request: ExportRequest, options: RequestOptions = {}): Promise<PreflightResult> { return this.#request("POST", "api/v1/jobs/preflight", request, "preflight", { ...options, timeoutMs: options.timeoutMs ?? this.#sourceMs }); }
+  preflight(request: ExportRequest, options: RequestOptions = {}): Promise<PreflightResult> { return this.#request("POST", "api/v1/jobs/preflight", renderReferences(request), "preflight", { ...options, timeoutMs: options.timeoutMs ?? this.#sourceMs }); }
   validateCollection(request: CollectionRequest, options: RequestOptions = {}): Promise<CollectionValidation> {
-    return this.#request("POST", "api/v1/collections/validate", request, "collection-validation", { ...options, timeoutMs: options.timeoutMs ?? this.#sourceMs });
+    return this.#request("POST", "api/v1/collections/validate", renderReferences(request), "collection-validation", { ...options, timeoutMs: options.timeoutMs ?? this.#sourceMs });
   }
   submitCollection(request: CollectionRequest, options: SubmissionOptions): Promise<CollectionSubmission> {
     if (typeof options?.idempotencyKey !== "string" || !options.idempotencyKey.trim() || new TextEncoder().encode(options.idempotencyKey).byteLength > 128 || /[\x00-\x1f\x7f]/.test(options.idempotencyKey)) throw new TypeError("idempotencyKey must contain 1 to 128 UTF-8 bytes and no control characters");
-    return this.#request("POST", "api/v1/collections", request, "collection-submission", { ...options, timeoutMs: options.timeoutMs ?? this.#sourceMs }, { idempotencyKey: options.idempotencyKey });
+    return this.#request("POST", "api/v1/collections", renderReferences(request), "collection-submission", { ...options, timeoutMs: options.timeoutMs ?? this.#sourceMs }, { idempotencyKey: options.idempotencyKey });
   }
   createJob(request: ExportRequest, options: SubmissionOptions): Promise<Job> {
     if (typeof options?.idempotencyKey !== "string" || !options.idempotencyKey.trim() || new TextEncoder().encode(options.idempotencyKey).byteLength > 128 || /[\x00-\x1f\x7f]/.test(options.idempotencyKey)) throw new TypeError("idempotencyKey must contain 1 to 128 UTF-8 bytes and no control characters");
-    return this.#request("POST", "api/v1/jobs", request, "job", options, { idempotencyKey: options.idempotencyKey });
+    return this.#request("POST", "api/v1/jobs", renderReferences(request), "job", options, { idempotencyKey: options.idempotencyKey });
   }
   getJob(id: string, options: RequestOptions = {}): Promise<Job> { return this.#request("GET", `api/v1/jobs/${endpointID(id)}`, undefined, "job", options, { jobId: id }); }
   cancelJob(id: string, options: RequestOptions = {}): Promise<Job> { return this.#request("POST", `api/v1/jobs/${endpointID(id)}/cancel`, undefined, "job", options, { jobId: id }); }

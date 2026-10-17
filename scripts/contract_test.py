@@ -23,6 +23,50 @@ class ContractChecks(unittest.TestCase):
         cls.baselines = dict(contract.frozen_baselines())
         cls.baseline = cls.baselines["compatibility-v1.4.1.json"]
 
+    def test_media_analysis_routes_reject_null_and_unknown_options(self):
+        for kind in ('silence', 'video', 'loudness'):
+            route = '/api/v1/sources/{id}/analysis/' + kind
+            schema = self.document['paths'][route]['post']['requestBody']['content']['application/json']['schema']
+            contract.validate(self.document, schema, {'start_ms': 0, 'end_ms': 0})
+            for value in (None, {'unknown': 1}, {'start_ms': -1}):
+                with self.subTest(kind=kind, value=value), self.assertRaises(ValidationError):
+                    contract.validate(self.document, schema, value)
+        schema = {'$ref': '#/components/schemas/LoudnessResult'}
+        result = {'version': 1, 'start_ms': 0, 'end_ms': 1000, 'analyzed_end_ms': 900, 'audio_track': 1,
+                  'integrated_lufs': None, 'true_peak_dbtp': None, 'loudness_range_lu': None}
+        contract.validate(self.document, schema, result)
+        del result['analyzed_end_ms']
+        with self.assertRaises(ValidationError):
+            contract.validate(self.document, schema, result)
+
+    def test_render_targets_canvas_and_http_audio_reference_are_explicit(self):
+        normalize = {'$ref': '#/components/schemas/AudioNormalize'}
+        valid = {'integrated_lufs': -16, 'true_peak_dbtp': -1, 'loudness_range_lu': 11}
+        contract.validate(self.document, normalize, valid)
+        for key in valid:
+            with self.subTest(missing=key), self.assertRaises(ValidationError):
+                contract.validate(self.document, normalize, {k:v for k,v in valid.items() if k != key})
+        canvas = {'$ref': '#/components/schemas/Canvas'}
+        valid = {'width': 1080, 'height': 1920, 'fit': 'contain', 'background': '#000000'}
+        contract.validate(self.document, canvas, valid)
+        for changed in ({'width': 1079}, {'fit': 'stretch'}, {'background': 'red'}):
+            with self.subTest(changed=changed), self.assertRaises(ValidationError):
+                contract.validate(self.document, canvas, {**valid, **changed})
+        audio = {'$ref': '#/components/schemas/AudioReplace'}
+        contract.validate(self.document, audio, {'source_id': 'owned-upload', 'offset_ms': 1000})
+        with self.assertRaises(ValidationError):
+            contract.validate(self.document, audio, {'input': '/private/audio.wav'})
+
+    def test_cut_list_nullable_markers_and_exactly_one_export_input(self):
+        cut = {'version': 1, 'entries': [{'start_ms': 0, 'end_ms': None, 'label': 'Привет'}]}
+        contract.validate(self.document, {'$ref': '#/components/schemas/CutList'}, cut)
+        schema = self.document['paths']['/api/v1/cut-lists/export']['post']['requestBody']['content']['application/json']['schema']
+        contract.validate(self.document, schema, {'format': 'csv', 'cut_list': cut})
+        for value in ({'format': 'csv'}, {'format': 'csv', 'cut_list': cut, 'segments': []},
+                      {'format': 'csv', 'plan': {'input': '/private/media.mp4'}}):
+            with self.subTest(value=value), self.assertRaises(ValidationError):
+                contract.validate(self.document, schema, value)
+
     @contextmanager
     def checkout(self):
         # An isolated CLI checkout makes overwrite/bypass controls safe even if

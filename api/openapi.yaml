@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: cutmyvideo-core HTTP API
-  version: 1.4.0
+  version: 1.5.0
   description: >-
     Manual media selection and asynchronous separate or joined export. Clients
     must ignore unknown response fields and accept unknown additive error codes
@@ -1272,6 +1272,115 @@ paths:
         '412': {description: A request precondition failed; empty response body}
         '416': {$ref: '#/components/responses/RangeError'}
         default: {$ref: '#/components/responses/Error'}
+  /api/v1/sources/{id}/analysis/silence:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    post:
+      description: Owner-only analysis of staged local source media. No cached files or export artifacts. JSON options
+        body maximum 8 KiB; selected interval at most 30 minutes, deadline at most 2 minutes. Six analyses/minute share
+        one owner admission budget. Results report actual decoded coverage; do not infer analysis of an uncovered
+        tail. Platform provider URLs are not fetched.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SilenceOptions'
+      responses:
+        '200':
+          description: Bounded source-timeline analysis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SilenceResult'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/sources/{id}/analysis/video:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    post:
+      description: Owner-only analysis of staged local source media. No cached files or export artifacts. JSON options
+        body maximum 8 KiB; selected interval at most 30 minutes, deadline at most 2 minutes. Six analyses/minute share
+        one owner admission budget. Results report actual decoded coverage; do not infer analysis of an uncovered
+        tail. Platform provider URLs are not fetched.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VideoAnalysisOptions'
+      responses:
+        '200':
+          description: Bounded source-timeline analysis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoAnalysisResult'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/sources/{id}/analysis/loudness:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    post:
+      description: Owner-only analysis of staged local source media. No cached files or export artifacts. JSON options
+        body maximum 8 KiB; selected interval at most 30 minutes, deadline at most 2 minutes. Six analyses/minute share
+        one owner admission budget. Results report actual decoded coverage; do not infer analysis of an uncovered
+        tail. Platform provider URLs are not fetched.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoudnessOptions'
+      responses:
+        '200':
+          description: Bounded source-timeline analysis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoudnessResult'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/cut-lists/import:
+    post:
+      description: Pure bounded CSV/FFmetadata conversion without opening media, local paths or source references.
+        Shared owner budget 60/minute. CSV retains edit order and unresolved markers; FFmetadata requires resolved
+        ordered non-overlapping intervals. Segment export uses actual output timestamps.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CutListImportRequest'
+      responses:
+        '200':
+          description: Converted cut decisions or UTF-8 text
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CutList'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/cut-lists/export:
+    post:
+      description: Pure bounded CSV/FFmetadata conversion without opening media, local paths or source references.
+        Shared owner budget 60/minute. CSV retains edit order and unresolved markers; FFmetadata requires resolved
+        ordered non-overlapping intervals. Segment export uses actual output timestamps.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CutListExportRequest'
+      responses:
+        '200':
+          description: Converted cut decisions or UTF-8 text
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CutListText'
+        default:
+          $ref: '#/components/responses/Error'
   /api/v1/subtitles/retime:
     post:
       description: >-
@@ -1489,6 +1598,406 @@ components:
         y: {type: number, minimum: 0, maximum: 1}
         width: {type: number, exclusiveMinimum: 0, maximum: 1}
         height: {type: number, exclusiveMinimum: 0, maximum: 1}
+    AudioNormalize:
+      type: object
+      additionalProperties: false
+      required:
+      - integrated_lufs
+      - true_peak_dbtp
+      - loudness_range_lu
+      properties:
+        integrated_lufs:
+          type: number
+          minimum: -70
+          maximum: -5
+        true_peak_dbtp:
+          type: number
+          minimum: -9
+          maximum: 0
+        loudness_range_lu:
+          type: number
+          minimum: 1
+          maximum: 50
+      description: Explicit EBU R128 targets for each completed output timeline. Requires accurate MP4/MP3 and an audio
+        stream; does not mix or amplify by an arbitrary percentage.
+    Canvas:
+      type: object
+      additionalProperties: false
+      required:
+      - width
+      - height
+      - fit
+      - background
+      properties:
+        width:
+          type: integer
+          minimum: 2
+          maximum: 4096
+          multipleOf: 2
+        height:
+          type: integer
+          minimum: 2
+          maximum: 4096
+          multipleOf: 2
+        fit:
+          type: string
+          const: contain
+        background:
+          type: string
+          pattern: ^#[0-9a-fA-F]{6}$
+      description: Solid fit/pad of the cropped displayed picture without stretching. Requires accurate final MP4 and
+        quality best; dimensions are final encoded pixels.
+    AudioReplace:
+      type: object
+      additionalProperties: false
+      required:
+      - source_id
+      properties:
+        source_id:
+          type: string
+          minLength: 1
+          maxLength: 160
+          description: Uploaded staged local audio source owned by the same session. A project grant covers its primary
+            source only and cannot authorize a new replacement reference. HTTP never accepts input paths.
+        audio_track:
+          type: integer
+          minimum: 0
+        offset_ms:
+          type: integer
+          minimum: -86400000
+          maximum: 86400000
+          default: 0
+          description: Positive places replacement timestamp zero at this original source time; uncovered audio is silence
+            and never shortens video.
+    AnalysisInterval:
+      type: object
+      additionalProperties: false
+      required:
+      - start_ms
+      - end_ms
+      properties:
+        start_ms:
+          type: integer
+          minimum: 0
+        end_ms:
+          type: integer
+          minimum: 1
+    SilenceOptions:
+      type: object
+      additionalProperties: false
+      properties:
+        start_ms:
+          type: integer
+          minimum: 0
+          default: 0
+        end_ms:
+          type: integer
+          minimum: 0
+          default: 0
+          description: Zero uses source duration; selected analysis interval is at most 30 minutes.
+        audio_track:
+          type: integer
+          minimum: 0
+        threshold_db:
+          anyOf:
+          - type: number
+            minimum: -90
+            maximum: -1
+          - const: 0
+        min_silence_ms:
+          anyOf:
+          - type: integer
+            minimum: 10
+            maximum: 60000
+          - const: 0
+        keep_before_ms:
+          type: integer
+          minimum: 0
+          maximum: 5000
+        keep_after_ms:
+          type: integer
+          minimum: 0
+          maximum: 5000
+        min_clip_ms:
+          type: integer
+          minimum: 0
+          maximum: 60000
+    VideoAnalysisOptions:
+      type: object
+      additionalProperties: false
+      properties:
+        start_ms:
+          type: integer
+          minimum: 0
+          default: 0
+        end_ms:
+          type: integer
+          minimum: 0
+          default: 0
+        scene_threshold:
+          anyOf:
+          - type: number
+            minimum: 0.001
+            maximum: 1
+          - const: 0
+        black_pixel_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+        black_picture_ratio:
+          anyOf:
+          - type: number
+            exclusiveMinimum: 0
+            maximum: 1
+          - const: 0
+        min_black_ms:
+          anyOf:
+          - type: integer
+            minimum: 1
+            maximum: 60000
+          - const: 0
+    LoudnessOptions:
+      type: object
+      additionalProperties: false
+      properties:
+        start_ms:
+          type: integer
+          minimum: 0
+          default: 0
+        end_ms:
+          type: integer
+          minimum: 0
+          default: 0
+        audio_track:
+          type: integer
+          minimum: 0
+    CutListEntry:
+      type: object
+      additionalProperties: false
+      required:
+      - start_ms
+      - end_ms
+      - label
+      properties:
+        start_ms:
+          type: integer
+          minimum: 0
+        end_ms:
+          type:
+          - integer
+          - 'null'
+          minimum: 1
+          description: Null is an unresolved chapter marker, preserved during text import. Building an edit plan requires
+            explicit duration to resolve the final marker.
+        label:
+          type: string
+          x-maxBytes: 200
+    CutList:
+      type: object
+      additionalProperties: false
+      required:
+      - version
+      - entries
+      properties:
+        version:
+          type: integer
+          const: 1
+        entries:
+          type: array
+          minItems: 1
+          maxItems: 128
+          items:
+            $ref: '#/components/schemas/CutListEntry'
+    CutListImportRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - format
+      - text
+      properties:
+        format:
+          type: string
+          enum:
+          - csv
+          - ffmetadata
+        text:
+          type: string
+          x-maxBytes: 1048576
+    CutListExportRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - format
+      properties:
+        format:
+          type: string
+          enum:
+          - csv
+          - ffmetadata
+        cut_list:
+          $ref: '#/components/schemas/CutList'
+        segments:
+          type: array
+          minItems: 1
+          maxItems: 128
+          items:
+            $ref: '#/components/schemas/ArtifactSegment'
+      oneOf:
+      - required:
+        - cut_list
+      - required:
+        - segments
+    CutListText:
+      type: object
+      additionalProperties: false
+      required:
+      - version
+      - format
+      - text
+      properties:
+        version:
+          type: integer
+          const: 1
+        format:
+          type: string
+          enum:
+          - csv
+          - ffmetadata
+        text:
+          type: string
+    SilenceResult:
+      type: object
+      required:
+      - version
+      - start_ms
+      - end_ms
+      - analyzed_end_ms
+      - audio_track
+      - silence
+      - keep
+      properties:
+        version:
+          type: integer
+          const: 1
+        start_ms:
+          type: integer
+          minimum: 0
+        end_ms:
+          type: integer
+          minimum: 1
+        analyzed_end_ms:
+          type: integer
+          minimum: 0
+          description: Actual decoded source-clock coverage, no later than requested end. Uncovered tails are not classified
+            as silence.
+        audio_track:
+          type: integer
+          minimum: 0
+        silence:
+          type: array
+          minItems: 0
+          maxItems: 4096
+          items:
+            $ref: '#/components/schemas/AnalysisInterval'
+        keep:
+          type: array
+          minItems: 0
+          maxItems: 4096
+          items:
+            $ref: '#/components/schemas/Range'
+    VideoAnalysisResult:
+      type: object
+      required:
+      - version
+      - start_ms
+      - end_ms
+      - analyzed_end_ms
+      - video_track
+      - scenes
+      - black
+      properties:
+        version:
+          type: integer
+          const: 1
+        start_ms:
+          type: integer
+          minimum: 0
+        end_ms:
+          type: integer
+          minimum: 1
+        analyzed_end_ms:
+          type: integer
+          minimum: 0
+          description: Actual decoded source-clock coverage, no later than requested end. Uncovered tails are not classified
+            as silence.
+        video_track:
+          type: integer
+          minimum: 0
+        scenes:
+          type: array
+          minItems: 0
+          maxItems: 4096
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - at_ms
+            - score
+            properties:
+              at_ms:
+                type: integer
+                minimum: 0
+              score:
+                type: number
+                minimum: 0
+                maximum: 1
+        black:
+          type: array
+          minItems: 0
+          maxItems: 4096
+          items:
+            $ref: '#/components/schemas/AnalysisInterval'
+    LoudnessResult:
+      type: object
+      required:
+      - version
+      - start_ms
+      - end_ms
+      - analyzed_end_ms
+      - audio_track
+      - integrated_lufs
+      - true_peak_dbtp
+      - loudness_range_lu
+      properties:
+        version:
+          type: integer
+          const: 1
+        start_ms:
+          type: integer
+          minimum: 0
+        end_ms:
+          type: integer
+          minimum: 1
+        analyzed_end_ms:
+          type: integer
+          minimum: 0
+          description: Actual decoded source-clock coverage, no later than requested end. Uncovered tails are not classified
+            as silence.
+        audio_track:
+          type: integer
+          minimum: 0
+        integrated_lufs:
+          type:
+          - number
+          - 'null'
+        true_peak_dbtp:
+          type:
+          - number
+          - 'null'
+        loudness_range_lu:
+          type:
+          - number
+          - 'null'
     ExportRequest:
       type: object
       additionalProperties: false
@@ -1508,6 +2017,9 @@ components:
         no_audio: {type: boolean, default: false, description: Export video without audio; cannot be combined with audio_track or MP3.}
         subtitle_mode: {type: string, enum: [omit, preserve], default: omit, description: Preserve compatible plain text subtitles from local copy sources, clipped and rebased to actual boundaries. Unsupported subtitle codecs fail explicitly. MP4 writes mov_text; MKV writes subrip.}
         crop: {$ref: '#/components/schemas/Crop'}
+        audio_normalize: {$ref: '#/components/schemas/AudioNormalize'}
+        canvas: {$ref: '#/components/schemas/Canvas'}
+        audio_replace: {$ref: '#/components/schemas/AudioReplace'}
         rendition: {type: string, enum: [final, draft], default: final, description: Draft requires accurate MP4 and uses a 720p cap plus ultrafast CRF28 encoding. Omitted/final retains installed final encoder settings. Persisted normalized final requests omit this field.}
     CollectionRequest:
       type: object
@@ -1566,6 +2078,21 @@ components:
             - {$ref: '#/components/schemas/Crop'}
             - {type: 'null'}
         clear_crop: {type: boolean}
+        audio_normalize:
+          oneOf:
+            - {$ref: '#/components/schemas/AudioNormalize'}
+            - {type: 'null'}
+        clear_audio_normalize: {type: boolean}
+        canvas:
+          oneOf:
+            - {$ref: '#/components/schemas/Canvas'}
+            - {type: 'null'}
+        clear_canvas: {type: boolean}
+        audio_replace:
+          oneOf:
+            - {$ref: '#/components/schemas/AudioReplace'}
+            - {type: 'null'}
+        clear_audio_replace: {type: boolean}
     CollectionDiagnostic:
       type: object
       required: [code, message]

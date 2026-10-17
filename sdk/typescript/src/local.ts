@@ -7,6 +7,9 @@ import { tmpdir } from "node:os";
 import { ApiError, LocalError } from "./errors.js";
 import { decode, JSON_LIMIT, object, positive } from "./protocol.js";
 import { subtitleRequest, subtitleResult } from "./subtitles.js";
+import { analysisFlags, analysisResult, cutImport, cutExport, cutList, cutFormat, cutExportResult, planResult, renderOptionSets, renderReferences } from "./media.js";
+import type { AnalysisKind } from "./media.js";
+import type { SilenceOptions, SilenceResult, VideoAnalysisOptions, VideoAnalysisResult, LoudnessOptions, LoudnessResult, SilencePlanOptions, CutList, CutListFormat, CutListImportRequest, LocalCutListExportRequest, CutListExportResult, CutListPlanOptions } from "./types.js";
 import type { SubtitleRequest, SubtitleResult } from "./types.js";
 import type { CutmyClient } from "./client.js";
 import type { BatchResult, CollectionPlan, DownloadOptions, InspectedSource, LocalCollectionOptions, LocalCollectionResult, LocalCollectionValidation, LocalPreflightResult, Plan, RequestOptions, Source } from "./types.js";
@@ -48,6 +51,59 @@ export class LocalCutmy {
     const timeout = positive(options.timeoutMs ?? 120_000, "timeoutMs");
     return this.#run(["inspect", "--input", resolve(this.#cwd, input), "--timeout", `${timeout}ms`], "inspect", timeout, options.signal);
   }
+  analyzeSilence(input: string, analysis: SilenceOptions = {}, options: RequestOptions = {}): Promise<SilenceResult> { return this.#analyze("silence",input,analysis,options); }
+  analyzeVideo(input: string, analysis: VideoAnalysisOptions = {}, options: RequestOptions = {}): Promise<VideoAnalysisResult> { return this.#analyze("video",input,analysis,options); }
+  analyzeLoudness(input: string, analysis: LoudnessOptions = {}, options: RequestOptions = {}): Promise<LoudnessResult> { return this.#analyze("loudness",input,analysis,options); }
+  silencePlan(input: string, analysis: SilenceOptions = {}, options: SilencePlanOptions = {}): Promise<Plan> {
+    const format = options.format ?? "mp4", mode = options.outputMode ?? "joined";
+    if (!["mp4","mp3"].includes(format) || !["joined","separate"].includes(mode)) throw new TypeError("Silence plans require mp4|mp3 and joined|separate");
+    return this.#analyze("silence",input,analysis,options,["--plan","--format",format,"--output-mode",mode]);
+  }
+  async #mediaResult<T>(operation: Promise<unknown>, validate: (value: unknown) => T): Promise<T> {
+    try { return validate(await operation); }
+    catch (error) { if (error instanceof ApiError) throw new LocalError("Local analysis or cut-list result is invalid", { code: "invalid_response" }); throw error; }
+  }
+  #analyze<T>(kind: AnalysisKind, input: string, analysis: unknown, options: RequestOptions, extra: string[] = []): Promise<T> {
+    if (!input) throw new TypeError("input is required");
+    const timeout = positive(options.timeoutMs ?? 120000,"timeoutMs");
+    const args = ["analyze",kind,"--input",resolve(this.#cwd,input),"--threads",String(this.#threads),...analysisFlags(kind,analysis),...extra,"--timeout",`${timeout}ms`];
+    return this.#mediaResult(this.#run(args,"object",timeout,options.signal), value => extra.includes("--plan") ? planResult<T>(value) : analysisResult<T>(kind,value));
+  }
+  importCutList(request: CutListImportRequest, options: RequestOptions = {}): Promise<CutList> {
+    const body = cutImport(request);
+    return this.#cut("import",body.text,body.format,cutList,options);
+  }
+  planCutList(request: CutListImportRequest, options: CutListPlanOptions): Promise<Plan> {
+    const body = cutImport(request), mode = options.outputMode ?? "joined";
+    if (!options.media || !Number.isSafeInteger(options.durationMs) || options.durationMs <= 0 || !["joined","separate"].includes(mode)) throw new TypeError("Cut-list plans require media, positive durationMs and joined|separate");
+    return this.#cut("import",body.text,body.format,value => planResult<Plan>(value),options,"--input",["--plan","--media",resolve(this.#cwd,options.media),"--duration-ms",String(options.durationMs),"--output-mode",mode]);
+  }
+  exportCutList(request: LocalCutListExportRequest, options: RequestOptions = {}): Promise<CutListExportResult> {
+    let content: unknown, flag: string;
+    if (object(request) && "plan" in request && Object.keys(request).sort().join(",") === "format,plan") {
+      cutFormat(request.format);
+      try { planResult(request.plan); } catch { throw new TypeError("Invalid plan"); }
+      content = request.plan; flag = "--plan";
+    } else {
+      const body = cutExport(request as import("./types.js").CutListExportRequest);
+      content = "cut_list" in body ? body.cut_list : body.segments; flag = "cut_list" in body ? "--input" : "--segments";
+    }
+    return this.#cut("export",JSON.stringify(content),request.format,value => cutExportResult(value,request.format),options,flag);
+  }
+  async #cut<T>(operation: string, content: string, format: CutListFormat, validate: (value: unknown) => T, options: RequestOptions, flag = "--input", extra: string[] = []): Promise<T> {
+    cutFormat(format);
+    const timeout = positive(options.timeoutMs ?? 120000,"timeoutMs"), deadline = performance.now() + timeout;
+    if (options.signal?.aborted) throw new LocalError("The operation was cancelled", { code: "cancelled" });
+    if (Buffer.byteLength(content) > JSON_LIMIT) throw new TypeError("Cut-list input exceeds1MiB");
+    const directory = await mkdtemp(join(tmpdir(),"cutmy-sdk-cutlist-"));
+    try {
+      const path = join(directory,"input.txt"), file = await open(path,"wx",0o600);
+      try { await file.writeFile(content); } finally { await file.close(); }
+      const remaining = Math.floor(deadline - performance.now());
+      if (remaining <= 0) throw new LocalError("The operation timed out", { code: "timeout" });
+      return await this.#mediaResult(this.#run(["cutlist",operation,"--format",format,flag,path,...extra],"object",remaining,options.signal),validate);
+    } finally { await rm(directory,{recursive:true,force:true}); }
+  }
   preflight(plan: Plan, output: string, options: RequestOptions = {}): Promise<LocalPreflightResult> { return this.#plan("preflight", plan, output, options); }
   executePlan(plan: Plan, output: string, options: RequestOptions = {}): Promise<BatchResult> { return this.#plan("batch", plan, output, options); }
   validateCollection(plan: CollectionPlan, output: string, options: LocalCollectionOptions = {}): Promise<LocalCollectionValidation> { return this.#plan("collection validate", plan, output, options, options); }
@@ -70,7 +126,10 @@ export class LocalCutmy {
     if (!plan.input || !output) throw new TypeError("plan.input and output are required");
     if (options.signal?.aborted) throw new LocalError("The operation was cancelled", { code: "cancelled" });
     // Resolve before moving the plan: CLI resolves relative input beside its plan file.
-    const bytes = Buffer.from(JSON.stringify({ ...plan, input: resolve(this.#cwd, plan.input) }));
+    const data = JSON.parse(JSON.stringify({ ...plan, input: resolve(this.#cwd, plan.input) })) as Plan | CollectionPlan;
+    renderReferences(data,true);
+    for (const settings of renderOptionSets(data)) if (object(settings.audio_replace)) settings.audio_replace.input = resolve(this.#cwd,String(settings.audio_replace.input));
+    const bytes = Buffer.from(JSON.stringify(data));
     if (bytes.length > JSON_LIMIT) throw new TypeError("Plan exceeds the 1 MiB limit");
     const extra: string[] = [];
     if (collection) {

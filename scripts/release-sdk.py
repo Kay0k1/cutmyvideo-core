@@ -91,17 +91,21 @@ def load_manifest(directory, source, expected_sha256=None, *, signed=False):
     acceptance = value['acceptance']
     m.require(type(acceptance) is dict and set(acceptance) == {'installed_consumers', 'sdk_checks_sha256', 'required_tests'}
               and acceptance['installed_consumers'] is True and m.HASH.fullmatch(acceptance['sdk_checks_sha256'])
-              and type(acceptance['required_tests']) is list and set(acceptance['required_tests']) == required_tests()
-              and len(acceptance['required_tests']) == len(required_tests()), 'Missing installed SDK/HTTP/worker acceptance claim.')
+              and type(acceptance['required_tests']) is list and set(acceptance['required_tests']) == required_tests(source['version'])
+              and len(acceptance['required_tests']) == len(required_tests(source['version'])), 'Missing installed SDK/HTTP/worker acceptance claim.')
     if signed:
         regular(directory / SIGNATURE, MAX_JSON)
     return value, subjects
 
 
-def required_tests():
+def required_tests(version=None):
     top = {'TestInstalledSDKLocalWorkflow', 'TestInstalledSDKCollectionLocalWorkflow',
            'TestInstalledSDKHTTPWorkflow', 'TestInstalledSDKCollectionHTTPWorkflow',
            'TestInstalledSDKAgentProjectWorkflow'}
+    # Older signed releases retain their original 15-check contract. New
+    # candidates and releases from 1.5 require both real media workflows too.
+    if version is None or version.startswith('v0.0.0-candidate.') or tuple(map(int, m.VERSION.fullmatch(version).group(1, 2, 3))) >= (1, 5, 0):
+        top.update({'TestInstalledSDKMediaLocalWorkflow', 'TestInstalledSDKMediaHTTPWorkflow'})
     return top | {name + '/' + sdk for name in top for sdk in ('python', 'typescript')}
 
 
@@ -111,7 +115,7 @@ def seal(directory, evidence, source, repo):
     m.require(not directory.exists(), 'SDK bundle destination must be new.')
     receipt_raw = regular(evidence / 'SDK-CHECKS.json', MAX_JSON)
     receipt = json.loads(receipt_raw)
-    m.require(receipt.get('installed_consumers') is True and set(receipt.get('required_tests', [])) == required_tests(),
+    m.require(receipt.get('installed_consumers') is True and set(receipt.get('required_tests', [])) == required_tests(source['version']),
               'Full installed SDK HTTP/worker acceptance is required.')
     frozen = receipt.get('source_inputs_sha256')
     m.require(type(frozen) is dict and frozen, 'SDK evidence has no frozen source inputs.')
@@ -143,7 +147,7 @@ def seal(directory, evidence, source, repo):
              'version': source['version'], 'mode': source['mode'], 'publishable': source['publishable'],
              'package_version': version, 'packages': sorted(rows, key=lambda row: row['kind']),
              'acceptance': {'installed_consumers': True, 'sdk_checks_sha256': m.digest(receipt_raw),
-                            'required_tests': sorted(required_tests())}}
+                            'required_tests': sorted(required_tests(source['version']))}}
     (directory / MANIFEST).write_bytes(m.canonical(value))
     load_manifest(directory, source)
     return value

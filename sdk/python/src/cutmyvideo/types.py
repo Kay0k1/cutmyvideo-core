@@ -21,6 +21,119 @@ class Crop(TypedDict):
     height: float
 
 
+class AudioNormalize(TypedDict):
+    integrated_lufs: float
+    true_peak_dbtp: float
+    loudness_range_lu: float
+
+
+class Canvas(TypedDict):
+    width: int
+    height: int
+    fit: str
+    background: str
+
+
+class _AudioReplacement(TypedDict, total=False):
+    audio_track: int
+    offset_ms: int
+
+
+class AudioReplace(_AudioReplacement):
+    source_id: str
+
+
+class LocalAudioReplace(_AudioReplacement):
+    input: str
+
+
+class AnalysisOptions(TypedDict, total=False):
+    start_ms: int
+    end_ms: int
+
+
+class LoudnessOptions(AnalysisOptions, total=False):
+    audio_track: int
+
+
+class SilenceOptions(LoudnessOptions, total=False):
+    threshold_db: float
+    min_silence_ms: int
+    keep_before_ms: int
+    keep_after_ms: int
+    min_clip_ms: int
+
+
+class VideoAnalysisOptions(AnalysisOptions, total=False):
+    scene_threshold: float
+    black_pixel_threshold: float
+    black_picture_ratio: float
+    min_black_ms: int
+
+
+class AnalysisResult(TypedDict):
+    version: int
+    start_ms: int
+    end_ms: int
+    analyzed_end_ms: int
+
+
+class SilenceResult(AnalysisResult):
+    audio_track: int
+    silence: list[Range]
+    keep: list[NamedRange]
+
+
+class SceneChange(TypedDict):
+    at_ms: int
+    score: float
+
+
+class VideoAnalysisResult(AnalysisResult):
+    video_track: int
+    scenes: list[SceneChange]
+    black: list[Range]
+
+
+class LoudnessResult(AnalysisResult):
+    audio_track: int
+    integrated_lufs: float | None
+    true_peak_dbtp: float | None
+    loudness_range_lu: float | None
+
+
+class CutListEntry(TypedDict):
+    start_ms: int
+    end_ms: int | None
+    label: str
+
+
+class CutList(TypedDict):
+    version: int
+    entries: list[CutListEntry]
+
+
+class CutListImportRequest(TypedDict):
+    format: str
+    text: str
+
+
+class CutListExportRequest(TypedDict, total=False):
+    format: str
+    cut_list: CutList
+    segments: list[Segment]
+
+
+class CutListExportResult(TypedDict):
+    version: int
+    format: str
+    text: str
+
+
+class LocalCutListExportRequest(CutListExportRequest, total=False):
+    plan: Plan
+
+
 class _ExportRequired(TypedDict):
     source_id: str
     ranges: list[NamedRange]
@@ -37,6 +150,9 @@ class ExportRequest(_ExportRequired, total=False):
     crop: Crop
     cleanup_source: bool
     rendition: str
+    audio_normalize: AudioNormalize
+    canvas: Canvas
+    audio_replace: AudioReplace
 
 
 class PlanOptions(TypedDict, total=False):
@@ -47,6 +163,9 @@ class PlanOptions(TypedDict, total=False):
     no_audio: bool
     subtitle_mode: str
     crop: Crop
+    audio_normalize: AudioNormalize
+    canvas: Canvas
+    audio_replace: LocalAudioReplace | AudioReplace
 
 
 class _PlanRequired(TypedDict):
@@ -299,6 +418,9 @@ class BatchResult(TypedDict):
 
 class CollectionOptions(PlanOptions, total=False):
     clear_crop: bool
+    clear_audio_normalize: bool
+    clear_canvas: bool
+    clear_audio_replace: bool
 
 
 class _CollectionClipRequired(TypedDict):

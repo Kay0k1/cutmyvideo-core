@@ -1,6 +1,7 @@
 /** Portable edit documents contain no authority, server IDs, keys or paths. */
 import { ApiError } from "./errors.js";
 import { object, JSON_LIMIT } from "./protocol.js";
+import { renderReferences } from "./media.js";
 import { publicPreparedSource, sourceFingerprint } from "./source_protocol.js";
 import type { AgentProject, CollectionRequest, PortableProject, Source } from "./types.js";
 
@@ -10,16 +11,20 @@ function copy<T>(value: T): T {
   return JSON.parse(text) as T;
 }
 function request(value: unknown): CollectionRequest {
+  renderReferences(value);
   if (!object(value) || typeof value.source_id !== "string" || !/^[A-Za-z0-9_-]{1,160}$/.test(value.source_id) || !object(value.plan) || value.plan.version !== 1 || value.plan.input || !Array.isArray(value.plan.clips) || !value.plan.clips.length || value.plan.clips.length > 128) throw new TypeError("Invalid project request");
   const ids = value.plan.clips.map(clip => object(clip) ? clip.id : undefined);
   if (!ids.every(id => typeof id === "string" && /^[a-z0-9][a-z0-9_-]{0,63}$/.test(id) && !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/.test(id)) || new Set(ids).size !== ids.length || value.rendition !== undefined && !["final","draft"].includes(String(value.rendition)) || value.clip_ids !== undefined && (!Array.isArray(value.clip_ids) || new Set(value.clip_ids).size !== value.clip_ids.length || !value.clip_ids.every(id => ids.includes(id)))) throw new TypeError("Invalid project selection");
   return value as unknown as CollectionRequest;
 }
 function portablePlan(value: CollectionRequest["plan"]): CollectionRequest["plan"] {
-  const fields = (item: unknown, allowed: string[]) => { if (!object(item) || Object.entries(item).some(([key, value]) => !allowed.includes(key) || !["options","crop","clips","ranges"].includes(key) && value !== null && typeof value === "object")) throw new TypeError("Portable project contains unknown edit fields"); };
+  const fields = (item: unknown, allowed: string[]) => { if (!object(item) || Object.entries(item).some(([key, value]) => !allowed.includes(key) || !["options","crop","clips","ranges","audio_normalize","canvas"].includes(key) && value !== null && typeof value === "object")) throw new TypeError("Portable project contains unknown edit fields"); };
   const options = (item: unknown) => {
-    fields(item, ["format","quality","cut_mode","audio_track","no_audio","subtitle_mode","crop","clear_crop"]);
+    if (object(item) && item.audio_replace !== undefined && item.audio_replace !== null) throw new TypeError("Portable projects require explicit replacement-audio relinking after import");
+    fields(item, ["format","quality","cut_mode","audio_track","no_audio","subtitle_mode","crop","clear_crop","audio_normalize","canvas","audio_replace","clear_audio_normalize","clear_canvas","clear_audio_replace"]);
     if (object(item) && item.crop !== undefined && item.crop !== null) fields(item.crop, ["x","y","width","height"]);
+    if (object(item) && item.audio_normalize !== undefined && item.audio_normalize !== null) fields(item.audio_normalize, ["integrated_lufs","true_peak_dbtp","loudness_range_lu"]);
+    if (object(item) && item.canvas !== undefined && item.canvas !== null) fields(item.canvas, ["width","height","fit","background"]);
   };
   fields(value, ["version","input","options","clips"]);
   if (!Array.isArray(value.clips)) throw new TypeError("Portable project clips must be an array");
