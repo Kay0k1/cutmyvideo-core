@@ -22,7 +22,7 @@ import (
 
 func metadataCacheFixture() (Source, platformInfo) {
 	return Source{ID: "source", Owner: "owner", Kind: "platform", URL: "https://www.youtube.com/watch?v=fixture", ProviderID: "fixture", DurationMS: 1200000},
-		platformInfo{ID: "fixture", Title: "Recording fixture", Duration: 1200, Extractor: "Youtube", Type: "video", LiveStatus: "not_live", Thumbnail: "https://media.example/thumbnail.jpg", Formats: []platformFormat{
+		platformInfo{StreamSelectionVersion: platformStreamSelectionVersion, ID: "fixture", Title: "Recording fixture", Duration: 1200, Extractor: "Youtube", Type: "video", LiveStatus: "not_live", Thumbnail: "https://media.example/thumbnail.jpg", Formats: []platformFormat{
 			{ID: "303", URL: "https://media.example/video.webm?token=private-video", Protocol: "https", Ext: "webm", VCodec: "vp9", ACodec: "none", Height: 1080, Width: 1920, TBR: 2500, Headers: map[string]string{"User-Agent": "fixture-agent", "Cookie": "private-cookie"}},
 			{ID: "251", URL: "https://media.example/audio.webm?token=private-audio", Protocol: "https", Ext: "webm", VCodec: "none", ACodec: "opus", ABR: 128, TBR: 128, Headers: map[string]string{"Referer": "https://media.example/recording"}},
 		}}

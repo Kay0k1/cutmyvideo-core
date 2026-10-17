@@ -225,33 +225,38 @@ func probeStreamsUncached(ctx context.Context, c Config, path string, remote boo
 	return p, p.validateStreams()
 }
 
+const platformStreamSelectionVersion = 1
+
 type platformInfo struct {
-	cachedUntil time.Time
-	ID          string           `json:"id"`
-	Title       string           `json:"title"`
-	Duration    float64          `json:"duration"`
-	Extractor   string           `json:"extractor_key"`
-	Thumbnail   string           `json:"thumbnail"`
-	IsLive      bool             `json:"is_live"`
-	LiveStatus  string           `json:"live_status"`
-	Type        string           `json:"_type"`
-	Entries     json.RawMessage  `json:"entries"`
-	HasDRM      bool             `json:"has_drm"`
-	Formats     []platformFormat `json:"formats"`
+	cachedUntil            time.Time
+	StreamSelectionVersion int              `json:"_cutmy_stream_selection_version,omitempty"`
+	ID                     string           `json:"id"`
+	Title                  string           `json:"title"`
+	Duration               float64          `json:"duration"`
+	Extractor              string           `json:"extractor_key"`
+	Thumbnail              string           `json:"thumbnail"`
+	IsLive                 bool             `json:"is_live"`
+	LiveStatus             string           `json:"live_status"`
+	Type                   string           `json:"_type"`
+	Entries                json.RawMessage  `json:"entries"`
+	HasDRM                 bool             `json:"has_drm"`
+	Formats                []platformFormat `json:"formats"`
 }
 type platformFormat struct {
-	ID       string            `json:"format_id"`
-	URL      string            `json:"url"`
-	Protocol string            `json:"protocol"`
-	VCodec   string            `json:"vcodec"`
-	ACodec   string            `json:"acodec"`
-	Height   int               `json:"height"`
-	Width    int               `json:"width"`
-	ABR      float64           `json:"abr"`
-	TBR      float64           `json:"tbr"`
-	Ext      string            `json:"ext"`
-	HasDRM   bool              `json:"has_drm"`
-	Headers  map[string]string `json:"http_headers"`
+	ID                 string            `json:"format_id"`
+	URL                string            `json:"url"`
+	Protocol           string            `json:"protocol"`
+	VCodec             string            `json:"vcodec"`
+	ACodec             string            `json:"acodec"`
+	Language           string            `json:"language"`
+	LanguagePreference float64           `json:"language_preference"`
+	Height             int               `json:"height"`
+	Width              int               `json:"width"`
+	ABR                float64           `json:"abr"`
+	TBR                float64           `json:"tbr"`
+	Ext                string            `json:"ext"`
+	HasDRM             bool              `json:"has_drm"`
+	Headers            map[string]string `json:"http_headers"`
 }
 
 func platformMetadata(ctx context.Context, c Config, raw string, g *networkGuard) (platformInfo, error) {
@@ -273,6 +278,7 @@ func platformMetadata(ctx context.Context, c Config, raw string, g *networkGuard
 	if err = json.Unmarshal(b, &info); err != nil {
 		return info, err
 	}
+	info.StreamSelectionVersion = platformStreamSelectionVersion
 	return info, validatePlatformInfo(info)
 }
 
@@ -326,10 +332,10 @@ func pickStreams(info platformInfo, quality, format string) ([]platformFormat, e
 			candidates = append(candidates, f)
 		}
 		if f.ACodec != "none" && (f.VCodec == "none" || !hasVideo) {
-			if audio == nil || f.ABR > audio.ABR {
+			if preferredPlatformAudio(f, audio) {
 				audio = f
 			}
-			if !isHLS(*f) && (progressiveAudio == nil || f.ABR > progressiveAudio.ABR) {
+			if !isHLS(*f) && preferredPlatformAudio(f, progressiveAudio) {
 				progressiveAudio = f
 			}
 		}
@@ -349,12 +355,33 @@ func pickStreams(info platformInfo, quality, format string) ([]platformFormat, e
 		}
 	}
 	var video, fallbackVideo *platformFormat
+	// Compare the audio actually carried by each supported input (or pair).
+	// The extractor ranks the original above default/dubbed tracks, regardless
+	// of language. Resolution and bitrate must not switch that soundtrack.
+	audioPreference := func(f *platformFormat) float64 {
+		if f.ACodec == "none" && progressiveAudio != nil {
+			return progressiveAudio.LanguagePreference
+		}
+		return f.LanguagePreference
+	}
+	var preferredAudio *platformFormat
+	for _, f := range supported {
+		if preferOriginal && strings.HasPrefix(f.ID, "portrait-") {
+			continue
+		}
+		if preferredAudio == nil || audioPreference(f) > audioPreference(preferredAudio) {
+			preferredAudio = f
+		}
+	}
 	for _, f := range supported {
 		// Twitch exposes separately cropped portrait adaptations. Its extractor
 		// sorts those first with quality=-2, so resolution ties must not select
 		// them over the original edit. Keep this family preference before the
 		// quality cap, while allowing portrait-only or unsupported-original clips.
 		if preferOriginal && strings.HasPrefix(f.ID, "portrait-") {
+			continue
+		}
+		if preferredAudio != nil && audioPreference(f) < audioPreference(preferredAudio) {
 			continue
 		}
 		if f.Height <= capHeight && (video == nil || f.Height > video.Height || f.Height == video.Height && f.TBR > video.TBR) {
@@ -368,6 +395,9 @@ func pickStreams(info platformInfo, quality, format string) ([]platformFormat, e
 		video = fallbackVideo
 	}
 	if format == "mp3" {
+		if video != nil && video.ACodec != "none" && (audio == nil || video.LanguagePreference > audio.LanguagePreference) {
+			return []platformFormat{*video}, nil
+		}
 		if audio != nil {
 			return []platformFormat{*audio}, nil
 		}
@@ -387,6 +417,11 @@ func pickStreams(info platformInfo, quality, format string) ([]platformFormat, e
 		}
 	}
 	return nil, errUnsupportedStream
+}
+
+func preferredPlatformAudio(candidate, current *platformFormat) bool {
+	return current == nil || candidate.LanguagePreference > current.LanguagePreference ||
+		candidate.LanguagePreference == current.LanguagePreference && candidate.ABR > current.ABR
 }
 
 func platformSourceDimensions(info platformInfo) (int, int) {

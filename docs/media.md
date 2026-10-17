@@ -17,6 +17,12 @@ subtitles with clipped/rebased timing. See [batch cutting](batch-cutting.md). MP
 selected audio only; a file containing audio and an attached cover remains an
 audio-only source for inspection.
 
+For platform URLs, the extractor's original-audio preference is applied before
+bitrate and video quality, independently of the language. This applies to MP4,
+MP3 and previews, including combined video/audio formats. If the provider does
+not identify an original, selection uses its available language preferences
+and then quality, within the supported stream combinations.
+
 For an existing separate progressive video/audio pair, video comes from its
 video input and audio from its audio input. Bounded combined HLS staging uses
 the same explicit stream selection; separate HLS renditions remain unsupported.
