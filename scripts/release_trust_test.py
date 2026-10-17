@@ -101,7 +101,7 @@ class TrustControls(unittest.TestCase):
         doc = self.sbom(changed)
         modules = [p for p in doc['packages'] if p['name'] == 'golang.org/x/sys']
         self.assertEqual(len(modules), 1)
-        self.assertEqual(modules[0]['versionInfo'], 'v0.42.0')
+        self.assertEqual(modules[0]['versionInfo'], 'v0.44.0')
         self.assertEqual(modules[0]['licenseDeclared'], 'BSD-3-Clause')
         references = [r for r in doc['relationships'] if r['relatedSpdxElement'] == modules[0]['SPDXID']]
         self.assertEqual(len(references), 2)
@@ -145,10 +145,10 @@ class TrustControls(unittest.TestCase):
         self.assertEqual(t.reviewed_license(notices, 'example.invalid/mod', 'v1.0.0'), 'NOASSERTION')
         known = (self.repo / 'THIRD_PARTY_NOTICES.md').read_text()
         self.assertEqual(t.reviewed_license(known.replace('Copyright (c) 2019', 'Different copyright'), 'github.com/jackc/pgpassfile', 'v1.0.0'), 'NOASSERTION')
-        heading = '## golang.org/x/sys v0.42.0\n'
+        heading = '## golang.org/x/sys v0.44.0\n'
         before, after = known.split(heading, 1)
         changed = before + heading + after.replace('Copyright 2009', 'Changed copyright', 1)
-        self.assertEqual(t.reviewed_license(changed, 'golang.org/x/sys', 'v0.42.0'), 'NOASSERTION')
+        self.assertEqual(t.reviewed_license(changed, 'golang.org/x/sys', 'v0.44.0'), 'NOASSERTION')
         changed = known.replace(heading, '## golang.org/x/sys v0.43.0\n', 1)
         self.assertEqual(t.reviewed_license(changed, 'golang.org/x/sys', 'v0.43.0'), 'NOASSERTION')
 

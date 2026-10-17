@@ -37,6 +37,7 @@ LICENSES = {
     ('github.com/jackc/puddle/v2', 'v2.2.2'): ('MIT', 'd6cbcd066041a771a5a9cf5fe81bce5679275858431fff7a10a8959ffb57d932'),
     ('golang.org/x/sync', 'v0.22.0'): ('BSD-3-Clause', 'e5abec394985e8f4b263766c5222204b80c3413ec7f7c3e4c15fc5b575591cb1'),
     ('golang.org/x/sys', 'v0.42.0'): ('BSD-3-Clause', 'e5abec394985e8f4b263766c5222204b80c3413ec7f7c3e4c15fc5b575591cb1'),
+    ('golang.org/x/sys', 'v0.44.0'): ('BSD-3-Clause', 'e5abec394985e8f4b263766c5222204b80c3413ec7f7c3e4c15fc5b575591cb1'),
     ('golang.org/x/text', 'v0.41.0'): ('BSD-3-Clause', 'e5abec394985e8f4b263766c5222204b80c3413ec7f7c3e4c15fc5b575591cb1'),
 }
 GO_NOTICE = '07e803b805ec67f8d2a26183c1a1e3bd7ef8f0c7c44cd4b35c7b775980630c4c'
