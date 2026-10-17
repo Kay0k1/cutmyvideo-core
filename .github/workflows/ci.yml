@@ -318,7 +318,7 @@ jobs:
       - name: Six core features on production-family FFmpeg 5.1
         shell: bash
         run: |
-          go test -json -race -count=1 -timeout=4m ./pkg/engine ./internal/localmedia ./cmd/cutmy ./internal/edit ./internal/mediaexport -run '^(TestAnalysis.*|TestRender.*|TestCutList.*|TestNewInterfacesCLI.*|TestLoudnessReport.*)$' | tee bookworm-feature-tests.jsonl
+          go test -json -race -count=1 -timeout=4m ./pkg/engine ./internal/localmedia ./cmd/cutmy ./internal/edit ./internal/mediaexport -run '^(TestAnalysis.*|TestRender.*|TestCutList.*|TestNewInterfacesCLI.*|TestLoudness(Report|Coverage).*)$' | tee bookworm-feature-tests.jsonl
           python3 scripts/check-native-results.py --core15-bookworm bookworm-feature-tests.jsonl
       - name: Draft attachment ownership, project scope and ZIP on Bookworm
         shell: bash

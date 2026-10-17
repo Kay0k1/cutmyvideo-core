@@ -270,6 +270,14 @@ func TestRenderExternalTrackClockAndInputFences(t *testing.T) {
 	if err != nil || coverage.AnalyzedEndMS < 5900 || coverage.AnalyzedEndMS > 6100 {
 		t.Fatalf("delayed stream loudness coverage lost its source clock: %+v %v", coverage, err)
 	}
+	hour := filepath.Join(directory, "hour-delayed.mka")
+	renderTool(t, "-v", "error", "-i", audio, "-itsoffset", "3600", "-i", audio, "-map", "0:a", "-map", "1:a", "-copyts", "-c:a", "pcm_s16le", hour)
+	for _, window := range []LoudnessOptions{{AudioTrack: &track}, {StartMS: 3600000, EndMS: 3601000, AudioTrack: &track}} {
+		actual, err := e.AnalyzeLoudness(context.Background(), hour, window)
+		if err != nil || actual.AnalyzedEndMS != 3601000 || actual.IntegratedLUFS == nil {
+			t.Fatalf("delayed hour/source seek changed the selected audio clock: %+v %+v %v", window, actual, err)
+		}
+	}
 	for _, replacePrimary := range []bool{false, true} {
 		source, replacement := renderFixture(t)
 		e := New(Config{FFmpegThreads: 1})
@@ -391,5 +399,15 @@ func TestRenderLoudnessWindowSelectionAndActualCoverage(t *testing.T) {
 	second, err := e.AnalyzeLoudness(ctx, multiple, LoudnessOptions{AudioTrack: &selected})
 	if err != nil || first.AudioTrack != 0 || second.AudioTrack != 1 || first.IntegratedLUFS == nil || second.IntegratedLUFS == nil || *first.IntegratedLUFS-*second.IntegratedLUFS < 18 {
 		t.Fatalf("absolute audio selection ignored: %+v %+v %v", first, second, err)
+	}
+	for _, rate := range []string{"44100", "96000"} {
+		native := filepath.Join(dir, "native-"+rate+".wav")
+		renderTool(t, "-v", "error", "-f", "lavfi", "-i", "sine=frequency=880:sample_rate="+rate+":duration=1.25", "-ac", "2", native)
+		for _, window := range []LoudnessOptions{{EndMS: 1000}, {StartMS: 250, EndMS: 1250}} {
+			actual, err := e.AnalyzeLoudness(ctx, native, window)
+			if err != nil || actual.AnalyzedEndMS != window.EndMS || actual.IntegratedLUFS == nil || actual.TruePeakDBTP == nil {
+				t.Fatalf("native-rate metadata followed loudnorm's internal resampling: %s %+v %+v %v", rate, window, actual, err)
+			}
+		}
 	}
 }

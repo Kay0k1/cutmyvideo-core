@@ -39,6 +39,8 @@ CORE15_ENGINE_REQUIRED = {
     "TestCutListChaptersAcceptedByIndependentFFmpeg",
 }
 CORE15_LOCALMEDIA_REQUIRED = {
+    "TestLoudnessCoveragePreservesNativeSourceClockAcrossWrites",
+    "TestLoudnessCoverageRejectsIncompleteOrMalformedFrames",
     "TestAnalysisPCMIndependentChannelEnergyAndSplitWrites",
     "TestAnalysisPCMRejectsPartialNonFiniteAndBudgetOverflow",
     "TestAnalysisKeepMarginsAndEmptyTimeline",
