@@ -85,13 +85,14 @@ authorization fences. `http_projects.go` handles request decoding, rate limits,
 database deadlines, response errors and project-scoped URLs. Storage reads keep
 canonical source/artifact URLs; the HTTP boundary rewrites them for project access.
 
-`internal/subtitles` owns supplied SRT/VTT retiming, subtitle cue indexing and
-clock formatting. It depends only on the standard library and `internal/edit`;
+`internal/subtitles` owns supplied SRT/VTT retiming, extracted-source SRT parsing,
+subtitle cue indexing and clock formatting. It depends only on the standard library and `internal/edit`;
 it does not open files, run media tools or depend on HTTP or database code.
 The public engine calls it directly, while app aliases preserve the existing
 request/result/error types. Extracted-source SRT parsing remains distinct from
-the stricter supplied-text parser. Source inspection, cache ownership and
-subtitle extraction/muxing remain in the app layer.
+the stricter supplied-text parser. Source inspection and subtitle tool execution
+and muxing retain their app adapters; operation-local caches belong to
+`internal/mediasession`.
 
 `internal/toolrun` owns the sanitized subprocess environment, process-tree
 containment on Unix/Windows, bounded stderr and fixed failure classification.
@@ -110,20 +111,37 @@ sentinel, while ordinary validation errors keep their causes. Unknown display
 geometry continues to leave coded dimensions and unrelated audio inspection
 available; rendering validates geometry when an operation needs it.
 
-`internal/mediaexport` coordinates one interval's media export, including the
-intermediate producer used by copy joins. It owns validation and selection order,
-copy-clock adjustment, FFmpeg arguments, output budgets and result verification.
-It receives narrow execution/inspection callbacks instead of server configuration
-or direct filesystem, process, network or database access. The app adapters keep
-the existing bounded/streaming stdout paths, diagnostic causes, source sessions,
-file identity checks and decoder-slot ownership. Result metadata is assigned only
-after verification succeeds; final/intermediate output flags remain explicit.
+`internal/mediaexport` coordinates individual and joined exports, including
+copy/accurate selection, ordered concat plans, repeated-interval reuse, audio
+alignment, requested/measured timelines and output verification. It owns FFmpeg
+arguments and pure output budgets. Filesystem, process, inspection and subtitle
+effects run through app-owned runtime adapters at their original positions in
+the operation. The package itself has no filesystem, process, network or database
+dependency. Bounded/streaming stdout, diagnostic causes, decoder-slot ownership
+and explicit final/intermediate flags retain their existing behavior.
 
-Media probing, joined-export algorithms and queue handling still share
-`internal/app`. The public engine therefore retains compile-time dependencies
-on that package; local operations continue to run without opening a database.
-These smaller internal boundaries support further media separation without
-changing the existing public Go interfaces.
+`internal/mediapreflight` owns advisory report planning, request/track/geometry
+decisions, exact capability-table parsing and batch capability-name unions. Each
+report owns its normalized request; later request errors retain their original
+position after earlier capability checks. App adapters keep fresh source/tool
+identity fences, query deadlines, bounded responses and fatal OS errors. A
+successful preflight still promises neither decoding nor storage/publication.
+
+`internal/mediasession` owns one local operation's pinned file metadata, bounded
+keyframe lookahead, disk-backed source text and single resident subtitle index.
+It also copies verified repeated outputs into independent files. It uses the
+filesystem and neutral media packages, with callbacks for actual media-tool
+queries; it has no HTTP, SQL, queue or subprocess dependency. App retains the
+context compatibility wrapper, authorization, reader pins and the separate
+cross-operation metadata cache's owner keys, TTL and eviction policy.
+
+The public engine still imports `internal/app` for concrete local tool adapters,
+public compatibility types/methods and error classification. In particular,
+`PreflightRequest` retains its existing request-validation method. Moving the
+coordination does not yet remove that compile-time dependency. Local operations
+continue to run without opening a database. Tool probing, owned-output scanners,
+subtitle muxing, remote/HLS preparation, decoder admission, worker leases and
+durable publication keep their current owners.
 
 ## Why SQL and JavaScript are here
 
@@ -151,8 +169,10 @@ installing the other language's SDK.
 | `cmd/cutmy/` | Local CLI, API/worker/maintenance entry points |
 | `internal/app/` | Shared media operations and internal server/queue/storage implementation |
 | `internal/edit/` | Standard-library-only edit models, validation and collection normalization |
-| `internal/mediaexport/` | Single-interval export coordination, command construction and result verification |
+| `internal/mediaexport/` | Individual/joined export planning, coordination, budgets and result verification |
 | `internal/mediainfo/` | Pure probe metadata, track decisions and video geometry/filter rules |
+| `internal/mediapreflight/` | Pure advisory reports, capability decisions and batch planning |
+| `internal/mediasession/` | Local operation identity, bounded caches, lifecycle and independent result reuse |
 | `internal/subtitles/` | Pure supplied-text retiming, cue indexing and clock formatting |
 | `internal/toolrun/` | External tool execution, bounded diagnostics and platform process containment |
 | `internal/app/migrations/` | Versioned SQL and expected database catalog layouts |

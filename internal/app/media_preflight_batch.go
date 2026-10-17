@@ -7,6 +7,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"time"
+
+	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
+	"github.com/Kay0k1/cutmyvideo-core/internal/mediainfo"
+	"github.com/Kay0k1/cutmyvideo-core/internal/mediapreflight"
 )
 
 // preflightLocalBatch shares only this invocation's fresh source inspection
@@ -59,57 +63,19 @@ func preflightLocalBatchWithQueries(ctx context.Context, c Config, path string, 
 		return nil, 0, err
 	}
 
-	// Compute the relevant-name union without retaining raw tool output or all
-	// parsed names. Delay each request's error until its turn so an earlier
-	// missing capability still precedes a later invalid range or track choice.
-	type prepared struct {
-		result PreflightResult
-		groups []preflightCapabilityGroup
-		err    error
-	}
-	preparedRequests := make([]prepared, len(requests))
-	wanted := make(map[string]map[string]bool)
+	neutralRequests := make([]edit.ExportRequest, len(requests))
 	for i, request := range requests {
-		if err := scope.unchanged(ctx); err != nil {
-			return nil, i, err
-		}
-		item := &preparedRequests[i]
-		item.result, item.groups, item.err = prepareLocalPreflight(c, absolute, request, p, duration)
-		for _, group := range item.groups {
-			if wanted[group.listing] == nil {
-				wanted[group.listing] = make(map[string]bool)
-			}
-			for _, name := range group.required {
-				wanted[group.listing][name] = true
-			}
-		}
-		if err := scope.unchanged(ctx); err != nil {
-			return nil, i, err
-		}
+		neutralRequests[i] = edit.ExportRequest(request)
 	}
-	snapshot := preflightCapabilitySnapshot{scope: &scope, wanted: wanted, listings: make(map[string]preflightCapabilityListing)}
-	results := make([]PreflightResult, len(requests))
-	for i := range preparedRequests {
-		if err := scope.unchanged(ctx); err != nil {
-			return nil, i, err
-		}
-		item := &preparedRequests[i]
-		if item.err != nil {
-			return nil, i, item.err
-		}
-		if err := snapshot.check(ctx, c, item.groups, &item.result, query); err != nil {
-			return nil, i, err
-		}
-		if err := scope.unchanged(ctx); err != nil {
-			return nil, i, err
-		}
-		finishLocalPreflight(&item.result)
-		results[i] = item.result
+	reports, failed, err := mediapreflight.Batch(ctx, editLimits(c), absolute, neutralRequests, mediainfo.Info(p), duration, &mediaPreflightBatchRuntime{config: c, scope: &scope, query: query})
+	if err != nil {
+		return nil, failed, mediaExportError(err)
 	}
-	if err := scope.unchanged(ctx); err != nil {
-		return nil, len(requests) - 1, err
+	results := make([]PreflightResult, len(reports))
+	for i, report := range reports {
+		results[i] = mediaPreflightResult(report)
 	}
-	return results, -1, nil
+	return results, failed, nil
 }
 
 type preflightExecutable struct {
@@ -221,15 +187,8 @@ func (snapshot *preflightCapabilitySnapshot) check(ctx context.Context, c Config
 			}
 			snapshot.listings[group.listing] = listing
 		}
-		if listing.deferred {
-			addPreflightDeferred(result, "tool_"+group.listing, "tool_capabilities_unverified", "The configured media tool's "+group.listing+" could not be verified without processing media")
-		} else {
-			for _, name := range group.required {
-				if !listing.available[name] {
-					return &sourceProblem{group.code, "The configured media tool does not provide required " + group.listing + " capability " + name}
-				}
-			}
-			result.Checks = append(result.Checks, PreflightCheck{Name: "tool_" + group.listing, Status: "passed"})
+		if err := applyPreflightListing(group, listing.available, listing.deferred, result); err != nil {
+			return err
 		}
 		if err := snapshot.scope.unchanged(ctx); err != nil {
 			return err

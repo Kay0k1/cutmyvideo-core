@@ -14,7 +14,7 @@ func mediaExportConfig(c Config) mediaexport.Config {
 }
 
 func mediaExportSelection(selection mediaSelection) mediaexport.Selection {
-	return mediaexport.Selection{Video: selection.Video, Audio: selection.Audio, VideoInput: selection.VideoInput, AudioInput: selection.AudioInput}
+	return mediaexport.Selection{Video: selection.Video, Audio: selection.Audio, VideoInput: selection.VideoInput, AudioInput: selection.AudioInput, MP3DurationMode: selection.mp3DurationMode}
 }
 
 // Keep existing service diagnostics and callback causes at the boundary.

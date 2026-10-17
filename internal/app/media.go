@@ -329,18 +329,7 @@ func nearestKeyframe(ctx context.Context, c Config, path string, start int64, re
 }
 
 func keyframeProbeBounds(start int64) (from, until int64) {
-	from = start - 30000
-	if from < 0 {
-		from = 0
-	}
-	until = start + 1
-	if start == 0 {
-		// Matroska can place its first video packet after zero (for example
-		// because audio starts first). Read the same bounded initial window
-		// accepted below; a 1 ms interval can otherwise contain no keyframe.
-		until = 2001
-	}
-	return from, until
+	return mediaexport.KeyframeProbeBounds(start)
 }
 
 func probeKeyframes(ctx context.Context, c Config, path string, remote bool, streamIndex int, from, until int64) ([]copyKeyframe, error) {
@@ -388,16 +377,7 @@ func probeKeyframes(ctx context.Context, c Config, path string, remote bool, str
 }
 
 func selectCopyKeyframe(frames []copyKeyframe, start int64) (copyKeyframe, error) {
-	found := copyKeyframe{PTS: -1}
-	for _, frame := range frames {
-		if (frame.PTS <= start || start == 0 && found.PTS < 0 && frame.PTS <= 2000) && frame.PTS > found.PTS {
-			found = frame
-		}
-	}
-	if found.PTS < 0 || !found.HasDTS && found.PTS > 2000 {
-		return copyKeyframe{}, errors.New("no nearby keyframe found; use accurate mode")
-	}
-	return found, nil
+	return mediaexport.SelectCopyKeyframe(frames, start)
 }
 
 type mediaInput = mediaexport.Input
