@@ -154,7 +154,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## github.com/jackc/puddle/v2 v2.2.2
+## github.com/jackc/puddle/v2 v2.2.3
 
 ### LICENSE
 
@@ -244,7 +244,7 @@ rights granted to you under this License for this implementation of Go
 shall terminate as of the date such litigation is filed.
 ```
 
-## golang.org/x/sys v0.44.0
+## golang.org/x/sys v0.49.0
 
 ### LICENSE
 

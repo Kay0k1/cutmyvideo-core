@@ -6,9 +6,9 @@ toolchain go1.27.2
 
 require (
 	github.com/jackc/pgx/v5 v5.9.2
-	github.com/jackc/puddle/v2 v2.2.2
+	github.com/jackc/puddle/v2 v2.2.3
 	golang.org/x/sync v0.22.0
-	golang.org/x/sys v0.44.0
+	golang.org/x/sys v0.49.0
 )
 
 require (
