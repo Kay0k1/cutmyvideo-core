@@ -16,52 +16,6 @@ import (
 // before resource row locks. It is shared by API and worker processes.
 const storageLock int64 = 736021912360105
 const storageBatch = 200
-const storageSchema = `
-CREATE TABLE IF NOT EXISTS storage_files (
- path text PRIMARY KEY, owner text NOT NULL DEFAULT '', resource_id text NOT NULL DEFAULT '',
- kind text NOT NULL, size_bytes bigint NOT NULL CHECK(size_bytes>=0),
- delete_pending boolean NOT NULL DEFAULT false, observed_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS storage_files_owner_idx ON storage_files(owner,kind);
-CREATE INDEX IF NOT EXISTS sources_owner_created_idx ON sources(owner,created_at DESC);
-CREATE INDEX IF NOT EXISTS storage_files_pending_idx ON storage_files(path) WHERE delete_pending;
-CREATE TABLE IF NOT EXISTS storage_reservations (
- id text PRIMARY KEY, owner text NOT NULL, kind text NOT NULL,
- size_bytes bigint NOT NULL CHECK(size_bytes>=0), expires_at timestamptz NOT NULL,
- token text NOT NULL DEFAULT '',job_id text NOT NULL DEFAULT '',abandoned_at timestamptz
-);
-ALTER TABLE storage_reservations ADD COLUMN IF NOT EXISTS job_id text NOT NULL DEFAULT '';
-ALTER TABLE storage_reservations ADD COLUMN IF NOT EXISTS abandoned_at timestamptz;
-CREATE INDEX IF NOT EXISTS storage_reservations_job_idx ON storage_reservations(job_id);
-CREATE INDEX IF NOT EXISTS storage_reservations_expiry_idx ON storage_reservations(expires_at);
-CREATE TABLE IF NOT EXISTS storage_counters (id integer PRIMARY KEY CHECK(id=1), stored_bytes numeric NOT NULL CHECK(stored_bytes>=0),reserved_bytes numeric NOT NULL CHECK(reserved_bytes>=0));
-INSERT INTO storage_counters(id,stored_bytes,reserved_bytes)
- SELECT 1,COALESCE((SELECT sum(size_bytes) FROM storage_files),0),COALESCE((SELECT sum(size_bytes) FROM storage_reservations),0) ON CONFLICT(id) DO NOTHING;
-CREATE OR REPLACE FUNCTION update_storage_counter() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE delta numeric; BEGIN
- IF TG_OP='INSERT' THEN SELECT COALESCE(sum(size_bytes),0) INTO delta FROM storage_new;
- ELSIF TG_OP='DELETE' THEN SELECT -COALESCE(sum(size_bytes),0) INTO delta FROM storage_old;
- ELSE SELECT COALESCE((SELECT sum(size_bytes) FROM storage_new),0)-COALESCE((SELECT sum(size_bytes) FROM storage_old),0) INTO delta; END IF;
- IF delta<>0 THEN
-  IF TG_TABLE_NAME='storage_files' THEN UPDATE storage_counters SET stored_bytes=stored_bytes+delta WHERE id=1;
-  ELSE UPDATE storage_counters SET reserved_bytes=reserved_bytes+delta WHERE id=1; END IF;
- END IF;
- RETURN NULL; END $$;
-DROP TRIGGER IF EXISTS storage_file_counter ON storage_files;
-DROP TRIGGER IF EXISTS storage_reservation_counter ON storage_reservations;
-CREATE OR REPLACE TRIGGER storage_file_insert AFTER INSERT ON storage_files REFERENCING NEW TABLE AS storage_new FOR EACH STATEMENT EXECUTE FUNCTION update_storage_counter();
-CREATE OR REPLACE TRIGGER storage_file_update AFTER UPDATE ON storage_files REFERENCING OLD TABLE AS storage_old NEW TABLE AS storage_new FOR EACH STATEMENT EXECUTE FUNCTION update_storage_counter();
-CREATE OR REPLACE TRIGGER storage_file_delete AFTER DELETE ON storage_files REFERENCING OLD TABLE AS storage_old FOR EACH STATEMENT EXECUTE FUNCTION update_storage_counter();
-CREATE OR REPLACE TRIGGER storage_reservation_insert AFTER INSERT ON storage_reservations REFERENCING NEW TABLE AS storage_new FOR EACH STATEMENT EXECUTE FUNCTION update_storage_counter();
-CREATE OR REPLACE TRIGGER storage_reservation_update AFTER UPDATE ON storage_reservations REFERENCING OLD TABLE AS storage_old NEW TABLE AS storage_new FOR EACH STATEMENT EXECUTE FUNCTION update_storage_counter();
-CREATE OR REPLACE TRIGGER storage_reservation_delete AFTER DELETE ON storage_reservations REFERENCING OLD TABLE AS storage_old FOR EACH STATEMENT EXECUTE FUNCTION update_storage_counter();
-CREATE TABLE IF NOT EXISTS storage_state (id text PRIMARY KEY);
-CREATE TABLE IF NOT EXISTS queue_owners (owner text PRIMARY KEY,last_claimed timestamptz,last_considered timestamptz);
-ALTER TABLE queue_owners ALTER COLUMN last_claimed DROP NOT NULL;
-ALTER TABLE queue_owners ADD COLUMN IF NOT EXISTS last_considered timestamptz;
-ALTER TABLE jobs ADD COLUMN IF NOT EXISTS storage_wait_until timestamptz;
-ALTER TABLE artifacts ADD COLUMN IF NOT EXISTS expires_at timestamptz;
-`
 
 var ErrSourceCommitUncertain = errors.New("source publication commit outcome unknown")
 var ErrSourceInUse = errors.New("source has active jobs")

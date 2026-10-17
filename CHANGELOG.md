@@ -10,6 +10,12 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 - Resolve HLS variants, segments and initialization maps against the final playlist URL after guarded HTTP redirects.
 - Recover TypeScript source-preparation journals interrupted between checkpoint hard-link publication and temporary-link removal, retaining the existing private-file checks.
 - Preserve valid `crop: null` inheritance in Python and TypeScript portable project imports and exports.
+- Show fixed refusal codes in the self-hosting lifecycle wrapper while retaining exit status 1 and redacting private exception details.
+
+### Changed
+- Remove unused legacy SQL schema literals; ordered embedded migrations remain the schema source.
+- Exclude local SDK dependencies, build output and generated evidence from the Docker build context.
+- Refresh release/SDK support documentation and add a map of development, verification and release commands.
 
 ## 1.4.1 - 2026-10-16
 

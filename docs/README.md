@@ -51,7 +51,7 @@ Choose an interface in the README, then follow the relevant guide. The project o
 
 | Guide | Covers |
 | --- | --- |
-| [Contributing](../CONTRIBUTING.md) | Environment, focused checks, SDK acceptance and pull requests |
+| [Contributing](../CONTRIBUTING.md) · [Command map](../CONTRIBUTING.md#command-map) | Environment, development/check/release entry points, SDK acceptance and pull requests |
 | [Changelog](../CHANGELOG.md) | Published versions and unreleased features |
 | [CLI releases](releases.md) | Release-page conventions, reproducible packaging and consumer signature verification |
 | [1.4.0 scope and verification](release-1.4.0.md) | Agent projects, schema 8, subtitle sidecars, signed packages and publication boundaries |
