@@ -56,6 +56,7 @@ TOOLRUN_MODULE_REQUIRED = {
     "TestRunOutputPreservesCancellation",
     "TestDiagnosticCopyCannotBypassMemoryBound",
 }
+TOOLRUN_LIFECYCLE_REQUIRED = {"TestRunOutputCleansDescendantsAfterParentExit"}
 MEDIAINFO_MODULE_REQUIRED = {
     "TestInfoValidationPreservesProbeBoundaries",
     "TestInfoDurationAndSelectionPreserveSourceOrder",
@@ -429,6 +430,7 @@ REQUIRED[0].update(EDIT_MODEL_ENGINE_REQUIRED)
 REQUIRED[4].update(AUDIT_MEDIA_REQUIRED)
 REQUIRED[0].update(SUBTITLE_MODULE_REQUIRED | MEDIA_BOUNDARY_ENGINE_REQUIRED)
 REQUIRED[1].update(TOOLRUN_MODULE_REQUIRED)
+REQUIRED[1].update(TOOLRUN_LIFECYCLE_REQUIRED)
 REQUIRED[0].update(MEDIAINFO_MODULE_REQUIRED)
 REQUIRED[4].update(MEDIAINFO_ADAPTER_REQUIRED)
 REQUIRED[0].update(MEDIAEXPORT_MODULE_REQUIRED)
@@ -462,7 +464,7 @@ REQUIRED_TEST_PACKAGES = [
             CLI_PACKAGE if name.startswith("TestCLI") or name == "TestParseCrop" else
             FS_PACKAGE if name == "TestConcurrentPublicationHasExactlyOneCompleteWinner" else
             ENGINE_PACKAGE) for name in REQUIRED[0]},
-    {name: TOOLRUN_PACKAGE if name in TOOLRUN_MODULE_REQUIRED else APP_PACKAGE for name in REQUIRED[1]},
+    {name: TOOLRUN_PACKAGE if name in TOOLRUN_MODULE_REQUIRED | TOOLRUN_LIFECYCLE_REQUIRED else APP_PACKAGE for name in REQUIRED[1]},
 ]
 
 BOOKWORM_REQUIRED = {

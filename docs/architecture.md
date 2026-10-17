@@ -88,6 +88,21 @@ authorization fences. `http_projects.go` handles request decoding, rate limits,
 database deadlines, response errors and project-scoped URLs. Storage reads keep
 canonical source/artifact URLs; the HTTP boundary rewrites them for project access.
 
+The server remains one internal package, with files grouped by responsibility.
+`http.go` contains server construction and route registration; session/origin
+checks, source admission/import, source reads, jobs/downloads and JSON responses
+have separate `http_*.go` files. Store startup and pool configuration remain in
+`store.go`; source reads, job admission, job reads, lease/state transitions and
+artifact persistence live in the corresponding `store_*.go` files.
+
+`worker.go` owns worker startup and the claim loop. Job execution is in
+`worker_job.go`, retention/reconciliation in `worker_cleanup.go`, and storage
+waiting/pressure handling in `worker_storage.go`. Preview limits stay in
+`preview.go`; HTTP handling, rendering, transactional admission/publication and
+cache retention live in `preview_http.go`, `preview_render.go`,
+`preview_admission.go` and `preview_cache.go`. These groups retain the existing
+transaction, cancellation, lease and ownership boundaries.
+
 `internal/subtitles` owns supplied SRT/VTT retiming, extracted-source SRT parsing,
 subtitle cue indexing and clock formatting. It depends only on the standard library and `internal/edit`;
 it does not open files, run media tools or depend on HTTP or database code.
@@ -105,6 +120,10 @@ is bounded, while streaming operations use their own writers and limits. The
 service installs a process observer for worker diagnostics and translates media
 errors to its existing private wrappers. The runner has no server configuration,
 HTTP or database dependency.
+On Unix, returning from a successfully started process also terminates remaining
+members of its process group; cleanup preserves the original process outcome.
+Windows retains its job-object cleanup. These mechanisms cover descendants
+that remain in the process group or Windows job.
 
 `internal/mediainfo` owns bounded probe metadata, finite-duration validation,
 deterministic stream selection, track manifests and pure video geometry/filter
@@ -209,4 +228,6 @@ not a supported integration API. The engine and service share the internal media
 backend without importing each other. They remain part of one versioned Go
 module. See
 [performance](performance.md) for measured costs and
-[artifact retention](artifacts.md) for generated diagnostics.
+[artifact retention](artifacts.md) for generated diagnostics. The
+[1.4.1 audit record](core-audit-1.4.1.md) maps the maintenance findings to their
+resolutions and verification boundaries.

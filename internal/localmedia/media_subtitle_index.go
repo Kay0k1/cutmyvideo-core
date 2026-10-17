@@ -7,8 +7,6 @@ import (
 	"github.com/Kay0k1/cutmyvideo-core/internal/subtitles"
 )
 
-const subtitleIndexCacheBytes = subtitles.IndexCacheBytes
-
 type subtitleIndex = subtitles.Index
 
 func newSubtitleIndex(cues []subtitleCue) *subtitleIndex {

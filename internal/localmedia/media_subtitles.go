@@ -19,7 +19,6 @@ import (
 // cannot simply be copied: a cue can begin before a cut and span its boundary.
 type subtitleCue = subtitles.Cue
 
-func parseSRT(data []byte) ([]subtitleCue, error) { return subtitles.ParseSourceSRT(data) }
 func subtitleTimestamp(ms int64) string {
 	return subtitles.Timestamp(ms)
 }

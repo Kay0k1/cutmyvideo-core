@@ -28,9 +28,7 @@ func preflightLocalWithQueries(ctx context.Context, c Config, path string, reque
 	result, err := localmedia.PreflightLocalWithQueries(ctx, c, path, request, localPreflightProbe(inspect), localmedia.PreflightQueryFunc(query))
 	return result, localMediaError(err)
 }
-func preflightSourceUnchanged(path string, before os.FileInfo) error {
-	return localMediaError(localmedia.PreflightSourceUnchanged(path, before))
-}
+
 func preflightFileIdentity(path string) (os.FileInfo, error) {
 	return localmedia.PreflightFileIdentity(path)
 }
@@ -61,12 +59,6 @@ func checkPreflightCapabilities(ctx context.Context, c Config, groups []prefligh
 func prepareLocalPreflight(c Config, path string, request ExportRequest, p probeInfo, duration int64) (PreflightResult, []preflightCapabilityGroup, error) {
 	result, groups, err := mediapreflight.Prepare(editLimits(c), path, edit.ExportRequest(request), mediainfo.Info(p), duration)
 	return mediaPreflightResult(result), preflightGroups(groups), mediaExportError(err)
-}
-
-func finishLocalPreflight(result *PreflightResult) {
-	report := mediaPreflightReport(*result)
-	mediapreflight.Finish(&report)
-	*result = mediaPreflightResult(report)
 }
 
 func validatePreflightSelection(selection mediaSelection, request ExportRequest) (*PreflightVideo, error) {

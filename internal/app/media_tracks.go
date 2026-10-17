@@ -27,10 +27,6 @@ type mediaSelection struct {
 	mp3DurationMode        int
 }
 
-func probeInputSelection(ctx context.Context, c Config, inputs []mediaInput) (mediaSelection, error) {
-	return probeInputSelectionOptions(ctx, c, inputs, ExportRequest{})
-}
-
 func probeInputSelectionOptions(ctx context.Context, c Config, inputs []mediaInput, request ExportRequest) (mediaSelection, error) {
 	s, e := localmedia.ProbeInputSelectionOptions(ctx, c, inputs, request)
 	return mediaSelection{Video: s.Video, Audio: s.Audio, VideoInput: s.VideoInput, AudioInput: s.AudioInput, mp3DurationMode: s.MP3DurationMode}, localMediaError(e)
@@ -48,23 +44,10 @@ func (p *probeInfo) tracks() []Track {
 	return (*mediainfo.Info)(p).Tracks()
 }
 
-func subtitleTextSupported(codec string) bool {
-	return mediainfo.SubtitleTextSupported(codec)
-}
-
-func trackManifest(p probeInfo, selection mediaSelection, request ExportRequest) ([]TrackSelection, error) {
-	manifest, err := mediainfo.TrackManifest(mediainfo.Info(p), selection.Video, selection.Audio, edit.ExportRequest(request))
-	return manifest, mediaInfoError(err)
-}
-
 // InspectExportLocal reports source tracks and their fate for selected options.
 func InspectExportLocal(ctx context.Context, c Config, path string, request ExportRequest) ([]TrackSelection, error) {
 	tracks, e := localmedia.InspectExportLocal(ctx, c, path, request)
 	return tracks, localMediaError(e)
-}
-
-func audioMetadataArgs(audio *probeStream) []string {
-	return mediainfo.AudioMetadataArgs(audio)
 }
 
 // SelectExportTracks computes the same deterministic selection from inspected

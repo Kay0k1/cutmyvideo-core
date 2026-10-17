@@ -20,11 +20,6 @@ func videoOutputGeometryWithCrop(stream *probeStream, quality string, preview bo
 	return width, height, mediaInfoError(err)
 }
 
-func videoEncoderTimeBase(stream *probeStream) (string, error) {
-	timeBase, err := mediainfo.EncoderTimeBase(stream)
-	return timeBase, mediaInfoError(err)
-}
-
 func videoRenderFilter(stream *probeStream, quality string, preview bool) (string, bool, error) {
 	filter, hdr, err := mediainfo.RenderFilter(stream, quality, preview)
 	return filter, hdr, mediaInfoError(err)
@@ -47,8 +42,4 @@ func renderedMediaFailure(err error, hdr bool) error {
 
 func validateRenderedVideo(info probeInfo, source *probeStream, quality string, preview, hdr bool) error {
 	return mediaInfoError(mediainfo.ValidateRenderedVideo(mediainfo.Info(info), source, quality, preview, hdr))
-}
-
-func validateRenderedVideoWithCrop(info probeInfo, source *probeStream, quality string, preview, hdr bool, crop *Crop) error {
-	return mediaInfoError(mediainfo.ValidateRenderedVideoWithCrop(mediainfo.Info(info), source, quality, preview, hdr, crop))
 }
