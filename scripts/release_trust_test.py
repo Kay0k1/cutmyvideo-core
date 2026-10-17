@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
-import release_test as fixture
+import release_test_fixtures as fixture
 
 SPEC = importlib.util.spec_from_file_location('release_trust', Path(__file__).with_name('release-trust.py'))
 t = importlib.util.module_from_spec(SPEC)
@@ -23,9 +23,8 @@ NATIVE_RECEIPT_COUNTS = {('linux', 'amd64'): 53, ('linux', 'arm64'): 53,
 
 class TrustControls(unittest.TestCase):
     def setUp(self):
-        self.fixture = fixture.ReleaseControls()
-        self.fixture.setUp()
-        self.addCleanup(self.fixture.doCleanups)
+        self.fixture = fixture.ReleaseFixture()
+        self.fixture.initialize(self.addCleanup)
         self.repo, self.root = self.fixture.repo, self.fixture.root
         for name in ('go.sum', 'LICENSE', 'THIRD_PARTY_NOTICES.md'):
             (self.repo / name).write_bytes((ROOT / name).read_bytes())

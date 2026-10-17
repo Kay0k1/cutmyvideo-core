@@ -74,6 +74,14 @@ workflow validation and govulncheck, and verifies third-party notices. It also
 requires actual HTTP/OpenAPI fixtures and their Python tooling. CI does the same
 on Linux and makes no requests to public videos.
 
+For focused work, `make check-static` runs formatting, vet, documentation and API
+checks without media or database acceptance. `make check-controls` runs the
+native-result, SDK-runner, performance-protocol and release-tooling controls.
+These groups are also used by `check` and `check-full`; their existing checks
+and ordering are preserved. Controls use synthetic inputs and may launch small
+test processes; passing them does not establish real media, package installation,
+historical restoration or release-signature acceptance.
+
 ### Command map
 
 Run these commands from the repository root. `GO` and `PYTHON` can select the
@@ -84,12 +92,14 @@ executables used by Make; the pinned CI/release Go toolchain is listed above.
 | Build or run available Go tests | `make build`, `make test` | Builds `bin/cutmy` or runs `go test ./...`; integration tests can skip without their tools/database. |
 | Format and inspect Go | `make fmt`, `make fmt-check`, `make vet` | `fmt` rewrites Go files; `fmt-check` and `vet` inspect them. |
 | Check documentation or schemas | `make docs-check`, `make api-check` | Python 3 for local Markdown links; API checks also need the pinned OpenAPI tooling above. |
+| Inspect source without media/database acceptance | `make check-static` | Formatting, Go vet, documentation and API/schema checks; needs Go and pinned Python contract tooling. |
 | Check a working tree | `make check` | Formatting, vet, docs, API/schema compatibility, runner controls, available Go tests and build. |
 | Require source acceptance | `make check-full` | Adds required media/extractor/database prerequisites, uncached race tests, hosting controls, notices, workflow validation and vulnerability checks. |
 | Exercise HTTP/OpenAPI fixtures | `make contract-check` | Runs `api-check` and `TestHTTPPublicContract`; needs the Python contract tooling and disposable `TEST_DATABASE_URL`. |
 | Test SDK source | [SDK unit-test commands](#sdk-checks) | Python 3.10+ or Node 20.19+/npm; no API, database or media rendering. |
 | Test installed SDKs | `make sdk-check SDK_REPORT_DIR=/tmp/new-cutmy-sdk-http-check` | Builds and installs both SDKs, then exercises real local media and API/worker flows; needs pinned build tooling, media tools and disposable `TEST_DATABASE_URL`. Use a new directory outside the checkout. |
-| Check runners and evidence rules | `make native-results-check sdk-controls-check performance-protocol-check release-check hosting-controls-check` | Regression controls for the verification tooling; this does not run the corresponding complete native, benchmark, release or hosting acceptance. |
+| Check runners and evidence rules | `make check-controls`, `make hosting-controls-check` | The first groups native-result, SDK-runner, performance and release controls; hosting controls remain separate. These do not run the corresponding complete acceptance harnesses. |
+| Check the recovery harness | `make recovery-controls-check` | Synthetic recovery-runner controls only; `recovery-check` runs these before the actual historical upgrade and restoration. |
 | Check notices, workflows or dependencies | `make notices-check`, `make workflows-check`, `make vuln` | Notices use the tracked modules; workflow/vulnerability tools use the pinned versions in Makefile and need network access when fetching tools or vulnerability data. |
 | Verify historical upgrade and restoration | `make recovery-check` | Separate Linux harness; needs full historical Git objects, media tools, PostgreSQL clients and disposable `RECOVERY_DATABASE_URL` with database-creation permission. See [recovery](docs/backup-recovery.md). |
 | Measure retained-row storage capacity | `make storage-capacity-check STORAGE_REPORT_DIR=/tmp/new-cutmy-storage-check` | Opt-in Linux workload with disposable `TEST_DATABASE_URL`; sizes and evidence requirements are in [storage capacity](docs/storage-capacity.md). |

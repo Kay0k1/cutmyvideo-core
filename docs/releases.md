@@ -118,6 +118,18 @@ checked separately through the tag-only attestations described below.
 
 ## Automation
 
+| Trigger | Required verification | Release effect |
+| --- | --- | --- |
+| Pull request | Immutable candidate source, both five-platform source/SDK matrices, packaged CLI consumers, archive recovery, package sealing, trust sidecars and disposable public hosting | Unsigned, nonpublishable candidate evidence. |
+| Push to `main` | Core source/native/SDK checks and disposable public-hosting acceptance on the merged commit | Verification only. |
+| Push of a new `v*` tag | The complete archive workflow, followed by tag/source rechecks, signing and signature verification | Creates a signed draft from the verified bytes. |
+| Manual archive workflow for an existing tag | The complete archive workflow through unsigned trust preparation | Verifies the tag; signing and draft publication are skipped. |
+| Manual signed-consumer workflow at the reviewed tag | Downloads the exact draft release ID; independently supplied commit/source/manifest identities; signature verification and native version smoke on five targets; offline SDK install/subtitle smoke for 1.4.0+ | Retains consumer evidence without publishing or changing assets. |
+
+Publishing the verified draft remains an operator action after signed-consumer
+acceptance. None of these workflows deploys the production website. Historical
+upgrade and public-hosting acceptance use disposable environments.
+
 Pull requests run the complete source CI once, as the reusable `checks` job in
 the archive workflow. The separate Core checks workflow retains main pushes and
 manual runs; it has no direct PR trigger. Both five-platform source/SDK matrices,
@@ -150,6 +162,19 @@ the tag, verifies the retained signatures and uploads the same bytes as a
 Evidence artifacts are scoped to the run and attempt. Retry the entire workflow
 when a new attempt is needed; partial reruns cannot reuse an earlier attempt
 under a new identity.
+
+Within a native source job, the complete engine package produces the required
+crop and display-geometry results. The later media-contract invocation exercises
+the server implementation without repeating those engine tests. The required
+results still identify their package and report; a similarly named test elsewhere
+cannot satisfy the moved engine requirements.
+
+Source-native media, the pinned Bookworm runtime, installed SDK distributions,
+archived executables and downloaded signed assets are separate acceptance
+boundaries. Their similar scenarios validate different runtimes or bytes.
+Signature/source checks after transport and signing remain mandatory. Selected
+HTTP contract and recovery tests also produce dedicated JSON reports after the
+full source suite; the suite's plain success output does not replace those reports.
 
 Manual dispatch verifies an existing tag containing this archive protocol without
 publication; older tags are refused rather than rebuilt with newer scripts. Neither path
