@@ -4,6 +4,23 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
+## 1.5.0 - 2026-10-18
+
+### Added
+- Bounded read-only silence analysis and editable version 1 cut plans, with strongest-channel RMS detection, explicit margins, selected audio tracks and actual coverage reporting.
+- Integrated LUFS, true peak and loudness-range reports; measured two-pass dynamic normalization of the final selected or joined audio timeline.
+- Explicit MP4 output canvases with contain fit and solid padding, preserving display rotation, pixel aspect ratio, crop and existing color handling.
+- Bounded CSV cut-list and FFmetadata chapter interchange, explicit marker expansion, escaped titles and conversion from actual output segment timestamps.
+- Scene-change scores and black intervals with explicit analysis windows, frame/event budgets and cancellation.
+- Local or owner-uploaded external audio replacement with track selection, source-clock offsets, silence padding and joined/reordered range support.
+- Go, CLI, HTTP and Python/TypeScript SDK entry points for the six operations; collection inheritance and explicit clearing of new rendering options.
+
+### Changed
+- Schema 9 protects both primary and external audio sources through atomic admission, durable references, reader leases, retention audits and cleanup. Completed primary jobs/artifacts survive explicit deletion of their external recording; active jobs still prevent deletion.
+- Include output canvas geometry and multi-input decoding in conservative media admission. Project grants remain scoped to their primary source; adding external audio requires the owner session.
+- Integrate reviewed dependency and pinned Actions updates, retaining archive packaging, fatal digest checks and reviewed module license identities.
+- Require real new-feature observations alongside existing native, production-family media, archived CLI, installed SDK, HTTP compatibility and upgrade/recovery gates.
+
 ## 1.4.2 - 2026-10-18
 
 ### Fixed
