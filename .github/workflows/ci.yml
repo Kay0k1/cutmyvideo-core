@@ -162,6 +162,30 @@ jobs:
         with:
           go-version: '1.27.2'
           cache: true
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.10'
+      - name: Pinned native extractor for offline metadata fixtures
+        shell: python
+        run: |
+          import hashlib, os, pathlib, subprocess, urllib.request
+          filename = 'yt-dlp.exe' if os.name == 'nt' else 'yt-dlp'
+          expected = ('66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a'
+                      if os.name == 'nt' else
+                      '1fa6733c37ea6fb51c99ad8fe785e7b7e5f3246c9b980230329d4fb72ed8d4d6')
+          path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'cutmy-native-extractor' / filename
+          path.parent.mkdir(exist_ok=True)
+          url = 'https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/' + filename
+          with urllib.request.urlopen(url, timeout=60) as response:
+              data = response.read()
+          if hashlib.sha256(data).hexdigest() != expected:
+              raise SystemExit('Native extractor checksum mismatch')
+          path.write_bytes(data)
+          path.chmod(0o755)
+          if subprocess.check_output([str(path), '--version'], text=True, timeout=15).strip() != '2026.08.19':
+              raise SystemExit('Native extractor version mismatch')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as stream:
+              stream.write(f'CUTMY_TEST_YTDLP={path}\n')
       - name: Linux media dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg python3
