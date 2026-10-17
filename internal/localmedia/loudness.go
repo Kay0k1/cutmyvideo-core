@@ -68,7 +68,10 @@ func AnalyzeLoudness(ctx context.Context, c Config, path string, options Loudnes
 	}
 	args := []string{"-hide_banner", "-v", "info", "-nostdin", "-nostats", "-xerror", "-max_alloc", "268435456", "-filter_threads", "1", "-progress", "pipe:1", "-protocol_whitelist", "file", "-format_whitelist", mediaFormats}
 	args = append(args, mediaInputBounds(c)...)
-	args = append(args, "-ss", seconds(options.StartMS), "-i", session.Path, "-t", seconds(end-options.StartMS), "-map", "0:"+strconv.Itoa(selected.Index), "-vn", "-sn", "-af", "atrim=duration="+seconds(end-options.StartMS)+",asetpts=PTS-STARTPTS,loudnorm=I=-16:TP=-1:LRA=11:print_format=json", "-f", "null", "-")
+	// Clip before loudnorm's lookahead, while retaining the input-relative
+	// timestamps: a selected track may begin well after container timestamp 0.
+	// Resetting PTS would incorrectly report its decoded end as its length.
+	args = append(args, "-ss", seconds(options.StartMS), "-i", session.Path, "-t", seconds(end-options.StartMS), "-map", "0:"+strconv.Itoa(selected.Index), "-vn", "-sn", "-af", "atrim=start=0:end="+seconds(end-options.StartMS)+",loudnorm=I=-16:TP=-1:LRA=11:print_format=json", "-f", "null", "-")
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	diagnostics := &processResponseBuffer{limit: 64 << 10, cancel: cancel}

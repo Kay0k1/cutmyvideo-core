@@ -230,6 +230,10 @@ func TestRenderExternalTrackClockAndInputFences(t *testing.T) {
 	if pcmRMS(pcm, .1, .8) > 10 || pcmRMS(pcm, 1.1, 1.8) < 1500 {
 		t.Fatal("selected external stream/container start clock was ignored")
 	}
+	coverage, err := e.AnalyzeLoudness(context.Background(), external, LoudnessOptions{AudioTrack: &track})
+	if err != nil || coverage.AnalyzedEndMS < 5900 || coverage.AnalyzedEndMS > 6100 {
+		t.Fatalf("delayed stream loudness coverage lost its source clock: %+v %v", coverage, err)
+	}
 	for _, replacePrimary := range []bool{false, true} {
 		source, replacement := renderFixture(t)
 		e := New(Config{FFmpegThreads: 1})
