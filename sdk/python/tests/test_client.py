@@ -8,6 +8,7 @@ import time
 import tracemalloc
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from unittest.mock import Mock, patch
 
 from cutmyvideo import APIError, CutmyClient, JobError, WaitCancelled, WaitTimeout, ready_artifacts
 
@@ -137,6 +138,72 @@ class Fixture:
         self.server.shutdown()
         self.server.server_close()
         self.thread.join()
+
+
+class DeadlineBoundaryTests(unittest.TestCase):
+    def test_request_deadline_expiring_before_timer_is_normalized_and_connection_closed(self):
+        for operation in ("get_job", "create_job", "wait_for_job"):
+            with self.subTest(operation=operation):
+                now = [0.0]
+                connection = Mock()
+                connection._wire_socket = None
+                client = CutmyClient("http://127.0.0.1:1", session_cookie=TOKEN)
+
+                def connection_ready(*_):
+                    # Connection construction succeeded, then the caller's
+                    # deadline elapsed before the abort timer could start.
+                    now[0] = 1.0
+                    return connection
+
+                with patch("cutmyvideo.client.time.perf_counter", side_effect=lambda: now[0]), \
+                        patch("cutmyvideo.client._HTTPConnection", side_effect=connection_ready), \
+                        patch("cutmyvideo.client.threading.Timer") as timer:
+                    if operation == "wait_for_job":
+                        with self.assertRaises(WaitTimeout) as failed:
+                            client.wait_for_job("job", timeout=1)
+                        self.assertEqual(failed.exception.job_id, "job")
+                        self.assertIsNone(failed.exception.job)
+                    else:
+                        with self.assertRaises(APIError) as failed:
+                            if operation == "create_job":
+                                client.create_job(REQUEST, idempotency_key="deadline-boundary", timeout=1)
+                            else:
+                                client.get_job("job", timeout=1)
+                        self.assertEqual(failed.exception.code, "request_timeout")
+                        if operation == "create_job":
+                            self.assertEqual(failed.exception.idempotency_key, "deadline-boundary")
+                timer.assert_not_called()
+                connection.request.assert_not_called()
+                connection.close.assert_called_once_with()
+
+    def test_wait_deadline_expiring_before_poll_preserves_last_job(self):
+        now = [0.0]
+        expire_after_read = [False]
+        pending = job("future_pending_status")
+        client = CutmyClient("http://127.0.0.1:1", session_cookie=TOKEN)
+
+        def clock():
+            value = now[0]
+            if expire_after_read[0]:
+                expire_after_read[0] = False
+                now[0] = 10.0
+            return value
+
+        def finish_poll_interval(_duration):
+            # The next loop observes a live deadline, but it expires before
+            # the request budget can be calculated. No real time passes.
+            now[0] = 9.5
+            expire_after_read[0] = True
+
+        with patch("cutmyvideo.client.time.perf_counter", side_effect=clock), \
+                patch("cutmyvideo.client.time.sleep", side_effect=finish_poll_interval) as pause, \
+                patch.object(client, "get_job", return_value=pending) as get_job:
+            with self.assertRaises(WaitTimeout) as failed:
+                client.wait_for_job("job", timeout=10)
+        self.assertEqual(failed.exception.job_id, "job")
+        self.assertIs(failed.exception.job, pending)
+        get_job.assert_called_once_with("job", timeout=10)
+        pause.assert_called_once_with(1)
 
 
 class ClientTests(unittest.TestCase):

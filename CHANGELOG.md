@@ -5,6 +5,7 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 ## Unreleased
 
 ### Fixed
+- Preserve Python SDK request and job-wait timeout diagnostics when a deadline expires before the request timer or next poll can start, closing the unused connection and retaining the last job report.
 - Publish the process-cancellation test fixture's readiness marker atomically, preventing an empty intermediate file from causing a false CI failure while retaining descendant-liveness assertions.
 - Admit scoped collection jobs and their project bindings in one transaction. A full project history returns `project_limit` without leaving hidden queued work; existing jobs and partial submissions remain recoverable.
 - Bound project and source-preparation transaction rollback independently of the request deadline, including stalled database responses.

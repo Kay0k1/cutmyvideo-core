@@ -377,18 +377,19 @@ class CutmyClient:
                 except OSError:
                     pass
 
-        timer = threading.Timer(_remaining(deadline), abort)
-        timer.daemon = True
-        timer.start()
-        if cancel_event is not None:
-            def cancel_transfer() -> None:
-                while not finished.wait(0.05):
-                    if cancel_event.is_set():
-                        abort()
-                        return
-            threading.Thread(target=cancel_transfer, daemon=True).start()
+        timer: threading.Timer | None = None
         response = None
         try:
+            timer = threading.Timer(_remaining(deadline), abort)
+            timer.daemon = True
+            timer.start()
+            if cancel_event is not None:
+                def cancel_transfer() -> None:
+                    while not finished.wait(0.05):
+                        if cancel_event.is_set():
+                            abort()
+                            return
+                threading.Thread(target=cancel_transfer, daemon=True).start()
             outgoing = {"Accept": "application/json", "User-Agent": "cutmyvideo-python/1.4.1"}
             if self._cookie:
                 outgoing["Cookie"] = "cutmy_session=" + self._cookie
@@ -479,7 +480,8 @@ class CutmyClient:
                            code="request_timeout" if timed_out else "transport_error") from None
         finally:
             finished.set()
-            timer.cancel()
+            if timer is not None:
+                timer.cancel()
             if response is not None:
                 response.close()
             connection.close()
@@ -786,7 +788,7 @@ class CutmyClient:
                 raise WaitTimeout(job_id, last)
             try:
                 last = self.get_job(job_id, timeout=min(self.request_timeout, _remaining(deadline)))
-            except APIError as exc:
+            except (APIError, TimeoutError) as exc:
                 if time.perf_counter() >= deadline:
                     raise WaitTimeout(job_id, last) from None
                 raise
