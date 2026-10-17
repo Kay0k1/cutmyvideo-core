@@ -90,8 +90,8 @@ def walk(document, value):
             walk(document, child)
 
 def load(path):
-    document = yaml.safe_load(Path(path).read_text())
-    official = json.loads((ROOT / "api/schema/openapi-3.1.json").read_text())
+    document = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    official = json.loads((ROOT / "api/schema/openapi-3.1.json").read_text(encoding="utf-8"))
     Draft202012Validator(official).validate(document)
     walk(document, document)
     for schema in document.get("components", {}).get("schemas", {}).values():
@@ -324,7 +324,7 @@ def check_compatibility(document, additional_baseline=None):
     current = snapshot(document)
     baselines = frozen_baselines()
     if additional_baseline:
-        baselines.append((str(additional_baseline), json.loads(additional_baseline.read_text())))
+        baselines.append((str(additional_baseline), json.loads(additional_baseline.read_text(encoding="utf-8"))))
     return [name + ": " + failure for name, baseline in baselines
             for failure in compatibility(baseline, current)]
 
@@ -340,12 +340,12 @@ def main():
         protected = {(ROOT / "api" / name).resolve() for name in FROZEN_BASELINES}
         if args.write_baseline.resolve() in protected:
             raise ValueError("cannot overwrite an immutable compatibility baseline; export to a separate review file")
-        args.write_baseline.write_text(json.dumps(snapshot(document), indent=2) + "\n")
+        args.write_baseline.write_text(json.dumps(snapshot(document), indent=2) + "\n", encoding="utf-8")
         return
     failures = check_compatibility(document, args.baseline)
     if failures:
         raise ValueError("incompatible public contract changes:\n" + "\n".join(failures))
-    samples = json.loads(args.samples.read_text()) if args.samples else []
+    samples = json.loads(args.samples.read_text(encoding="utf-8")) if args.samples else []
     for sample in samples:
         try:
             sample_check(document, sample)

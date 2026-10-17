@@ -3,6 +3,7 @@ import copy
 from contextlib import contextmanager
 import importlib.util
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -91,7 +92,7 @@ class ContractChecks(unittest.TestCase):
                 with self.subTest(mutation=mutate.__name__):
                     changed = copy.deepcopy(self.document)
                     mutate(changed)
-                    spec.write_text(contract.yaml.safe_dump(changed, sort_keys=False))
+                    spec.write_text(contract.yaml.safe_dump(changed, sort_keys=False), encoding="utf-8")
                     result = self.cli(root)
                     self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
                     self.assertIn("compatibility-v1.4.1.json:", result.stderr)
@@ -101,11 +102,11 @@ class ContractChecks(unittest.TestCase):
         with self.checkout() as root:
             changed = copy.deepcopy(self.document)
             del changed["paths"]["/api/v1/collections"]["post"]
-            (root / "api/openapi.yaml").write_text(contract.yaml.safe_dump(changed, sort_keys=False))
+            (root / "api/openapi.yaml").write_text(contract.yaml.safe_dump(changed, sort_keys=False), encoding="utf-8")
             exported = root / "review.json"
             result = self.cli(root, "--write-baseline", exported)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(json.loads(exported.read_text()), contract.snapshot(changed))
+            self.assertEqual(json.loads(exported.read_text(encoding="utf-8")), contract.snapshot(changed))
             result = self.cli(root, "--baseline", exported)
             self.assertEqual(result.returncode, 1)
             self.assertIn("compatibility-v1.4.1.json: POST /api/v1/collections: operation removed", result.stderr)
@@ -115,11 +116,11 @@ class ContractChecks(unittest.TestCase):
             with self.subTest(baseline=name), self.checkout() as root:
                 target = root / "api" / name
                 if name == "compatibility-v1.4.1.json":
-                    regenerated = json.loads(target.read_text())
+                    regenerated = json.loads(target.read_text(encoding="utf-8"))
                     regenerated["document"] = self.document
                 else:
                     regenerated = contract.snapshot(self.document)
-                target.write_text(json.dumps(regenerated))
+                target.write_text(json.dumps(regenerated), encoding="utf-8")
                 result = self.cli(root)
                 self.assertEqual(result.returncode, 1)
                 self.assertIn(name + ": immutable baseline changed", result.stderr)
@@ -166,7 +167,7 @@ class ContractChecks(unittest.TestCase):
         self.assertIn("title", source["properties"])
 
     def test_collection_contract_examples_match_openapi_structure(self):
-        corpus = json.loads((contract.ROOT / "api/testdata/project-contracts.json").read_text())
+        corpus = json.loads((contract.ROOT / "api/testdata/project-contracts.json").read_text(encoding="utf-8"))
         self.assertEqual(corpus["schema_version"], 1)
         cases = corpus["collection_cases"]
         self.assertTrue(cases)
@@ -185,6 +186,15 @@ class ContractChecks(unittest.TestCase):
                 else:
                     with self.assertRaises(ValidationError):
                         contract.validate(self.document, schema, case["request"])
+
+    def test_utf8_contract_examples_do_not_depend_on_system_locale(self):
+        env = dict(os.environ, LC_ALL="C", PYTHONUTF8="0", PYTHONCOERCECLOCALE="0")
+        checked = subprocess.run(
+            [sys.executable, "-B", "-m", "unittest",
+             "contract_test.ContractChecks.test_collection_contract_examples_match_openapi_structure"],
+            cwd=contract.ROOT / "scripts", env=env, capture_output=True,
+            text=True, encoding="utf-8", errors="replace", timeout=30)
+        self.assertEqual(checked.returncode, 0, checked.stdout + checked.stderr)
 
     def test_removed_response_header(self):
         self.incompatible(lambda s: s["GET /api/v1/sources/{id}/preview"]["response_headers"]["200"].pop("x-preview-start-ms"))
