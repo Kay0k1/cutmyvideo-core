@@ -69,11 +69,6 @@ func probeStreams(ctx context.Context, c Config, path string, remote bool) (prob
 	return probeInfo(p), localMediaError(e)
 }
 
-func probeStreamsUncached(ctx context.Context, c Config, path string, remote bool) (probeInfo, error) {
-	p, e := localmedia.ProbeStreamsUncached(ctx, c, path, remote)
-	return probeInfo(p), localMediaError(e)
-}
-
 type platformInfo struct {
 	cachedUntil time.Time
 	ID          string           `json:"id"`
@@ -279,10 +274,6 @@ func exportMedia(ctx context.Context, c Config, paths []string, remote bool, r R
 func exportInputs(ctx context.Context, c Config, inputs []mediaInput, r Range, request ExportRequest, out string) (int64, int64, error) {
 	start, end, e := localmedia.ExportInputs(ctx, c, inputs, r, request, out)
 	return start, end, localMediaError(e)
-}
-
-func exportInputsCoreProgress(ctx context.Context, c Config, inputs []mediaInput, r Range, request ExportRequest, out string, report func(int64)) (int64, int64, error) {
-	return exportInputsCoreProgressMode(ctx, c, inputs, r, request, out, report, true)
 }
 
 // Intermediate MP4s are read locally by a later mux. Only the final result

@@ -15,11 +15,6 @@ type localExportSessionKey struct{}
 // adapters. The bounded media state and lifecycle belong to mediasession.
 type LocalExportSession struct{ *mediasession.Session }
 
-const sessionKeyframeWindows = mediasession.KeyframeWindows
-const sessionKeyframeEntries = mediasession.KeyframeEntries
-
-type keyframeWindow = mediasession.KeyframeWindow
-
 func BeginLocalExport(ctx context.Context, path string) (context.Context, *LocalExportSession) {
 	absolute, err := filepath.Abs(path)
 	if err != nil {

@@ -23,8 +23,6 @@ type mediaInput = mediaexport.Input
 type copyKeyframe = mediaexport.Keyframe
 
 const mediaFormats = mediaexport.InputFormats
-const maxMediaPixels = mediainfo.MaxPixels
-const maxMediaStreams = mediainfo.MaxStreams
 
 var errProcessResponseTooLarge = mediaerror.ErrProcessResponseTooLarge
 

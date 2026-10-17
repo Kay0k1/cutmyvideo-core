@@ -40,7 +40,7 @@ class NativeResultsChecks(unittest.TestCase):
                     package = native_results.MEDIAINFO_PACKAGE
                 elif name in native_results.SUBTITLE_MODULE_REQUIRED | native_results.SOURCE_SUBTITLE_MODULE_REQUIRED:
                     package = native_results.SUBTITLE_PACKAGE
-                elif name in native_results.TOOLRUN_MODULE_REQUIRED:
+                elif name in native_results.TOOLRUN_MODULE_REQUIRED | native_results.TOOLRUN_LIFECYCLE_REQUIRED:
                     package = native_results.TOOLRUN_PACKAGE
                 elif name.startswith("TestCLI") or name == "TestParseCrop":
                     package = native_results.CLI_PACKAGE
@@ -56,6 +56,56 @@ class NativeResultsChecks(unittest.TestCase):
     def run_gate(self, reports=None):
         return subprocess.run([sys.executable, str(SCRIPT), *map(str, self.reports if reports is None else reports)],
                               capture_output=True, text=True, timeout=10)
+
+    def assert_required_results_reject_mutations(self, cases, wrong_package, other_report):
+        originals = [path.read_text(encoding="utf-8") for path in self.reports]
+        baseline = [[json.loads(line) for line in text.splitlines()] for text in originals]
+        self.assertEqual(self.run_gate().returncode, 0)
+        for index, package, names in cases:
+            path = self.reports[index]
+            for name in names:
+                for action in ("missing", "skip", "fail", "failed-subtest", "wrong-package", "wrong-report", "incomplete-package"):
+                    with self.subTest(name=name, action=action):
+                        if action == "incomplete-package":
+                            events = [event for event in baseline[index]
+                                      if event.get("Test") or event["Package"] != package]
+                        else:
+                            events = [event for event in baseline[index]
+                                      if action == "failed-subtest" or event.get("Test") != name]
+                        if action in ("skip", "fail", "failed-subtest", "wrong-package"):
+                            wrong = wrong_package(index, package)
+                            events.append({"Action": "pass" if action == "wrong-package" else "fail" if action == "failed-subtest" else action,
+                                           "Test": name + "/fault" if action == "failed-subtest" else name,
+                                           "Package": wrong if action == "wrong-package" else package})
+                        path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+                        if action == "wrong-report":
+                            other = other_report(index)
+                            moved = baseline[other] + [{"Action": "pass", "Test": name, "Package": package}]
+                            self.reports[other].write_text("".join(json.dumps(event) + "\n" for event in moved), encoding="utf-8")
+                        result = self.run_gate()
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn("incomplete_packages" if action == "incomplete-package" else "failed/skipped=1" if action == "failed-subtest" else name, result.stderr)
+                        for report, original in zip(self.reports, originals):
+                            report.write_text(original, encoding="utf-8")
+
+    def test_process_return_cleanup_is_required_and_rejects_incomplete_native_proof(self):
+        required = {"TestRunOutputCleansDescendantsAfterParentExit"}
+        self.assertEqual(native_results.TOOLRUN_LIFECYCLE_REQUIRED, required)
+        self.assertLessEqual(required, native_results.REQUIRED[1])
+        self.assertIn(native_results.TOOLRUN_PACKAGE, native_results.REQUIRED_PACKAGES[1])
+        for name in required:
+            self.assertEqual(native_results.REQUIRED_TEST_PACKAGES[1][name], native_results.TOOLRUN_PACKAGE)
+        workflow = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]", workflow)
+        process = next(line for line in workflow.splitlines() if "tee native-process-tests.jsonl" in line)
+        self.assertIn("./internal/app ./internal/toolrun", process)
+        selector = re.search(r"-run '([^']+)'", process).group(1)
+        for name in required:
+            self.assertIsNotNone(re.fullmatch(selector, name))
+        self.assert_required_results_reject_mutations(
+            ((1, native_results.TOOLRUN_PACKAGE, required),),
+            lambda index, package: native_results.APP_PACKAGE,
+            lambda index: 0)
 
     def test_engine_separation_checks_are_required_on_every_native_target(self):
         coremodel = {"TestCoreModelPreservesLegacyValidationAndShapes",
@@ -102,35 +152,10 @@ class NativeResultsChecks(unittest.TestCase):
                  (0, native_results.LOCALMEDIA_PACKAGE, native_results.LOCALMEDIA_MODULE_REQUIRED),
                  (0, native_results.ENGINE_PACKAGE, native_results.ENGINE_DEPENDENCY_REQUIRED),
                  (4, native_results.APP_PACKAGE, native_results.COREMODEL_MEDIAERROR_ADAPTER_REQUIRED))
-        originals = [path.read_text(encoding="utf-8") for path in self.reports]
-        baseline = [[json.loads(line) for line in text.splitlines()] for text in originals]
-        self.assertEqual(self.run_gate().returncode, 0)
-        for index, package, names in cases:
-            path = self.reports[index]
-            for name in names:
-                for action in ("missing", "skip", "fail", "failed-subtest", "wrong-package", "wrong-report", "incomplete-package"):
-                    with self.subTest(name=name, action=action):
-                        if action == "incomplete-package":
-                            events = [event for event in baseline[index]
-                                      if event.get("Test") or event["Package"] != package]
-                        else:
-                            events = [event for event in baseline[index]
-                                      if action == "failed-subtest" or event.get("Test") != name]
-                        if action in ("skip", "fail", "failed-subtest", "wrong-package"):
-                            wrong = native_results.APP_PACKAGE if index == 0 else native_results.ENGINE_PACKAGE
-                            events.append({"Action": "pass" if action == "wrong-package" else "fail" if action == "failed-subtest" else action,
-                                           "Test": name + "/fault" if action == "failed-subtest" else name,
-                                           "Package": wrong if action == "wrong-package" else package})
-                        path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
-                        if action == "wrong-report":
-                            other = 4 if index == 0 else 0
-                            moved = baseline[other] + [{"Action": "pass", "Test": name, "Package": package}]
-                            self.reports[other].write_text("".join(json.dumps(event) + "\n" for event in moved), encoding="utf-8")
-                        result = self.run_gate()
-                        self.assertNotEqual(result.returncode, 0)
-                        self.assertIn("incomplete_packages" if action == "incomplete-package" else "failed/skipped=1" if action == "failed-subtest" else name, result.stderr)
-                        for report, original in zip(self.reports, originals):
-                            report.write_text(original, encoding="utf-8")
+        self.assert_required_results_reject_mutations(
+            cases,
+            lambda index, package: native_results.APP_PACKAGE if index == 0 else native_results.ENGINE_PACKAGE,
+            lambda index: 4 if index == 0 else 0)
 
     def test_engine_separation_modules_cannot_satisfy_existing_engine_and_app_checks(self):
         for package in (native_results.COREMODEL_PACKAGE, native_results.MEDIAERROR_PACKAGE,
@@ -205,35 +230,10 @@ class NativeResultsChecks(unittest.TestCase):
                  (0, native_results.MEDIASESSION_PACKAGE, native_results.MEDIASESSION_MODULE_REQUIRED),
                  (0, native_results.SUBTITLE_PACKAGE, native_results.SOURCE_SUBTITLE_MODULE_REQUIRED),
                  (4, native_results.APP_PACKAGE, native_results.MEDIAPREFLIGHT_ADAPTER_REQUIRED | native_results.MEDIASESSION_ADAPTER_REQUIRED))
-        originals = [path.read_text(encoding="utf-8") for path in self.reports]
-        baseline = [[json.loads(line) for line in text.splitlines()] for text in originals]
-        self.assertEqual(self.run_gate().returncode, 0)
-        for index, package, names in cases:
-            path = self.reports[index]
-            for name in names:
-                for action in ("missing", "skip", "fail", "failed-subtest", "wrong-package", "wrong-report", "incomplete-package"):
-                    with self.subTest(name=name, action=action):
-                        if action == "incomplete-package":
-                            events = [event for event in baseline[index]
-                                      if event.get("Test") or event["Package"] != package]
-                        else:
-                            events = [event for event in baseline[index]
-                                      if action == "failed-subtest" or event.get("Test") != name]
-                        if action in ("skip", "fail", "failed-subtest", "wrong-package"):
-                            wrong = native_results.ENGINE_PACKAGE if index == 0 else native_results.MEDIAEXPORT_PACKAGE
-                            events.append({"Action": "pass" if action == "wrong-package" else "fail" if action == "failed-subtest" else action,
-                                           "Test": name + "/fault" if action == "failed-subtest" else name,
-                                           "Package": wrong if action == "wrong-package" else package})
-                        path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
-                        if action == "wrong-report":
-                            other = 4 if index == 0 else 0
-                            moved = baseline[other] + [{"Action": "pass", "Test": name, "Package": package}]
-                            self.reports[other].write_text("".join(json.dumps(event) + "\n" for event in moved), encoding="utf-8")
-                        result = self.run_gate()
-                        self.assertNotEqual(result.returncode, 0)
-                        self.assertIn("incomplete_packages" if action == "incomplete-package" else "failed/skipped=1" if action == "failed-subtest" else name, result.stderr)
-                        for report, original in zip(self.reports, originals):
-                            report.write_text(original, encoding="utf-8")
+        self.assert_required_results_reject_mutations(
+            cases,
+            lambda index, package: native_results.ENGINE_PACKAGE if index == 0 else native_results.MEDIAEXPORT_PACKAGE,
+            lambda index: 4 if index == 0 else 0)
 
     def test_joined_preflight_and_session_modules_cannot_satisfy_existing_engine_and_app_checks(self):
         for package in (native_results.MEDIAEXPORT_PACKAGE, native_results.MEDIAPREFLIGHT_PACKAGE,
@@ -283,35 +283,10 @@ class NativeResultsChecks(unittest.TestCase):
     def test_mediaexport_results_reject_missing_skipped_failed_and_substituted_proof(self):
         cases = ((0, native_results.MEDIAEXPORT_PACKAGE, native_results.MEDIAEXPORT_MODULE_REQUIRED),
                  (4, native_results.APP_PACKAGE, native_results.MEDIAEXPORT_ADAPTER_REQUIRED))
-        originals = [path.read_text(encoding="utf-8") for path in self.reports]
-        baseline = [[json.loads(line) for line in text.splitlines()] for text in originals]
-        self.assertEqual(self.run_gate().returncode, 0)
-        for index, package, names in cases:
-            path = self.reports[index]
-            for name in names:
-                for action in ("missing", "skip", "fail", "failed-subtest", "wrong-package", "wrong-report", "incomplete-package"):
-                    with self.subTest(name=name, action=action):
-                        if action == "incomplete-package":
-                            events = [event for event in baseline[index]
-                                      if event.get("Test") or event["Package"] != package]
-                        else:
-                            events = [event for event in baseline[index]
-                                      if action == "failed-subtest" or event.get("Test") != name]
-                        if action in ("skip", "fail", "failed-subtest", "wrong-package"):
-                            wrong = native_results.ENGINE_PACKAGE if index == 0 else native_results.MEDIAEXPORT_PACKAGE
-                            events.append({"Action": "pass" if action == "wrong-package" else "fail" if action == "failed-subtest" else action,
-                                           "Test": name + "/fault" if action == "failed-subtest" else name,
-                                           "Package": wrong if action == "wrong-package" else package})
-                        path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
-                        if action == "wrong-report":
-                            other = 4 if index == 0 else 0
-                            moved = baseline[other] + [{"Action": "pass", "Test": name, "Package": package}]
-                            self.reports[other].write_text("".join(json.dumps(event) + "\n" for event in moved), encoding="utf-8")
-                        result = self.run_gate()
-                        self.assertNotEqual(result.returncode, 0)
-                        self.assertIn("incomplete_packages" if action == "incomplete-package" else "failed/skipped=1" if action == "failed-subtest" else name, result.stderr)
-                        for report, original in zip(self.reports, originals):
-                            report.write_text(original, encoding="utf-8")
+        self.assert_required_results_reject_mutations(
+            cases,
+            lambda index, package: native_results.ENGINE_PACKAGE if index == 0 else native_results.MEDIAEXPORT_PACKAGE,
+            lambda index: 4 if index == 0 else 0)
 
     def test_mediaexport_cannot_satisfy_existing_engine_and_app_checks(self):
         for index, name in ((0, "TestEngineInspectAndExportActualMedia"),
@@ -357,35 +332,10 @@ class NativeResultsChecks(unittest.TestCase):
     def test_mediainfo_results_reject_missing_skipped_failed_and_substituted_proof(self):
         cases = ((0, native_results.MEDIAINFO_PACKAGE, native_results.MEDIAINFO_MODULE_REQUIRED),
                  (4, native_results.APP_PACKAGE, native_results.MEDIAINFO_ADAPTER_REQUIRED))
-        originals = [path.read_text(encoding="utf-8") for path in self.reports]
-        baseline = [[json.loads(line) for line in text.splitlines()] for text in originals]
-        self.assertEqual(self.run_gate().returncode, 0)
-        for index, package, names in cases:
-            path = self.reports[index]
-            for name in names:
-                for action in ("missing", "skip", "fail", "failed-subtest", "wrong-package", "wrong-report", "incomplete-package"):
-                    with self.subTest(name=name, action=action):
-                        if action == "incomplete-package":
-                            events = [event for event in baseline[index]
-                                      if event.get("Test") or event["Package"] != package]
-                        else:
-                            events = [event for event in baseline[index]
-                                      if action == "failed-subtest" or event.get("Test") != name]
-                        if action in ("skip", "fail", "failed-subtest", "wrong-package"):
-                            wrong = native_results.ENGINE_PACKAGE if index == 0 else native_results.MEDIAINFO_PACKAGE
-                            events.append({"Action": "pass" if action == "wrong-package" else "fail" if action == "failed-subtest" else action,
-                                           "Test": name + "/fault" if action == "failed-subtest" else name,
-                                           "Package": wrong if action == "wrong-package" else package})
-                        path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
-                        if action == "wrong-report":
-                            other = 4 if index == 0 else 0
-                            moved = baseline[other] + [{"Action": "pass", "Test": name, "Package": package}]
-                            self.reports[other].write_text("".join(json.dumps(event) + "\n" for event in moved), encoding="utf-8")
-                        result = self.run_gate()
-                        self.assertNotEqual(result.returncode, 0)
-                        self.assertIn("incomplete_packages" if action == "incomplete-package" else "failed/skipped=1" if action == "failed-subtest" else name, result.stderr)
-                        for report, original in zip(self.reports, originals):
-                            report.write_text(original, encoding="utf-8")
+        self.assert_required_results_reject_mutations(
+            cases,
+            lambda index, package: native_results.ENGINE_PACKAGE if index == 0 else native_results.MEDIAINFO_PACKAGE,
+            lambda index: 4 if index == 0 else 0)
 
     def test_mediainfo_cannot_satisfy_existing_engine_and_app_checks(self):
         for index, name in ((0, "TestEngineInspectAndExportActualMedia"),
@@ -434,35 +384,10 @@ class NativeResultsChecks(unittest.TestCase):
                  (1, native_results.TOOLRUN_PACKAGE, {"TestToolrunPackageUsesOnlyStandardLibrary",
                   "TestRunOutputPreservesRawFailureAndStreaming", "TestRunOutputPreservesCancellation",
                   "TestDiagnosticCopyCannotBypassMemoryBound"}))
-        originals = [path.read_text(encoding="utf-8") for path in self.reports]
-        baseline = [[json.loads(line) for line in text.splitlines()] for text in originals]
-        self.assertEqual(self.run_gate().returncode, 0)
-        for index, package, names in cases:
-            path = self.reports[index]
-            for name in names:
-                for action in ("missing", "skip", "fail", "failed-subtest", "wrong-package", "wrong-report", "incomplete-package"):
-                    with self.subTest(name=name, action=action):
-                        if action == "incomplete-package":
-                            events = [event for event in baseline[index]
-                                      if event.get("Test") or event["Package"] != package]
-                        else:
-                            events = [event for event in baseline[index]
-                                      if action == "failed-subtest" or event.get("Test") != name]
-                        if action in ("skip", "fail", "failed-subtest", "wrong-package"):
-                            wrong = native_results.ENGINE_PACKAGE if package == native_results.SUBTITLE_PACKAGE else native_results.SUBTITLE_PACKAGE if index == 0 else native_results.APP_PACKAGE
-                            events.append({"Action": "pass" if action == "wrong-package" else "fail" if action == "failed-subtest" else action,
-                                           "Test": name + "/fault" if action == "failed-subtest" else name,
-                                           "Package": wrong if action == "wrong-package" else package})
-                        path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
-                        if action == "wrong-report":
-                            other = 1 - index
-                            moved = baseline[other] + [{"Action": "pass", "Test": name, "Package": package}]
-                            self.reports[other].write_text("".join(json.dumps(event) + "\n" for event in moved), encoding="utf-8")
-                        result = self.run_gate()
-                        self.assertNotEqual(result.returncode, 0)
-                        self.assertIn("incomplete_packages" if action == "incomplete-package" else "failed/skipped=1" if action == "failed-subtest" else name, result.stderr)
-                        for report, original in zip(self.reports, originals):
-                            report.write_text(original, encoding="utf-8")
+        self.assert_required_results_reject_mutations(
+            cases,
+            lambda index, package: native_results.ENGINE_PACKAGE if package == native_results.SUBTITLE_PACKAGE else native_results.SUBTITLE_PACKAGE if index == 0 else native_results.APP_PACKAGE,
+            lambda index: 1 - index)
 
     def test_new_modules_cannot_satisfy_existing_engine_and_app_requirements(self):
         for index, name, package in ((0, "TestEngineInspectAndExportActualMedia", native_results.SUBTITLE_PACKAGE),
@@ -1133,7 +1058,7 @@ class NativeResultsChecks(unittest.TestCase):
                  "TestStorageScanSessionReadBatchPreservesNonISODateStyle",
                  "TestStorageScanSessionReadBatchLookupFailureRollsBackAndRecovers")
         self.assertEqual(len(native_results.REQUIRED[3]), 48 + len(native_results.UNIVERSAL_STORAGE_REQUIRED) + len(native_results.AGENT_PROJECT_STORAGE_REQUIRED))
-        self.assertEqual(sum(map(len, native_results.REQUIRED)), 124 + sum(map(len, (native_results.UNIVERSAL_ENGINE_REQUIRED, native_results.UNIVERSAL_SERVICE_REQUIRED, native_results.UNIVERSAL_STORAGE_REQUIRED, native_results.UNIVERSAL_MEDIA_REQUIRED, native_results.PREFLIGHT_ENGINE_REQUIRED, native_results.PREFLIGHT_CLI_REQUIRED, native_results.PREFLIGHT_SERVICE_REQUIRED, native_results.PREFLIGHT_MEDIA_REQUIRED, native_results.POOL_SERVICE_REQUIRED, native_results.DRAFT_CACHE_TRANSFER_REQUIRED, native_results.DRAFT_CACHE_DATABASE_REQUIRED, native_results.COLLECTION_ENGINE_REQUIRED, native_results.COLLECTION_CLI_REQUIRED, native_results.COLLECTION_SERVICE_REQUIRED, native_results.AGENT_PROJECT_SERVICE_REQUIRED, native_results.AGENT_PROJECT_STORAGE_REQUIRED, native_results.SUBTITLE_SERVICE_REQUIRED, native_results.SUBTITLE_CLI_REQUIRED, native_results.AUDIT_MEDIA_REQUIRED, native_results.AUDIT_SERVICE_REQUIRED, native_results.PROJECT_CONTRACT_SERVICE_REQUIRED, native_results.EDIT_MODEL_SERVICE_REQUIRED, native_results.EDIT_MODEL_ENGINE_REQUIRED, native_results.SUBTITLE_MODULE_REQUIRED, native_results.MEDIA_BOUNDARY_ENGINE_REQUIRED, native_results.TOOLRUN_MODULE_REQUIRED, native_results.MEDIAINFO_MODULE_REQUIRED, native_results.MEDIAINFO_ADAPTER_REQUIRED, native_results.MEDIAEXPORT_MODULE_REQUIRED, native_results.MEDIAEXPORT_ADAPTER_REQUIRED, native_results.JOINED_MEDIAEXPORT_REQUIRED, native_results.MEDIAPREFLIGHT_MODULE_REQUIRED, native_results.MEDIAPREFLIGHT_ADAPTER_REQUIRED, native_results.MEDIASESSION_MODULE_REQUIRED, native_results.SOURCE_SUBTITLE_MODULE_REQUIRED, native_results.MEDIASESSION_ADAPTER_REQUIRED, native_results.COREMODEL_MODULE_REQUIRED, native_results.MEDIAERROR_MODULE_REQUIRED, native_results.LOCALMEDIA_MODULE_REQUIRED, native_results.COREMODEL_MEDIAERROR_ADAPTER_REQUIRED, native_results.ENGINE_DEPENDENCY_REQUIRED))))
+        self.assertEqual(sum(map(len, native_results.REQUIRED)), 124 + sum(map(len, (native_results.UNIVERSAL_ENGINE_REQUIRED, native_results.UNIVERSAL_SERVICE_REQUIRED, native_results.UNIVERSAL_STORAGE_REQUIRED, native_results.UNIVERSAL_MEDIA_REQUIRED, native_results.PREFLIGHT_ENGINE_REQUIRED, native_results.PREFLIGHT_CLI_REQUIRED, native_results.PREFLIGHT_SERVICE_REQUIRED, native_results.PREFLIGHT_MEDIA_REQUIRED, native_results.POOL_SERVICE_REQUIRED, native_results.DRAFT_CACHE_TRANSFER_REQUIRED, native_results.DRAFT_CACHE_DATABASE_REQUIRED, native_results.COLLECTION_ENGINE_REQUIRED, native_results.COLLECTION_CLI_REQUIRED, native_results.COLLECTION_SERVICE_REQUIRED, native_results.AGENT_PROJECT_SERVICE_REQUIRED, native_results.AGENT_PROJECT_STORAGE_REQUIRED, native_results.SUBTITLE_SERVICE_REQUIRED, native_results.SUBTITLE_CLI_REQUIRED, native_results.AUDIT_MEDIA_REQUIRED, native_results.AUDIT_SERVICE_REQUIRED, native_results.PROJECT_CONTRACT_SERVICE_REQUIRED, native_results.EDIT_MODEL_SERVICE_REQUIRED, native_results.EDIT_MODEL_ENGINE_REQUIRED, native_results.SUBTITLE_MODULE_REQUIRED, native_results.MEDIA_BOUNDARY_ENGINE_REQUIRED, native_results.TOOLRUN_MODULE_REQUIRED, native_results.MEDIAINFO_MODULE_REQUIRED, native_results.MEDIAINFO_ADAPTER_REQUIRED, native_results.MEDIAEXPORT_MODULE_REQUIRED, native_results.MEDIAEXPORT_ADAPTER_REQUIRED, native_results.JOINED_MEDIAEXPORT_REQUIRED, native_results.MEDIAPREFLIGHT_MODULE_REQUIRED, native_results.MEDIAPREFLIGHT_ADAPTER_REQUIRED, native_results.MEDIASESSION_MODULE_REQUIRED, native_results.SOURCE_SUBTITLE_MODULE_REQUIRED, native_results.MEDIASESSION_ADAPTER_REQUIRED, native_results.COREMODEL_MODULE_REQUIRED, native_results.MEDIAERROR_MODULE_REQUIRED, native_results.LOCALMEDIA_MODULE_REQUIRED, native_results.COREMODEL_MEDIAERROR_ADAPTER_REQUIRED, native_results.ENGINE_DEPENDENCY_REQUIRED, native_results.TOOLRUN_LIFECYCLE_REQUIRED))))
         workflow = SCRIPT.parent.parent / ".github" / "workflows" / "ci.yml"
         commands = [line for line in workflow.read_text(encoding="utf-8").splitlines()
                     if "tee native-storage-tests.jsonl" in line]

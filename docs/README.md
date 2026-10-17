@@ -55,7 +55,9 @@ Choose an interface in the README, then follow the relevant guide. The project o
 | [HTTP compatibility](../api/COMPATIBILITY.md) | Frozen API baselines and shared collection/project examples across the core and SDKs |
 | [Changelog](../CHANGELOG.md) | Published versions and unreleased features |
 | [CLI releases](releases.md) | Release-page conventions, reproducible packaging and consumer signature verification |
+| [1.4.1 scope and verification](release-1.4.1.md) | Shared collection preflight, native resource bounds and measured draft-export results |
 | [1.4.0 scope and verification](release-1.4.0.md) | Agent projects, schema 8, subtitle sidecars, signed packages and publication boundaries |
+| [Core 1.4.1 audit](core-audit-1.4.1.md) | Original findings, maintenance work, retained regression proofs and completion checks |
 | [Performance](performance.md) | Matched measurements, retained results and limits of speed claims |
 | [Artifact retention](artifacts.md) | Keeping large diagnostics outside the source tree |
 | [Security reporting](../SECURITY.md) | Private vulnerability reports |

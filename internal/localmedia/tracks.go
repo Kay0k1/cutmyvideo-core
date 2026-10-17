@@ -12,7 +12,6 @@ import (
 const mediaProbeEntries = mediainfo.ProbeEntries
 
 type probeStream = mediainfo.Stream
-type probeSideData = mediainfo.SideData
 
 func (p *probeInfo) selectedVideo() *probeStream {
 	return (*mediainfo.Info)(p).SelectedVideo()
@@ -26,10 +25,6 @@ type mediaSelection struct {
 	Video, Audio           *probeStream
 	VideoInput, AudioInput int
 	mp3DurationMode        int
-}
-
-func probeInputSelection(ctx context.Context, c Config, inputs []mediaInput) (mediaSelection, error) {
-	return probeInputSelectionOptions(ctx, c, inputs, ExportRequest{})
 }
 
 func probeInputSelectionOptions(ctx context.Context, c Config, inputs []mediaInput, request ExportRequest) (mediaSelection, error) {
@@ -108,10 +103,6 @@ func InspectExportLocal(ctx context.Context, c Config, path string, request Expo
 		}
 	}
 	return SelectExportTracks(p.tracks(), request)
-}
-
-func audioMetadataArgs(audio *probeStream) []string {
-	return mediainfo.AudioMetadataArgs(audio)
 }
 
 // SelectExportTracks computes the same deterministic selection from inspected

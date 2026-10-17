@@ -1,8 +1,6 @@
 package app
 
 import (
-	"context"
-
 	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
 	"github.com/Kay0k1/cutmyvideo-core/internal/mediapreflight"
 )
@@ -46,25 +44,4 @@ func applyPreflightListing(group preflightCapabilityGroup, available map[string]
 	err := mediapreflight.ApplyListing(mediapreflight.CapabilityGroup{Listing: group.listing, Code: group.code, Required: group.required}, available, deferred, &report)
 	*result = mediaPreflightResult(report)
 	return mediaExportError(err)
-}
-
-type mediaPreflightBatchRuntime struct {
-	config   Config
-	scope    *preflightBatchScope
-	query    preflightQueryFunc
-	snapshot *preflightCapabilitySnapshot
-}
-
-func (runtime *mediaPreflightBatchRuntime) Unchanged(ctx context.Context) error {
-	return runtime.scope.unchanged(ctx)
-}
-
-func (runtime *mediaPreflightBatchRuntime) Check(ctx context.Context, groups []mediapreflight.CapabilityGroup, result *mediapreflight.Result, wanted map[string]map[string]bool) error {
-	if runtime.snapshot == nil {
-		runtime.snapshot = &preflightCapabilitySnapshot{scope: runtime.scope, wanted: wanted, listings: make(map[string]preflightCapabilityListing)}
-	}
-	report := mediaPreflightResult(*result)
-	err := runtime.snapshot.check(ctx, runtime.config, preflightGroups(groups), &report, runtime.query)
-	*result = mediaPreflightReport(report)
-	return err
 }

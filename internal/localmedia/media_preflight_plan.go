@@ -30,17 +30,6 @@ func preflightGroups(groups []mediapreflight.CapabilityGroup) []PreflightCapabil
 	return result
 }
 
-func mediaPreflightGroups(groups []PreflightCapabilityGroup) []mediapreflight.CapabilityGroup {
-	if groups == nil {
-		return nil
-	}
-	result := make([]mediapreflight.CapabilityGroup, len(groups))
-	for i, group := range groups {
-		result[i] = mediapreflight.CapabilityGroup{Listing: group.Listing, Code: group.Code, Required: group.Required}
-	}
-	return result
-}
-
 func applyPreflightListing(group PreflightCapabilityGroup, available map[string]bool, deferred bool, result *PreflightResult) error {
 	report := mediaPreflightReport(*result)
 	err := mediapreflight.ApplyListing(mediapreflight.CapabilityGroup{Listing: group.Listing, Code: group.Code, Required: group.Required}, available, deferred, &report)
