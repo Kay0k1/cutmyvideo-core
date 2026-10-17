@@ -6,10 +6,17 @@ STORAGE_SIZES ?= 10000,100000
 STORAGE_SAMPLES ?= 20
 SDK_REPORT_DIR ?=
 
-.PHONY: help build fmt fmt-check vet test test-full docs-check api-check native-results-check sdk-controls-check sdk-check performance-protocol-check release-check hosting-controls-check contract-check recovery-check storage-capacity-check notices-check workflows-check vuln check check-full release
+.PHONY: help build fmt fmt-check vet test test-full docs-check api-check native-results-check sdk-controls-check sdk-check performance-protocol-check release-check hosting-controls-check contract-check recovery-controls-check recovery-check storage-capacity-check notices-check workflows-check vuln check-static check-controls check check-full release
 
 help:
-	@printf '%s\n' 'make build       Build bin/cutmy' 'make check       Format, vet, docs, tests and build (integration tests may skip)' 'make check-full  Require media/extractor/PostgreSQL tools, race tests, workflows and vulnerability scan' 'make release VERSION=vX.Y.Z  Package CLI binaries from a clean tagged checkout'
+	@printf '%s\n' \
+		'make build           Build bin/cutmy' \
+		'make check           Fast local checks, available tests and build (integration tests may skip)' \
+		'make check-full      Full source acceptance: media/extractor/PostgreSQL tools, race tests, workflows and vulnerability scan' \
+		'make check-static    Format, vet, documentation and API/schema checks' \
+		'make check-controls  Native/SDK/performance/release runner controls; no full acceptance' \
+		'make recovery-controls-check  Recovery harness controls; no actual upgrade or restore' \
+		'make release VERSION=vX.Y.Z  Package CLI binaries from a clean tagged checkout'
 
 build:
 	$(GO) build -trimpath -o bin/cutmy ./cmd/cutmy
@@ -66,8 +73,10 @@ hosting-controls-check:
 contract-check: api-check
 	CUTMY_REQUIRE_CONTRACT=1 CUTMY_CONTRACT_PYTHON=$(PYTHON) $(GO) test -count=1 ./internal/app -run '^TestHTTPPublicContract$$'
 
-recovery-check:
+recovery-controls-check:
 	$(PYTHON) -m unittest discover -s scripts -p recovery_test.py
+
+recovery-check: recovery-controls-check
 	$(PYTHON) scripts/recovery-acceptance.py --go "$(GO)"
 
 storage-capacity-check:
@@ -83,9 +92,13 @@ workflows-check:
 vuln:
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
-check: fmt-check vet docs-check api-check native-results-check sdk-controls-check performance-protocol-check release-check test build
+check-static: fmt-check vet docs-check api-check
 
-check-full: fmt-check vet docs-check api-check native-results-check sdk-controls-check performance-protocol-check release-check hosting-controls-check notices-check workflows-check test-full vuln build
+check-controls: native-results-check sdk-controls-check performance-protocol-check release-check
+
+check: check-static check-controls test build
+
+check-full: check-static check-controls hosting-controls-check notices-check workflows-check test-full vuln build
 
 release:
 	./scripts/release.sh "$(VERSION)"

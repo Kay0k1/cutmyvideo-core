@@ -35,6 +35,10 @@ EDIT_MODEL_SERVICE_REQUIRED = {
     "TestEditAdapterPreservesCollectionErrorChains",
 }
 EDIT_MODEL_ENGINE_REQUIRED = {"TestEngineEditModelPreservesPublicShapes"}
+ENGINE_MEDIA_REQUIRED = {
+    "TestAdvancedCropPlanPublishesActualCroppedOutput",
+    "TestEngineInspectSeparatesCodedAndDisplayDimensions",
+}
 
 NEW_MEDIA_REQUIRED = {
     "TestWaveformPCMStreamingBoundsAndSplitSamples", "TestWaveformMatchesIndependentAudioTimelineAndOffsets",
@@ -301,7 +305,7 @@ REQUIRED = [
     {"TestMediaContractRotationDisplayGeometry", "TestMediaContractSampleAspectNormalization",
      "TestMediaContractVariableFrameTimestamps", "TestMediaContractHDRToneMappingAndCopy",
      "TestMediaContractDefaultAudioSelection", "TestMediaContractAttachedPicturesAreNotVideo",
-     "TestMediaContractCopyQualityUsesSelectedVideo", "TestEngineInspectSeparatesCodedAndDisplayDimensions",
+     "TestMediaContractCopyQualityUsesSelectedVideo",
      "TestHLSMediaContractRotationAndSAR", "TestHLSMediaContractDefaultAudio", "TestHLSMediaContractHDRTags",
      "TestHLSMediaContractContinuityMetadata", "TestHLSMediaContractFingerprintUsesSelectedTracks",
      "TestHDRCapabilityFailureKeepsProcessCause", "TestHDRFailurePreservesCancellationAndLimits",
@@ -309,8 +313,9 @@ REQUIRED = [
 ]
 
 REQUIRED[0].add("TestParseCrop")
+REQUIRED[0].update(ENGINE_MEDIA_REQUIRED)
 REQUIRED[2].update(NEW_SERVICE_REQUIRED)
-REQUIRED[4].update(NEW_MEDIA_REQUIRED | {"TestAdvancedCropPlanPublishesActualCroppedOutput"})
+REQUIRED[4].update(NEW_MEDIA_REQUIRED)
 REQUIRED[2].update(EFFICIENT_CUTTING_SERVICE_REQUIRED)
 REQUIRED[3].update(EFFICIENT_CUTTING_STORAGE_REQUIRED)
 REQUIRED[4].update(EFFICIENT_CUTTING_MEDIA_REQUIRED)
@@ -341,7 +346,7 @@ REQUIRED_PACKAGES = [
     {APP_PACKAGE},
     {APP_PACKAGE},
     {APP_PACKAGE},
-    {APP_PACKAGE, ENGINE_PACKAGE},
+    {APP_PACKAGE},
 ]
 
 BOOKWORM_REQUIRED = {
@@ -366,20 +371,24 @@ BOOKWORM_REQUIRED.update(DRAFT_CACHE_TRANSFER_REQUIRED)
 BOOKWORM_REQUIRED.update(AUDIT_MEDIA_REQUIRED)
 
 
-def verify_report(filename, names, packages):
+def verify_report(filename, names, packages, test_packages=None):
     events = [json.loads(line) for line in Path(filename).read_text(encoding="utf-8").splitlines() if line.strip()]
     failures = [event for event in events if event.get("Action") in {"fail", "skip"}]
-    passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
+    passed = {(event.get("Package"), event.get("Test")) for event in events if event.get("Action") == "pass"}
     completed = {event.get("Package") for event in events if event.get("Action") == "pass" and not event.get("Test")}
-    if failures or not names <= passed or not packages <= completed:
-        raise SystemExit(f"native verification incomplete: {filename}; missing={sorted(names - passed)}; incomplete_packages={sorted(packages - completed)}; failed/skipped={len(failures)}")
+    expected_packages = test_packages or {}
+    missing = {name for name in names if not any((package, name) in passed for package in
+               ({expected_packages[name]} if name in expected_packages else packages))}
+    if failures or missing or not packages <= completed:
+        raise SystemExit(f"native verification incomplete: {filename}; missing={sorted(missing)}; incomplete_packages={sorted(packages - completed)}; failed/skipped={len(failures)}")
 
 
 def verify(filenames):
     if len(filenames) != len(REQUIRED):
         raise SystemExit("expected media, process, service, storage and media-contract JSON test reports")
-    for filename, names, packages in zip(filenames, REQUIRED, REQUIRED_PACKAGES):
-        verify_report(filename, names, packages)
+    for index, (filename, names, packages) in enumerate(zip(filenames, REQUIRED, REQUIRED_PACKAGES)):
+        test_packages = {name: ENGINE_PACKAGE for name in ENGINE_MEDIA_REQUIRED} if index == 0 else None
+        verify_report(filename, names, packages, test_packages)
 
 
 if __name__ == "__main__":

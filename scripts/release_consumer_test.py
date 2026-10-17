@@ -20,7 +20,7 @@ from unittest.mock import patch, Mock
 import zipfile
 import warnings
 
-import release_test as fixture
+import release_test_fixtures as fixture
 import release_consumer_process as processes
 
 SPEC = importlib.util.spec_from_file_location('release_consumer', Path(__file__).with_name('release-consumer.py'))

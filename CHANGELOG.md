@@ -13,6 +13,9 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 - Show fixed refusal codes in the self-hosting lifecycle wrapper while retaining exit status 1 and redacting private exception details.
 
 ### Changed
+- Group existing local source and verification-tooling checks, with separate recovery controls and a release trigger/acceptance map.
+- Run native crop and display-geometry engine checks once per platform while preserving their required package/report identities and all media acceptance boundaries.
+- Share synthetic release-test fixtures without importing executable test suites or invoking another test case's setup and cleanup.
 - Separate pure edit models and shared validation from server configuration, preserving public Go shapes, JSON and diagnostic behavior.
 - Move project persistence and transaction handling out of HTTP handlers, retaining authorization, revision checks, lock ordering and database deadlines.
 - Check free SDK verification space before builds and remove only successful runs' disposable installations, preserving packages and verification evidence.
