@@ -8,6 +8,8 @@ APP_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/app"
 ENGINE_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/pkg/engine"
 FS_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
 CLI_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/cmd/cutmy"
+SUBTITLE_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/subtitles"
+TOOLRUN_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/toolrun"
 
 AUDIT_MEDIA_REQUIRED = {
     "TestHLSManifestRedirectResolvesFinalRelativeReferences",
@@ -38,6 +40,14 @@ EDIT_MODEL_ENGINE_REQUIRED = {"TestEngineEditModelPreservesPublicShapes"}
 ENGINE_MEDIA_REQUIRED = {
     "TestAdvancedCropPlanPublishesActualCroppedOutput",
     "TestEngineInspectSeparatesCodedAndDisplayDimensions",
+}
+SUBTITLE_MODULE_REQUIRED = {"TestSubtitlePackageHasNoRuntimeDependencies"}
+MEDIA_BOUNDARY_ENGINE_REQUIRED = {"TestEngineSubtitleBoundaryPreservesPublicContracts"}
+TOOLRUN_MODULE_REQUIRED = {
+    "TestToolrunPackageUsesOnlyStandardLibrary",
+    "TestRunOutputPreservesRawFailureAndStreaming",
+    "TestRunOutputPreservesCancellation",
+    "TestDiagnosticCopyCannotBypassMemoryBound",
 }
 
 NEW_MEDIA_REQUIRED = {
@@ -340,13 +350,25 @@ REQUIRED[2].update(PROJECT_CONTRACT_SERVICE_REQUIRED)
 REQUIRED[2].update(EDIT_MODEL_SERVICE_REQUIRED)
 REQUIRED[0].update(EDIT_MODEL_ENGINE_REQUIRED)
 REQUIRED[4].update(AUDIT_MEDIA_REQUIRED)
+REQUIRED[0].update(SUBTITLE_MODULE_REQUIRED | MEDIA_BOUNDARY_ENGINE_REQUIRED)
+REQUIRED[1].update(TOOLRUN_MODULE_REQUIRED)
 
 REQUIRED_PACKAGES = [
-    {ENGINE_PACKAGE, FS_PACKAGE, CLI_PACKAGE},
+    {ENGINE_PACKAGE, FS_PACKAGE, CLI_PACKAGE, SUBTITLE_PACKAGE},
+    {APP_PACKAGE, TOOLRUN_PACKAGE},
     {APP_PACKAGE},
     {APP_PACKAGE},
     {APP_PACKAGE},
-    {APP_PACKAGE},
+]
+
+# The mixed reports must retain each test's owning package. Adding a standalone
+# module must not let its similarly named test satisfy an engine or app result.
+REQUIRED_TEST_PACKAGES = [
+    {name: (SUBTITLE_PACKAGE if name in SUBTITLE_MODULE_REQUIRED else
+            CLI_PACKAGE if name.startswith("TestCLI") or name == "TestParseCrop" else
+            FS_PACKAGE if name == "TestConcurrentPublicationHasExactlyOneCompleteWinner" else
+            ENGINE_PACKAGE) for name in REQUIRED[0]},
+    {name: TOOLRUN_PACKAGE if name in TOOLRUN_MODULE_REQUIRED else APP_PACKAGE for name in REQUIRED[1]},
 ]
 
 BOOKWORM_REQUIRED = {
@@ -387,7 +409,7 @@ def verify(filenames):
     if len(filenames) != len(REQUIRED):
         raise SystemExit("expected media, process, service, storage and media-contract JSON test reports")
     for index, (filename, names, packages) in enumerate(zip(filenames, REQUIRED, REQUIRED_PACKAGES)):
-        test_packages = {name: ENGINE_PACKAGE for name in ENGINE_MEDIA_REQUIRED} if index == 0 else None
+        test_packages = REQUIRED_TEST_PACKAGES[index] if index < len(REQUIRED_TEST_PACKAGES) else None
         verify_report(filename, names, packages, test_packages)
 
 

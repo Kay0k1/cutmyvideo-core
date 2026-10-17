@@ -9,15 +9,14 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/Kay0k1/cutmyvideo-core/internal/subtitles"
 )
 
 // Text subtitles are extracted once in their source clock, clipped to the
 // actual export bounds and placed on the new output clock. Subtitle packets
 // cannot simply be copied: a cue can begin before a cut and span its boundary.
-type subtitleCue struct {
-	StartMS, EndMS int64
-	Text           string
-}
+type subtitleCue = subtitles.Cue
 
 func parseSubtitleTime(raw string) (int64, error) {
 	raw = strings.ReplaceAll(strings.TrimSpace(raw), ",", ".")
@@ -78,7 +77,7 @@ func parseSRT(data []byte) ([]subtitleCue, error) {
 	return cues, nil
 }
 func subtitleTimestamp(ms int64) string {
-	return fmt.Sprintf("%02d:%02d:%02d,%03d", ms/3600000, ms/60000%60, ms/1000%60, ms%1000)
+	return subtitles.Timestamp(ms)
 }
 func rebaseSubtitles(cues []subtitleCue, segments []ArtifactSegment) ([]byte, error) {
 	return rebaseIndexedSubtitles(newSubtitleIndex(cues), segments)
@@ -88,7 +87,7 @@ func rebaseIndexedSubtitles(index *subtitleIndex, segments []ArtifactSegment) ([
 	var out strings.Builder
 	number := 0
 	for _, segment := range segments {
-		for _, cue := range index.intersecting(segment.SourceStartMS, segment.SourceEndMS) {
+		for _, cue := range index.Intersecting(segment.SourceStartMS, segment.SourceEndMS) {
 			start, end := max(cue.StartMS, segment.SourceStartMS), min(cue.EndMS, segment.SourceEndMS)
 			if end <= start {
 				continue
