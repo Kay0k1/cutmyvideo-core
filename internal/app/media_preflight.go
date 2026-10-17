@@ -6,11 +6,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
+
+	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
+	"github.com/Kay0k1/cutmyvideo-core/internal/mediainfo"
+	"github.com/Kay0k1/cutmyvideo-core/internal/mediapreflight"
 )
 
-const preflightCapabilityBytes = 1 << 20
+const preflightCapabilityBytes = mediapreflight.CapabilityBytes
 
 type preflightProbeFunc func(context.Context, Config, string, bool) (probeInfo, int64, error)
 type preflightQueryFunc func(context.Context, string, ...string) ([]byte, error)
@@ -72,67 +75,14 @@ func preflightLocalWithQueries(ctx context.Context, c Config, path string, reque
 // prepareLocalPreflight owns every report's mutable fields. Both single and
 // batch checks use the same request validation, stream selection and geometry.
 func prepareLocalPreflight(c Config, path string, request ExportRequest, p probeInfo, duration int64) (PreflightResult, []preflightCapabilityGroup, error) {
-	source := Source{Path: path, DurationMS: duration, Tracks: p.tracks()}
-	if video := p.selectedVideo(); video != nil {
-		source.Width, source.Height = video.Width, video.Height
-		source.DisplayWidth, source.DisplayHeight, _ = videoDisplayGeometry(video)
-	}
-	// Validate normalizes labels and defaults. Keep that mutation private to
-	// this report rather than changing the caller's reusable request.
-	request.Ranges = append([]Range(nil), request.Ranges...)
-	if request.AudioTrack != nil {
-		value := *request.AudioTrack
-		request.AudioTrack = &value
-	}
-	if request.Crop != nil {
-		value := *request.Crop
-		request.Crop = &value
-	}
-	if err := request.Validate(c, source); err != nil {
-		return PreflightResult{}, nil, &sourceProblem{"invalid_argument", err.Error()}
-	}
-	selection := mediaSelection{Video: p.selectedVideo(), Audio: p.selectedAudio()}
-	if request.NoAudio {
-		selection.Audio = nil
-	} else if request.AudioTrack != nil {
-		selection.Audio = nil
-		for i := range p.Streams {
-			stream := &p.Streams[i]
-			if stream.CodecType == "audio" && stream.Index == *request.AudioTrack {
-				selection.Audio = stream
-				break
-			}
-		}
-		if selection.Audio == nil {
-			return PreflightResult{}, nil, &sourceProblem{"audio_track_unavailable", "The selected audio stream index is not available; inspect the source and choose an audio index"}
-		}
-	}
-	tracks, err := trackManifest(p, selection, request)
-	if err != nil {
-		return PreflightResult{}, nil, err
-	}
-	video, err := validatePreflightSelection(selection, request)
-	if err != nil {
-		return PreflightResult{}, nil, err
-	}
-	result := preflightRequestResult(source, request)
-	result.TrackManifest, result.Video = tracks, video
-	result.Checks = append(result.Checks, PreflightCheck{Name: "source", Status: "passed"}, PreflightCheck{Name: "tracks", Status: "passed"})
-	if video != nil {
-		result.Checks = append(result.Checks, PreflightCheck{Name: "video_geometry", Status: "passed"})
-	}
-	return result, preflightRequiredCapabilities(selection, request, tracks, video), nil
+	result, groups, err := mediapreflight.Prepare(editLimits(c), path, edit.ExportRequest(request), mediainfo.Info(p), duration)
+	return mediaPreflightResult(result), preflightGroups(groups), mediaExportError(err)
 }
 
 func finishLocalPreflight(result *PreflightResult) {
-	if result.Request.CutMode == "copy" {
-		addPreflightDeferred(result, "copy_boundaries", "copy_boundaries_deferred", "Copy boundaries are determined from source packets and nearby keyframes during export")
-		addPreflightDeferred(result, "copy_container", "copy_container_unverified", "The configured muxer verifies whether the selected codecs can be copied into the requested container during export")
-	}
-	addPreflightDeferred(result, "media_decode", "media_decode_deferred", "Source payload decoding and completed output verification occur during export")
-	addPreflightDeferred(result, "output_size", "output_size_deferred", "The completed output must satisfy its size limit during export")
-	addPreflightDeferred(result, "storage", "storage_admission_deferred", "Available storage and execution admission are checked when an export is started")
-	addPreflightDeferred(result, "publication", "publication_deferred", "Output paths, filesystem capabilities and exclusive publication are checked during execution")
+	report := mediaPreflightReport(*result)
+	mediapreflight.Finish(&report)
+	*result = mediaPreflightResult(report)
 }
 
 func preflightSourceUnchanged(path string, before os.FileInfo) error {
@@ -160,40 +110,8 @@ func preflightFileIdentity(path string) (os.FileInfo, error) {
 // These source-only guards mirror the existing export preparation. Copy keeps
 // coded geometry and never silently acquires an encode, resize or HDR step.
 func validatePreflightSelection(selection mediaSelection, request ExportRequest) (*PreflightVideo, error) {
-	if request.Format == "mp3" {
-		if selection.Audio == nil {
-			return nil, errNoAudio
-		}
-		return nil, nil
-	}
-	if selection.Video == nil {
-		return nil, errUnsupportedStream
-	}
-	if request.CutMode == "copy" {
-		if request.Quality != "best" {
-			_, height, err := videoDisplayGeometry(selection.Video)
-			if err != nil {
-				return nil, err
-			}
-			limit := 1080
-			if request.Quality == "720p" {
-				limit = 720
-			}
-			if height > limit {
-				return nil, &sourceProblem{"copy_quality_unsupported", "Copy mode cannot reduce this video's resolution. Choose original quality or accurate mode"}
-			}
-		}
-		return &PreflightVideo{Width: selection.Video.Width, Height: selection.Video.Height}, nil
-	}
-	_, hdr, err := videoCropRenderFilter(selection.Video, request.Quality, request.Crop)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := videoEncoderTimeBase(selection.Video); err != nil {
-		return nil, err
-	}
-	width, height, err := videoOutputGeometryWithCrop(selection.Video, request.Quality, false, request.Crop)
-	return &PreflightVideo{Width: width, Height: height, HDRToSDR: hdr}, err
+	video, err := mediapreflight.ValidateSelection(mediaExportSelection(selection), edit.ExportRequest(request))
+	return video, mediaExportError(err)
 }
 
 type preflightCapabilityGroup struct {
@@ -202,75 +120,7 @@ type preflightCapabilityGroup struct {
 }
 
 func preflightRequiredCapabilities(selection mediaSelection, request ExportRequest, tracks []TrackSelection, video *PreflightVideo) []preflightCapabilityGroup {
-	var encoders, filters, demuxers, bsfs []string
-	muxer := request.Format
-	if muxer == "mkv" {
-		muxer = "matroska"
-	}
-	muxers := []string{muxer}
-	joined := request.OutputMode == "joined"
-	if request.CutMode != "copy" {
-		if request.Format == "mp3" {
-			encoders = append(encoders, "libmp3lame")
-		} else {
-			encoders = append(encoders, "libx264")
-			filters = append(filters, "scale", "setsar")
-			if request.Crop != nil {
-				filters = append(filters, "crop")
-			}
-			if selection.Audio != nil {
-				encoders = append(encoders, "aac")
-			}
-			if video != nil && video.HDRToSDR {
-				filters = append(filters, "zscale", "format", "setparams", "tonemap")
-				bsfs = append(bsfs, "h264_metadata")
-			}
-			if joined {
-				filters = append(filters, "select")
-			}
-		}
-		if joined && selection.Audio != nil {
-			filters = append(filters, "aselect", "aresample")
-		}
-	}
-	if joined {
-		demuxers = append(demuxers, "concat")
-		if request.CutMode == "copy" {
-			if request.Format == "mkv" {
-				demuxers = append(demuxers, "matroska")
-			} else {
-				demuxers = append(demuxers, "mov")
-				// Joined MP4 copy always stages selected audio as Matroska;
-				// the optional direct packet path is limited to MKV.
-				if selection.Audio != nil {
-					muxers = append(muxers, "matroska")
-					demuxers = append(demuxers, "matroska")
-				}
-			}
-		}
-	}
-	for _, track := range tracks {
-		if !track.Included || track.Type != "subtitle" {
-			continue
-		}
-		encoders = append(encoders, "subrip")
-		muxers = append(muxers, "srt")
-		demuxers = append(demuxers, "srt")
-		if request.Format == "mp4" {
-			encoders = append(encoders, "mov_text")
-			demuxers = append(demuxers, "mov")
-		} else {
-			demuxers = append(demuxers, "matroska")
-		}
-		break
-	}
-	return []preflightCapabilityGroup{
-		{"encoders", "encoder_unavailable", encoders},
-		{"muxers", "muxer_unavailable", muxers},
-		{"filters", "filter_unavailable", filters},
-		{"demuxers", "demuxer_unavailable", demuxers},
-		{"bsfs", "bitstream_filter_unavailable", bsfs},
-	}
+	return preflightGroups(mediapreflight.RequiredCapabilities(mediaExportSelection(selection), edit.ExportRequest(request), tracks, video))
 }
 
 func queryPreflightCapabilities(ctx context.Context, path string, args ...string) ([]byte, error) {
@@ -325,16 +175,9 @@ func checkPreflightCapabilities(ctx context.Context, c Config, groups []prefligh
 			return queryErr
 		}
 		available, parsed := parsePreflightCapabilityList(group.listing, data)
-		if queryErr != nil || len(data) > preflightCapabilityBytes || !parsed {
-			addPreflightDeferred(result, "tool_"+group.listing, "tool_capabilities_unverified", "The configured media tool's "+group.listing+" could not be verified without processing media")
-			continue
+		if err := applyPreflightListing(group, available, queryErr != nil || len(data) > preflightCapabilityBytes || !parsed, result); err != nil {
+			return err
 		}
-		for _, name := range group.required {
-			if !available[name] {
-				return &sourceProblem{group.code, "The configured media tool does not provide required " + group.listing + " capability " + name}
-			}
-		}
-		result.Checks = append(result.Checks, PreflightCheck{Name: "tool_" + group.listing, Status: "passed"})
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -349,109 +192,5 @@ func checkPreflightCapabilities(ctx context.Context, c Config, groups []prefligh
 // Capability names are read only from complete, recognized FFmpeg tables.
 // A substring in descriptive text or an unrecognized response proves nothing.
 func parsePreflightCapabilityList(kind string, data []byte) (map[string]bool, bool) {
-	if len(data) == 0 || len(data) > preflightCapabilityBytes {
-		return nil, false
-	}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	header := strings.TrimSpace(lines[0])
-	validHeader := kind == "encoders" && header == "Encoders:" || kind == "filters" && header == "Filters:" || kind == "bsfs" && header == "Bitstream filters:" || (kind == "muxers" || kind == "demuxers") && (header == "Formats:" || header == "File formats:" || kind == "muxers" && header == "Muxers:" || kind == "demuxers" && header == "Demuxers:")
-	if !validHeader {
-		return nil, false
-	}
-	entries := make(map[string]bool)
-	rows := kind == "bsfs"
-	var filterLegend uint8
-	for _, raw := range lines[1:] {
-		line := strings.TrimSpace(raw)
-		if line == "" {
-			continue
-		}
-		if !rows {
-			if strings.Trim(line, "-") == "" {
-				rows = true
-				continue
-			}
-			if kind == "filters" {
-				// FFmpeg 5.1 starts rows directly after this complete legend;
-				// newer versions also place a dashed separator after it.
-				legend := []string{"T.. = Timeline support", ".S. = Slice threading", "..C = Command support", "A = Audio input/output", "V = Video input/output", "N = Dynamic number and/or type of input/output", "| = Source or sink filter"}
-				matched := false
-				for i, entry := range legend {
-					if strings.Join(strings.Fields(line), " ") == entry {
-						filterLegend |= 1 << i
-						matched = true
-						break
-					}
-				}
-				if matched {
-					continue
-				}
-				if filterLegend != 127 {
-					return nil, false
-				}
-				rows = true
-			} else {
-				fields := strings.Fields(line)
-				if len(fields) < 3 || fields[1] != "=" {
-					return nil, false
-				}
-				continue
-			}
-		}
-		fields := strings.Fields(line)
-		if kind == "bsfs" {
-			if len(fields) != 1 || !preflightCapabilityName(fields[0]) {
-				return nil, false
-			}
-			entries[fields[0]] = true
-			continue
-		}
-		// Muxer/demuxer descriptions are optional. FFmpeg 5.1's libcdio
-		// demuxer, for example, has only its flags and exact name.
-		minimumFields := 3
-		if kind == "muxers" || kind == "demuxers" {
-			minimumFields = 2
-		}
-		if len(fields) < minimumFields {
-			return nil, false
-		}
-		flags := fields[0]
-		switch kind {
-		case "encoders":
-			if len(flags) != 6 || !strings.ContainsRune("VAS", rune(flags[0])) || strings.Trim(flags[1:], ".FSXBD") != "" {
-				return nil, false
-			}
-		case "filters":
-			if len(flags) < 2 || len(flags) > 3 || strings.Trim(flags, ".TSC") != "" || len(fields) < 4 || !strings.Contains(fields[2], "->") {
-				return nil, false
-			}
-		case "muxers", "demuxers":
-			if len(flags) > 3 || strings.Trim(flags, "DEd.") != "" || !strings.ContainsAny(flags, "DE") {
-				return nil, false
-			}
-		}
-		for _, name := range strings.Split(fields[1], ",") {
-			if !preflightCapabilityName(name) {
-				return nil, false
-			}
-			if kind == "muxers" && !strings.Contains(flags, "E") || kind == "demuxers" && !strings.Contains(flags, "D") {
-				continue
-			}
-			entries[name] = true
-		}
-	}
-	return entries, rows && len(entries) > 0
-}
-
-func preflightCapabilityName(name string) bool {
-	if name == "" || len(name) > 128 {
-		return false
-	}
-	for _, ch := range name {
-		if ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '_' || ch == '-' {
-			continue
-		}
-		return false
-	}
-	return true
+	return mediapreflight.ParseCapabilityList(kind, data)
 }

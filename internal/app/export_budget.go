@@ -30,25 +30,11 @@ func outputBudget(c Config, r Range, request ExportRequest) int64 {
 }
 
 func joinedOutputRange(request ExportRequest) Range {
-	var duration int64
-	for _, selected := range request.Ranges {
-		duration += selected.EndMS - selected.StartMS
-	}
-	return Range{EndMS: duration}
+	return mediaexport.JoinedOutputRange(edit.ExportRequest(request))
 }
 
 func joinedOutputBudget(c Config, request ExportRequest) int64 {
-	outputRange := joinedOutputRange(request)
-	if request.CutMode == "copy" {
-		for _, selected := range request.Ranges {
-			preroll := min(int64(30_000), selected.StartMS)
-			if preroll > math.MaxInt64-outputRange.EndMS {
-				return c.MaxOutputBytes
-			}
-			outputRange.EndMS += preroll
-		}
-	}
-	return outputBudget(c, outputRange, request)
+	return mediaexport.JoinedOutputBudget(mediaExportConfig(c), edit.ExportRequest(request))
 }
 
 func subtitleWorkBudget(c Config, request ExportRequest, output int64) (int64, error) {

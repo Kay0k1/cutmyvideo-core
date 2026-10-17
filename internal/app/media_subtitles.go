@@ -18,64 +18,7 @@ import (
 // cannot simply be copied: a cue can begin before a cut and span its boundary.
 type subtitleCue = subtitles.Cue
 
-func parseSubtitleTime(raw string) (int64, error) {
-	raw = strings.ReplaceAll(strings.TrimSpace(raw), ",", ".")
-	parts := strings.Split(raw, ":")
-	if len(parts) != 3 {
-		return 0, fmt.Errorf("invalid subtitle timestamp")
-	}
-	h, e := strconv.ParseInt(parts[0], 10, 64)
-	if e != nil || h < 0 || h > 720 {
-		return 0, fmt.Errorf("invalid subtitle timestamp")
-	}
-	m, e := strconv.ParseInt(parts[1], 10, 64)
-	if e != nil || m < 0 || m > 59 {
-		return 0, fmt.Errorf("invalid subtitle timestamp")
-	}
-	sec, e := strconv.ParseFloat(parts[2], 64)
-	if e != nil || math.IsNaN(sec) || math.IsInf(sec, 0) || sec < 0 || sec >= 60 {
-		return 0, fmt.Errorf("invalid subtitle timestamp")
-	}
-	return h*3600000 + m*60000 + int64(sec*1000+0.5), nil
-}
-func parseSRT(data []byte) ([]subtitleCue, error) {
-	raw := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(string(data), "\r\n", "\n"), "\r", "\n"))
-	if raw == "" {
-		return nil, nil
-	}
-	var cues []subtitleCue
-	for _, block := range strings.Split(raw, "\n\n") {
-		lines := strings.Split(block, "\n")
-		if len(lines) < 2 {
-			continue
-		}
-		position := 0
-		if !strings.Contains(lines[0], " --> ") {
-			position = 1
-		}
-		if len(lines) <= position+1 {
-			return nil, fmt.Errorf("invalid text subtitle cue")
-		}
-		bounds := strings.Split(lines[position], " --> ")
-		if len(bounds) != 2 {
-			return nil, fmt.Errorf("invalid text subtitle cue")
-		}
-		start, e := parseSubtitleTime(bounds[0])
-		if e != nil {
-			return nil, e
-		}
-		endFields := strings.Fields(bounds[1])
-		if len(endFields) == 0 {
-			return nil, fmt.Errorf("invalid text subtitle cue")
-		}
-		end, e := parseSubtitleTime(endFields[0])
-		if e != nil || end < start {
-			return nil, fmt.Errorf("invalid text subtitle cue")
-		}
-		cues = append(cues, subtitleCue{StartMS: start, EndMS: end, Text: strings.Join(lines[position+1:], "\n")})
-	}
-	return cues, nil
-}
+func parseSRT(data []byte) ([]subtitleCue, error) { return subtitles.ParseSourceSRT(data) }
 func subtitleTimestamp(ms int64) string {
 	return subtitles.Timestamp(ms)
 }
@@ -144,43 +87,14 @@ func exportInputsProgress(ctx context.Context, c Config, inputs []mediaInput, r 
 }
 
 func extractTextSubtitles(ctx context.Context, c Config, source string, stream probeStream) ([]byte, error) {
-	if session := localExportSession(ctx, source, false); session != nil {
-		session.mu.Lock()
-		defer session.mu.Unlock()
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if _, err := session.unchanged(); err != nil {
-			return nil, err
-		}
-		if path := session.cues[stream.Index]; path != "" {
-			return os.ReadFile(path)
-		}
-		data, err := extractTextSubtitlesUncached(ctx, c, source, stream)
-		if err != nil {
-			return nil, err
-		}
-		if _, err := session.unchanged(); err != nil {
-			return nil, err
-		}
-		// Cache on disk inside the reserved workspace. Only one bounded track
-		// is decoded into Go memory at a time, even for a many-track source.
-		if session.workspace != "" {
-			if session.cueDir == "" {
-				session.cueDir, err = os.MkdirTemp(session.workspace, ".source-subtitles-")
-				if err != nil {
-					return nil, err
-				}
-			}
-			path := filepath.Join(session.cueDir, fmt.Sprintf("track-%d.srt", stream.Index))
-			if err := os.WriteFile(path, data, 0600); err != nil {
-				return nil, err
-			}
-			session.cues[stream.Index] = path
-		}
-		return data, nil
+	session := localExportSession(ctx, source, false)
+	if session == nil {
+		return extractTextSubtitlesUncached(ctx, c, source, stream)
 	}
-	return extractTextSubtitlesUncached(ctx, c, source, stream)
+	data, err := session.Session.ExtractText(ctx, stream.Index, func() ([]byte, error) {
+		return extractTextSubtitlesUncached(ctx, c, source, stream)
+	})
+	return data, mediaInfoError(err)
 }
 
 func extractTextSubtitlesUncached(ctx context.Context, c Config, source string, stream probeStream) ([]byte, error) {

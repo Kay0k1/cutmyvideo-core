@@ -5,6 +5,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/Kay0k1/cutmyvideo-core/internal/mediainfo"
 )
 
 const localProbeCacheEntries = 32
@@ -43,7 +45,7 @@ func (s *Store) beginCachedLocal(ctx context.Context, c Config, source Source) (
 		delete(s.localProbes.entries, key)
 		return ctx, session, false
 	}
-	session.file, session.info = file, entry.info
+	session.File, session.Info = file, mediainfo.Info(entry.info)
 	return ctx, session, true
 }
 
@@ -52,9 +54,9 @@ func (s *Store) rememberLocalProbe(ctx context.Context, c Config, source Source)
 	if session == nil || ctx.Err() != nil {
 		return
 	}
-	session.mu.Lock()
-	defer session.mu.Unlock()
-	if session.file == nil {
+	session.Mu.Lock()
+	defer session.Mu.Unlock()
+	if session.File == nil {
 		return
 	}
 	if _, err := session.unchanged(); err != nil {
@@ -81,5 +83,5 @@ func (s *Store) rememberLocalProbe(ctx context.Context, c Config, source Source)
 		}
 		delete(s.localProbes.entries, oldest)
 	}
-	s.localProbes.entries[key] = localProbeEntry{session.file, session.info, c.FFprobe, now.Add(localProbeCacheTTL)}
+	s.localProbes.entries[key] = localProbeEntry{session.File, probeInfo(session.Info), c.FFprobe, now.Add(localProbeCacheTTL)}
 }

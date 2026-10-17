@@ -62,3 +62,25 @@ func OutputBudget(c Config, r edit.Range, request edit.ExportRequest) int64 {
 	}
 	return BoundedMediaBytes(duration, rate, ContainerAllowance, c.MaxOutputBytes)
 }
+
+func JoinedOutputRange(request edit.ExportRequest) edit.Range {
+	var duration int64
+	for _, selected := range request.Ranges {
+		duration += selected.EndMS - selected.StartMS
+	}
+	return edit.Range{EndMS: duration}
+}
+
+func JoinedOutputBudget(c Config, request edit.ExportRequest) int64 {
+	outputRange := JoinedOutputRange(request)
+	if request.CutMode == "copy" {
+		for _, selected := range request.Ranges {
+			preroll := min(int64(30_000), selected.StartMS)
+			if preroll > math.MaxInt64-outputRange.EndMS {
+				return c.MaxOutputBytes
+			}
+			outputRange.EndMS += preroll
+		}
+	}
+	return OutputBudget(c, outputRange, request)
+}

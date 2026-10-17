@@ -15,6 +15,7 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 - Show fixed refusal codes in the self-hosting lifecycle wrapper while retaining exit status 1 and redacting private exception details.
 
 ### Changed
+- Separate complete joined-export coordination, advisory preflight planning and operation-local media sessions from the server package, preserving stream compatibility, copy/accurate clocks, capability and identity fences, bounded caches, independent repeated outputs and public contracts.
 - Separate single-interval export coordination and shared output-budget rules from server configuration, preserving copy clocks, encoder arguments, progress, diagnostic causes and fresh result verification.
 - Separate probe metadata, deterministic track selection and video geometry/filter rules from server configuration, preserving inspection, rendering and diagnostic behavior.
 - Extract supplied subtitle retiming and shared cue indexing from the server package, preserving public Go aliases, text formats, limits and diagnostics.

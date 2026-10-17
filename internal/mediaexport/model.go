@@ -32,6 +32,7 @@ type Keyframe struct {
 type Selection struct {
 	Video, Audio           *mediainfo.Stream
 	VideoInput, AudioInput int
+	MP3DurationMode        int
 }
 
 func (s Selection) MapArgs(format string) []string {

@@ -61,30 +61,30 @@ func TestMediaExportBridgePreservesLegacyErrorsAndRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session.file = file
-	session.info = probeInfo{Streams: []probeStream{
+	session.File = file
+	session.Info = mediainfo.Info{Streams: []probeStream{
 		{Index: 2, CodecType: "video", Width: 100, Height: 100},
 		{Index: 4, CodecType: "audio", Channels: 1},
 		{Index: 7, CodecType: "audio", Channels: 2},
 	}}
-	session.info.Format.Duration = "3.000"
+	session.Info.Format.Duration = "3.000"
 	runtime := mediaExportRuntime{config: config}
 	selectedAudio := 7
 	selection, err := runtime.SelectInputs(ctx, []mediaexport.Input{{Path: path}}, edit.ExportRequest{AudioTrack: &selectedAudio})
-	if err != nil || selection.Video != &session.info.Streams[0] || selection.Audio != &session.info.Streams[2] || selection.VideoInput != 0 || selection.AudioInput != 0 {
+	if err != nil || selection.Video != &session.Info.Streams[0] || selection.Audio != &session.Info.Streams[2] || selection.VideoInput != 0 || selection.AudioInput != 0 {
 		t.Fatal("runtime changed local session selection or stream identity", selection, err)
 	}
 	if got := selection.MapArgs("mp4"); !reflect.DeepEqual(got, []string{"-map", "0:2", "-map", "0:7"}) {
 		t.Fatal("projected stream mapping changed", got)
 	}
 	info, duration, err := runtime.Probe(ctx, path, false)
-	if err != nil || duration != 3000 || &info.Streams[0] != &session.info.Streams[0] {
+	if err != nil || duration != 3000 || &info.Streams[0] != &session.Info.Streams[0] {
 		t.Fatal("runtime bypassed the verified local probe session", duration, err)
 	}
 	from, until := keyframeProbeBounds(1000)
 	frame := copyKeyframe{PTS: 500, DTS: 450, HasDTS: true}
-	session.keyframeFile = file
-	session.keyframes = []keyframeWindow{{from: from, until: until, stream: 2, tool: config.FFprobe, frames: []copyKeyframe{frame}}}
+	session.KeyframeFile = file
+	session.Keyframes = []keyframeWindow{{From: from, Until: until, Stream: 2, Tool: config.FFprobe, Frames: []copyKeyframe{frame}}}
 	if got, err := runtime.NearestKeyframe(ctx, path, 1000, false, 2); err != nil || got != frame {
 		t.Fatal("runtime lost the local keyframe session", got, err)
 	}
