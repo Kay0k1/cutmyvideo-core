@@ -23,6 +23,8 @@ can still look like silence; this is a proposed edit, not speech recognition.
 `--min-clip-ms` explicitly omits shorter proposed clips; zero retains them.
 Use `--audio-track` for an inspected absolute stream index. The result reports
 actual coverage; plan creation refuses silently dropping an unexamined tail.
+An omitted or zero `threshold_db` uses -35 dBFS; omitted or zero
+`min_silence_ms` uses 500 ms. Other silence margins and `min_clip_ms` keep zero.
 
 ## Inspect and normalize loudness
 
@@ -119,6 +121,10 @@ cutmy analyze video --input interview.mp4 --start 0 --end 300 \
 
 Results contain source timestamps, scores and black intervals without changing
 the plan. These are visual thresholds, not semantic scene understanding.
+Omitted or zero `scene_threshold`, `black_pixel_threshold`,
+`black_picture_ratio` and `min_black_ms` use 0.3, 0.1, 0.98 and 500 ms
+respectively. This default convention applies to analysis; normalization's
+explicit `true_peak_dbtp: 0` remains a real 0 dBTP target.
 
 Silence/video windows are bounded to 30 minutes, with decoded-sample, frame and
 event limits. HTTP loudness windows also stop at 30 minutes; local loudness

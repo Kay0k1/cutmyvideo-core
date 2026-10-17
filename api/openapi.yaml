@@ -1699,12 +1699,14 @@ components:
           type: integer
           minimum: 0
         threshold_db:
+          description: Omitted or zero uses -35 dBFS.
           anyOf:
           - type: number
             minimum: -90
             maximum: -1
           - const: 0
         min_silence_ms:
+          description: Omitted or zero uses 500 ms.
           anyOf:
           - type: integer
             minimum: 10
@@ -1735,22 +1737,26 @@ components:
           minimum: 0
           default: 0
         scene_threshold:
+          description: Omitted or zero uses 0.3.
           anyOf:
           - type: number
             minimum: 0.001
             maximum: 1
           - const: 0
         black_pixel_threshold:
+          description: Omitted or zero uses 0.1.
           type: number
           minimum: 0
           maximum: 1
         black_picture_ratio:
+          description: Omitted or zero uses 0.98.
           anyOf:
           - type: number
             exclusiveMinimum: 0
             maximum: 1
           - const: 0
         min_black_ms:
+          description: Omitted or zero uses 500 ms.
           anyOf:
           - type: integer
             minimum: 1
