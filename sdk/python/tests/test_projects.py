@@ -81,3 +81,26 @@ class ProjectTests(unittest.TestCase):
             unsafe = request(2); mutate(unsafe)
             with self.assertRaises(ValueError): export_portable_project(unsafe, source)
         with self.assertRaises(APIError): export_portable_project(request(2), {**source, "title": {"session_cookie": "private-cookie"}})
+
+    def test_portable_documents_preserve_null_crop_inheritance_and_explicit_reset(self):
+        crop = {"x": 0.25, "y": 0, "width": 0.5, "height": 1}
+        source = {"id": "source", "duration_ms": 120000, "title": "Interview"}
+        for collection_crop in (None, crop):
+            with self.subTest(collection_crop=collection_crop):
+                body = request(3)
+                body["plan"]["options"] = {"crop": collection_crop}
+                body["plan"]["clips"][1]["options"] = {"crop": None}
+                body["plan"]["clips"][2]["options"] = {"crop": None, "clear_crop": True}
+                original = copy.deepcopy(body)
+                # Null inherits; clear_crop explicitly resets. A shared edit
+                # document must preserve that distinction for the core.
+                expected = {"kind": "cutmy.collection.project", "version": 1,
+                            "source": {"duration_ms": 120000, "title": "Interview"}, "plan": copy.deepcopy(body["plan"])}
+                exported = export_portable_project(body, source)
+                self.assertEqual(exported, expected)
+                self.assertEqual(import_portable_project(exported, source), original)
+                # Independently authored JSON must work without first exporting.
+                selected_source = {**source, "id": "selected-source"}
+                self.assertEqual(import_portable_project(json.loads(json.dumps(expected)), selected_source),
+                                 {**original, "source_id": "selected-source"})
+                self.assertEqual(body, original)

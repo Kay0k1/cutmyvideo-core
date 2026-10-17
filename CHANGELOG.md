@@ -4,6 +4,13 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
+### Fixed
+- Admit scoped collection jobs and their project bindings in one transaction. A full project history returns `project_limit` without leaving hidden queued work; existing jobs and partial submissions remain recoverable.
+- Bound project and source-preparation transaction rollback independently of the request deadline, including stalled database responses.
+- Resolve HLS variants, segments and initialization maps against the final playlist URL after guarded HTTP redirects.
+- Recover TypeScript source-preparation journals interrupted between checkpoint hard-link publication and temporary-link removal, retaining the existing private-file checks.
+- Preserve valid `crop: null` inheritance in Python and TypeScript portable project imports and exports.
+
 ## 1.4.1 - 2026-10-16
 
 ### Changed

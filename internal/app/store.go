@@ -30,6 +30,10 @@ var ErrBusy = errors.New("too many active jobs")
 var ErrJobTooLarge = errors.New("export cannot fit the configured storage budget")
 
 func (s *Store) CreateJobLimited(ctx context.Context, owner string, r ExportRequest, key string, limit, globalLimit int) (Job, error) {
+	return s.createJobLimited(ctx, owner, r, key, limit, globalLimit, nil)
+}
+
+func (s *Store) createJobLimited(ctx context.Context, owner string, r ExportRequest, key string, limit, globalLimit int, binding *projectJobBinding) (Job, error) {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		return Job{}, err
@@ -45,7 +49,14 @@ func (s *Store) CreateJobLimited(ctx context.Context, owner string, r ExportRequ
 		var id string
 		err = tx.QueryRow(ctx, `SELECT id FROM jobs WHERE owner=$1 AND idempotency_key=$2`, owner, key).Scan(&id)
 		if err == nil {
-			return readJob(ctx, tx, id, owner)
+			job, err := readJob(ctx, tx, id, owner)
+			if err != nil || binding == nil {
+				return job, err
+			}
+			if err = bindScopedProjectJob(ctx, tx, *binding, owner, job); err != nil {
+				return Job{}, err
+			}
+			return job, tx.Commit(ctx)
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return Job{}, err
@@ -85,6 +96,14 @@ func (s *Store) CreateJobLimited(ctx context.Context, owner string, r ExportRequ
 	j, err := insertJob(ctx, tx, owner, r, key)
 	if err != nil {
 		return j, err
+	}
+	// A scoped job becomes visible to its recipient in the same commit that
+	// admits it. Refused/expired scopes and full histories cannot leave queued
+	// work that the recipient cannot recover through the project.
+	if binding != nil {
+		if err = bindScopedProjectJob(ctx, tx, *binding, owner, j); err != nil {
+			return Job{}, err
+		}
 	}
 	err = tx.Commit(ctx)
 	return j, err

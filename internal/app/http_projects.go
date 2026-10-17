@@ -69,6 +69,10 @@ type projectScope struct {
 	ID, Actor string
 	Current   map[string]Job
 }
+type projectJobBinding struct {
+	Scope projectScope
+	Clip  string
+}
 
 var errProjectConflict = errors.New("project revision conflict")
 var errProjectLimit = errors.New("project limit reached")
@@ -347,7 +351,7 @@ func (s *Server) createAgentProject(w http.ResponseWriter, r *http.Request, owne
 		if e != nil {
 			return e
 		}
-		defer tx.Rollback(context.Background())
+		defer rollbackStorage(tx)
 		if _, e = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, "agent-project:"+owner); e != nil {
 			return e
 		}
@@ -481,7 +485,7 @@ func (s *Server) issueProjectHandoff(w http.ResponseWriter, r *http.Request, act
 		if e != nil {
 			return e
 		}
-		defer tx.Rollback(context.Background())
+		defer rollbackStorage(tx)
 		var owner string
 		if e = tx.QueryRow(ctx, `SELECT owner FROM agent_projects WHERE id=$1 AND owner=$2 AND expires_at>clock_timestamp() FOR UPDATE`, r.PathValue("project"), actor).Scan(&owner); errors.Is(e, pgx.ErrNoRows) {
 			return ErrNotFound
@@ -540,7 +544,7 @@ func (s *Server) redeemProjectHandoff(w http.ResponseWriter, r *http.Request, ac
 		if e != nil {
 			return e
 		}
-		defer tx.Rollback(context.Background())
+		defer rollbackStorage(tx)
 		var recipient *string
 		if _, e = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, "project-recipient:"+actor); e != nil {
 			return e
@@ -611,7 +615,7 @@ func (s *Server) revokeAgentProject(w http.ResponseWriter, r *http.Request, acto
 		if e != nil {
 			return e
 		}
-		defer tx.Rollback(context.Background())
+		defer rollbackStorage(tx)
 		var id string
 		if e = tx.QueryRow(ctx, `SELECT id FROM agent_projects WHERE id=$1 AND owner=$2 FOR UPDATE`, r.PathValue("project"), actor).Scan(&id); errors.Is(e, pgx.ErrNoRows) {
 			return ErrNotFound
@@ -729,7 +733,7 @@ func (s *Server) retryProjectCollection(w http.ResponseWriter, r *http.Request, 
 		if e != nil {
 			return e
 		}
-		defer tx.Rollback(context.Background())
+		defer rollbackStorage(tx)
 		var revision int64
 		if e = tx.QueryRow(ctx, `SELECT revision FROM agent_projects WHERE id=$1 AND expires_at>clock_timestamp() AND `+projectAccess+` FOR UPDATE`, p.ID, actor).Scan(&revision); errors.Is(e, pgx.ErrNoRows) {
 			return ErrNotFound
@@ -880,22 +884,51 @@ func (s *Server) recordScopedProjectJob(ctx context.Context, owner, clip string,
 		return nil
 	}
 	return apiDatabaseExec(ctx, func(dbCtx context.Context) error {
-		tag, err := s.Store.DB.Exec(dbCtx, `INSERT INTO agent_project_jobs(project_id,job_id,clip_id) SELECT id,$4,$5 FROM agent_projects WHERE id=$1 AND owner=$3 AND source_id=$6 AND expires_at>clock_timestamp() AND `+projectAccess+` AND (SELECT count(*) FROM agent_project_jobs WHERE project_id=$1)<1024 ON CONFLICT(project_id,job_id) DO NOTHING`, scope.ID, scope.Actor, owner, job.ID, clip, job.Request.SourceID)
+		tx, err := s.Store.DB.Begin(dbCtx)
 		if err != nil {
 			return err
 		}
-		if tag.RowsAffected() == 0 {
-			var exists bool
-			err = s.Store.DB.QueryRow(dbCtx, `SELECT EXISTS(SELECT 1 FROM agent_project_jobs WHERE project_id=$1 AND job_id=$2)`, scope.ID, job.ID).Scan(&exists)
-			if err != nil {
-				return err
-			}
-			if !exists {
-				return ErrNotFound
-			}
+		defer rollbackStorage(tx)
+		if err = bindScopedProjectJob(dbCtx, tx, projectJobBinding{Scope: scope, Clip: clip}, owner, job); err != nil {
+			return err
 		}
-		return nil
+		return tx.Commit(dbCtx)
 	})
+}
+
+func bindScopedProjectJob(ctx context.Context, tx pgx.Tx, binding projectJobBinding, owner string, job Job) error {
+	// Serialize capacity checks with other bindings and recheck the live scope.
+	// The same row lock also fences grant revocation and project deletion.
+	var id string
+	err := tx.QueryRow(ctx, `SELECT id FROM agent_projects WHERE id=$1 AND owner=$2 AND source_id=$3 FOR UPDATE`, binding.Scope.ID, owner, job.Request.SourceID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	// The authorization snapshot must be taken after a possible row-lock wait:
+	// a revoker can hold the project lock while deleting the grant.
+	var allowed bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_projects WHERE id=$1 AND expires_at>clock_timestamp() AND `+projectAccess+`)`, id, binding.Scope.Actor).Scan(&allowed); err != nil {
+		return err
+	}
+	if !allowed {
+		return ErrNotFound
+	}
+	var exists bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_project_jobs WHERE project_id=$1 AND job_id=$2)`, id, job.ID).Scan(&exists); err != nil || exists {
+		return err
+	}
+	var count int
+	if err = tx.QueryRow(ctx, `SELECT count(*) FROM agent_project_jobs WHERE project_id=$1`, id).Scan(&count); err != nil {
+		return err
+	}
+	if count >= 1024 {
+		return errProjectLimit
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO agent_project_jobs(project_id,job_id,clip_id) VALUES($1,$2,$3)`, id, job.ID, binding.Clip)
+	return err
 }
 
 func (s *Server) scopedProjectResource(w http.ResponseWriter, r *http.Request, actor string) {

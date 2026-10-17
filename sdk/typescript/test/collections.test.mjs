@@ -135,6 +135,27 @@ test('portable edit documents exclude authority and require an explicit matching
   assert.throws(() => exportPortableProject(request(2), { ...source, title: { session_cookie: 'private-cookie' } }), error => error instanceof ApiError && error.code === 'invalid_response');
 });
 
+test('portable documents preserve null crop inheritance and explicit reset', () => {
+  const source = { id: 'source-1', duration_ms: 120000, title: 'Interview' };
+  for (const crop of [null, { x: 0.25, y: 0, width: 0.5, height: 1 }]) {
+    const body = request(3);
+    body.plan.options.crop = crop;
+    body.plan.clips[1].options = { crop: null };
+    body.plan.clips[2].options = { crop: null, clear_crop: true };
+    const original = structuredClone(body);
+    // Null inherits; clear_crop explicitly resets. Preserve both decisions.
+    const expected = { kind: 'cutmy.collection.project', version: 1,
+      source: { duration_ms: 120000, title: 'Interview' }, plan: structuredClone(body.plan) };
+    const exported = exportPortableProject(body, source);
+    assert.deepEqual(exported, expected);
+    assert.deepEqual(importPortableProject(exported, source), original);
+    // Independently authored JSON must work without first exporting.
+    assert.deepEqual(importPortableProject(JSON.parse(JSON.stringify(expected)), { ...source, id: 'selected-source' }),
+      { ...original, source_id: 'selected-source' });
+    assert.deepEqual(body, original);
+  }
+});
+
 test('retained receipt limit refuses a new transfer without making the project unreadable', async t => {
   const root = join(await directory(t), 'project'), f = await fixture(t);
   const done = await runCollection(f.client, request(), root), original = await readFile(done.outputs[0].path);

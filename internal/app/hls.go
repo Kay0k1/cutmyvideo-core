@@ -228,31 +228,46 @@ func mediaHeaders(req *http.Request, headers map[string]string) {
 	}
 }
 func (g *networkGuard) fetch(ctx context.Context, raw string, headers map[string]string, dst io.Writer, limit int64) error {
+	_, err := g.fetchWithFinalURL(ctx, raw, headers, dst, limit)
+	return err
+}
+
+// Relative playlist references belong to the final response URL after redirects.
+// Payload callers keep the same guarded transfer without needing that URL.
+func (g *networkGuard) fetchWithFinalURL(ctx context.Context, raw string, headers map[string]string, dst io.Writer, limit int64) (string, error) {
 	if limit < 0 {
-		return errors.New("invalid source transfer limit")
+		return "", errors.New("invalid source transfer limit")
 	}
 	u, e := validateURL(raw)
 	if e != nil {
-		return errUnsupportedStream
+		return "", errUnsupportedStream
 	}
 	req, e := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if e != nil {
-		return errUnsupportedStream
+		return "", errUnsupportedStream
 	}
 	mediaHeaders(req, headers)
 	resp, e := g.client.Do(req)
 	if e != nil {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return "", ctx.Err()
 		}
-		return errPlatformUnavailable
+		return "", errPlatformUnavailable
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
-		return &sourceProblem{"media_upstream_denied", "The video service refused the media request; reopen the source or upload a file"}
+		return "", &sourceProblem{"media_upstream_denied", "The video service refused the media request; reopen the source or upload a file"}
 	}
 	if resp.StatusCode != http.StatusOK || resp.ContentLength > limit {
-		return errPlatformUnavailable
+		return "", errPlatformUnavailable
+	}
+	finalURL := u.String()
+	if resp.Request != nil && resp.Request.URL != nil {
+		final, err := validateURL(resp.Request.URL.String())
+		if err != nil {
+			return "", errUnsupportedStream
+		}
+		finalURL = final.String()
 	}
 	var reader io.Reader = resp.Body
 	if limit < math.MaxInt64 {
@@ -267,20 +282,20 @@ func (g *networkGuard) fetch(ctx context.Context, raw string, headers map[string
 		if n > 0 {
 			total += int64(n)
 			if total > limit || g.bytes.Add(int64(n)) > g.limit {
-				return errors.New("source transfer budget exceeded")
+				return "", errors.New("source transfer budget exceeded")
 			}
 			if _, e = dst.Write(buffer[:n]); e != nil {
-				return e
+				return "", e
 			}
 		}
 		if readErr == io.EOF {
-			return nil
+			return finalURL, nil
 		}
 		if readErr != nil {
 			if ctx.Err() != nil {
-				return ctx.Err()
+				return "", ctx.Err()
 			}
-			return errPlatformUnavailable
+			return "", errPlatformUnavailable
 		}
 	}
 }
@@ -289,10 +304,11 @@ func loadHLS(ctx context.Context, g *networkGuard, f platformFormat, quality str
 		return hlsPlaylist{}, errUnsupportedStream
 	}
 	var data bytes.Buffer
-	if e := g.fetch(ctx, f.URL, f.Headers, &data, maxManifestBytes); e != nil {
+	finalURL, e := g.fetchWithFinalURL(ctx, f.URL, f.Headers, &data, maxManifestBytes)
+	if e != nil {
 		return hlsPlaylist{}, e
 	}
-	p, e := parseHLS(f.URL, data.Bytes())
+	p, e := parseHLS(finalURL, data.Bytes())
 	if e != nil {
 		return p, e
 	}

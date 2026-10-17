@@ -9,6 +9,20 @@ ENGINE_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/pkg/engine"
 FS_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
 CLI_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/cmd/cutmy"
 
+AUDIT_MEDIA_REQUIRED = {
+    "TestHLSManifestRedirectResolvesFinalRelativeReferences",
+    "TestHLSManifestRedirectRetainsTargetGuards",
+    "TestHLSManifestRedirectRetainsRedirectLimit",
+    "TestHLSManifestRedirectRetainsTransferBudgets",
+}
+AUDIT_SERVICE_REQUIRED = {
+    "TestHTTPAgentProjectJobLimitRejectsAdmissionAtomicallyAndRetainsReplay",
+    "TestHTTPAgentProjectConcurrentAdmissionsShareLastBindingSlot",
+    "TestHTTPAgentProjectPartialAdmissionPreservesJobsAtBindingLimit",
+    "TestProjectAdmissionRechecksScopeBeforeCommittingJob",
+    "TestHTTPProjectAndPreparationRollbackHasIndependentBound",
+}
+
 NEW_MEDIA_REQUIRED = {
     "TestWaveformPCMStreamingBoundsAndSplitSamples", "TestWaveformMatchesIndependentAudioTimelineAndOffsets",
     "TestWaveformSelectsActualAudioTrack", "TestWaveformPreservesAntiphaseStereoActivity",
@@ -303,6 +317,8 @@ REQUIRED[2].update(COLLECTION_SERVICE_REQUIRED)
 REQUIRED[0].update(SUBTITLE_CLI_REQUIRED)
 REQUIRED[2].update(AGENT_PROJECT_SERVICE_REQUIRED | SUBTITLE_SERVICE_REQUIRED)
 REQUIRED[3].update(AGENT_PROJECT_STORAGE_REQUIRED)
+REQUIRED[2].update(AUDIT_SERVICE_REQUIRED)
+REQUIRED[4].update(AUDIT_MEDIA_REQUIRED)
 
 REQUIRED_PACKAGES = [
     {ENGINE_PACKAGE, FS_PACKAGE, CLI_PACKAGE},
@@ -331,6 +347,7 @@ BOOKWORM_REQUIRED.update(EFFICIENT_CUTTING_MEDIA_REQUIRED)
 BOOKWORM_REQUIRED.update(UNIVERSAL_MEDIA_REQUIRED)
 BOOKWORM_REQUIRED.update(PREFLIGHT_MEDIA_REQUIRED)
 BOOKWORM_REQUIRED.update(DRAFT_CACHE_TRANSFER_REQUIRED)
+BOOKWORM_REQUIRED.update(AUDIT_MEDIA_REQUIRED)
 
 
 def verify_report(filename, names, packages):
