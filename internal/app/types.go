@@ -6,8 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
+
+	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
 )
 
 type Config struct {
@@ -169,137 +170,25 @@ type Source struct {
 	PreparationPathID string `json:"-"`
 }
 
-type Range struct {
-	StartMS int64  `json:"start_ms"`
-	EndMS   int64  `json:"end_ms"`
-	Label   string `json:"label"`
-}
+type Range = edit.Range
+type Track = edit.Track
+type TrackSelection = edit.TrackSelection
+type ArtifactSegment = edit.Segment
 
-type ExportRequest struct {
-	SourceID      string  `json:"source_id"`
-	Ranges        []Range `json:"ranges"`
-	Format        string  `json:"format"`
-	Quality       string  `json:"quality"`
-	CutMode       string  `json:"cut_mode"`
-	OutputMode    string  `json:"output_mode,omitempty"`
-	AudioTrack    *int    `json:"audio_track,omitempty"`
-	NoAudio       bool    `json:"no_audio,omitempty"`
-	SubtitleMode  string  `json:"subtitle_mode,omitempty"`
-	Crop          *Crop   `json:"crop,omitempty"`
-	CleanupSource bool    `json:"cleanup_source,omitempty"`
-	// Rendition selects a draft without changing the edit plan.
-	Rendition string `json:"rendition,omitempty"`
-}
+// ExportRequest retains its legacy validation method and JSON representation.
+// Shared rules consume the neutral edit model through this compatibility type.
+type ExportRequest edit.ExportRequest
 
 func (r *ExportRequest) Validate(c Config, s Source) error {
-	if err := validateCropMode(*r); err != nil {
-		return err
-	}
-	if len(r.Ranges) == 0 {
-		return errors.New("choose at least one range; mark a start and an end before exporting")
-	}
-	if len(r.Ranges) > c.MaxRanges {
-		return fmt.Errorf("choose between 1 and %d ranges (received %d); remove extra ranges or submit another job", c.MaxRanges, len(r.Ranges))
-	}
-	if r.Format != "mp4" && r.Format != "mp3" && r.Format != "mkv" {
-		return errors.New("format must be mp4, mp3, or mkv")
-	}
-	if r.Quality != "1080p" && r.Quality != "720p" && r.Quality != "best" {
-		return errors.New("quality must be 1080p, 720p, or best")
-	}
-	if r.CutMode != "accurate" && r.CutMode != "copy" {
-		return errors.New("cut_mode must be accurate or copy")
-	}
-	if r.Rendition != "" && r.Rendition != "final" && r.Rendition != "draft" {
-		return errors.New("rendition must be final or draft")
-	}
-	if r.Rendition == "draft" {
-		if r.Format != "mp4" || r.CutMode != "accurate" {
-			return errors.New("draft rendition requires accurate MP4; choose final to preserve original streams")
-		}
-		r.Quality = "720p"
-	} else {
-		r.Rendition = ""
-	}
-	if r.Format == "mp3" && r.CutMode == "copy" {
-		return errors.New("MP3 export requires accurate mode; preserving arbitrary input audio as MP3 is not possible")
-	}
-	if r.Format == "mkv" && r.CutMode != "copy" {
-		return errors.New("MKV export requires copy mode; choose MP4 for accurate cutting")
-	}
-	if r.OutputMode != "" && r.OutputMode != "separate" && r.OutputMode != "joined" {
-		return errors.New("output_mode must be separate or joined")
-	}
-	if r.SubtitleMode != "" && r.SubtitleMode != "omit" && r.SubtitleMode != "preserve" {
-		return errors.New("subtitle_mode must be omit or preserve")
-	}
-	if r.AudioTrack != nil && *r.AudioTrack < 0 {
-		return errors.New("audio_track must be a nonnegative source stream index; inspect the source tracks first")
-	}
-	if r.NoAudio && r.AudioTrack != nil {
-		return errors.New("choose audio_track or no_audio, not both")
-	}
-	if r.NoAudio && r.Format == "mp3" {
-		return errors.New("MP3 export requires audio; enable audio or choose a video format")
-	}
-	if r.AudioTrack != nil && s.Path == "" {
-		return errors.New("audio track selection requires an uploaded file; upload the source to select its audio track")
-	}
-	if r.SubtitleMode == "preserve" && (r.CutMode != "copy" || r.Format == "mp3") {
-		return errors.New("subtitle preservation requires MP4 or MKV copy mode; choose copy mode or omit subtitles")
-	}
-	if r.SubtitleMode == "preserve" && s.Path == "" {
-		return errors.New("subtitle preservation requires an uploaded file; upload the source or omit subtitles")
-	}
-	// Persist defaults exactly as older requests did. Idempotency continues to
-	// return the original owner/key pair regardless of later request changes.
-	if r.OutputMode == "separate" {
-		r.OutputMode = ""
-	}
-	if r.SubtitleMode == "omit" {
-		r.SubtitleMode = ""
-	}
-	var total int64
-	for i := range r.Ranges {
-		v := &r.Ranges[i]
-		v.Label = strings.TrimSpace(v.Label)
-		context := fmt.Sprintf("range %d", i+1)
-		if v.Label != "" {
-			context += fmt.Sprintf(" (%q)", v.Label)
-		}
-		if len(v.Label) > 200 {
-			return fmt.Errorf("%s: shorten the label to at most 200 UTF-8 bytes", context)
-		}
-		if v.StartMS < 0 {
-			return fmt.Errorf("%s: start_ms must be at least 0", context)
-		}
-		if v.EndMS <= v.StartMS {
-			return fmt.Errorf("%s: set end_ms after start_ms (%d)", context, v.StartMS)
-		}
-		if v.EndMS > s.DurationMS {
-			return fmt.Errorf("%s: set end_ms at or before the source duration (%d ms)", context, s.DurationMS)
-		}
-		if v.EndMS-v.StartMS > c.MaxRangeMS {
-			return fmt.Errorf("%s: shorten the range to at most %d ms", context, c.MaxRangeMS)
-		}
-		duration := v.EndMS - v.StartMS
-		if duration > c.MaxJobMS-total {
-			return fmt.Errorf("%s: total selected duration exceeds %d ms; shorten or remove ranges", context, c.MaxJobMS)
-		}
-		total += duration
-	}
-	return nil
+	return edit.ValidateExportRequest((*edit.ExportRequest)(r), editLimits(c), editSource(s))
 }
 
-// ArtifactSegment records actual source boundaries and the resulting joined
-// timeline in user-specified order. Copy boundaries may include keyframe preroll.
-type ArtifactSegment struct {
-	Index         int    `json:"index"`
-	Label         string `json:"label"`
-	SourceStartMS int64  `json:"source_start_ms"`
-	SourceEndMS   int64  `json:"source_end_ms"`
-	OutputStartMS int64  `json:"output_start_ms"`
-	OutputEndMS   int64  `json:"output_end_ms"`
+func editLimits(c Config) edit.Limits {
+	return edit.Limits{MaxRanges: c.MaxRanges, MaxRangeMS: c.MaxRangeMS, MaxJobMS: c.MaxJobMS}
+}
+
+func editSource(s Source) edit.Source {
+	return edit.Source{ID: s.ID, DurationMS: s.DurationMS, HasLocalMedia: s.Path != ""}
 }
 
 type Artifact struct {

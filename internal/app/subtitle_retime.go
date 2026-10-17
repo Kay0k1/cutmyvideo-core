@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
 )
 
 // SubtitleRetimeRequest transforms supplied text against actual output maps.
@@ -242,7 +244,7 @@ func RetimeSubtitles(ctx context.Context, request SubtitleRetimeRequest) (Subtit
 	seen := make(map[string]bool)
 	for i, clip := range request.Outputs {
 		field := fmt.Sprintf("outputs[%d]", i)
-		if !collectionIDPattern.MatchString(clip.ClipID) || collectionReservedIDPattern.MatchString(clip.ClipID) || seen[clip.ClipID] {
+		if !edit.ValidCollectionID(clip.ClipID) || seen[clip.ClipID] {
 			return result, subtitleInvalid("invalid_segment_map", field+".clip_id")
 		}
 		seen[clip.ClipID] = true

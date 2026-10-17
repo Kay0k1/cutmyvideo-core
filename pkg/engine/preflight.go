@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Kay0k1/cutmyvideo-core/internal/app"
+	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
 )
 
 type PreflightCheck = app.PreflightCheck
@@ -16,7 +17,7 @@ type PreflightWarning = app.PreflightWarning
 type PreflightSource = app.PreflightSource
 type PreflightVideo = app.PreflightVideo
 type PreflightRequest = app.ExportRequest
-type PreflightRange = app.Range
+type PreflightRange = edit.Range
 
 // PreflightResult contains known prerequisites and explicitly deferred checks.
 // OutputPaths are proposed names only. No output or workspace is created and

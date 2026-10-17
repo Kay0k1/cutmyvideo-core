@@ -30,6 +30,12 @@ PROJECT_CONTRACT_SERVICE_REQUIRED = {
     "TestProjectLifecycleLiveProjectAndGrantDoNotPinSource",
 }
 
+EDIT_MODEL_SERVICE_REQUIRED = {
+    "TestEditAdapterPreservesRequestNormalizationOrder",
+    "TestEditAdapterPreservesCollectionErrorChains",
+}
+EDIT_MODEL_ENGINE_REQUIRED = {"TestEngineEditModelPreservesPublicShapes"}
+
 NEW_MEDIA_REQUIRED = {
     "TestWaveformPCMStreamingBoundsAndSplitSamples", "TestWaveformMatchesIndependentAudioTimelineAndOffsets",
     "TestWaveformSelectsActualAudioTrack", "TestWaveformPreservesAntiphaseStereoActivity",
@@ -326,6 +332,8 @@ REQUIRED[2].update(AGENT_PROJECT_SERVICE_REQUIRED | SUBTITLE_SERVICE_REQUIRED)
 REQUIRED[3].update(AGENT_PROJECT_STORAGE_REQUIRED)
 REQUIRED[2].update(AUDIT_SERVICE_REQUIRED)
 REQUIRED[2].update(PROJECT_CONTRACT_SERVICE_REQUIRED)
+REQUIRED[2].update(EDIT_MODEL_SERVICE_REQUIRED)
+REQUIRED[0].update(EDIT_MODEL_ENGINE_REQUIRED)
 REQUIRED[4].update(AUDIT_MEDIA_REQUIRED)
 
 REQUIRED_PACKAGES = [

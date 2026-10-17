@@ -13,6 +13,9 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 - Show fixed refusal codes in the self-hosting lifecycle wrapper while retaining exit status 1 and redacting private exception details.
 
 ### Changed
+- Separate pure edit models and shared validation from server configuration, preserving public Go shapes, JSON and diagnostic behavior.
+- Move project persistence and transaction handling out of HTTP handlers, retaining authorization, revision checks, lock ordering and database deadlines.
+- Check free SDK verification space before builds and remove only successful runs' disposable installations, preserving packages and verification evidence.
 - Freeze the 1.4.1 HTTP contract alongside the original baseline, with mandatory compatibility checks for collections, projects and the other existing API operations.
 - Share versioned collection and portable-project examples between Go, OpenAPI and both source/installed SDK test suites, preserving their distinct validation responsibilities.
 - Document independent project, access, source, job, artifact and local-state lifetimes; require project expiry, revocation and retained-work regression checks on every native target.

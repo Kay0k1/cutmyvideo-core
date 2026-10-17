@@ -9,74 +9,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"math"
 	"net/http"
 	"reflect"
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
-
-type AgentProjectJob struct {
-	ClipID  string        `json:"clip_id"`
-	Job     Job           `json:"job"`
-	Request ExportRequest `json:"request"`
-	Current bool          `json:"current"`
-}
-type AgentProjectClip struct {
-	ClipID  string        `json:"clip_id"`
-	Request ExportRequest `json:"request"`
-}
-type AgentProject struct {
-	Version         int                `json:"version"`
-	ID              string             `json:"id"`
-	Revision        int64              `json:"revision"`
-	SourceID        string             `json:"source_id"`
-	Source          Source             `json:"source"`
-	Plan            CollectionPlan     `json:"plan"`
-	ClipIDs         []string           `json:"clip_ids,omitempty"`
-	Rendition       string             `json:"rendition"`
-	Jobs            []AgentProjectJob  `json:"jobs"`
-	Clips           []AgentProjectClip `json:"clips"`
-	ExpiresAt       time.Time          `json:"expires_at"`
-	AccessExpiresAt *time.Time         `json:"access_expires_at,omitempty"`
-	Owner           string             `json:"-"`
-	CollectionKey   string             `json:"-"`
-}
-type projectCreateRequest struct {
-	SourceID      string           `json:"source_id"`
-	Plan          CollectionPlan   `json:"plan"`
-	ClipIDs       []string         `json:"clip_ids,omitempty"`
-	Rendition     string           `json:"rendition,omitempty"`
-	CollectionKey string           `json:"collection_key"`
-	JobIDs        []string         `json:"job_ids,omitempty"`
-	ClipJobs      []projectClipJob `json:"clip_jobs,omitempty"`
-}
-type projectClipJob struct {
-	ClipID string `json:"clip_id"`
-	JobID  string `json:"job_id"`
-}
-type projectEditRequest struct {
-	Revision  int64          `json:"revision"`
-	Plan      CollectionPlan `json:"plan"`
-	ClipIDs   []string       `json:"clip_ids,omitempty"`
-	Rendition string         `json:"rendition,omitempty"`
-}
-type projectScopeKey struct{}
-type projectScope struct {
-	ID, Actor string
-	Current   map[string]Job
-}
-type projectJobBinding struct {
-	Scope projectScope
-	Clip  string
-}
-
-var errProjectConflict = errors.New("project revision conflict")
-var errProjectLimit = errors.New("project limit reached")
-var errProjectSelection = errors.New("invalid project selection")
 
 func writeProjectPersistenceError(w http.ResponseWriter, err error) {
 	var postgres *pgconn.PgError
@@ -89,65 +28,13 @@ func writeProjectPersistenceError(w http.ResponseWriter, err error) {
 	lookupError(w, err)
 }
 
-const projectAccess = `(owner=$2 OR EXISTS(SELECT 1 FROM agent_project_grants g WHERE g.project_id=agent_projects.id AND g.recipient=$2 AND g.expires_at>clock_timestamp()))`
-
-func projectPrepared(plan CollectionPlan, selected []string, rendition string, source Source, c Config, identityOnly bool) ([]PreparedCollectionClip, error) {
-	if plan.Input != "" {
-		return nil, collectionInvalid("", "plan.input", "HTTP projects cannot contain filesystem inputs")
-	}
-	if identityOnly {
-		c.MaxRanges = 128 * 128
-		c.MaxRangeMS = math.MaxInt64
-		c.MaxJobMS = math.MaxInt64
-		source.DurationMS = math.MaxInt64
-		source.Path = "project-identity-only"
-	}
-	return NormalizeCollection(plan, CollectionExecution{ClipIDs: selected, Rendition: rendition}, c, source)
-}
-
-func (s *Store) agentProject(ctx context.Context, id, actor string, jobs bool) (AgentProject, error) {
-	p := AgentProject{Version: 1, Jobs: []AgentProjectJob{}}
-	var plan, selection, snapshot []byte
-	err := s.DB.QueryRow(ctx, `SELECT id,owner,source_id,plan,clip_ids,rendition,collection_key,revision,expires_at,source_snapshot,(SELECT expires_at FROM agent_project_grants WHERE project_id=agent_projects.id AND recipient=$2 AND expires_at>clock_timestamp()) FROM agent_projects WHERE id=$1 AND expires_at>clock_timestamp() AND `+projectAccess, id, actor).Scan(&p.ID, &p.Owner, &p.SourceID, &plan, &selection, &p.Rendition, &p.CollectionKey, &p.Revision, &p.ExpiresAt, &snapshot, &p.AccessExpiresAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return p, ErrNotFound
-	}
+func (s *Server) agentProject(ctx context.Context, id, actor string, jobs bool) (AgentProject, error) {
+	p, err := s.Store.agentProject(ctx, id, actor, jobs)
 	if err != nil {
 		return p, err
 	}
-	if err = json.Unmarshal(plan, &p.Plan); err != nil {
-		return p, err
-	}
-	if err = json.Unmarshal(selection, &p.ClipIDs); err != nil {
-		return p, err
-	}
-	if err = json.Unmarshal(snapshot, &p.Source); err != nil {
-		return p, err
-	}
-	if source, e := s.Source(ctx, p.SourceID, p.Owner); e == nil {
-		p.Source = source
-	} else if errors.Is(e, ErrNotFound) {
-		p.Source.MediaRemoved = true
-		p.Source.PreviewURL = nil
-		p.Source.ThumbnailURL = nil
-	} else {
-		return p, e
-	}
-	if p.Owner == actor {
-		p.AccessExpiresAt = nil
-	}
-	prepared, e := projectPrepared(p.Plan, p.ClipIDs, p.Rendition, p.Source, s.storageConfig(), true)
-	if e != nil {
-		return p, e
-	}
-	p.Clips = []AgentProjectClip{}
-	for _, clip := range prepared {
-		p.Clips = append(p.Clips, AgentProjectClip{ClipID: clip.ID, Request: clip.Request})
-	}
-	if jobs {
-		if err = s.projectJobs(ctx, &p); err != nil {
-			return p, err
-		}
+	for i := range p.Jobs {
+		rewriteProjectJobID(p.ID, &p.Jobs[i].Job)
 	}
 	projectSourceURLs(&p)
 	return p, nil
@@ -163,61 +50,6 @@ func projectSourceURLs(p *AgentProject) {
 		v := base + "/thumbnail"
 		p.Source.ThumbnailURL = &v
 	}
-}
-
-func (s *Store) projectJobs(ctx context.Context, p *AgentProject) error {
-	clips, err := projectPrepared(p.Plan, nil, p.Rendition, p.Source, s.storageConfig(), true)
-	if err != nil {
-		return err
-	}
-	expected := map[string]ExportRequest{}
-	for _, clip := range p.Clips {
-		expected[clip.ClipID] = clip.Request
-	}
-	rows, err := s.DB.Query(ctx, `SELECT j.id,p.clip_id,j.request FROM agent_project_jobs p JOIN jobs j ON j.id=p.job_id WHERE p.project_id=$1 AND j.owner=$2 ORDER BY j.created_at DESC,j.id DESC LIMIT 1024`, p.ID, p.Owner)
-	if err != nil {
-		return err
-	}
-	type candidate struct {
-		id, clip string
-		request  ExportRequest
-		current  bool
-	}
-	chosen := map[string]candidate{}
-	for rows.Next() {
-		var c candidate
-		var raw []byte
-		if err = rows.Scan(&c.id, &c.clip, &raw); err != nil {
-			break
-		}
-		if err = json.Unmarshal(raw, &c.request); err != nil {
-			break
-		}
-		want, exists := expected[c.clip]
-		c.current = exists && reflect.DeepEqual(c.request, want)
-		old, found := chosen[c.clip]
-		if !found || (!old.current && c.current) {
-			chosen[c.clip] = c
-		}
-	}
-	if err == nil {
-		err = rows.Err()
-	}
-	rows.Close()
-	if err != nil {
-		return err
-	}
-	for _, clip := range clips {
-		if c, ok := chosen[clip.ID]; ok {
-			job, e := s.Job(ctx, c.id, p.Owner)
-			if e != nil {
-				return e
-			}
-			rewriteProjectJobID(p.ID, &job)
-			p.Jobs = append(p.Jobs, AgentProjectJob{ClipID: c.clip, Job: job, Request: c.request, Current: c.current})
-		}
-	}
-	return nil
 }
 
 func rewriteProjectJobID(projectID string, job *Job) {
@@ -256,7 +88,7 @@ func (s *Server) createAgentProject(w http.ResponseWriter, r *http.Request, owne
 	identity, _ := json.Marshal([]string{owner, body.CollectionKey})
 	digest := sha256.Sum256(identity)
 	id := "project_" + hex.EncodeToString(digest[:])
-	retained, err := apiDatabase(r.Context(), func(ctx context.Context) (AgentProject, error) { return s.Store.agentProject(ctx, id, owner, true) })
+	retained, err := apiDatabase(r.Context(), func(ctx context.Context) (AgentProject, error) { return s.agentProject(ctx, id, owner, true) })
 	if err == nil {
 		if retained.Owner != owner || retained.CollectionKey != body.CollectionKey || retained.SourceID != body.SourceID {
 			writeError(w, 409, "project_conflict", "This project workflow key belongs to a different fixed source")
@@ -345,47 +177,8 @@ func (s *Server) createAgentProject(w http.ResponseWriter, r *http.Request, owne
 		selection = []byte("[]")
 	}
 	snapshot, _ := json.Marshal(source)
-	created := true
-	err = apiDatabaseExec(r.Context(), func(ctx context.Context) error {
-		tx, e := s.Store.DB.Begin(ctx)
-		if e != nil {
-			return e
-		}
-		defer rollbackStorage(tx)
-		if _, e = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, "agent-project:"+owner); e != nil {
-			return e
-		}
-		if _, e = tx.Exec(ctx, `DELETE FROM agent_projects WHERE id IN (SELECT id FROM agent_projects WHERE expires_at<clock_timestamp() ORDER BY expires_at,id LIMIT 200)`); e != nil {
-			return e
-		}
-		var savedSource string
-		e = tx.QueryRow(ctx, `SELECT source_id FROM agent_projects WHERE owner=$1 AND collection_key=$2`, owner, body.CollectionKey).Scan(&savedSource)
-		if e == nil {
-			if savedSource != body.SourceID {
-				return errProjectConflict
-			}
-			created = false
-			return tx.Commit(ctx)
-		}
-		if !errors.Is(e, pgx.ErrNoRows) {
-			return e
-		}
-		var n int
-		if e = tx.QueryRow(ctx, `SELECT count(*) FROM agent_projects WHERE owner=$1`, owner).Scan(&n); e != nil {
-			return e
-		}
-		if n >= 20 {
-			return errProjectLimit
-		}
-		if _, e = tx.Exec(ctx, `INSERT INTO agent_projects(id,owner,source_id,plan,source_snapshot,clip_ids,rendition,collection_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, id, owner, source.ID, plan, snapshot, selection, collectionRendition(body.Rendition), body.CollectionKey); e != nil {
-			return e
-		}
-		for job, clip := range attached {
-			if _, e = tx.Exec(ctx, `INSERT INTO agent_project_jobs(project_id,job_id,clip_id) VALUES($1,$2,$3)`, id, job, clip); e != nil {
-				return e
-			}
-		}
-		return tx.Commit(ctx)
+	created, err := apiDatabase(r.Context(), func(ctx context.Context) (bool, error) {
+		return s.Store.createAgentProject(ctx, id, owner, body, source, attached, plan, selection, snapshot)
 	})
 	if errors.Is(err, errProjectConflict) {
 		writeError(w, 409, "project_conflict", "This project workflow key belongs to a different fixed source")
@@ -407,7 +200,7 @@ func (s *Server) createAgentProject(w http.ResponseWriter, r *http.Request, owne
 }
 
 func (s *Server) writeAgentProject(w http.ResponseWriter, r *http.Request, actor, id string, status int) {
-	p, err := apiDatabase(r.Context(), func(ctx context.Context) (AgentProject, error) { return s.Store.agentProject(ctx, id, actor, true) })
+	p, err := apiDatabase(r.Context(), func(ctx context.Context) (AgentProject, error) { return s.agentProject(ctx, id, actor, true) })
 	if err != nil {
 		lookupError(w, err)
 		return
@@ -426,7 +219,7 @@ func (s *Server) editAgentProject(w http.ResponseWriter, r *http.Request, actor 
 		return
 	}
 	p, err := apiDatabase(r.Context(), func(ctx context.Context) (AgentProject, error) {
-		return s.Store.agentProject(ctx, r.PathValue("project"), actor, false)
+		return s.agentProject(ctx, r.PathValue("project"), actor, false)
 	})
 	if err != nil {
 		lookupError(w, err)
@@ -442,14 +235,7 @@ func (s *Server) editAgentProject(w http.ResponseWriter, r *http.Request, actor 
 		selection = []byte("[]")
 	}
 	err = apiDatabaseExec(r.Context(), func(ctx context.Context) error {
-		tag, e := s.Store.DB.Exec(ctx, `UPDATE agent_projects SET plan=$4,clip_ids=$5,rendition=$6,revision=revision+1 WHERE id=$1 AND `+projectAccess+` AND expires_at>clock_timestamp() AND revision=$3`, p.ID, actor, body.Revision, plan, selection, collectionRendition(body.Rendition))
-		if e != nil {
-			return e
-		}
-		if tag.RowsAffected() != 1 {
-			return errProjectConflict
-		}
-		return nil
+		return s.Store.editAgentProject(ctx, p.ID, actor, body.Revision, plan, selection, body.Rendition)
 	})
 	if errors.Is(err, errProjectConflict) {
 		writeError(w, 409, "project_conflict", "The project changed; reload it before saving edits")
@@ -479,33 +265,8 @@ func (s *Server) issueProjectHandoff(w http.ResponseWriter, r *http.Request, act
 	token := base64.RawURLEncoding.EncodeToString(raw[:])
 	sum := sha256.Sum256([]byte(token))
 	hash := hex.EncodeToString(sum[:])
-	var expiry time.Time
-	err := apiDatabaseExec(r.Context(), func(ctx context.Context) error {
-		tx, e := s.Store.DB.Begin(ctx)
-		if e != nil {
-			return e
-		}
-		defer rollbackStorage(tx)
-		var owner string
-		if e = tx.QueryRow(ctx, `SELECT owner FROM agent_projects WHERE id=$1 AND owner=$2 AND expires_at>clock_timestamp() FOR UPDATE`, r.PathValue("project"), actor).Scan(&owner); errors.Is(e, pgx.ErrNoRows) {
-			return ErrNotFound
-		} else if e != nil {
-			return e
-		}
-		if _, e = tx.Exec(ctx, `DELETE FROM agent_project_handoffs WHERE project_id=$1 AND expires_at<clock_timestamp()`, r.PathValue("project")); e != nil {
-			return e
-		}
-		var n int
-		if e = tx.QueryRow(ctx, `SELECT count(*) FROM agent_project_handoffs WHERE project_id=$1`, r.PathValue("project")).Scan(&n); e != nil {
-			return e
-		}
-		if n >= 8 {
-			return errProjectLimit
-		}
-		if e = tx.QueryRow(ctx, `INSERT INTO agent_project_handoffs(token_hash,project_id) VALUES($1,$2) RETURNING expires_at`, hash, r.PathValue("project")).Scan(&expiry); e != nil {
-			return e
-		}
-		return tx.Commit(ctx)
+	expiry, err := apiDatabase(r.Context(), func(ctx context.Context) (time.Time, error) {
+		return s.Store.issueProjectHandoff(ctx, r.PathValue("project"), actor, hash)
 	})
 	if errors.Is(err, errProjectLimit) {
 		writeError(w, 429, "handoff_limit", "This project has reached its unexpired handoff limit")
@@ -538,58 +299,8 @@ func (s *Server) redeemProjectHandoff(w http.ResponseWriter, r *http.Request, ac
 	}
 	sum := sha256.Sum256([]byte(body.Token))
 	hash := hex.EncodeToString(sum[:])
-	var projectID string
-	err := apiDatabaseExec(r.Context(), func(ctx context.Context) error {
-		tx, e := s.Store.DB.Begin(ctx)
-		if e != nil {
-			return e
-		}
-		defer rollbackStorage(tx)
-		var recipient *string
-		if _, e = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, "project-recipient:"+actor); e != nil {
-			return e
-		}
-		if e = tx.QueryRow(ctx, `SELECT h.project_id,h.recipient FROM agent_project_handoffs h JOIN agent_projects p ON p.id=h.project_id WHERE h.token_hash=$1 AND h.expires_at>clock_timestamp() AND p.expires_at>clock_timestamp() FOR UPDATE OF h,p`, hash).Scan(&projectID, &recipient); errors.Is(e, pgx.ErrNoRows) {
-			return ErrNotFound
-		} else if e != nil {
-			return e
-		}
-		if recipient != nil {
-			if *recipient != actor {
-				return ErrNotFound
-			}
-			var exists bool
-			if e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_project_grants WHERE project_id=$1 AND recipient=$2 AND expires_at>clock_timestamp())`, projectID, actor).Scan(&exists); e != nil {
-				return e
-			}
-			if !exists {
-				return ErrNotFound
-			}
-			return tx.Commit(ctx)
-		}
-		if _, e = tx.Exec(ctx, `DELETE FROM agent_project_grants WHERE expires_at<clock_timestamp() AND (project_id=$1 OR recipient=$2)`, projectID, actor); e != nil {
-			return e
-		}
-		var n int
-		if e = tx.QueryRow(ctx, `SELECT count(*) FROM agent_project_grants WHERE recipient=$1`, actor).Scan(&n); e != nil {
-			return e
-		}
-		if n >= 20 {
-			return errProjectLimit
-		}
-		if e = tx.QueryRow(ctx, `SELECT count(*) FROM agent_project_grants WHERE project_id=$1`, projectID).Scan(&n); e != nil {
-			return e
-		}
-		if n >= 32 {
-			return errProjectLimit
-		}
-		if _, e = tx.Exec(ctx, `INSERT INTO agent_project_grants(project_id,recipient,expires_at) VALUES($1,$2,least(clock_timestamp()+interval '24 hours',(SELECT expires_at FROM agent_projects WHERE id=$1))) ON CONFLICT(project_id,recipient) DO NOTHING`, projectID, actor); e != nil {
-			return e
-		}
-		if _, e = tx.Exec(ctx, `UPDATE agent_project_handoffs SET recipient=$2,redeemed_at=clock_timestamp() WHERE token_hash=$1`, hash, actor); e != nil {
-			return e
-		}
-		return tx.Commit(ctx)
+	projectID, err := apiDatabase(r.Context(), func(ctx context.Context) (string, error) {
+		return s.Store.redeemProjectHandoff(ctx, actor, hash)
 	})
 	if errors.Is(err, errProjectLimit) {
 		writeError(w, 429, "project_limit", "The project access limit was reached")
@@ -600,7 +311,7 @@ func (s *Server) redeemProjectHandoff(w http.ResponseWriter, r *http.Request, ac
 		return
 	}
 	p, err := apiDatabase(r.Context(), func(ctx context.Context) (AgentProject, error) {
-		return s.Store.agentProject(ctx, projectID, actor, true)
+		return s.agentProject(ctx, projectID, actor, true)
 	})
 	if err != nil {
 		lookupError(w, err)
@@ -611,29 +322,7 @@ func (s *Server) redeemProjectHandoff(w http.ResponseWriter, r *http.Request, ac
 
 func (s *Server) revokeAgentProject(w http.ResponseWriter, r *http.Request, actor string, remove bool) {
 	err := apiDatabaseExec(r.Context(), func(ctx context.Context) error {
-		tx, e := s.Store.DB.Begin(ctx)
-		if e != nil {
-			return e
-		}
-		defer rollbackStorage(tx)
-		var id string
-		if e = tx.QueryRow(ctx, `SELECT id FROM agent_projects WHERE id=$1 AND owner=$2 FOR UPDATE`, r.PathValue("project"), actor).Scan(&id); errors.Is(e, pgx.ErrNoRows) {
-			return ErrNotFound
-		} else if e != nil {
-			return e
-		}
-		if remove {
-			_, e = tx.Exec(ctx, `DELETE FROM agent_projects WHERE id=$1`, id)
-		} else {
-			_, e = tx.Exec(ctx, `DELETE FROM agent_project_handoffs WHERE project_id=$1`, id)
-			if e == nil {
-				_, e = tx.Exec(ctx, `DELETE FROM agent_project_grants WHERE project_id=$1`, id)
-			}
-		}
-		if e != nil {
-			return e
-		}
-		return tx.Commit(ctx)
+		return s.Store.revokeAgentProject(ctx, r.PathValue("project"), actor, remove)
 	})
 	if err != nil {
 		lookupError(w, err)
@@ -651,7 +340,7 @@ func (s *Server) scopedProjectCollection(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	p, err := apiDatabase(r.Context(), func(ctx context.Context) (AgentProject, error) {
-		return s.Store.agentProject(ctx, r.PathValue("project"), actor, true)
+		return s.agentProject(ctx, r.PathValue("project"), actor, true)
 	})
 	if err != nil {
 		lookupError(w, err)
@@ -717,7 +406,7 @@ func (s *Server) retryProjectCollection(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	p, err := apiDatabase(r.Context(), func(ctx context.Context) (AgentProject, error) {
-		return s.Store.agentProject(ctx, r.PathValue("project"), actor, true)
+		return s.agentProject(ctx, r.PathValue("project"), actor, true)
 	})
 	if err != nil {
 		lookupError(w, err)
@@ -728,111 +417,8 @@ func (s *Server) retryProjectCollection(w http.ResponseWriter, r *http.Request, 
 	hash := hex.EncodeToString(sum[:])
 	request := CollectionRequest{SourceID: p.SourceID, Plan: p.Plan, ClipIDs: body.ClipIDs, Rendition: p.Rendition}
 	attempt := newID("project-attempt")
-	err = apiDatabaseExec(r.Context(), func(ctx context.Context) error {
-		tx, e := s.Store.DB.Begin(ctx)
-		if e != nil {
-			return e
-		}
-		defer rollbackStorage(tx)
-		var revision int64
-		if e = tx.QueryRow(ctx, `SELECT revision FROM agent_projects WHERE id=$1 AND expires_at>clock_timestamp() AND `+projectAccess+` FOR UPDATE`, p.ID, actor).Scan(&revision); errors.Is(e, pgx.ErrNoRows) {
-			return ErrNotFound
-		} else if e != nil {
-			return e
-		}
-		var stored string
-		var raw []byte
-		e = tx.QueryRow(ctx, `SELECT intent_hash,request,attempt_key FROM agent_project_retries WHERE project_id=$1 AND key=$2`, p.ID, key).Scan(&stored, &raw, &attempt)
-		if e == nil {
-			if stored != hash {
-				return errProjectConflict
-			}
-			if e = json.Unmarshal(raw, &request); e != nil {
-				return e
-			}
-			return tx.Commit(ctx)
-		} else if !errors.Is(e, pgx.ErrNoRows) {
-			return e
-		}
-		if revision != body.Revision {
-			return errProjectConflict
-		}
-		allowed, seen := map[string]bool{}, map[string]bool{}
-		for _, clip := range p.Clips {
-			allowed[clip.ClipID] = true
-		}
-		for _, id := range body.ClipIDs {
-			if !allowed[id] || seen[id] {
-				return errProjectSelection
-			}
-			seen[id] = true
-		}
-		clips, e := projectPrepared(p.Plan, body.ClipIDs, p.Rendition, p.Source, s.Config, true)
-		if e != nil {
-			return e
-		}
-		current := map[string]AgentProjectJob{}
-		for _, row := range p.Jobs {
-			if row.Current {
-				current[row.ClipID] = row
-			}
-		}
-		for _, clip := range clips {
-			row, ok := current[clip.ID]
-			if !ok {
-				return errProjectConflict
-			}
-			job, jobErr := readJob(ctx, tx, row.Job.ID, p.Owner)
-			if jobErr != nil {
-				return jobErr
-			}
-			if !projectRetryableJob(job, time.Now()) {
-				return errProjectConflict
-			}
-			// The previous intent is durable before its job is admitted. A second
-			// caller key must not race that gap and create two repair renders.
-			var previousKey string
-			e = tx.QueryRow(ctx, `SELECT clip_job_keys->>$2 FROM agent_project_retries WHERE project_id=$1 AND clip_intents->>$2=$3 ORDER BY created_at DESC,key DESC LIMIT 1`, p.ID, clip.ID, collectionJobKey("", clip)).Scan(&previousKey)
-			if e == nil {
-				var previousID string
-				if e = tx.QueryRow(ctx, `SELECT id FROM jobs WHERE owner=$1 AND idempotency_key=$2`, p.Owner, previousKey).Scan(&previousID); errors.Is(e, pgx.ErrNoRows) {
-					return errProjectConflict
-				} else if e != nil {
-					return e
-				}
-				previous, previousErr := readJob(ctx, tx, previousID, p.Owner)
-				if previousErr != nil {
-					return previousErr
-				}
-				if !projectRetryableJob(previous, time.Now()) {
-					return errProjectConflict
-				}
-			} else if !errors.Is(e, pgx.ErrNoRows) {
-				return e
-			}
-		}
-		var count int
-		if e = tx.QueryRow(ctx, `SELECT count(*) FROM agent_project_retries WHERE project_id=$1`, p.ID).Scan(&count); e != nil {
-			return e
-		}
-		if count >= 1024 {
-			return errProjectLimit
-		}
-		raw, e = json.Marshal(request)
-		if e != nil {
-			return e
-		}
-		clipIntents, clipJobKeys := map[string]string{}, map[string]string{}
-		for _, clip := range clips {
-			clipIntents[clip.ID] = collectionJobKey("", clip)
-			clipJobKeys[clip.ID] = collectionJobKey(attempt, clip)
-		}
-		intentsJSON, _ := json.Marshal(clipIntents)
-		keysJSON, _ := json.Marshal(clipJobKeys)
-		if _, e = tx.Exec(ctx, `INSERT INTO agent_project_retries(project_id,key,intent_hash,request,attempt_key,clip_intents,clip_job_keys) VALUES($1,$2,$3,$4,$5,$6,$7)`, p.ID, key, hash, raw, attempt, intentsJSON, keysJSON); e != nil {
-			return e
-		}
-		return tx.Commit(ctx)
+	retry, err := apiDatabase(r.Context(), func(ctx context.Context) (projectRetryRecord, error) {
+		return s.Store.retryProjectCollection(ctx, p, actor, key, hash, attempt, body.Revision, body.ClipIDs, request, s.Config)
 	})
 	if errors.Is(err, errProjectConflict) {
 		writeError(w, 409, "project_conflict", "Reconcile this retry or reload the current failed clips before starting another attempt")
@@ -850,6 +436,7 @@ func (s *Server) retryProjectCollection(w http.ResponseWriter, r *http.Request, 
 		writeProjectPersistenceError(w, err)
 		return
 	}
+	request, attempt = retry.Request, retry.Attempt
 	data, _ := json.Marshal(request)
 	inner := r.Clone(context.WithValue(r.Context(), projectScopeKey{}, projectScope{ID: p.ID, Actor: actor}))
 	inner.Body = ioReadCloser{bytes.NewReader(data)}
@@ -857,21 +444,6 @@ func (s *Server) retryProjectCollection(w http.ResponseWriter, r *http.Request, 
 	inner.Header = r.Header.Clone()
 	inner.Header.Set("Idempotency-Key", attempt)
 	s.submitCollection(w, inner, p.Owner)
-}
-
-func projectRetryableJob(job Job, now time.Time) bool {
-	if job.Status == "failed" || job.Status == "cancelled" {
-		return true
-	}
-	if job.Status != "succeeded" || len(job.Items) == 0 {
-		return false
-	}
-	for _, item := range job.Items {
-		if item.Artifact != nil && (item.Artifact.ExpiresAt == nil || item.Artifact.ExpiresAt.After(now)) {
-			return false
-		}
-	}
-	return true
 }
 
 type ioReadCloser struct{ *bytes.Reader }
@@ -884,56 +456,13 @@ func (s *Server) recordScopedProjectJob(ctx context.Context, owner, clip string,
 		return nil
 	}
 	return apiDatabaseExec(ctx, func(dbCtx context.Context) error {
-		tx, err := s.Store.DB.Begin(dbCtx)
-		if err != nil {
-			return err
-		}
-		defer rollbackStorage(tx)
-		if err = bindScopedProjectJob(dbCtx, tx, projectJobBinding{Scope: scope, Clip: clip}, owner, job); err != nil {
-			return err
-		}
-		return tx.Commit(dbCtx)
+		return s.Store.bindProjectJob(dbCtx, projectJobBinding{Scope: scope, Clip: clip}, owner, job)
 	})
-}
-
-func bindScopedProjectJob(ctx context.Context, tx pgx.Tx, binding projectJobBinding, owner string, job Job) error {
-	// Serialize capacity checks with other bindings and recheck the live scope.
-	// The same row lock also fences grant revocation and project deletion.
-	var id string
-	err := tx.QueryRow(ctx, `SELECT id FROM agent_projects WHERE id=$1 AND owner=$2 AND source_id=$3 FOR UPDATE`, binding.Scope.ID, owner, job.Request.SourceID).Scan(&id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrNotFound
-	}
-	if err != nil {
-		return err
-	}
-	// The authorization snapshot must be taken after a possible row-lock wait:
-	// a revoker can hold the project lock while deleting the grant.
-	var allowed bool
-	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_projects WHERE id=$1 AND expires_at>clock_timestamp() AND `+projectAccess+`)`, id, binding.Scope.Actor).Scan(&allowed); err != nil {
-		return err
-	}
-	if !allowed {
-		return ErrNotFound
-	}
-	var exists bool
-	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_project_jobs WHERE project_id=$1 AND job_id=$2)`, id, job.ID).Scan(&exists); err != nil || exists {
-		return err
-	}
-	var count int
-	if err = tx.QueryRow(ctx, `SELECT count(*) FROM agent_project_jobs WHERE project_id=$1`, id).Scan(&count); err != nil {
-		return err
-	}
-	if count >= 1024 {
-		return errProjectLimit
-	}
-	_, err = tx.Exec(ctx, `INSERT INTO agent_project_jobs(project_id,job_id,clip_id) VALUES($1,$2,$3)`, id, job.ID, binding.Clip)
-	return err
 }
 
 func (s *Server) scopedProjectResource(w http.ResponseWriter, r *http.Request, actor string) {
 	p, err := apiDatabase(r.Context(), func(ctx context.Context) (AgentProject, error) {
-		return s.Store.agentProject(ctx, r.PathValue("project"), actor, false)
+		return s.agentProject(ctx, r.PathValue("project"), actor, false)
 	})
 	if err != nil {
 		lookupError(w, err)
@@ -980,18 +509,7 @@ func (s *Server) scopedProjectResource(w http.ResponseWriter, r *http.Request, a
 		}
 	case "jobs", "artifacts":
 		allowed, e := apiDatabase(r.Context(), func(ctx context.Context) (bool, error) {
-			var yes bool
-			query := `SELECT EXISTS(SELECT 1 FROM agent_project_jobs WHERE project_id=$1 AND job_id=$2)`
-			if parts[0] == "artifacts" {
-				query = `SELECT EXISTS(SELECT 1 FROM agent_project_jobs p JOIN artifacts a ON a.job_id=p.job_id WHERE p.project_id=$1 AND a.id=$2 AND a.owner=$3)`
-			}
-			var err error
-			if parts[0] == "artifacts" {
-				err = s.Store.DB.QueryRow(ctx, query, p.ID, parts[1], p.Owner).Scan(&yes)
-			} else {
-				err = s.Store.DB.QueryRow(ctx, query, p.ID, parts[1]).Scan(&yes)
-			}
-			return yes, err
+			return s.Store.projectResourceAllowed(ctx, p.ID, parts[0], parts[1], p.Owner)
 		})
 		if e != nil {
 			lookupError(w, e)

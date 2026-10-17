@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -14,6 +15,34 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 APP_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/app"
 PROJECT_CONTRACTS = "api/testdata/project-contracts.json"
+MINIMUM_FREE = 2 * 1024 * 1024 * 1024
+
+
+def require_output_capacity(output):
+    free = shutil.disk_usage(output).free
+    if free < MINIMUM_FREE:
+        raise RuntimeError(f"SDK checks require at least 2 GiB free on the output filesystem; "
+                           f"only {free // (1024 * 1024)} MiB available at {output}")
+
+
+def cleanup_disposable(output, owned_output):
+    """Keep release evidence; remove only this successful run's scratch paths."""
+    current = output.lstat()
+    if (current.st_dev, current.st_ino) != (owned_output.st_dev, owned_output.st_ino):
+        raise RuntimeError("SDK evidence directory changed; refusing scratch cleanup")
+    directories = [output / name for name in ("python-consumer", "node-consumer", "python-source", "python-rebuilt")]
+    binary = output / ("cutmy.exe" if os.name == "nt" else "cutmy")
+    # Validate every direct child before removing any. rmtree unlinks nested
+    # symlinks (and Windows junctions), without traversing their targets.
+    for path, expected_type in [(output, stat.S_ISDIR), *[(path, stat.S_ISDIR) for path in directories],
+                                (binary, stat.S_ISREG)]:
+        entry = path.lstat()
+        if (not expected_type(entry.st_mode) or
+                getattr(entry, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)):
+            raise RuntimeError(f"Unsafe SDK scratch path; refusing cleanup: {path}")
+    for path in directories:
+        shutil.rmtree(path)
+    binary.unlink()
 
 
 def verify_go_report(path, required):
@@ -102,6 +131,8 @@ def main():
     if output.is_relative_to(ROOT):
         parser.error("SDK consumer evidence must be outside the checkout")
     output.mkdir(parents=True, exist_ok=False)
+    owned_output = output.lstat()
+    require_output_capacity(output)
     env = dict(os.environ)
     source_inputs = collection_inputs()
     project_contracts = copy_project_contracts(output, source_inputs[PROJECT_CONTRACTS])
@@ -221,6 +252,7 @@ void local.executeCollection({...request.plan, input: "/media/interview.mp4"}, "
                "python_sdist_sha256": sha256(sdists[0]), "npm_tarball_sha256": sha256(tarballs[0]),
                "cli_sha256": sha256(binary), "installed_consumers": True, "source_inputs_sha256": source_inputs}
     (output / "SDK-CHECKS.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+    cleanup_disposable(output, owned_output)
     print("Built, installed and verified both SDKs against real media and the core.")
 
 
