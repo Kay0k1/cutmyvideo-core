@@ -39,6 +39,8 @@ class UpgradeSnapshotChecks(unittest.TestCase):
             row.update(delete_retry_at="-infinity", delete_failures=0)
         for row in self.after["sources"]:
             row.update(retention_job_pins=1, retention_preview_pins=1, retention_pins_valid=True, retention_pin_revision=0, media_removed=False)
+        for row in self.after["jobs"]:
+            row["audio_source_id"] = None
 
     def rejects(self, mutate):
         changed = copy.deepcopy(self.after)
@@ -135,6 +137,8 @@ class UpgradeSnapshotChecks(unittest.TestCase):
             {**self.before["storage_reservations"][0], "id": "other", "job_id": "src_elsewhere"},
         ])
         self.after["jobs"] = copy.deepcopy(self.before["jobs"])
+        for row in self.after["jobs"]:
+            row["audio_source_id"] = None
         self.after["storage_reservations"] = copy.deepcopy(self.before["storage_reservations"])
         self.after["sources"][0].update(retention_job_pins=2, retention_preview_pins=2)
         self.assertEqual(recovery.verify_upgrade_snapshot(self.before, self.after), 2)
@@ -158,6 +162,25 @@ class UpgradeSnapshotChecks(unittest.TestCase):
             before["sources"][0][field] = 0
             with self.subTest(field=field), self.assertRaises(RuntimeError):
                 recovery.verify_upgrade_snapshot(before, self.after)
+
+    def test_external_audio_addition_is_exact_null_on_every_historical_job(self):
+        self.before["jobs"].append({**self.before["jobs"][0], "id": "job_other"})
+        self.after["jobs"].append({**self.after["jobs"][0], "id": "job_other"})
+        self.after["sources"][0]["retention_job_pins"] = 2
+        self.assertEqual(recovery.verify_upgrade_snapshot(self.before, self.after), 2)
+        for index in (0, 1):
+            with self.subTest(index=index, operation="missing"):
+                self.rejects(lambda s: s["jobs"][index].pop("audio_source_id"))
+            for value in ("src_old", "src_other", "", False, 0, []):
+                with self.subTest(index=index, value=value):
+                    self.rejects(lambda s: s["jobs"][index].update(audio_source_id=value))
+        self.rejects(lambda s: s["jobs"][1].update(lease_token="changed"))
+
+    def test_fixture_must_represent_pre_009_jobs(self):
+        before = copy.deepcopy(self.before)
+        before["jobs"][0]["audio_source_id"] = None
+        with self.assertRaises(RuntimeError):
+            recovery.verify_upgrade_snapshot(before, self.after)
 
 
 class ExternalCurrentChecks(unittest.TestCase):
