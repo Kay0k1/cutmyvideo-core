@@ -57,7 +57,9 @@ func TestCutListChaptersAcceptedByIndependentFFmpeg(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	metadataPath, output := filepath.Join(dir, "chapters.txt"), filepath.Join(dir, "chapters.mp4")
+	// Matroska retains a nonzero first chapter start. QuickTime chapter tracks
+	// may extend the first named chapter to zero as a muxer policy.
+	metadataPath, output := filepath.Join(dir, "chapters.txt"), filepath.Join(dir, "chapters.mkv")
 	if err := os.WriteFile(metadataPath, metadata, 0600); err != nil {
 		t.Fatal(err)
 	}
