@@ -30,6 +30,7 @@ There are no invented `v1`/`v2` markers for those unversioned installations.
 | 6 | `20261012-source-media-cleanup-v1` | Adds durable post-success source-media cleanup and read leases; retains source metadata, jobs and result artifacts independently. |
 | 7 | `20261014-metadata-resolution-leases-v1` | Coordinates platform metadata extraction through expiring owner/token leases without keeping SQL connections occupied during upstream work. |
 | 8 | `20261016-agent-projects-v1` | Adds source preparation receipts/fingerprints, scoped collection projects, recipient grants and durable repair attempt identities. Preserves existing source/job/artifact values, media and byte accounting. |
+| 9 | `20261018-external-audio-refs-v1` | Adds an optional derived replacement-audio reference to jobs and includes both source references in retention pins and cleanup protection. Preserves legacy jobs with a NULL reference and retains all earlier migration identities. |
 
 SQL files and expected catalog layouts live in
 [`internal/app/migrations`](../internal/app/migrations). `app_schema_versions`
@@ -39,6 +40,10 @@ of the immutable SQL files and application timestamps. All pending migrations
 and their records commit in one transaction.
 SQL uses canonical LF line endings for execution and checksums; Windows CRLF
 checkouts or source archives cannot create a different migration identity.
+
+See [migration 9 upgrade and recovery](external-audio-upgrade.md) for the
+position-8 predecessor, two-source lifecycle rules and required coordinated
+rollback/compatible restore qualification.
 
 ## Refusal and recovery
 
