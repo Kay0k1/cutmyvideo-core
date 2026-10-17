@@ -28,6 +28,7 @@ const sourceRetentionSQL = `WITH source_retention_candidates AS MATERIALIZED (
 ), checked AS MATERIALIZED (
  SELECT candidate.id,
  EXISTS(SELECT 1 FROM jobs WHERE source_id=candidate.id OFFSET 0)
+ OR EXISTS(SELECT 1 FROM jobs WHERE audio_source_id=candidate.id OFFSET 0)
  OR EXISTS(SELECT 1 FROM storage_reservations WHERE kind='preview' AND job_id=candidate.id) AS pinned,
  EXISTS(SELECT 1 FROM source_media_readers WHERE source_id=candidate.id AND expires_at>clock_timestamp())
  OR EXISTS(SELECT 1 FROM source_media_cleanup WHERE source_id=candidate.id) AS media_in_use
@@ -220,14 +221,15 @@ func (s *Store) auditSourcePinUnitCommit(ctx context.Context, commit func(contex
 }
 
 func auditSourcePinChildren(ctx context.Context, tx pgx.Tx, id string, preview bool, cursor *string, count int64) (next *string, total int64, done bool, err error) {
-	// Four literal SQL statements keep both membership and cursor range indexed.
-	query := `SELECT id FROM jobs WHERE source_id=$1 ORDER BY id LIMIT $2`
+	// Each membership branch performs its own indexed seek and bound before
+	// merging at most 258 IDs. Never sort all jobs for a two-reference OR.
+	query := `SELECT id FROM ((SELECT id FROM jobs WHERE source_id=$1 ORDER BY id LIMIT $2) UNION ALL (SELECT id FROM jobs WHERE audio_source_id=$1 ORDER BY id LIMIT $2)) memberships ORDER BY id LIMIT $2`
 	args := []any{id, sourcePinAuditChildren + 1}
 	if preview {
 		query = `SELECT id FROM storage_reservations WHERE kind='preview' AND job_id=$1 ORDER BY id LIMIT $2`
 	}
 	if cursor != nil {
-		query = `SELECT id FROM jobs WHERE source_id=$1 AND id>$2 ORDER BY id LIMIT $3`
+		query = `SELECT id FROM ((SELECT id FROM jobs WHERE source_id=$1 AND id>$2 ORDER BY id LIMIT $3) UNION ALL (SELECT id FROM jobs WHERE audio_source_id=$1 AND id>$2 ORDER BY id LIMIT $3)) memberships ORDER BY id LIMIT $3`
 		if preview {
 			query = `SELECT id FROM storage_reservations WHERE kind='preview' AND job_id=$1 AND id>$2 ORDER BY id LIMIT $3`
 		}

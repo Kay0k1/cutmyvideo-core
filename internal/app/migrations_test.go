@@ -206,16 +206,22 @@ func TestMetadataResolutionMigrationPreserves006RowsAndRestartsWithoutWrites(t *
 		var data []byte
 		if err := f.db.QueryRow(ctx, `SELECT jsonb_build_object(
  'sources',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(s),'xmin',s.xmin::text) ORDER BY id) FROM sources s),
- 'jobs',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(j),'xmin',j.xmin::text) ORDER BY id) FROM jobs j),
+ 'jobs',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(j)-'audio_source_id','xmin',j.xmin::text) ORDER BY id) FROM jobs j),
  'cache',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(c),'xmin',c.xmin::text) ORDER BY source_id) FROM source_metadata_cache c),
  'counters',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(c),'xmin',c.xmin::text) ORDER BY id) FROM storage_counters c),
  'ledger',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(m),'xmin',m.xmin::text) ORDER BY position) FROM app_schema_migrations m WHERE position<=6),
- 'versions',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(v),'xmin',v.xmin::text) ORDER BY version) FROM app_schema_versions v WHERE version NOT IN($1,$2)))`, schemaMigrations[6].version, schemaVersion).Scan(&data); err != nil {
+ 'versions',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(v),'xmin',v.xmin::text) ORDER BY version) FROM app_schema_versions v WHERE version NOT IN($1,$2,$3)))`, schemaMigrations[6].version, schemaMigrations[7].version, schemaVersion).Scan(&data); err != nil {
 			t.Fatal(err)
 		}
 		return string(data)
 	}
 	before := snapshot()
+	// Preserve the exact 006→007 boundary before advancing through later
+	// additive migrations. Their new NULL audio column is checked separately.
+	applyMigrationFixture(t, f, 6)
+	if after := snapshot(); after != before {
+		t.Fatal("007 changed predecessor rows/history")
+	}
 	current := openMigrationStore(t, f)
 	assertMigrationLedger(t, current)
 	if after := snapshot(); after != before {
@@ -246,12 +252,18 @@ func TestAgentProjectsMigrationPreserves007RowsAndRestartsWithoutWrites(t *testi
 	before := historicalRowsSnapshot(t, f.db)
 	history := func() string {
 		var raw []byte
-		if err := f.db.QueryRow(context.Background(), `SELECT jsonb_build_object('ledger',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(m),'xmin',m.xmin::text) ORDER BY position) FROM app_schema_migrations m WHERE position<=7),'versions',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(v),'xmin',v.xmin::text) ORDER BY version) FROM app_schema_versions v WHERE version<>$1))`, schemaVersion).Scan(&raw); err != nil {
+		if err := f.db.QueryRow(context.Background(), `SELECT jsonb_build_object('ledger',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(m),'xmin',m.xmin::text) ORDER BY position) FROM app_schema_migrations m WHERE position<=7),'versions',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(v),'xmin',v.xmin::text) ORDER BY version) FROM app_schema_versions v WHERE version NOT IN($1,$2)))`, schemaMigrations[7].version, schemaVersion).Scan(&raw); err != nil {
 			t.Fatal(err)
 		}
 		return string(raw)
 	}
 	oldHistory := history()
+	// Retain the independent 007→008 preservation proof even as current
+	// startup advances further to the separately tested external-audio step.
+	applyMigrationFixture(t, f, 7)
+	if after := historicalRowsSnapshot(t, f.db); after != before || history() != oldHistory {
+		t.Fatal("008 changed predecessor rows/history")
+	}
 	current := openMigrationStore(t, f)
 	assertMigrationLedger(t, current)
 	if after := historicalRowsSnapshot(t, f.db); after != before || history() != oldHistory {
@@ -419,7 +431,7 @@ INSERT INTO storage_work_cleanup(data_dir,path) VALUES('/fixture/data','/fixture
 		}
 		if err := f.db.QueryRow(context.Background(), `SELECT jsonb_build_object(
  'sources',(SELECT jsonb_agg(`+sourceRow+` ORDER BY id) FROM sources s),
- 'jobs',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(j),'xmin',j.xmin::text) ORDER BY id) FROM jobs j),
+ 'jobs',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(j)-'audio_source_id','xmin',j.xmin::text) ORDER BY id) FROM jobs j),
  'artifacts',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(a),'xmin',a.xmin::text) ORDER BY id) FROM artifacts a),
  'files',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(f),'xmin',f.xmin::text) ORDER BY path) FROM storage_files f),
  'reservations',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(r),'xmin',r.xmin::text) ORDER BY id) FROM storage_reservations r),
@@ -645,6 +657,7 @@ func TestMigrationSQLChecksumsArePinnedAcrossWindowsNewlines(t *testing.T) {
 		"20261012-source-media-cleanup-v1":       "e2d36a97a35a158dead1ed47519209ca67eb92fe0a9fffef4ceb9ad50c34d7bb",
 		"20261014-metadata-resolution-leases-v1": "01f421ef7efdf02386f7d284491ccf1bccee2dc3014a24f24b85bcd356dcbc0f",
 		"20261016-agent-projects-v1":             "40990aab92ee4bcdadeae7b7f0f21ad308804f30c054372907c15d2c14a51a92",
+		"20261018-external-audio-refs-v1":        "3304ef39020de23eb9546e27bb9ecd74eea0cb7b67ec5620cb111afa8f41d58c",
 	}
 	for _, migration := range schemaMigrations {
 		t.Run(migration.version, func(t *testing.T) {
