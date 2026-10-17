@@ -49,6 +49,9 @@ func ValidateRenderOptions(r ExportRequest) error {
 	if r.CutMode != "accurate" || r.Format == "mkv" {
 		return errors.New("canvas, audio_normalize and audio_replace require accurate MP4 or MP3; copy mode cannot apply rendering options")
 	}
+	if r.SubtitleMode == "preserve" {
+		return errors.New("rendering options require subtitles omitted; subtitle preservation requires copy mode")
+	}
 	if v := r.Canvas; v != nil {
 		if r.Format != "mp4" {
 			return errors.New("canvas requires accurate MP4")

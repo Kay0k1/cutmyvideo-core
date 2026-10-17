@@ -53,6 +53,42 @@ func pcmRMS(data []byte, start, end float64) float64 {
 	return math.Sqrt(sum / float64(b-a))
 }
 
+func TestRenderOptionsRefusePreservedTextWithoutLosingExistingCopySupport(t *testing.T) {
+	video, audio := renderFixture(t)
+	dir := t.TempDir()
+	subtitles, input := filepath.Join(dir, "captions.srt"), filepath.Join(dir, "captions.mp4")
+	if err := os.WriteFile(subtitles, []byte("1\n00:00:00,200 --> 00:00:00,800\nKeep this caption\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	renderTool(t, "-v", "error", "-i", video, "-i", subtitles, "-map", "0", "-map", "1:0", "-c", "copy", "-c:s", "mov_text", input)
+	e := New(Config{FFmpegThreads: 1, MaxOutputBytes: 16 << 20})
+	i, p, l := -16.0, -1.0, 11.0
+	for _, transform := range []AdvancedOptions{
+		{Canvas: &Canvas{Width: 192, Height: 192, Fit: "contain", Background: "#000000"}},
+		{AudioNormalize: &AudioNormalize{IntegratedLUFS: &i, TruePeakDBTP: &p, LoudnessRangeLU: &l}},
+		{AudioReplace: &AudioReplace{Input: audio}},
+	} {
+		transform.Options, transform.SubtitleMode = Options{Format: "mp4", Quality: "best", CutMode: "accurate"}, "preserve"
+		plan := Plan{Version: 1, Input: input, OutputMode: "joined", Ranges: []NamedRange{{StartMS: 0, EndMS: 1000}}, Options: transform}
+		out := filepath.Join(dir, "refused.mp4")
+		if _, err := e.ExecutePlan(context.Background(), plan, out); err == nil || !strings.Contains(strings.ToLower(err.Error()), "subtitle") {
+			t.Fatal("rendering did not explicitly refuse preservation", err)
+		}
+		if _, err := os.Stat(out); !os.IsNotExist(err) {
+			t.Fatal("refused rendering created an output", err)
+		}
+	}
+	copyPlan := Plan{Version: 1, Input: input, OutputMode: "joined", Ranges: []NamedRange{{StartMS: 0, EndMS: 1000}}, Options: AdvancedOptions{Options: Options{Format: "mp4", Quality: "best", CutMode: "copy"}, SubtitleMode: "preserve"}}
+	out := filepath.Join(dir, "preserved.mp4")
+	if _, err := e.ExecutePlan(context.Background(), copyPlan, out); err != nil {
+		t.Fatal("existing copy subtitle support regressed", err)
+	}
+	data, err := exec.Command("ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "json", out).Output()
+	if err != nil || !strings.Contains(string(data), `"codec_type": "subtitle"`) {
+		t.Fatal("existing copy lost its subtitle stream", string(data), err)
+	}
+}
+
 func TestRenderCanvasAndExternalAudioTimelineActualMedia(t *testing.T) {
 	video, audio := renderFixture(t)
 	e := New(Config{FFmpegThreads: 1, MaxOutputBytes: 16 << 20})

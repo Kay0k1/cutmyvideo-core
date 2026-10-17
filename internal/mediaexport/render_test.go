@@ -23,3 +23,14 @@ func TestRenderedExportRefusesUnavailableOptionalRuntime(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderedExportRefusesSubtitlePreservationBeforeEffects(t *testing.T) {
+	r := exportFixtureRequest()
+	r.Canvas = &edit.Canvas{Width: 192, Height: 192, Fit: "contain", Background: "#000000"}
+	r.SubtitleMode = "preserve"
+	runtime := newExportRuntimeFixture()
+	_, _, err := Export(context.Background(), exportFixtureConfig(), []Input{{Path: "subtitled.mp4"}}, edit.Range{EndMS: 1000}, r, "out.mp4", nil, true, nil, runtime)
+	if err == nil || !strings.Contains(err.Error(), "subtitle") || len(runtime.events) != 0 {
+		t.Fatal("rendering silently omitted requested subtitles", err, runtime.events)
+	}
+}

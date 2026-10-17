@@ -83,6 +83,10 @@ inherit these options and can use `clear_audio_normalize`, `clear_canvas`,
 `clear_audio_replace`. Portable SDK documents cannot transfer replacement paths
 or server IDs; bind replacement audio explicitly after import.
 
+The new rendering options require subtitles omitted. Existing embedded text
+subtitle preservation remains available in copy mode; incompatible combinations
+are rejected before encoding instead of silently losing captions.
+
 ## Exchange cuts and chapters
 
 CSV uses three columns without a header: start seconds, end seconds, label.
