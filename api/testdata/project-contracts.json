@@ -1,0 +1,2260 @@
+{
+  "schema_version": 1,
+  "collection_cases": [
+    {
+      "id": "defaults-absent",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "valid": true,
+      "schema_valid": true,
+      "sdk_valid": true,
+      "selected_clip_ids": [
+        "one"
+      ],
+      "effective_options": {
+        "one": {
+          "format": "mp4",
+          "quality": "best",
+          "cut_mode": "accurate",
+          "no_audio": false,
+          "audio_track": null,
+          "crop": null
+        }
+      }
+    },
+    {
+      "id": "defaults-null",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ],
+          "options": {
+            "crop": null,
+            "audio_track": null,
+            "no_audio": null
+          }
+        }
+      },
+      "valid": true,
+      "schema_valid": true,
+      "sdk_valid": true,
+      "selected_clip_ids": [
+        "one"
+      ],
+      "effective_options": {
+        "one": {
+          "format": "mp4",
+          "quality": "best",
+          "cut_mode": "accurate",
+          "no_audio": false,
+          "audio_track": null,
+          "crop": null
+        }
+      }
+    },
+    {
+      "id": "inherit-crop-audio-and-reset",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "inherit-absent",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            },
+            {
+              "id": "inherit-null",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "options": {
+                "crop": null,
+                "audio_track": null,
+                "no_audio": null
+              }
+            },
+            {
+              "id": "reset",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "options": {
+                "crop": null,
+                "clear_crop": true,
+                "audio_track": -1,
+                "no_audio": true
+              }
+            },
+            {
+              "id": "explicit-zero",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "options": {
+                "audio_track": 0,
+                "no_audio": false
+              }
+            }
+          ],
+          "options": {
+            "quality": "1080p",
+            "crop": {
+              "x": 0.25,
+              "y": 0,
+              "width": 0.5,
+              "height": 1
+            },
+            "audio_track": 3,
+            "no_audio": false
+          }
+        }
+      },
+      "valid": true,
+      "schema_valid": true,
+      "sdk_valid": true,
+      "selected_clip_ids": [
+        "inherit-absent",
+        "inherit-null",
+        "reset",
+        "explicit-zero"
+      ],
+      "effective_options": {
+        "inherit-absent": {
+          "format": "mp4",
+          "quality": "1080p",
+          "cut_mode": "accurate",
+          "no_audio": false,
+          "audio_track": 3,
+          "crop": {
+            "x": 0.25,
+            "y": 0,
+            "width": 0.5,
+            "height": 1
+          }
+        },
+        "inherit-null": {
+          "format": "mp4",
+          "quality": "1080p",
+          "cut_mode": "accurate",
+          "no_audio": false,
+          "audio_track": 3,
+          "crop": {
+            "x": 0.25,
+            "y": 0,
+            "width": 0.5,
+            "height": 1
+          }
+        },
+        "reset": {
+          "format": "mp4",
+          "quality": "1080p",
+          "cut_mode": "accurate",
+          "no_audio": true,
+          "audio_track": null,
+          "crop": null
+        },
+        "explicit-zero": {
+          "format": "mp4",
+          "quality": "1080p",
+          "cut_mode": "accurate",
+          "no_audio": false,
+          "audio_track": 0,
+          "crop": {
+            "x": 0.25,
+            "y": 0,
+            "width": 0.5,
+            "height": 1
+          }
+        }
+      }
+    },
+    {
+      "id": "explicit-false-overrides-true",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "muted",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            },
+            {
+              "id": "unmuted",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "options": {
+                "no_audio": false
+              }
+            }
+          ],
+          "options": {
+            "no_audio": true
+          }
+        }
+      },
+      "valid": true,
+      "schema_valid": true,
+      "sdk_valid": true,
+      "selected_clip_ids": [
+        "muted",
+        "unmuted"
+      ],
+      "effective_options": {
+        "muted": {
+          "format": "mp4",
+          "quality": "best",
+          "cut_mode": "accurate",
+          "no_audio": true,
+          "audio_track": null,
+          "crop": null
+        },
+        "unmuted": {
+          "format": "mp4",
+          "quality": "best",
+          "cut_mode": "accurate",
+          "no_audio": false,
+          "audio_track": null,
+          "crop": null
+        }
+      }
+    },
+    {
+      "id": "selectors-follow-plan-order",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "z",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            },
+            {
+              "id": "1",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            },
+            {
+              "id": "a",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        },
+        "clip_ids": [
+          "a",
+          "z"
+        ]
+      },
+      "valid": true,
+      "schema_valid": true,
+      "sdk_valid": true,
+      "selected_clip_ids": [
+        "z",
+        "a"
+      ],
+      "effective_options": {
+        "z": {
+          "format": "mp4",
+          "quality": "best",
+          "cut_mode": "accurate",
+          "no_audio": false,
+          "audio_track": null,
+          "crop": null
+        },
+        "a": {
+          "format": "mp4",
+          "quality": "best",
+          "cut_mode": "accurate",
+          "no_audio": false,
+          "audio_track": null,
+          "crop": null
+        }
+      }
+    },
+    {
+      "id": "empty-selector-includes-all",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "z",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            },
+            {
+              "id": "1",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        },
+        "clip_ids": []
+      },
+      "valid": true,
+      "schema_valid": true,
+      "sdk_valid": true,
+      "selected_clip_ids": [
+        "z",
+        "1"
+      ],
+      "effective_options": {
+        "z": {
+          "format": "mp4",
+          "quality": "best",
+          "cut_mode": "accurate",
+          "no_audio": false,
+          "audio_track": null,
+          "crop": null
+        },
+        "1": {
+          "format": "mp4",
+          "quality": "best",
+          "cut_mode": "accurate",
+          "no_audio": false,
+          "audio_track": null,
+          "crop": null
+        }
+      }
+    },
+    {
+      "id": "unknown-selector",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        },
+        "clip_ids": [
+          "missing"
+        ]
+      },
+      "valid": false,
+      "schema_valid": true,
+      "sdk_valid": false
+    },
+    {
+      "id": "duplicate-selector",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        },
+        "clip_ids": [
+          "one",
+          "one"
+        ]
+      },
+      "valid": false,
+      "schema_valid": false,
+      "sdk_valid": false
+    },
+    {
+      "id": "reserved-clip-id",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "con",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "valid": false,
+      "schema_valid": true,
+      "sdk_valid": false
+    },
+    {
+      "id": "empty-clips",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": []
+        }
+      },
+      "valid": false,
+      "schema_valid": false,
+      "sdk_valid": false
+    },
+    {
+      "id": "clip-id-64-bytes",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "valid": true,
+      "schema_valid": true,
+      "sdk_valid": true,
+      "selected_clip_ids": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "effective_options": {
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+          "format": "mp4",
+          "quality": "best",
+          "cut_mode": "accurate",
+          "no_audio": false,
+          "audio_track": null,
+          "crop": null
+        }
+      }
+    },
+    {
+      "id": "clip-id-65-bytes",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "valid": false,
+      "schema_valid": false,
+      "sdk_valid": false
+    },
+    {
+      "id": "crop-and-clear-conflict",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ],
+          "options": {
+            "crop": {
+              "x": 0.25,
+              "y": 0,
+              "width": 0.5,
+              "height": 1
+            },
+            "clear_crop": true
+          }
+        }
+      },
+      "valid": false,
+      "schema_valid": true,
+      "sdk_valid": true
+    },
+    {
+      "id": "range-duration-budget",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1001
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "valid": false,
+      "schema_valid": true,
+      "sdk_valid": true,
+      "limits": {
+        "max_range_ms": 1000
+      }
+    },
+    {
+      "id": "aggregate-duration-budget",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 600
+                }
+              ]
+            },
+            {
+              "id": "two",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 600
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "valid": false,
+      "schema_valid": true,
+      "sdk_valid": true,
+      "limits": {
+        "max_job_ms": 1000
+      }
+    },
+    {
+      "id": "aggregate-range-count-budget",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            },
+            {
+              "id": "two",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "valid": false,
+      "schema_valid": true,
+      "sdk_valid": true,
+      "limits": {
+        "max_ranges": 1
+      }
+    },
+    {
+      "id": "source-duration-boundary",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "valid": false,
+      "schema_valid": true,
+      "sdk_valid": true,
+      "source": {
+        "duration_ms": 999
+      }
+    },
+    {
+      "id": "reversed-range-cross-field",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 1000,
+                  "end_ms": 500
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "valid": false,
+      "schema_valid": true,
+      "sdk_valid": true
+    },
+    {
+      "id": "unknown-rendition",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        },
+        "rendition": "future"
+      },
+      "valid": false,
+      "schema_valid": false,
+      "sdk_valid": false
+    },
+    {
+      "id": "draft-keeps-edits-and-caps-quality",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ],
+          "options": {
+            "crop": {
+              "x": 0.25,
+              "y": 0,
+              "width": 0.5,
+              "height": 1
+            }
+          }
+        },
+        "rendition": "draft"
+      },
+      "valid": true,
+      "schema_valid": true,
+      "sdk_valid": true,
+      "selected_clip_ids": [
+        "one"
+      ],
+      "effective_options": {
+        "one": {
+          "format": "mp4",
+          "quality": "720p",
+          "cut_mode": "accurate",
+          "no_audio": false,
+          "audio_track": null,
+          "crop": {
+            "x": 0.25,
+            "y": 0,
+            "width": 0.5,
+            "height": 1
+          }
+        }
+      }
+    },
+    {
+      "id": "clip-label-200-utf8-bytes",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "label": "ab界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界"
+            }
+          ]
+        }
+      },
+      "valid": true,
+      "schema_valid": true,
+      "sdk_valid": true,
+      "selected_clip_ids": [
+        "one"
+      ],
+      "effective_options": {
+        "one": {
+          "format": "mp4",
+          "quality": "best",
+          "cut_mode": "accurate",
+          "no_audio": false,
+          "audio_track": null,
+          "crop": null
+        }
+      }
+    },
+    {
+      "id": "clip-label-201-utf8-bytes",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "label": "界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界"
+            }
+          ]
+        }
+      },
+      "valid": false,
+      "schema_valid": false,
+      "sdk_valid": true
+    }
+  ],
+  "portable_cases": [
+    {
+      "id": "content-fingerprint-rebinds-to-explicit-source",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "source": {
+        "id": "source-original",
+        "duration_ms": 120000,
+        "title": "Interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 4096
+        },
+        "source_url": "https://example.invalid/private-source",
+        "unexpected_metadata": "omit-from-portable-document"
+      },
+      "document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview",
+          "fingerprint": {
+            "kind": "content",
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "size_bytes": 4096
+          }
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "trusted_source": {
+        "id": "selected-source",
+        "duration_ms": 120000,
+        "title": "Selected interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 4096
+        }
+      },
+      "export_valid": true,
+      "import_valid": true,
+      "expected_document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview",
+          "fingerprint": {
+            "kind": "content",
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "size_bytes": 4096
+          }
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expected_request": {
+        "source_id": "selected-source",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "null-crop-audio-and-reset-survive-sharing",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "inherit-absent",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            },
+            {
+              "id": "inherit-null",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "options": {
+                "crop": null,
+                "audio_track": null,
+                "no_audio": null
+              }
+            },
+            {
+              "id": "reset",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "options": {
+                "crop": null,
+                "clear_crop": true,
+                "audio_track": -1,
+                "no_audio": true
+              }
+            },
+            {
+              "id": "explicit-zero",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "options": {
+                "audio_track": 0,
+                "no_audio": false
+              }
+            }
+          ],
+          "options": {
+            "quality": "1080p",
+            "crop": {
+              "x": 0.25,
+              "y": 0,
+              "width": 0.5,
+              "height": 1
+            },
+            "audio_track": 3,
+            "no_audio": false
+          }
+        }
+      },
+      "source": {
+        "id": "source-original",
+        "duration_ms": 120000,
+        "title": "Interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 4096
+        },
+        "source_url": "https://example.invalid/private-source",
+        "unexpected_metadata": "omit-from-portable-document"
+      },
+      "document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview",
+          "fingerprint": {
+            "kind": "content",
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "size_bytes": 4096
+          }
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "inherit-absent",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            },
+            {
+              "id": "inherit-null",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "options": {
+                "crop": null,
+                "audio_track": null,
+                "no_audio": null
+              }
+            },
+            {
+              "id": "reset",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "options": {
+                "crop": null,
+                "clear_crop": true,
+                "audio_track": -1,
+                "no_audio": true
+              }
+            },
+            {
+              "id": "explicit-zero",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "options": {
+                "audio_track": 0,
+                "no_audio": false
+              }
+            }
+          ],
+          "options": {
+            "quality": "1080p",
+            "crop": {
+              "x": 0.25,
+              "y": 0,
+              "width": 0.5,
+              "height": 1
+            },
+            "audio_track": 3,
+            "no_audio": false
+          }
+        }
+      },
+      "trusted_source": {
+        "id": "selected-source",
+        "duration_ms": 120000,
+        "title": "Selected interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 4096
+        }
+      },
+      "export_valid": true,
+      "import_valid": true,
+      "expected_document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview",
+          "fingerprint": {
+            "kind": "content",
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "size_bytes": 4096
+          }
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "inherit-absent",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            },
+            {
+              "id": "inherit-null",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "options": {
+                "crop": null,
+                "audio_track": null,
+                "no_audio": null
+              }
+            },
+            {
+              "id": "reset",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "options": {
+                "crop": null,
+                "clear_crop": true,
+                "audio_track": -1,
+                "no_audio": true
+              }
+            },
+            {
+              "id": "explicit-zero",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "options": {
+                "audio_track": 0,
+                "no_audio": false
+              }
+            }
+          ],
+          "options": {
+            "quality": "1080p",
+            "crop": {
+              "x": 0.25,
+              "y": 0,
+              "width": 0.5,
+              "height": 1
+            },
+            "audio_track": 3,
+            "no_audio": false
+          }
+        }
+      },
+      "expected_request": {
+        "source_id": "selected-source",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "inherit-absent",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            },
+            {
+              "id": "inherit-null",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "options": {
+                "crop": null,
+                "audio_track": null,
+                "no_audio": null
+              }
+            },
+            {
+              "id": "reset",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "options": {
+                "crop": null,
+                "clear_crop": true,
+                "audio_track": -1,
+                "no_audio": true
+              }
+            },
+            {
+              "id": "explicit-zero",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "options": {
+                "audio_track": 0,
+                "no_audio": false
+              }
+            }
+          ],
+          "options": {
+            "quality": "1080p",
+            "crop": {
+              "x": 0.25,
+              "y": 0,
+              "width": 0.5,
+              "height": 1
+            },
+            "audio_track": 3,
+            "no_audio": false
+          }
+        }
+      }
+    },
+    {
+      "id": "empty-selector-survives-sharing",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "z",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            },
+            {
+              "id": "1",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        },
+        "clip_ids": []
+      },
+      "source": {
+        "id": "source-original",
+        "duration_ms": 120000,
+        "title": "Interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 4096
+        },
+        "source_url": "https://example.invalid/private-source",
+        "unexpected_metadata": "omit-from-portable-document"
+      },
+      "document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview",
+          "fingerprint": {
+            "kind": "content",
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "size_bytes": 4096
+          }
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "z",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            },
+            {
+              "id": "1",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        },
+        "clip_ids": []
+      },
+      "trusted_source": {
+        "id": "selected-source",
+        "duration_ms": 120000,
+        "title": "Selected interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 4096
+        }
+      },
+      "export_valid": true,
+      "import_valid": true,
+      "expected_document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview",
+          "fingerprint": {
+            "kind": "content",
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "size_bytes": 4096
+          }
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "z",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            },
+            {
+              "id": "1",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        },
+        "clip_ids": []
+      },
+      "expected_request": {
+        "source_id": "selected-source",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "z",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            },
+            {
+              "id": "1",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        },
+        "clip_ids": []
+      }
+    },
+    {
+      "id": "provider-fingerprint-rebinds-to-explicit-source",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "source": {
+        "id": "source-original",
+        "duration_ms": 120000,
+        "title": "Interview",
+        "fingerprint": {
+          "kind": "provider",
+          "provider": "fixture",
+          "provider_id": "recording",
+          "canonical_url_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+        },
+        "source_url": "https://example.invalid/private-source",
+        "unexpected_metadata": "omit-from-portable-document"
+      },
+      "document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview",
+          "fingerprint": {
+            "kind": "provider",
+            "provider": "fixture",
+            "provider_id": "recording",
+            "canonical_url_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+          }
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "trusted_source": {
+        "id": "selected-source",
+        "duration_ms": 120000,
+        "title": "Selected interview",
+        "fingerprint": {
+          "kind": "provider",
+          "provider": "fixture",
+          "provider_id": "recording",
+          "canonical_url_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      },
+      "export_valid": true,
+      "import_valid": true,
+      "expected_document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview",
+          "fingerprint": {
+            "kind": "provider",
+            "provider": "fixture",
+            "provider_id": "recording",
+            "canonical_url_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+          }
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expected_request": {
+        "source_id": "selected-source",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "no-fingerprint-uses-explicit-source-and-duration",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "source": {
+        "id": "source-original",
+        "duration_ms": 120000,
+        "title": "Interview",
+        "source_url": "https://example.invalid/private-source",
+        "unexpected_metadata": "omit-from-portable-document"
+      },
+      "document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview"
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "trusted_source": {
+        "id": "selected-source",
+        "duration_ms": 120000,
+        "title": "Selected interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+          "size_bytes": 4096
+        }
+      },
+      "export_valid": true,
+      "import_valid": true,
+      "expected_document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview"
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expected_request": {
+        "source_id": "selected-source",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "fingerprint-mismatch-refuses-rebind",
+      "document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview",
+          "fingerprint": {
+            "kind": "content",
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "size_bytes": 4096
+          }
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "trusted_source": {
+        "id": "selected-source",
+        "duration_ms": 120000,
+        "title": "Selected interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+          "size_bytes": 4096
+        }
+      },
+      "import_valid": false
+    },
+    {
+      "id": "required-fingerprint-missing-refuses-rebind",
+      "document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview",
+          "fingerprint": {
+            "kind": "content",
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "size_bytes": 4096
+          }
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "trusted_source": {
+        "id": "selected-source",
+        "duration_ms": 120000,
+        "title": "Selected interview"
+      },
+      "import_valid": false
+    },
+    {
+      "id": "duration-mismatch-refuses-rebind",
+      "document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview",
+          "fingerprint": {
+            "kind": "content",
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "size_bytes": 4096
+          }
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "trusted_source": {
+        "id": "selected-source",
+        "duration_ms": 119999,
+        "title": "Selected interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 4096
+        }
+      },
+      "import_valid": false
+    },
+    {
+      "id": "unknown-portable-envelope-field",
+      "document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview",
+          "fingerprint": {
+            "kind": "content",
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "size_bytes": 4096
+          }
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        },
+        "owner": "not-a-portable-field"
+      },
+      "trusted_source": {
+        "id": "selected-source",
+        "duration_ms": 120000,
+        "title": "Selected interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 4096
+        }
+      },
+      "import_valid": false
+    },
+    {
+      "id": "unknown-portable-source-field",
+      "document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview",
+          "fingerprint": {
+            "kind": "content",
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "size_bytes": 4096
+          },
+          "source_id": "not-a-portable-field"
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "trusted_source": {
+        "id": "selected-source",
+        "duration_ms": 120000,
+        "title": "Selected interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 4096
+        }
+      },
+      "import_valid": false
+    },
+    {
+      "id": "unknown-plan-field",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ],
+          "owner": "not-an-edit-field"
+        }
+      },
+      "source": {
+        "id": "source-original",
+        "duration_ms": 120000,
+        "title": "Interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 4096
+        },
+        "source_url": "https://example.invalid/private-source",
+        "unexpected_metadata": "omit-from-portable-document"
+      },
+      "document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview",
+          "fingerprint": {
+            "kind": "content",
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "size_bytes": 4096
+          }
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ],
+          "owner": "not-an-edit-field"
+        }
+      },
+      "trusted_source": {
+        "id": "selected-source",
+        "duration_ms": 120000,
+        "title": "Selected interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 4096
+        }
+      },
+      "export_valid": false,
+      "import_valid": false
+    },
+    {
+      "id": "unknown-options-field",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ],
+          "options": {
+            "unexpected_option": true
+          }
+        }
+      },
+      "source": {
+        "id": "source-original",
+        "duration_ms": 120000,
+        "title": "Interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 4096
+        },
+        "source_url": "https://example.invalid/private-source",
+        "unexpected_metadata": "omit-from-portable-document"
+      },
+      "document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview",
+          "fingerprint": {
+            "kind": "content",
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "size_bytes": 4096
+          }
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ],
+          "options": {
+            "unexpected_option": true
+          }
+        }
+      },
+      "trusted_source": {
+        "id": "selected-source",
+        "duration_ms": 120000,
+        "title": "Selected interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 4096
+        }
+      },
+      "export_valid": false,
+      "import_valid": false
+    },
+    {
+      "id": "unknown-crop-field",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ],
+          "options": {
+            "crop": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "unexpected_crop_field": true
+            }
+          }
+        }
+      },
+      "source": {
+        "id": "source-original",
+        "duration_ms": 120000,
+        "title": "Interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 4096
+        },
+        "source_url": "https://example.invalid/private-source",
+        "unexpected_metadata": "omit-from-portable-document"
+      },
+      "document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview",
+          "fingerprint": {
+            "kind": "content",
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "size_bytes": 4096
+          }
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ]
+            }
+          ],
+          "options": {
+            "crop": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "unexpected_crop_field": true
+            }
+          }
+        }
+      },
+      "trusted_source": {
+        "id": "selected-source",
+        "duration_ms": 120000,
+        "title": "Selected interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 4096
+        }
+      },
+      "export_valid": false,
+      "import_valid": false
+    },
+    {
+      "id": "unknown-clip-field",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "unexpected_clip_field": true
+            }
+          ]
+        }
+      },
+      "source": {
+        "id": "source-original",
+        "duration_ms": 120000,
+        "title": "Interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 4096
+        },
+        "source_url": "https://example.invalid/private-source",
+        "unexpected_metadata": "omit-from-portable-document"
+      },
+      "document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview",
+          "fingerprint": {
+            "kind": "content",
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "size_bytes": 4096
+          }
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000
+                }
+              ],
+              "unexpected_clip_field": true
+            }
+          ]
+        }
+      },
+      "trusted_source": {
+        "id": "selected-source",
+        "duration_ms": 120000,
+        "title": "Selected interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 4096
+        }
+      },
+      "export_valid": false,
+      "import_valid": false
+    },
+    {
+      "id": "unknown-range-field",
+      "request": {
+        "source_id": "source-original",
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000,
+                  "unexpected_range_field": true
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "source": {
+        "id": "source-original",
+        "duration_ms": 120000,
+        "title": "Interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 4096
+        },
+        "source_url": "https://example.invalid/private-source",
+        "unexpected_metadata": "omit-from-portable-document"
+      },
+      "document": {
+        "kind": "cutmy.collection.project",
+        "version": 1,
+        "source": {
+          "duration_ms": 120000,
+          "title": "Interview",
+          "fingerprint": {
+            "kind": "content",
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "size_bytes": 4096
+          }
+        },
+        "plan": {
+          "version": 1,
+          "clips": [
+            {
+              "id": "one",
+              "ranges": [
+                {
+                  "start_ms": 0,
+                  "end_ms": 1000,
+                  "unexpected_range_field": true
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "trusted_source": {
+        "id": "selected-source",
+        "duration_ms": 120000,
+        "title": "Selected interview",
+        "fingerprint": {
+          "kind": "content",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 4096
+        }
+      },
+      "export_valid": false,
+      "import_valid": false
+    }
+  ]
+}

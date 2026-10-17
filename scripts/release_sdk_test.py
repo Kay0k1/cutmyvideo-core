@@ -24,11 +24,11 @@ class SDKReleaseControls(unittest.TestCase):
         (self.repo / 'sdk/typescript').mkdir(parents=True)
         (self.repo / 'sdk/typescript/package.json').write_text('{"version":"1.4.0"}')
         self.source = {'commit': 'a'*40, 'tree': 'b'*40, 'version': 'v1.4.0', 'mode': 'release', 'publishable': True,
-                       'files': {'sdk/input.py': {'sha256': 'c'*64}}}
+                       'files': {'sdk/input.py': {'sha256': 'c'*64}, s.PROJECT_CONTRACTS: {'sha256': 'e'*64}}}
         self.run = {'repository': s.REPOSITORY, 'run_id': 123, 'run_attempt': 2}
         self.names = s.package_names('1.4.0')
         self.receipt = {'installed_consumers': True, 'required_tests': sorted(s.required_tests()),
-                        'source_inputs_sha256': {'sdk/input.py': 'c'*64}}
+                        'source_inputs_sha256': {'sdk/input.py': 'c'*64, s.PROJECT_CONTRACTS: 'e'*64}}
         for kind, name in self.names.items():
             path = self.evidence / ('python-dist' if kind != 'npm' else '') / name
             raw = (kind+'-tested-package').encode()
@@ -59,6 +59,18 @@ class SDKReleaseControls(unittest.TestCase):
                 receipt = deepcopy(self.receipt); receipt[key] = bad
                 (self.evidence/'SDK-CHECKS.json').write_bytes(s.m.canonical(receipt))
                 with self.assertRaises(ValueError): self.seal()
+
+    def test_refuses_receipt_without_the_resolved_shared_contract_examples(self):
+        for digest in (None, 'f' * 64):
+            with self.subTest(digest=digest):
+                receipt = deepcopy(self.receipt)
+                if digest is None:
+                    receipt['source_inputs_sha256'].pop(s.PROJECT_CONTRACTS)
+                else:
+                    receipt['source_inputs_sha256'][s.PROJECT_CONTRACTS] = digest
+                (self.evidence / 'SDK-CHECKS.json').write_bytes(s.m.canonical(receipt))
+                with self.assertRaisesRegex(ValueError, 'shared project contract examples'):
+                    self.seal()
 
     def test_refuses_changed_package_or_noncanonical_metadata(self):
         self.seal()

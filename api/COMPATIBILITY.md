@@ -1,6 +1,6 @@
-# HTTP compatibility baseline
+# HTTP compatibility baselines
 
-The effective baseline is derived from `api/openapi.yaml` at immutable tag
+The older effective baseline is derived from `api/openapi.yaml` at immutable tag
 `v0.2.1`, commit `f2be62c42a6a0d3d7a017b40bd683596bc578b95`.
 [The original tagged document](https://github.com/Kay0k1/cutmyvideo-core/blob/v0.2.1/api/openapi.yaml)
 is the provenance, rather than the modified working-tree specification.
@@ -28,6 +28,33 @@ of the old URL/key `maxLength` to the same UTF-8 byte bound is an explicit
 correction of the old character-versus-runtime-byte mismatch. Diagnostic
 `code`/`error_code` fields remain open vocabularies; the old item error enum was
 contrary to the already documented unknown-code fallback.
+
+The additional `compatibility-v1.4.1.json` freezes the entire structural HTTP
+contract at immutable tag `v1.4.1`, commit
+`eb24d8e177de977da5e4a34b9b48ecabe14cf635`:
+46 operations across 41 paths, including all 23 collection/project operations.
+[The tagged specification](https://github.com/Kay0k1/cutmyvideo-core/blob/eb24d8e177de977da5e4a34b9b48ecabe14cf635/api/openapi.yaml)
+has SHA-256
+`d12ceac0881402fb9a625afd3bd1792188bdccdd89b9121e18bec0a19ea477b1`.
+This snapshot stores paths and shared components with local references intact;
+the checker expands those references in memory. Descriptions, examples, titles
+and defaults are omitted from the snapshot and compatibility comparison. This
+keeps its 35 named schemas in one approximately 42 KiB file without duplicating
+large source/job/project schemas per operation. Its envelope records the source
+commit, digest and normalization. No effective v0.2.1 promises or baseline bytes
+were replaced by the newer snapshot.
+Annotation removal respects named maps: response status `default` and properties
+or components named `title`, `description` or `default` remain contract data.
+
+Both checked-in files have independently pinned SHA-256 digests in the checker.
+The ordinary check always applies both baselines; `--baseline PATH` adds an
+expanded review snapshot and cannot replace either frozen check.
+`--write-baseline PATH` only exports the supplied specification's expanded
+contract for review. It refuses either protected baseline path, including
+resolved path and symlink aliases. Editing or regenerating a checked-in baseline
+fails its digest check, so an intentional baseline change also requires review
+of its checker pin and provenance. Normal checks work offline and do not require
+a Git checkout or access to tags.
 
 The checker detects removed operations/parameters/response fields/headers,
 new required inputs, incompatible types/enums, narrowed requests and weakened

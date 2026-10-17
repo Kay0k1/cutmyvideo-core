@@ -236,7 +236,9 @@ fresh key for different work. Once retention cleanup or source deletion removes
 the original job, its key no longer recovers it.
 For an uncertain source registration, check `GET /sources` in the same session
 before deciding whether to repeat the upload/import. That list is bounded to 20
-sources and uploads/imports have no idempotency-key guarantee. Other failed
+sources. Unkeyed uploads/imports require caller reconciliation; keyed source
+preparations use the retained owner/key/intent receipts described above and in the
+[lifecycle map](agent-workflow.md#retention-access-and-recovery). Other failed
 mutations are not promised to be unapplied; a timeout or connection loss grants
 no blanket permission to retry them blindly.
 

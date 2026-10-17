@@ -69,6 +69,20 @@ class NativeResultsChecks(unittest.TestCase):
                     self.assertNotIn(name, required)
                     self.assertIsNone(re.fullmatch(selector, name), "Database tests belong to the service invocation")
 
+    def test_project_contract_and_lifecycle_regressions_are_required_on_every_native_target(self):
+        names = {"TestProjectCollectionContractExamples",
+                 "TestProjectLifecycleRevokeAndDeletePreserveAcceptedWork",
+                 "TestProjectLifecycleAccessExpiryPrecedesAdmissionCleanup",
+                 "TestProjectLifecycleLiveProjectAndGrantDoNotPinSource"}
+        self.assertEqual(native_results.PROJECT_CONTRACT_SERVICE_REQUIRED, names)
+        self.assertLessEqual(names, native_results.REQUIRED[2])
+        workflow = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        command = next(line for line in workflow.splitlines() if "tee native-service-tests.jsonl" in line)
+        selector = re.search(r"-run '([^']+)'", command).group(1)
+        for name in names:
+            with self.subTest(name=name):
+                self.assertIsNotNone(re.fullmatch(selector, name))
+
     def test_audit_regressions_reject_missing_skipped_and_failed_results(self):
         bookworm = Path(self.directory.name) / "audit-bookworm.jsonl"
         bookworm_events = [{"Action": "pass", "Test": name, "Package": native_results.APP_PACKAGE}
@@ -78,6 +92,7 @@ class NativeResultsChecks(unittest.TestCase):
         for path, names, option in (
             (self.reports[4], native_results.AUDIT_MEDIA_REQUIRED, None),
             (self.reports[2], native_results.AUDIT_SERVICE_REQUIRED, None),
+            (self.reports[2], native_results.PROJECT_CONTRACT_SERVICE_REQUIRED, None),
             (bookworm, native_results.AUDIT_MEDIA_REQUIRED, "--bookworm"),
         ):
             good = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
@@ -553,7 +568,7 @@ class NativeResultsChecks(unittest.TestCase):
                  "TestStorageScanSessionReadBatchPreservesNonISODateStyle",
                  "TestStorageScanSessionReadBatchLookupFailureRollsBackAndRecovers")
         self.assertEqual(len(native_results.REQUIRED[3]), 48 + len(native_results.UNIVERSAL_STORAGE_REQUIRED) + len(native_results.AGENT_PROJECT_STORAGE_REQUIRED))
-        self.assertEqual(sum(map(len, native_results.REQUIRED)), 124 + sum(map(len, (native_results.UNIVERSAL_ENGINE_REQUIRED, native_results.UNIVERSAL_SERVICE_REQUIRED, native_results.UNIVERSAL_STORAGE_REQUIRED, native_results.UNIVERSAL_MEDIA_REQUIRED, native_results.PREFLIGHT_ENGINE_REQUIRED, native_results.PREFLIGHT_CLI_REQUIRED, native_results.PREFLIGHT_SERVICE_REQUIRED, native_results.PREFLIGHT_MEDIA_REQUIRED, native_results.POOL_SERVICE_REQUIRED, native_results.DRAFT_CACHE_TRANSFER_REQUIRED, native_results.DRAFT_CACHE_DATABASE_REQUIRED, native_results.COLLECTION_ENGINE_REQUIRED, native_results.COLLECTION_CLI_REQUIRED, native_results.COLLECTION_SERVICE_REQUIRED, native_results.AGENT_PROJECT_SERVICE_REQUIRED, native_results.AGENT_PROJECT_STORAGE_REQUIRED, native_results.SUBTITLE_SERVICE_REQUIRED, native_results.SUBTITLE_CLI_REQUIRED, native_results.AUDIT_MEDIA_REQUIRED, native_results.AUDIT_SERVICE_REQUIRED))))
+        self.assertEqual(sum(map(len, native_results.REQUIRED)), 124 + sum(map(len, (native_results.UNIVERSAL_ENGINE_REQUIRED, native_results.UNIVERSAL_SERVICE_REQUIRED, native_results.UNIVERSAL_STORAGE_REQUIRED, native_results.UNIVERSAL_MEDIA_REQUIRED, native_results.PREFLIGHT_ENGINE_REQUIRED, native_results.PREFLIGHT_CLI_REQUIRED, native_results.PREFLIGHT_SERVICE_REQUIRED, native_results.PREFLIGHT_MEDIA_REQUIRED, native_results.POOL_SERVICE_REQUIRED, native_results.DRAFT_CACHE_TRANSFER_REQUIRED, native_results.DRAFT_CACHE_DATABASE_REQUIRED, native_results.COLLECTION_ENGINE_REQUIRED, native_results.COLLECTION_CLI_REQUIRED, native_results.COLLECTION_SERVICE_REQUIRED, native_results.AGENT_PROJECT_SERVICE_REQUIRED, native_results.AGENT_PROJECT_STORAGE_REQUIRED, native_results.SUBTITLE_SERVICE_REQUIRED, native_results.SUBTITLE_CLI_REQUIRED, native_results.AUDIT_MEDIA_REQUIRED, native_results.AUDIT_SERVICE_REQUIRED, native_results.PROJECT_CONTRACT_SERVICE_REQUIRED))))
         workflow = SCRIPT.parent.parent / ".github" / "workflows" / "ci.yml"
         commands = [line for line in workflow.read_text(encoding="utf-8").splitlines()
                     if "tee native-storage-tests.jsonl" in line]

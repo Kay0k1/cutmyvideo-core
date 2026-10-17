@@ -13,6 +13,9 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 - Show fixed refusal codes in the self-hosting lifecycle wrapper while retaining exit status 1 and redacting private exception details.
 
 ### Changed
+- Freeze the 1.4.1 HTTP contract alongside the original baseline, with mandatory compatibility checks for collections, projects and the other existing API operations.
+- Share versioned collection and portable-project examples between Go, OpenAPI and both source/installed SDK test suites, preserving their distinct validation responsibilities.
+- Document independent project, access, source, job, artifact and local-state lifetimes; require project expiry, revocation and retained-work regression checks on every native target.
 - Remove unused legacy SQL schema literals; ordered embedded migrations remain the schema source.
 - Exclude local SDK dependencies, build output and generated evidence from the Docker build context.
 - Refresh release/SDK support documentation and add a map of development, verification and release commands.
