@@ -2,6 +2,14 @@
 
 The engine handles untrusted URLs and media. The engine includes application protections, and deployment provides another boundary.
 
+Analysis in 1.5.0 is read-only and restricted to owned uploaded media on HTTP,
+with explicit windows, decoder/event budgets, deadlines and reader leases.
+Replacement audio accepts owner-scoped upload IDs instead of filesystem paths;
+both recordings are checked atomically at queue admission and retained while
+needed. A project grant covers its primary recording only; adding secondary
+audio requires the owner's session. Output canvas size and multi-input decoding
+participate in conservative media admission. See [limits and usage](media-analysis-and-rendering.md).
+
 ## Network
 
 - User source links require HTTPS on port 443, no URL credentials and bounded length. Only recognized platform page hosts may upgrade HTTP/schemeless pastes; unknown/direct signed queries remain unchanged.
