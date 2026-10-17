@@ -8,9 +8,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Kay0k1/cutmyvideo-core/internal/app"
 	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
 	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
+	"github.com/Kay0k1/cutmyvideo-core/internal/localmedia"
 )
 
 type CollectionPlan = edit.CollectionPlan
@@ -75,7 +75,7 @@ func (e *Engine) PreflightCollection(ctx context.Context, plan CollectionPlan, o
 	}
 	ctx, cancel := context.WithTimeout(ctx, e.inspectTimeout)
 	defer cancel()
-	ctx, session := app.BeginLocalExport(ctx, input)
+	ctx, session := localmedia.BeginLocalExport(ctx, input)
 	defer session.Close()
 	result, _, err = e.prepareCollection(ctx, plan, input, dir, execution)
 	return result, err
@@ -99,7 +99,7 @@ func (e *Engine) ExecuteCollection(ctx context.Context, plan CollectionPlan, out
 	}
 	ctx, cancel := context.WithTimeout(ctx, e.exportTimeout)
 	defer cancel()
-	ctx, session := app.BeginLocalExport(ctx, input)
+	ctx, session := localmedia.BeginLocalExport(ctx, input)
 	defer session.Close()
 	inspectCtx, stopInspect := context.WithTimeout(ctx, e.inspectTimeout)
 	checked, clips, err := e.prepareCollection(inspectCtx, plan, input, dir, execution)
@@ -108,8 +108,8 @@ func (e *Engine) ExecuteCollection(ctx context.Context, plan CollectionPlan, out
 		return result, err
 	}
 	result = CollectionResult{Version: 1, Rendition: checked.Rendition, Outputs: []CollectionOutput{}}
-	ctx = app.CollectionRenderContext(ctx, result.Rendition)
-	var ranges []app.Range
+	ctx = localmedia.CollectionRenderContext(ctx, result.Rendition)
+	var ranges []localmedia.Range
 	for _, clip := range clips {
 		ranges = append(ranges, clip.Request.Ranges...)
 	}
@@ -134,7 +134,7 @@ func (e *Engine) ExecuteCollection(ctx context.Context, plan CollectionPlan, out
 			return result, collectionClipError(clip.ID, "export", &Error{Code: CodeOutputLimit, Err: errors.New("selected collection exceeds configured output byte limit")})
 		}
 		path := filepath.Join(workspace, fmt.Sprintf("clip-%d.%s", i, clip.Request.Format))
-		segments, renderErr := app.ExportJoinedLocal(ctx, config, input, path, clip.Request.Ranges, clip.Request)
+		segments, renderErr := localmedia.ExportJoinedLocal(ctx, config, input, path, clip.Request.Ranges, clip.Request)
 		if renderErr != nil {
 			return result, collectionClipError(clip.ID, "export", renderErr)
 		}
@@ -190,20 +190,20 @@ func collectionClipError(id, field string, err error) error {
 	return &CollectionFieldError{ClipID: id, Field: field, Err: err}
 }
 
-func (e *Engine) prepareCollection(ctx context.Context, plan CollectionPlan, input, dir string, execution CollectionExecution) (result CollectionPreflightResult, clips []app.PreparedCollectionClip, err error) {
+func (e *Engine) prepareCollection(ctx context.Context, plan CollectionPlan, input, dir string, execution CollectionExecution) (result CollectionPreflightResult, clips []localmedia.PreparedCollectionClip, err error) {
 	source, err := e.InspectWithTracks(ctx, input)
 	if err != nil {
 		return result, nil, err
 	}
-	clips, err = app.NormalizeCollection(plan, execution, e.config, app.Source{Path: input, DurationMS: source.DurationMS, Tracks: source.Tracks})
+	clips, err = localmedia.NormalizeCollection(plan, execution, e.config, localmedia.Source{Path: input, DurationMS: source.DurationMS, Tracks: source.Tracks})
 	if err != nil {
 		return result, nil, err
 	}
-	rendition, _ := app.NormalizeCollectionRendition(execution.Rendition)
+	rendition, _ := localmedia.NormalizeCollectionRendition(execution.Rendition)
 	result = CollectionPreflightResult{Version: 1, Valid: true, Rendition: rendition, SelectedClipIDs: []string{}, Clips: []CollectionClipPreflight{}, Source: PreflightSource{DurationMS: source.DurationMS, Width: source.Width, Height: source.Height, DisplayWidth: source.DisplayWidth, DisplayHeight: source.DisplayHeight}}
 	names := make([]string, len(clips))
 	for i, clip := range clips {
-		names[i] = filepath.Join(dir, app.CollectionOutputFilename(clip, rendition))
+		names[i] = filepath.Join(dir, localmedia.CollectionOutputFilename(clip, rendition))
 		if _, err = os.Lstat(names[i]); err == nil {
 			return CollectionPreflightResult{}, nil, collectionClipError(clip.ID, "output_path", &messageCause{message: ErrOutputExists.Error(), cause: errors.Join(ErrOutputExists, os.ErrExist)})
 		}
@@ -213,14 +213,14 @@ func (e *Engine) prepareCollection(ctx context.Context, plan CollectionPlan, inp
 	}
 	// A request fingerprint omits ranges: those are already fully validated.
 	// Identical settings share capability probes, including the source snapshot.
-	cache := make(map[string]app.PreflightResult)
+	cache := make(map[string]localmedia.PreflightResult)
 	for i, clip := range clips {
 		fingerprint := clip.Request
 		fingerprint.Ranges = nil
 		key, _ := json.Marshal(fingerprint)
 		checked, ok := cache[string(key)]
 		if !ok {
-			checked, err = app.PreflightLocal(ctx, e.config, input, clip.Request)
+			checked, err = localmedia.PreflightLocal(ctx, e.config, input, clip.Request)
 			if err != nil {
 				return CollectionPreflightResult{}, nil, collectionClipError(clip.ID, collectionMediaErrorField(err), err)
 			}

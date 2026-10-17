@@ -2,89 +2,66 @@ package app
 
 import (
 	"context"
-	"os"
-	"path/filepath"
-
 	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
+	"github.com/Kay0k1/cutmyvideo-core/internal/localmedia"
 	"github.com/Kay0k1/cutmyvideo-core/internal/mediaexport"
 	"github.com/Kay0k1/cutmyvideo-core/internal/mediainfo"
 )
 
-type joinedMediaRuntime struct{ mediaExportRuntime }
+// Keep service diagnostics at the boundary while the concrete effects belong
+// to the same backend used by the local engine.
+type joinedMediaRuntime struct{ mediaexport.JoinedRuntime }
 
 func newJoinedMediaRuntime(c Config) joinedMediaRuntime {
-	return joinedMediaRuntime{mediaExportRuntime: mediaExportRuntime{config: c}}
+	return joinedMediaRuntime{JoinedRuntime: localmedia.NewJoinedRuntime(c)}
 }
 
 var _ mediaexport.JoinedRuntime = joinedMediaRuntime{}
 
-func (joinedMediaRuntime) JoinPath(parts ...string) string { return filepath.Join(parts...) }
-func (joinedMediaRuntime) BaseDir(path string) string      { return filepath.Dir(path) }
-func (joinedMediaRuntime) ResolveLocalPath(path string) (string, error) {
-	absolute, err := filepath.Abs(path)
-	if err != nil {
-		return "", err
-	}
-	return filepath.ToSlash(absolute), nil
+func (runtime joinedMediaRuntime) SelectInputs(ctx context.Context, inputs []mediaexport.Input, request edit.ExportRequest) (mediaexport.Selection, error) {
+	selection, err := runtime.JoinedRuntime.SelectInputs(ctx, inputs, request)
+	return selection, localMediaError(err)
 }
-func (joinedMediaRuntime) NewWorkspace(parent, prefix string) (string, error) {
-	return os.MkdirTemp(parent, prefix)
+func (runtime joinedMediaRuntime) NearestKeyframe(ctx context.Context, path string, start int64, remote bool, index int) (mediaexport.Keyframe, error) {
+	frame, err := runtime.JoinedRuntime.NearestKeyframe(ctx, path, start, remote, index)
+	return frame, localMediaError(err)
 }
-func (joinedMediaRuntime) RemoveAll(path string) error          { return os.RemoveAll(path) }
-func (joinedMediaRuntime) Remove(path string) error             { return os.Remove(path) }
-func (joinedMediaRuntime) Rename(oldPath, newPath string) error { return os.Rename(oldPath, newPath) }
-func (joinedMediaRuntime) WritePlan(path string, data []byte) error {
-	return os.WriteFile(path, data, 0600)
+func (runtime joinedMediaRuntime) Run(ctx context.Context, args []string, total int64, report func(int64)) error {
+	return localMediaError(runtime.JoinedRuntime.Run(ctx, args, total, report))
 }
-
-type joinedMediaFile struct{ file os.FileInfo }
-
-func (file *joinedMediaFile) Size() int64 { return file.file.Size() }
-func (file *joinedMediaFile) Same(other mediaexport.JoinedFile) bool {
-	value, ok := other.(*joinedMediaFile)
-	return ok && os.SameFile(file.file, value.file) && file.file.Size() == value.file.Size() && file.file.ModTime().Equal(value.file.ModTime())
+func (runtime joinedMediaRuntime) Probe(ctx context.Context, path string, remote bool) (mediainfo.Info, int64, error) {
+	p, d, err := runtime.JoinedRuntime.Probe(ctx, path, remote)
+	return p, d, localMediaError(err)
 }
-func (joinedMediaRuntime) StatFile(path string) (mediaexport.JoinedFile, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return nil, err
-	}
-	return &joinedMediaFile{file: info}, nil
+func (runtime joinedMediaRuntime) CopyDiagnostic(err error, format string) error {
+	return localMediaError(runtime.JoinedRuntime.CopyDiagnostic(err, format))
+}
+func (runtime joinedMediaRuntime) RenderedFailure(err error, hdr bool) error {
+	return localMediaError(runtime.JoinedRuntime.RenderedFailure(err, hdr))
 }
 
-type joinedMediaSource struct{ session *LocalExportSession }
+type joinedMediaSource struct{ source mediaexport.SourceFence }
 
-func (source *joinedMediaSource) Check() error {
-	source.session.Mu.Lock()
-	_, err := source.session.unchanged()
-	source.session.Mu.Unlock()
-	return err
-}
-func (joinedMediaRuntime) PinnedSource(ctx context.Context, input mediaexport.Input) mediaexport.SourceFence {
-	session := localExportSession(ctx, input.Path, input.Remote)
-	if session == nil {
+func (source *joinedMediaSource) Check() error { return localMediaError(source.source.Check()) }
+func (runtime joinedMediaRuntime) PinnedSource(ctx context.Context, input mediaexport.Input) mediaexport.SourceFence {
+	source := runtime.JoinedRuntime.PinnedSource(ctx, input)
+	if source == nil {
 		return nil
 	}
-	return &joinedMediaSource{session: session}
+	return &joinedMediaSource{source: source}
 }
 func (runtime joinedMediaRuntime) ProbeStreams(ctx context.Context, path string, remote bool) (mediainfo.Info, error) {
-	info, err := probeStreams(ctx, runtime.config, path, remote)
-	return mediainfo.Info(info), err
+	p, err := runtime.JoinedRuntime.ProbeStreams(ctx, path, remote)
+	return p, localMediaError(err)
 }
 func (runtime joinedMediaRuntime) MuxSubtitles(ctx context.Context, source string, info mediainfo.Info, media, out string, segments []edit.Segment, request edit.ExportRequest, limit int64) error {
-	return muxTextSubtitles(ctx, runtime.config, source, probeInfo(info), media, out, segments, ExportRequest(request), limit)
+	return localMediaError(runtime.JoinedRuntime.MuxSubtitles(ctx, source, info, media, out, segments, request, limit))
 }
 func (runtime joinedMediaRuntime) VerifyAccurate(ctx context.Context, out string, request edit.ExportRequest, expected, limit int64, selection mediaexport.Selection) (mediainfo.Info, error) {
-	original := mediaSelection{Video: selection.Video, Audio: selection.Audio, VideoInput: selection.VideoInput, AudioInput: selection.AudioInput, mp3DurationMode: selection.MP3DurationMode}
-	var info probeInfo
-	var err error
-	if request.Format == "mp4" && runtime.config.FFmpegProfile != "compact" {
-		info, err = verifyJoinedOwnedMP4(ctx, runtime.config, out, ExportRequest(request), expected, limit, original)
-	} else {
-		info, err = verifyJoinedOwnedMP3(ctx, runtime.config, out, ExportRequest(request), expected, limit, original.mp3DurationMode)
-	}
-	return mediainfo.Info(info), err
+	p, err := runtime.JoinedRuntime.VerifyAccurate(ctx, out, request, expected, limit, selection)
+	return p, localMediaError(err)
 }
 func (runtime joinedMediaRuntime) SupportsAudioPacketDrop(ctx context.Context) (bool, error) {
-	return supportsAudioPacketDrop(ctx, runtime.config)
+	ok, err := runtime.JoinedRuntime.SupportsAudioPacketDrop(ctx)
+	return ok, localMediaError(err)
 }

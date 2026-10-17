@@ -14,6 +14,9 @@ MEDIAINFO_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/mediainfo"
 MEDIAEXPORT_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/mediaexport"
 MEDIAPREFLIGHT_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/mediapreflight"
 MEDIASESSION_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/mediasession"
+COREMODEL_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/coremodel"
+MEDIAERROR_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/mediaerror"
+LOCALMEDIA_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/localmedia"
 
 AUDIT_MEDIA_REQUIRED = {
     "TestHLSManifestRedirectResolvesFinalRelativeReferences",
@@ -103,6 +106,25 @@ SOURCE_SUBTITLE_MODULE_REQUIRED = {
 }
 MEDIASESSION_ADAPTER_REQUIRED = {
     "TestMediaSessionBridgePreservesLegacyTypesAndCallbacks",
+}
+COREMODEL_MODULE_REQUIRED = {
+    "TestCoreModelPreservesLegacyValidationAndShapes",
+    "TestCoreModelPackageHasNoServiceDependencies",
+}
+MEDIAERROR_MODULE_REQUIRED = {
+    "TestMediaErrorPreservesClassificationAndCauses",
+    "TestMediaErrorPackageUsesOnlyStandardLibrary",
+}
+LOCALMEDIA_MODULE_REQUIRED = {
+    "TestLocalMediaSessionPreservesOwnershipAndFreshness",
+    "TestLocalMediaProcessPreservesBoundsStreamingAndObserver",
+}
+COREMODEL_MEDIAERROR_ADAPTER_REQUIRED = {
+    "TestCoreModelAndMediaErrorAdaptersPreserveLegacyContracts",
+}
+ENGINE_DEPENDENCY_REQUIRED = {
+    "TestEngineRuntimeDependencyBoundary",
+    "TestEngineExternalConsumerPreservesPublicContracts",
 }
 
 NEW_MEDIA_REQUIRED = {
@@ -415,9 +437,11 @@ REQUIRED[0].update(JOINED_MEDIAEXPORT_REQUIRED | MEDIAPREFLIGHT_MODULE_REQUIRED)
 REQUIRED[4].update(MEDIAPREFLIGHT_ADAPTER_REQUIRED)
 REQUIRED[0].update(MEDIASESSION_MODULE_REQUIRED | SOURCE_SUBTITLE_MODULE_REQUIRED)
 REQUIRED[4].update(MEDIASESSION_ADAPTER_REQUIRED)
+REQUIRED[0].update(COREMODEL_MODULE_REQUIRED | MEDIAERROR_MODULE_REQUIRED | LOCALMEDIA_MODULE_REQUIRED | ENGINE_DEPENDENCY_REQUIRED)
+REQUIRED[4].update(COREMODEL_MEDIAERROR_ADAPTER_REQUIRED)
 
 REQUIRED_PACKAGES = [
-    {ENGINE_PACKAGE, FS_PACKAGE, CLI_PACKAGE, SUBTITLE_PACKAGE, MEDIAINFO_PACKAGE, MEDIAEXPORT_PACKAGE, MEDIAPREFLIGHT_PACKAGE, MEDIASESSION_PACKAGE},
+    {ENGINE_PACKAGE, FS_PACKAGE, CLI_PACKAGE, SUBTITLE_PACKAGE, MEDIAINFO_PACKAGE, MEDIAEXPORT_PACKAGE, MEDIAPREFLIGHT_PACKAGE, MEDIASESSION_PACKAGE, COREMODEL_PACKAGE, MEDIAERROR_PACKAGE, LOCALMEDIA_PACKAGE},
     {APP_PACKAGE, TOOLRUN_PACKAGE},
     {APP_PACKAGE},
     {APP_PACKAGE},
@@ -427,7 +451,10 @@ REQUIRED_PACKAGES = [
 # The mixed reports must retain each test's owning package. Adding a standalone
 # module must not let its similarly named test satisfy an engine or app result.
 REQUIRED_TEST_PACKAGES = [
-    {name: (MEDIASESSION_PACKAGE if name in MEDIASESSION_MODULE_REQUIRED else
+    {name: (COREMODEL_PACKAGE if name in COREMODEL_MODULE_REQUIRED else
+            MEDIAERROR_PACKAGE if name in MEDIAERROR_MODULE_REQUIRED else
+            LOCALMEDIA_PACKAGE if name in LOCALMEDIA_MODULE_REQUIRED else
+            MEDIASESSION_PACKAGE if name in MEDIASESSION_MODULE_REQUIRED else
             MEDIAPREFLIGHT_PACKAGE if name in MEDIAPREFLIGHT_MODULE_REQUIRED else
             MEDIAEXPORT_PACKAGE if name in MEDIAEXPORT_MODULE_REQUIRED | JOINED_MEDIAEXPORT_REQUIRED else
             MEDIAINFO_PACKAGE if name in MEDIAINFO_MODULE_REQUIRED else

@@ -15,14 +15,16 @@ flowchart LR
     CLI[cutmy CLI] --> Engine
     Python[Python LocalCutmy] --> CLI
     TypeScript[TypeScript LocalCutmy] --> CLI
-    Engine --> Tools[FFmpeg / ffprobe]
+    Engine --> Backend[internal/localmedia]
+    Backend --> Tools[FFmpeg / ffprobe]
     Tools --> Files[Local input and output files]
 ```
 
 `pkg/engine` is the public Go interface for inspection, individual exports,
 saved plans and preflight. It launches external media tools within bounded
 operations and validates/publishes their results. Its local operations do not
-open PostgreSQL or start an HTTP service.
+open PostgreSQL or start an HTTP service. Its runtime dependency graph does not
+include the server package, database driver or HTTP stack.
 
 The CLI exposes the same operations as JSON-oriented commands. Local SDKs invoke
 an installed CLI with argument arrays, then return structured results and errors.
@@ -40,11 +42,12 @@ flowchart LR
     Client[HTTP client / SDK / browser editor] --> API[Go HTTP API]
     API --> DB[(PostgreSQL)]
     DB --> Worker[Go worker]
-    Worker --> Media[Shared media operations]
+    Worker --> Media[internal/localmedia]
     Media --> Tools[FFmpeg / ffprobe]
     API --> Disk[(Private media storage)]
     Media --> Disk
-    Media --> Import[yt-dlp / guarded HTTPS relay]
+    Worker --> Import[yt-dlp / guarded HTTPS relay]
+    Import --> Media
 ```
 
 The API owns sessions, source admission, job submission and artifact access. A
@@ -91,15 +94,16 @@ it does not open files, run media tools or depend on HTTP or database code.
 The public engine calls it directly, while app aliases preserve the existing
 request/result/error types. Extracted-source SRT parsing remains distinct from
 the stricter supplied-text parser. Source inspection and subtitle tool execution
-and muxing retain their app adapters; operation-local caches belong to
+and muxing run through `internal/localmedia`; operation-local caches belong to
 `internal/mediasession`.
 
 `internal/toolrun` owns the sanitized subprocess environment, process-tree
 containment on Unix/Windows, bounded stderr and fixed failure classification.
-It returns elapsed time and the raw process error to its caller. The app layer
-retains worker diagnostics, cancellation precedence, its existing error wrappers
-and stdout policies: buffered inspection is bounded, while streaming operations
-use their own writers and limits. The runner has no server configuration,
+It returns elapsed time and the raw process error to its caller. The local media
+backend retains cancellation precedence and stdout policies: buffered inspection
+is bounded, while streaming operations use their own writers and limits. The
+service installs a process observer for worker diagnostics and translates media
+errors to its existing private wrappers. The runner has no server configuration,
 HTTP or database dependency.
 
 `internal/mediainfo` owns bounded probe metadata, finite-duration validation,
@@ -115,7 +119,7 @@ available; rendering validates geometry when an operation needs it.
 copy/accurate selection, ordered concat plans, repeated-interval reuse, audio
 alignment, requested/measured timelines and output verification. It owns FFmpeg
 arguments and pure output budgets. Filesystem, process, inspection and subtitle
-effects run through app-owned runtime adapters at their original positions in
+effects run through local media runtime adapters at their original positions in
 the operation. The package itself has no filesystem, process, network or database
 dependency. Bounded/streaming stdout, diagnostic causes, decoder-slot ownership
 and explicit final/intermediate flags retain their existing behavior.
@@ -123,7 +127,7 @@ and explicit final/intermediate flags retain their existing behavior.
 `internal/mediapreflight` owns advisory report planning, request/track/geometry
 decisions, exact capability-table parsing and batch capability-name unions. Each
 report owns its normalized request; later request errors retain their original
-position after earlier capability checks. App adapters keep fresh source/tool
+position after earlier capability checks. Local media adapters keep fresh source/tool
 identity fences, query deadlines, bounded responses and fatal OS errors. A
 successful preflight still promises neither decoding nor storage/publication.
 
@@ -132,16 +136,28 @@ keyframe lookahead, disk-backed source text and single resident subtitle index.
 It also copies verified repeated outputs into independent files. It uses the
 filesystem and neutral media packages, with callbacks for actual media-tool
 queries; it has no HTTP, SQL, queue or subprocess dependency. App retains the
-context compatibility wrapper, authorization, reader pins and the separate
+context compatibility wrapper over the same local media session, authorization,
+reader pins and the separate
 cross-operation metadata cache's owner keys, TTL and eviction policy.
 
-The public engine still imports `internal/app` for concrete local tool adapters,
-public compatibility types/methods and error classification. In particular,
-`PreflightRequest` retains its existing request-validation method. Moving the
-coordination does not yet remove that compile-time dependency. Local operations
-continue to run without opening a database. Tool probing, owned-output scanners,
-subtitle muxing, remote/HLS preparation, decoder admission, worker leases and
-durable publication keep their current owners.
+`internal/localmedia` owns concrete tool invocation, probe/keyframe queries,
+subtitle extraction/muxing, capability snapshots and bounded owned-output
+scanners. It connects the pure coordinators to the filesystem and process runner.
+Both engine and service use this backend; the engine has no dependency on
+`internal/app`, including through intermediate packages.
+
+`internal/coremodel` owns compatibility data types, the existing request
+validation method and shared startup/storage sentinels. App aliases retain their
+complete field shapes and assignment compatibility. The full legacy config and
+source shapes remain here to preserve `PreflightRequest.Validate` without
+importing server behavior; environment loading and persistence stay in app.
+`internal/mediaerror` owns fixed media diagnostics, classification and causes.
+App adapters retain private error types and sentinel identity. Runtime dependency
+guards and an external Go consumer verify this boundary and public contracts.
+
+Remote/HLS preparation, authorization, decoder admission, cross-operation
+caches and worker leases remain service responsibilities. Durable publication
+continues to use `internal/fsdurable` at the engine and service boundaries.
 
 ## Why SQL and JavaScript are here
 
@@ -167,7 +183,10 @@ installing the other language's SDK.
 | --- | --- |
 | `pkg/engine/` | Public Go library and its tests |
 | `cmd/cutmy/` | Local CLI, API/worker/maintenance entry points |
-| `internal/app/` | Shared media operations and internal server/queue/storage implementation |
+| `internal/app/` | Server/queue/storage implementation and media compatibility adapters |
+| `internal/localmedia/` | Concrete media runtime, local sessions, tool queries and owned-output scanners |
+| `internal/coremodel/` | Shared compatibility data, request-validation method and sentinels |
+| `internal/mediaerror/` | Portable media diagnostics, classification and cause chains |
 | `internal/edit/` | Standard-library-only edit models, validation and collection normalization |
 | `internal/mediaexport/` | Individual/joined export planning, coordination, budgets and result verification |
 | `internal/mediainfo/` | Pure probe metadata, track decisions and video geometry/filter rules |
@@ -186,8 +205,8 @@ installing the other language's SDK.
 | `benchmarks/`, `verification/` | Reproduction tooling, compact observations and retained evidence references |
 
 Public Go callers import `pkg/engine`; `internal/app` is implementation detail,
-not a supported integration API. Server code and shared media helpers currently
-coexist in that internal package. The separation above describes execution and
-public interfaces, not independently versioned Go modules. See
+not a supported integration API. The engine and service share the internal media
+backend without importing each other. They remain part of one versioned Go
+module. See
 [performance](performance.md) for measured costs and
 [artifact retention](artifacts.md) for generated diagnostics.

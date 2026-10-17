@@ -8,27 +8,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Kay0k1/cutmyvideo-core/internal/coremodel"
 	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
 )
 
-type Config struct {
-	DatabaseURL, DataDir, ListenAddr, FFmpeg, FFprobe, YTDLP, PublicOrigin string
-	WorkerHealthPath                                                       string
-	FFmpegProfile                                                          string
-	FFmpegThreads                                                          int
-	WorkerConcurrency                                                      int
-	WorkerPreparationConcurrency                                           int
-	MaxSourceBytes, MaxOutputBytes, MaxStorageBytes, MaxOwnerBytes         int64
-	MaxFetchBytes                                                          int64
-	StorageSafetyBytes                                                     int64
-	MaxRanges, MaxActiveJobs                                               int
-	MutationsPerMinute                                                     int
-	MaxRangeMS, MaxJobMS                                                   int64
-	JobTimeout, SourceTimeout, SourceTTL, ArtifactTTL                      time.Duration
-	StorageWaitTimeout                                                     time.Duration
-	UploadTimeout                                                          time.Duration
-	SecureCookie, TrustProxy                                               bool
-}
+type Config = coremodel.Config
 
 func ConfigFromEnv() (Config, error) {
 	c := Config{DatabaseURL: os.Getenv("DATABASE_URL"), DataDir: env("DATA_DIR", "./data"), ListenAddr: env("LISTEN_ADDR", ":8080"), FFmpeg: env("FFMPEG_PATH", "ffmpeg"), FFprobe: env("FFPROBE_PATH", "ffprobe"), YTDLP: env("YTDLP_PATH", "yt-dlp"), MaxSourceBytes: 32 << 30, MaxOutputBytes: 16 << 30, MaxRanges: 32, MaxRangeMS: 12 * 60 * 60 * 1000, MaxJobMS: 24 * 60 * 60 * 1000, JobTimeout: 12 * time.Hour, SourceTimeout: 2 * time.Minute, ArtifactTTL: 24 * time.Hour, SecureCookie: os.Getenv("COOKIE_SECURE") == "true"}
@@ -136,52 +120,15 @@ func remoteSourceBudget(c Config) int64 {
 	return c.MaxSourceBytes
 }
 
-type Source struct {
-	Fingerprint      *SourceFingerprint `json:"fingerprint,omitempty"`
-	MediaRemoved     bool               `json:"media_removed"`
-	ID               string             `json:"id"`
-	ExpiresAt        *time.Time         `json:"expires_at"`
-	RetentionBlocked bool               `json:"retention_blocked"`
-	Title            string             `json:"title"`
-	DurationMS       int64              `json:"duration_ms"`
-	Kind             string             `json:"kind"`
-	Provider         string             `json:"provider"`
-	ProviderVideoID  *string            `json:"provider_video_id"`
-	SourceURL        *string            `json:"source_url"`
-	PreviewKind      string             `json:"preview_kind"`
-	ThumbnailPath    string             `json:"-"`
-	PreviewURL       *string            `json:"preview_url"`
-	EmbedURL         *string            `json:"embed_url"`
-	ThumbnailURL     *string            `json:"thumbnail_url"`
-	Width            int                `json:"width,omitempty"`
-	Height           int                `json:"height,omitempty"`
-	Tracks           []Track            `json:"tracks,omitempty"`
-	// Display dimensions are computed only by fresh local inspection. They are
-	// not persisted in the source table or exposed by HTTP source responses.
-	DisplayWidth      int    `json:"-"`
-	DisplayHeight     int    `json:"-"`
-	Path              string `json:"-"`
-	URL               string `json:"-"`
-	Owner             string `json:"-"`
-	StorageToken      string `json:"-"`
-	ProviderID        string `json:"-"`
-	PreparationKey    string `json:"-"`
-	PreparationClaim  string `json:"-"`
-	PreparationPathID string `json:"-"`
-}
+type Source = coremodel.Source
 
 type Range = edit.Range
 type Track = edit.Track
 type TrackSelection = edit.TrackSelection
 type ArtifactSegment = edit.Segment
 
-// ExportRequest retains its legacy validation method and JSON representation.
-// Shared rules consume the neutral edit model through this compatibility type.
-type ExportRequest edit.ExportRequest
-
-func (r *ExportRequest) Validate(c Config, s Source) error {
-	return edit.ValidateExportRequest((*edit.ExportRequest)(r), editLimits(c), editSource(s))
-}
+// ExportRequest retains its legacy validation method through the shared type.
+type ExportRequest = coremodel.ExportRequest
 
 func editLimits(c Config) edit.Limits {
 	return edit.Limits{MaxRanges: c.MaxRanges, MaxRangeMS: c.MaxRangeMS, MaxJobMS: c.MaxJobMS}

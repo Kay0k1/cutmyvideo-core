@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"errors"
+
+	"github.com/Kay0k1/cutmyvideo-core/internal/mediaerror"
 )
 
 var errNoAudio = &sourceProblem{"audio_missing", "This video has no audio track. Export it as MP4 video instead"}
@@ -57,20 +59,5 @@ type copyExportFailure struct {
 func (e *copyExportFailure) Error() string   { return e.problem.Error() }
 func (e *copyExportFailure) Unwrap() []error { return []error{e.problem, e.cause} }
 func copyExportDiagnostic(err error, format string) error {
-	var existing *copyExportFailure
-	if errors.As(err, &existing) {
-		return err
-	}
-	var process *mediaProcessFailure
-	if errors.As(err, &process) && process.category == "copy_incompatible" {
-		problem := copyIncompatibleProblem()
-		if format == "mp4" {
-			problem.message = "Selected streams cannot be copied into MP4. Choose MKV to preserve them, or accurate MP4 to encode"
-		}
-		if format == "mkv" {
-			problem.message = "Selected streams cannot be copied into MKV. Choose accurate MP4 to encode"
-		}
-		return &copyExportFailure{problem: problem, cause: err}
-	}
-	return err
+	return localMediaError(mediaerror.CopyDiagnostic(err, format))
 }

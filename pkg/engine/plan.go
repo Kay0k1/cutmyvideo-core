@@ -9,9 +9,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/Kay0k1/cutmyvideo-core/internal/app"
 	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
 	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
+	"github.com/Kay0k1/cutmyvideo-core/internal/localmedia"
 )
 
 type Track = edit.Track
@@ -97,18 +97,18 @@ func (e *Engine) ExecutePlan(ctx context.Context, plan Plan, output string) (res
 	}
 	ctx, cancel := context.WithTimeout(ctx, e.exportTimeout)
 	defer cancel()
-	ctx, session := app.BeginLocalExport(ctx, input)
+	ctx, session := localmedia.BeginLocalExport(ctx, input)
 	defer session.Close()
 	source, err := e.InspectWithTracks(ctx, input)
 	if err != nil {
 		return result, err
 	}
-	if err = request.Validate(e.config, app.Source{DurationMS: source.DurationMS, Path: input}); err != nil {
+	if err = request.Validate(e.config, localmedia.Source{DurationMS: source.DurationMS, Path: input}); err != nil {
 		return result, invalidArgument(err)
 	}
 	ranges := request.Ranges
 	session.SetRanges(ranges)
-	tracks, err := app.SelectExportTracks(source.Tracks, request)
+	tracks, err := localmedia.SelectExportTracks(source.Tracks, request)
 	if err != nil {
 		return result, err
 	}
@@ -130,7 +130,7 @@ func (e *Engine) ExecutePlan(ctx context.Context, plan Plan, output string) (res
 	prepared := make([]BatchOutput, 0, len(names))
 	if request.OutputMode == "joined" {
 		path := filepath.Join(dir, "output."+request.Format)
-		segments, e := app.ExportJoinedLocal(ctx, e.config, input, path, ranges, request)
+		segments, e := localmedia.ExportJoinedLocal(ctx, e.config, input, path, ranges, request)
 		if e != nil {
 			return result, e
 		}
@@ -156,13 +156,13 @@ func (e *Engine) ExecutePlan(ctx context.Context, plan Plan, output string) (res
 			var exportErr error
 			reused := false
 			if prior, ok := completed[key]; ok {
-				reused, exportErr = app.ReuseLocalExport(ctx, input, prior.path, path, prior.info, e.config.MaxOutputBytes)
+				reused, exportErr = localmedia.ReuseLocalExport(ctx, input, prior.path, path, prior.info, e.config.MaxOutputBytes)
 				if reused {
 					start, end = prior.start, prior.end
 				}
 			}
 			if exportErr == nil && !reused {
-				start, end, exportErr = app.ExportLocal(ctx, e.config, input, path, r, request)
+				start, end, exportErr = localmedia.ExportLocal(ctx, e.config, input, path, r, request)
 			}
 			if exportErr != nil {
 				return result, exportErr

@@ -2,21 +2,15 @@ package app
 
 import (
 	"context"
-	"path/filepath"
+	"github.com/Kay0k1/cutmyvideo-core/internal/localmedia"
 
 	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
 	"github.com/Kay0k1/cutmyvideo-core/internal/mediaexport"
 )
 
 func ExportJoinedLocal(ctx context.Context, c Config, path, out string, ranges []Range, request ExportRequest) ([]ArtifactSegment, error) {
-	if localExportSession(ctx, path, false) == nil {
-		var session *LocalExportSession
-		ctx, session = BeginLocalExport(ctx, path)
-		session.SetWorkspace(filepath.Dir(out))
-		session.SetRanges(ranges)
-		defer session.Close()
-	}
-	return exportJoinedInputsProgress(ctx, c, []mediaInput{{Path: path}}, ranges, request, out, nil)
+	segments, err := localmedia.ExportJoinedLocal(ctx, c, path, out, ranges, request)
+	return segments, localMediaError(err)
 }
 
 func exportJoinedInputsProgress(ctx context.Context, c Config, inputs []mediaInput, ranges []Range, request ExportRequest, out string, report func(int64)) ([]ArtifactSegment, error) {

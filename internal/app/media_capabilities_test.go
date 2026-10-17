@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Kay0k1/cutmyvideo-core/internal/localmedia"
 )
 
 func TestPacketDropCapabilitiesCheckToolIdentityBoundsAndCancellation(t *testing.T) {
@@ -53,9 +55,7 @@ func TestPacketDropCapabilitiesCheckToolIdentityBoundsAndCancellation(t *testing
 			t.Fatal(err)
 		}
 	}
-	packetDropCapabilities.Lock()
-	count := len(packetDropCapabilities.entries)
-	packetDropCapabilities.Unlock()
+	count := localmedia.PacketDropCapabilityCount()
 	if count > 32 {
 		t.Fatalf("capability cache retained %d executables", count)
 	}

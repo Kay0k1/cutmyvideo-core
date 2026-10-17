@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,15 +9,14 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
 	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
+	"github.com/Kay0k1/cutmyvideo-core/internal/localmedia"
+	"github.com/Kay0k1/cutmyvideo-core/internal/mediaerror"
 	"github.com/Kay0k1/cutmyvideo-core/internal/mediaexport"
 	"github.com/Kay0k1/cutmyvideo-core/internal/mediainfo"
-	"github.com/Kay0k1/cutmyvideo-core/internal/toolrun"
 )
 
 const mediaFormats = mediaexport.InputFormats
@@ -31,29 +29,11 @@ func mediaInputBounds(c Config) []string {
 	return mediaexport.InputBounds(c.FFmpegThreads)
 }
 
-var errProcessResponseTooLarge = errors.New("process response is too large")
+var errProcessResponseTooLarge = mediaerror.ErrProcessResponseTooLarge
 
 // Cancel the process as soon as its response crosses the bound. Merely
 // discarding excess stdout bounds RAM but lets a broken extractor consume CPU
 // until the whole inspection timeout, or forever for a local caller.
-type processResponseBuffer struct {
-	buffer   bytes.Buffer
-	limit    int
-	cancel   context.CancelFunc
-	overflow bool
-}
-
-func (b *processResponseBuffer) Write(p []byte) (int, error) {
-	remaining := b.limit - b.buffer.Len()
-	if len(p) <= remaining {
-		return b.buffer.Write(p)
-	}
-	_, _ = b.buffer.Write(p[:remaining])
-	b.overflow = true
-	b.cancel()
-	return remaining, errProcessResponseTooLarge
-}
-
 type mediaProcessFailure struct {
 	cause    error
 	category string
@@ -64,78 +44,34 @@ func (e *mediaProcessFailure) Error() string {
 }
 func (e *mediaProcessFailure) Unwrap() error { return e.cause }
 
-func mediaFailureCategory(stderr string) string {
-	return toolrun.FailureCategory(stderr)
-}
+func mediaFailureCategory(stderr string) string { return localmedia.FailureCategory(stderr) }
 
 func runCommand(ctx context.Context, path string, args ...string) ([]byte, error) {
-	runCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	stdout := &processResponseBuffer{limit: 8 << 20, cancel: cancel}
-	err := runCommandOutput(runCtx, path, args, stdout)
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-	if stdout.overflow {
-		return nil, errProcessResponseTooLarge
-	}
-	if err != nil {
-		return nil, err
-	}
-	return stdout.buffer.Bytes(), nil
+	data, err := localmedia.RunCommand(ctx, path, args...)
+	return data, localMediaError(err)
 }
 
 func runCommandOutput(ctx context.Context, path string, args []string, stdout io.Writer) error {
-	result := toolrun.RunOutput(ctx, path, args, stdout)
-	recordMediaProcess(ctx, path, result.Elapsed, result.ProcessErr)
-	if err := result.ProcessErr; err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		return &mediaProcessFailure{cause: err, category: result.Category}
-	}
-	return nil
+	return localMediaError(localmedia.RunCommandOutput(ctx, path, args, stdout))
 }
 
 type probeInfo mediainfo.Info
 
 func probe(ctx context.Context, c Config, path string, remote bool) (probeInfo, int64, error) {
-	p, err := probeStreams(ctx, c, path, remote)
-	if err != nil {
-		return p, 0, err
-	}
-	duration, err := (*mediainfo.Info)(&p).DurationMS()
-	return p, duration, err
+	p, d, e := localmedia.Probe(ctx, c, path, remote)
+	return probeInfo(p), d, localMediaError(e)
 }
 
 // HLS staging can have no finite duration until timestamps have been remuxed.
 // Stream selection still uses the same bounded probe and validation as files.
 func probeStreams(ctx context.Context, c Config, path string, remote bool) (probeInfo, error) {
-	if session := localExportSession(ctx, path, remote); session != nil {
-		return session.inspect(ctx, c)
-	}
-	return probeStreamsUncached(ctx, c, path, remote)
+	p, e := localmedia.ProbeStreams(ctx, c, path, remote)
+	return probeInfo(p), localMediaError(e)
 }
 
 func probeStreamsUncached(ctx context.Context, c Config, path string, remote bool) (probeInfo, error) {
-	protocols := "file"
-	if remote {
-		protocols = "http,tcp"
-	}
-	// Request named selection/rendering fields only, not arbitrary tags or
-	// complete side data such as a user-controlled display-matrix dump.
-	args := []string{"-v", "error", "-max_alloc", "268435456", "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats}
-	args = append(args, mediaInputBounds(c)...)
-	args = append(args, "-show_library_versions", "-show_entries", mediaProbeEntries+":library_version=name,major", "-show_data_hash", "sha256", "-of", "json", path)
-	b, err := runCommand(ctx, c.FFprobe, args...)
-	var p probeInfo
-	if err != nil {
-		return p, err
-	}
-	if err = json.Unmarshal(b, &p); err != nil {
-		return p, err
-	}
-	return p, p.validateStreams()
+	p, e := localmedia.ProbeStreamsUncached(ctx, c, path, remote)
+	return probeInfo(p), localMediaError(e)
 }
 
 type platformInfo struct {
@@ -317,15 +253,8 @@ func seconds(ms int64) string { return mediaexport.Seconds(ms) }
 type copyKeyframe = mediaexport.Keyframe
 
 func nearestKeyframe(ctx context.Context, c Config, path string, start int64, remote bool, streamIndex int) (copyKeyframe, error) {
-	if session := localExportSession(ctx, path, remote); session != nil {
-		return session.nearestKeyframe(ctx, c, start, streamIndex)
-	}
-	from, until := keyframeProbeBounds(start)
-	frames, err := probeKeyframes(ctx, c, path, remote, streamIndex, from, until)
-	if err != nil {
-		return copyKeyframe{}, err
-	}
-	return selectCopyKeyframe(frames, start)
+	frame, e := localmedia.NearestKeyframe(ctx, c, path, start, remote, streamIndex)
+	return frame, localMediaError(e)
 }
 
 func keyframeProbeBounds(start int64) (from, until int64) {
@@ -333,47 +262,8 @@ func keyframeProbeBounds(start int64) (from, until int64) {
 }
 
 func probeKeyframes(ctx context.Context, c Config, path string, remote bool, streamIndex int, from, until int64) ([]copyKeyframe, error) {
-	protocols := "file"
-	if remote {
-		protocols = "http,tcp"
-	}
-	args := []string{"-v", "error", "-max_alloc", "268435456", "-protocol_whitelist", protocols, "-format_whitelist", mediaFormats}
-	args = append(args, mediaInputBounds(c)...)
-	args = append(args, "-select_streams", strconv.Itoa(streamIndex), "-read_intervals", seconds(from)+"%"+seconds(until), "-show_packets", "-show_entries", "packet=pts_time,dts_time,flags", "-of", "json", path)
-	b, err := runCommand(ctx, c.FFprobe, args...)
-	if err != nil {
-		return nil, err
-	}
-	var p struct {
-		Packets []struct {
-			PTS   string `json:"pts_time"`
-			DTS   string `json:"dts_time"`
-			Flags string `json:"flags"`
-		} `json:"packets"`
-	}
-	if err = json.Unmarshal(b, &p); err != nil {
-		return nil, err
-	}
-	var frames []copyKeyframe
-	for _, v := range p.Packets {
-		if !strings.Contains(v.Flags, "K") {
-			continue
-		}
-		n, e := strconv.ParseFloat(v.PTS, 64)
-		if e != nil {
-			continue
-		}
-		ms := int64(math.Round(n * 1000))
-		if ms >= 0 {
-			frame := copyKeyframe{PTS: ms}
-			if dts, err := strconv.ParseFloat(v.DTS, 64); err == nil && !math.IsNaN(dts) && !math.IsInf(dts, 0) && math.Abs(dts-n) <= 2 {
-				// Rounding DTS upwards can discard the very keyframe we selected.
-				frame.DTS, frame.HasDTS = int64(math.Floor(dts*1000)), true
-			}
-			frames = append(frames, frame)
-		}
-	}
-	return frames, nil
+	frames, e := localmedia.ProbeKeyframes(ctx, c, path, remote, streamIndex, from, until)
+	return frames, localMediaError(e)
 }
 
 func selectCopyKeyframe(frames []copyKeyframe, start int64) (copyKeyframe, error) {
@@ -383,14 +273,12 @@ func selectCopyKeyframe(frames []copyKeyframe, start int64) (copyKeyframe, error
 type mediaInput = mediaexport.Input
 
 func exportMedia(ctx context.Context, c Config, paths []string, remote bool, r Range, request ExportRequest, out string) (int64, int64, error) {
-	inputs := make([]mediaInput, len(paths))
-	for i, path := range paths {
-		inputs[i] = mediaInput{Path: path, Remote: remote}
-	}
-	return exportInputs(ctx, c, inputs, r, request, out)
+	start, end, e := localmedia.ExportMedia(ctx, c, paths, remote, r, request, out)
+	return start, end, localMediaError(e)
 }
 func exportInputs(ctx context.Context, c Config, inputs []mediaInput, r Range, request ExportRequest, out string) (int64, int64, error) {
-	return exportInputsProgress(ctx, c, inputs, r, request, out, nil)
+	start, end, e := localmedia.ExportInputs(ctx, c, inputs, r, request, out)
+	return start, end, localMediaError(e)
 }
 
 func exportInputsCoreProgress(ctx context.Context, c Config, inputs []mediaInput, r Range, request ExportRequest, out string, report func(int64)) (int64, int64, error) {
@@ -404,8 +292,8 @@ func exportInputsCoreProgressMode(ctx context.Context, c Config, inputs []mediaI
 }
 
 func exportInputsCoreVerifiedProgress(ctx context.Context, c Config, inputs []mediaInput, r Range, request ExportRequest, out string, report func(int64), finalOutput bool, verified *probeInfo) (int64, int64, error) {
-	start, end, err := mediaexport.Export(ctx, mediaExportConfig(c), inputs, r, edit.ExportRequest(request), out, report, finalOutput, (*mediainfo.Info)(verified), mediaExportRuntime{config: c})
-	return start, end, mediaExportError(err)
+	start, end, e := localmedia.ExportInputsCoreVerifiedProgress(ctx, c, inputs, r, request, out, report, finalOutput, (*mediainfo.Info)(verified))
+	return start, end, localMediaError(e)
 }
 
 var errSourceTooLarge = errors.New("source exceeds size limit")

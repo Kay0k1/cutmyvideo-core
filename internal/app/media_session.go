@@ -3,9 +3,8 @@ package app
 import (
 	"context"
 	"os"
-	"path/filepath"
 
-	"github.com/Kay0k1/cutmyvideo-core/internal/mediainfo"
+	"github.com/Kay0k1/cutmyvideo-core/internal/localmedia"
 	"github.com/Kay0k1/cutmyvideo-core/internal/mediasession"
 )
 
@@ -21,27 +20,20 @@ const sessionKeyframeEntries = mediasession.KeyframeEntries
 type keyframeWindow = mediasession.KeyframeWindow
 
 func BeginLocalExport(ctx context.Context, path string) (context.Context, *LocalExportSession) {
-	absolute, err := filepath.Abs(path)
-	if err != nil {
-		absolute = path
-	}
-	session := &LocalExportSession{Session: mediasession.New(absolute)}
+	ctx, state := localmedia.BeginLocalExport(ctx, path)
+	session := &LocalExportSession{Session: state.Session}
 	return context.WithValue(ctx, localExportSessionKey{}, session), session
 }
 
 func localExportSession(ctx context.Context, path string, remote bool) *LocalExportSession {
-	if remote {
+	state := localmedia.GetLocalExportSession(ctx, path, remote)
+	if state == nil {
 		return nil
 	}
-	session, _ := ctx.Value(localExportSessionKey{}).(*LocalExportSession)
-	if session == nil {
-		return nil
+	if session, _ := ctx.Value(localExportSessionKey{}).(*LocalExportSession); session != nil && session.Session == state.Session {
+		return session
 	}
-	absolute, err := filepath.Abs(path)
-	if err != nil || absolute != session.Path {
-		return nil
-	}
-	return session
+	return &LocalExportSession{Session: state.Session}
 }
 
 func (s *LocalExportSession) unchanged() (os.FileInfo, error) {
@@ -50,11 +42,8 @@ func (s *LocalExportSession) unchanged() (os.FileInfo, error) {
 }
 
 func (s *LocalExportSession) inspect(ctx context.Context, c Config) (probeInfo, error) {
-	info, err := s.Session.Inspect(ctx, func(ctx context.Context, path string, remote bool) (mediainfo.Info, error) {
-		info, err := probeStreamsUncached(ctx, c, path, remote)
-		return mediainfo.Info(info), err
-	})
-	return probeInfo(info), mediaInfoError(err)
+	p, e := (&localmedia.LocalExportSession{Session: s.Session}).Inspect(ctx, c)
+	return probeInfo(p), localMediaError(e)
 }
 
 func (s *LocalExportSession) nearestKeyframe(ctx context.Context, c Config, start int64, stream int) (copyKeyframe, error) {
@@ -64,9 +53,6 @@ func (s *LocalExportSession) nearestKeyframe(ctx context.Context, c Config, star
 type keyframeProbeFunc func(context.Context, Config, string, bool, int, int64, int64) ([]copyKeyframe, error)
 
 func (s *LocalExportSession) nearestKeyframeWithProbe(ctx context.Context, c Config, start int64, stream int, inspect keyframeProbeFunc) (copyKeyframe, error) {
-	frame, err := s.Session.NearestKeyframe(ctx, c.FFprobe, start, stream,
-		func(ctx context.Context, path string, remote bool, stream int, from, until int64) ([]copyKeyframe, error) {
-			return inspect(ctx, c, path, remote, stream, from, until)
-		})
-	return frame, mediaInfoError(err)
+	frame, e := (&localmedia.LocalExportSession{Session: s.Session}).NearestKeyframeWithProbe(ctx, c, start, stream, inspect)
+	return frame, localMediaError(e)
 }

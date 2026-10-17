@@ -11,12 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Kay0k1/cutmyvideo-core/internal/coremodel"
+
 	"github.com/jackc/pgx/v5"
 )
 
 // Accounting must finish before an admission can rely on the storage counter.
 // Batches already observed remain committed when this retryable error is returned.
-var ErrStorageInitializing = errors.New("storage accounting is initializing")
+var ErrStorageInitializing = coremodel.ErrStorageInitializing
 
 const storageProgressBatches = 24
 const storageMaintenanceBatches = 512
