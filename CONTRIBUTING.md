@@ -142,7 +142,7 @@ make sdk-check SDK_REPORT_DIR=/tmp/cutmy-sdk-http-check
 Run these inside an isolated Python environment. CI requires installed-package
 acceptance on all five native platforms and a separate HTTP acceptance run;
 passing only source unit tests does not establish package installation or media
-behavior. The [published 1.4.1 SDK distributions](docs/sdk.md#install-versioned-packages)
+behavior. The [published 1.4.2 SDK distributions](docs/sdk.md#install-versioned-packages)
 are signed GitHub release assets: a wheel, Python source archive and npm tarball.
 Current source can contain unreleased fixes; a source version or GitHub release
 does not imply publication to the PyPI/npm registries.
