@@ -41,11 +41,11 @@ func sameHLSStream(a, b *probeStream) bool {
 	}
 	// Index and disposition can change during remuxing. Only the selected
 	// streams' codec, presentation geometry and colour properties must agree.
-	return a.CodecType == b.CodecType && a.CodecName == b.CodecName && a.Width == b.Width && a.Height == b.Height && a.SampleRate == b.SampleRate && a.Channels == b.Channels && a.TimeBase == b.TimeBase && a.ExtradataHash == b.ExtradataHash && a.SampleAspectRatio == b.SampleAspectRatio && a.rotation() == b.rotation() && a.PixelFormat == b.PixelFormat && a.ColorPrimaries == b.ColorPrimaries && a.ColorTransfer == b.ColorTransfer && a.ColorSpace == b.ColorSpace && a.ColorRange == b.ColorRange
+	return a.CodecType == b.CodecType && a.CodecName == b.CodecName && a.Width == b.Width && a.Height == b.Height && a.SampleRate == b.SampleRate && a.Channels == b.Channels && a.TimeBase == b.TimeBase && a.ExtradataHash == b.ExtradataHash && a.SampleAspectRatio == b.SampleAspectRatio && a.Rotation() == b.Rotation() && a.PixelFormat == b.PixelFormat && a.ColorPrimaries == b.ColorPrimaries && a.ColorTransfer == b.ColorTransfer && a.ColorSpace == b.ColorSpace && a.ColorRange == b.ColorRange
 }
 
 func hlsStageExtension(video *probeStream) string {
-	if video != nil && math.Abs(math.Remainder(video.rotation(), 360)) > 0.001 {
+	if video != nil && math.Abs(math.Remainder(video.Rotation(), 360)) > 0.001 {
 		return "mp4"
 	}
 	return "mkv"
@@ -67,7 +67,7 @@ func sameHLSPresentation(before, after probeInfo) bool {
 		if a != b {
 			return false
 		}
-	} else if a.CodecName != b.CodecName || a.Width != b.Width || a.Height != b.Height || !sameHLSSAR(a.SampleAspectRatio, b.SampleAspectRatio) || math.Abs(math.Remainder(a.rotation()-b.rotation(), 360)) > 0.001 || a.PixelFormat != b.PixelFormat || a.ColorPrimaries != b.ColorPrimaries || a.ColorTransfer != b.ColorTransfer || a.ColorSpace != b.ColorSpace || a.ColorRange != b.ColorRange {
+	} else if a.CodecName != b.CodecName || a.Width != b.Width || a.Height != b.Height || !sameHLSSAR(a.SampleAspectRatio, b.SampleAspectRatio) || math.Abs(math.Remainder(a.Rotation()-b.Rotation(), 360)) > 0.001 || a.PixelFormat != b.PixelFormat || a.ColorPrimaries != b.ColorPrimaries || a.ColorTransfer != b.ColorTransfer || a.ColorSpace != b.ColorSpace || a.ColorRange != b.ColorRange {
 		return false
 	}
 	a, b = before.selectedAudio(), after.selectedAudio()

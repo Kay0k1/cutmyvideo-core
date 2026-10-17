@@ -10,6 +10,7 @@ FS_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
 CLI_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/cmd/cutmy"
 SUBTITLE_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/subtitles"
 TOOLRUN_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/toolrun"
+MEDIAINFO_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/mediainfo"
 
 AUDIT_MEDIA_REQUIRED = {
     "TestHLSManifestRedirectResolvesFinalRelativeReferences",
@@ -48,6 +49,16 @@ TOOLRUN_MODULE_REQUIRED = {
     "TestRunOutputPreservesRawFailureAndStreaming",
     "TestRunOutputPreservesCancellation",
     "TestDiagnosticCopyCannotBypassMemoryBound",
+}
+MEDIAINFO_MODULE_REQUIRED = {
+    "TestInfoValidationPreservesProbeBoundaries",
+    "TestInfoDurationAndSelectionPreserveSourceOrder",
+    "TestTrackDecisionPreservesManifestAndErrorContracts",
+    "TestMediaInfoPackageHasPureDependencies",
+}
+MEDIAINFO_ADAPTER_REQUIRED = {
+    "TestMediaInfoErrorBridgePreservesLegacyTypesAndCauses",
+    "TestMediaInfoGeometryPreservesValidationOrder",
 }
 
 NEW_MEDIA_REQUIRED = {
@@ -352,9 +363,11 @@ REQUIRED[0].update(EDIT_MODEL_ENGINE_REQUIRED)
 REQUIRED[4].update(AUDIT_MEDIA_REQUIRED)
 REQUIRED[0].update(SUBTITLE_MODULE_REQUIRED | MEDIA_BOUNDARY_ENGINE_REQUIRED)
 REQUIRED[1].update(TOOLRUN_MODULE_REQUIRED)
+REQUIRED[0].update(MEDIAINFO_MODULE_REQUIRED)
+REQUIRED[4].update(MEDIAINFO_ADAPTER_REQUIRED)
 
 REQUIRED_PACKAGES = [
-    {ENGINE_PACKAGE, FS_PACKAGE, CLI_PACKAGE, SUBTITLE_PACKAGE},
+    {ENGINE_PACKAGE, FS_PACKAGE, CLI_PACKAGE, SUBTITLE_PACKAGE, MEDIAINFO_PACKAGE},
     {APP_PACKAGE, TOOLRUN_PACKAGE},
     {APP_PACKAGE},
     {APP_PACKAGE},
@@ -364,7 +377,8 @@ REQUIRED_PACKAGES = [
 # The mixed reports must retain each test's owning package. Adding a standalone
 # module must not let its similarly named test satisfy an engine or app result.
 REQUIRED_TEST_PACKAGES = [
-    {name: (SUBTITLE_PACKAGE if name in SUBTITLE_MODULE_REQUIRED else
+    {name: (MEDIAINFO_PACKAGE if name in MEDIAINFO_MODULE_REQUIRED else
+            SUBTITLE_PACKAGE if name in SUBTITLE_MODULE_REQUIRED else
             CLI_PACKAGE if name.startswith("TestCLI") or name == "TestParseCrop" else
             FS_PACKAGE if name == "TestConcurrentPublicationHasExactlyOneCompleteWinner" else
             ENGINE_PACKAGE) for name in REQUIRED[0]},

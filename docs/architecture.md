@@ -101,6 +101,15 @@ and stdout policies: buffered inspection is bounded, while streaming operations
 use their own writers and limits. The runner has no server configuration,
 HTTP or database dependency.
 
+`internal/mediainfo` owns bounded probe metadata, finite-duration validation,
+deterministic stream selection, track manifests and pure video geometry/filter
+construction. It uses only the standard library and `internal/edit`; it does not
+run FFprobe, open files or access server configuration. The app layer converts
+its classified failures back to the existing error types and unsupported-stream
+sentinel, while ordinary validation errors keep their causes. Unknown display
+geometry continues to leave coded dimensions and unrelated audio inspection
+available; rendering validates geometry when an operation needs it.
+
 Media probing, encoding coordination and queue handling still share
 `internal/app`. The public engine therefore retains compile-time dependencies
 on that package; local operations continue to run without opening a database.
@@ -133,6 +142,7 @@ installing the other language's SDK.
 | `cmd/cutmy/` | Local CLI, API/worker/maintenance entry points |
 | `internal/app/` | Shared media operations and internal server/queue/storage implementation |
 | `internal/edit/` | Standard-library-only edit models, validation and collection normalization |
+| `internal/mediainfo/` | Pure probe metadata, track decisions and video geometry/filter rules |
 | `internal/subtitles/` | Pure supplied-text retiming, cue indexing and clock formatting |
 | `internal/toolrun/` | External tool execution, bounded diagnostics and platform process containment |
 | `internal/app/migrations/` | Versioned SQL and expected database catalog layouts |

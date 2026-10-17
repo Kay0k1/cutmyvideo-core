@@ -33,7 +33,7 @@ func sameJoinedStream(a, b *probeStream) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
 	}
-	return a.Index == b.Index && a.CodecName == b.CodecName && a.TimeBase == b.TimeBase && a.ExtradataHash == b.ExtradataHash && a.Width == b.Width && a.Height == b.Height && a.SampleRate == b.SampleRate && a.Channels == b.Channels && a.SampleAspectRatio == b.SampleAspectRatio && a.rotation() == b.rotation()
+	return a.Index == b.Index && a.CodecName == b.CodecName && a.TimeBase == b.TimeBase && a.ExtradataHash == b.ExtradataHash && a.Width == b.Width && a.Height == b.Height && a.SampleRate == b.SampleRate && a.Channels == b.Channels && a.SampleAspectRatio == b.SampleAspectRatio && a.Rotation() == b.Rotation()
 }
 
 func exportJoinedSegmentInputsProgress(ctx context.Context, c Config, inputs [][]mediaInput, ranges []Range, request ExportRequest, out string, report func(int64)) ([]ArtifactSegment, error) {

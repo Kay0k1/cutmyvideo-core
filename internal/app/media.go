@@ -15,12 +15,13 @@ import (
 	"time"
 
 	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
+	"github.com/Kay0k1/cutmyvideo-core/internal/mediainfo"
 	"github.com/Kay0k1/cutmyvideo-core/internal/toolrun"
 )
 
 const mediaFormats = "mov,matroska,webm,mp3,wav,flac,ogg,aac,avi,mpegts"
-const maxMediaPixels = 33_554_432 // Includes 7680 x 4320 (8K).
-const maxMediaStreams = 32
+const maxMediaPixels = mediainfo.MaxPixels
+const maxMediaStreams = mediainfo.MaxStreams
 
 // These are per-tool input/decoder bounds, alongside container memory limits.
 // Limit stream discovery too: the service only uses one video/audio pair.
@@ -98,28 +99,15 @@ func runCommandOutput(ctx context.Context, path string, args []string, stdout io
 	return nil
 }
 
-type probeInfo struct {
-	Format struct {
-		Duration  string `json:"duration"`
-		StartTime string `json:"start_time"`
-	} `json:"format"`
-	Streams         []probeStream `json:"streams"`
-	LibraryVersions []struct {
-		Name  string `json:"name"`
-		Major int    `json:"major"`
-	} `json:"library_versions"`
-}
+type probeInfo mediainfo.Info
 
 func probe(ctx context.Context, c Config, path string, remote bool) (probeInfo, int64, error) {
 	p, err := probeStreams(ctx, c, path, remote)
 	if err != nil {
 		return p, 0, err
 	}
-	duration, err := strconv.ParseFloat(p.Format.Duration, 64)
-	if err != nil || math.IsNaN(duration) || math.IsInf(duration, 0) || duration <= 0 || duration > 30*24*3600 {
-		return p, 0, errors.New("source has no supported finite duration")
-	}
-	return p, int64(math.Round(duration * 1000)), nil
+	duration, err := (*mediainfo.Info)(&p).DurationMS()
+	return p, duration, err
 }
 
 // HLS staging can have no finite duration until timestamps have been remuxed.
