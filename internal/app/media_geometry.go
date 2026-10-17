@@ -1,9 +1,7 @@
 package app
 
 import (
-	"errors"
-	"fmt"
-
+	"github.com/Kay0k1/cutmyvideo-core/internal/mediaerror"
 	"github.com/Kay0k1/cutmyvideo-core/internal/mediainfo"
 )
 
@@ -44,11 +42,7 @@ func hdrOutputColorArgs(hdr bool) []string {
 // Only a classified conversion-capability failure changes the public code.
 // Cancellation, storage limits and unrelated processing errors keep their cause.
 func renderedMediaFailure(err error, hdr bool) error {
-	var process *mediaProcessFailure
-	if hdr && errors.As(err, &process) && process.category == "hdr_conversion_unavailable" {
-		return fmt.Errorf("%w: %w", &sourceProblem{"hdr_conversion_unavailable", "HDR conversion to SDR is unavailable with the configured media tools"}, err)
-	}
-	return err
+	return localMediaError(mediaerror.RenderedFailure(err, hdr))
 }
 
 func validateRenderedVideo(info probeInfo, source *probeStream, quality string, preview, hdr bool) error {

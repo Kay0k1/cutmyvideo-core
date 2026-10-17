@@ -7,8 +7,9 @@ import (
 	"os/exec"
 	"syscall"
 
-	"github.com/Kay0k1/cutmyvideo-core/internal/app"
+	"github.com/Kay0k1/cutmyvideo-core/internal/coremodel"
 	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
+	"github.com/Kay0k1/cutmyvideo-core/internal/mediaerror"
 )
 
 var (
@@ -23,10 +24,10 @@ var (
 	// publication/cleanup sync. Inspect that path before deciding to retry.
 	ErrPublicationUncertain = fsdurable.ErrPublicationUncertain
 	// ErrSchemaIncompatible reports a service startup schema guard refusal.
-	ErrSchemaIncompatible = app.ErrSchemaIncompatible
+	ErrSchemaIncompatible = coremodel.ErrSchemaIncompatible
 	// ErrStorageInitializing reports incomplete initial storage accounting.
 	// Retry after bootstrap progresses; admissions have not been accepted.
-	ErrStorageInitializing = app.ErrStorageInitializing
+	ErrStorageInitializing = coremodel.ErrStorageInitializing
 )
 
 // ErrorCode is a stable machine-readable diagnostic. Consumers must allow
@@ -144,7 +145,7 @@ func CodeOf(err error) ErrorCode {
 	if errors.Is(err, os.ErrNotExist) {
 		return CodeInputNotFound
 	}
-	if code := app.LocalErrorCode(err); code != "" {
+	if code := mediaerror.LocalErrorCode(err); code != "" {
 		return ErrorCode(code)
 	}
 	return CodeProcessingFailed

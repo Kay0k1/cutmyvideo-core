@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Kay0k1/cutmyvideo-core/internal/app"
 	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
+	"github.com/Kay0k1/cutmyvideo-core/internal/localmedia"
 )
 
 // Config controls external media tools and resource limits. Zero fields use
@@ -35,7 +35,7 @@ type Config struct {
 // Engine is immutable after New and safe to share between callers. Each
 // operation has its own deadline and temporary output workspace.
 type Engine struct {
-	config         app.Config
+	config         localmedia.Config
 	configErr      error
 	inspectTimeout time.Duration
 	exportTimeout  time.Duration
@@ -103,7 +103,7 @@ func New(c Config) *Engine {
 	if c.ExportTimeout == 0 {
 		c.ExportTimeout = 30 * time.Minute
 	}
-	e := &Engine{config: app.Config{FFmpeg: c.FFmpegPath, FFprobe: c.FFprobePath, FFmpegProfile: c.EncodeProfile, FFmpegThreads: c.FFmpegThreads, MaxOutputBytes: c.MaxOutputBytes, MaxRanges: 128, MaxRangeMS: 24 * 3600000, MaxJobMS: 24 * 3600000}, inspectTimeout: c.InspectTimeout, exportTimeout: c.ExportTimeout}
+	e := &Engine{config: localmedia.Config{FFmpeg: c.FFmpegPath, FFprobe: c.FFprobePath, FFmpegProfile: c.EncodeProfile, FFmpegThreads: c.FFmpegThreads, MaxOutputBytes: c.MaxOutputBytes, MaxRanges: 128, MaxRangeMS: 24 * 3600000, MaxJobMS: 24 * 3600000}, inspectTimeout: c.InspectTimeout, exportTimeout: c.ExportTimeout}
 	e.preflight, e.publish = fsdurable.Preflight, fsdurable.Publish
 	if c.MaxOutputBytes < 0 || c.FFmpegThreads < 1 || c.FFmpegThreads > 32 || (c.EncodeProfile != "fast" && c.EncodeProfile != "compact") || c.InspectTimeout <= 0 || c.ExportTimeout <= 0 {
 		e.configErr = errors.New("invalid engine limits, profile, threads, or timeout")
@@ -145,7 +145,7 @@ func (e *Engine) InspectWithTracks(ctx context.Context, path string) (result Adv
 	if !info.Mode().IsRegular() {
 		return AdvancedSourceInfo{}, invalidArgument(errors.New("input must be a readable local file"))
 	}
-	s, err := app.InspectLocal(ctx, e.config, path)
+	s, err := localmedia.InspectLocal(ctx, e.config, path)
 	return AdvancedSourceInfo{SourceInfo: SourceInfo{DurationMS: s.DurationMS, Width: s.Width, Height: s.Height, DisplayWidth: s.DisplayWidth, DisplayHeight: s.DisplayHeight}, Tracks: s.Tracks}, err
 }
 
@@ -181,7 +181,7 @@ func (e *Engine) ExportWithOptions(ctx context.Context, input, output string, r 
 	if err != nil {
 		return AdvancedResult{}, err
 	}
-	ctx, session := app.BeginLocalExport(ctx, input)
+	ctx, session := localmedia.BeginLocalExport(ctx, input)
 	defer session.Close()
 	s, err := e.InspectWithTracks(ctx, input)
 	if err != nil {
@@ -196,11 +196,11 @@ func (e *Engine) ExportWithOptions(ctx context.Context, input, output string, r 
 	if o.Format == "" {
 		o.Format = strings.TrimPrefix(strings.ToLower(filepath.Ext(output)), ".")
 	}
-	req := app.ExportRequest{Ranges: []app.Range{{StartMS: r.StartMS, EndMS: r.EndMS}}, Format: o.Format, Quality: o.Quality, CutMode: o.CutMode, AudioTrack: o.AudioTrack, NoAudio: o.NoAudio, SubtitleMode: o.SubtitleMode, Crop: o.Crop}
-	if err = req.Validate(e.config, app.Source{DurationMS: s.DurationMS, Path: input}); err != nil {
+	req := localmedia.ExportRequest{Ranges: []localmedia.Range{{StartMS: r.StartMS, EndMS: r.EndMS}}, Format: o.Format, Quality: o.Quality, CutMode: o.CutMode, AudioTrack: o.AudioTrack, NoAudio: o.NoAudio, SubtitleMode: o.SubtitleMode, Crop: o.Crop}
+	if err = req.Validate(e.config, localmedia.Source{DurationMS: s.DurationMS, Path: input}); err != nil {
 		return AdvancedResult{}, invalidArgument(err)
 	}
-	tracks, err := app.SelectExportTracks(s.Tracks, req)
+	tracks, err := localmedia.SelectExportTracks(s.Tracks, req)
 	if err != nil {
 		return AdvancedResult{}, err
 	}
@@ -219,7 +219,7 @@ func (e *Engine) ExportWithOptions(ctx context.Context, input, output string, r 
 		return AdvancedResult{}, err
 	}
 	tmp := filepath.Join(dir, "output."+o.Format)
-	start, end, err := app.ExportLocal(ctx, e.config, input, tmp, req.Ranges[0], req)
+	start, end, err := localmedia.ExportLocal(ctx, e.config, input, tmp, req.Ranges[0], req)
 	if err != nil {
 		return AdvancedResult{}, err
 	}

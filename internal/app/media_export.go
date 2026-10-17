@@ -2,9 +2,9 @@ package app
 
 import (
 	"context"
-	"os"
 
 	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
+	"github.com/Kay0k1/cutmyvideo-core/internal/localmedia"
 	"github.com/Kay0k1/cutmyvideo-core/internal/mediaexport"
 	"github.com/Kay0k1/cutmyvideo-core/internal/mediainfo"
 )
@@ -32,39 +32,32 @@ func mediaExportError(err error) error {
 type mediaExportRuntime struct{ config Config }
 
 func (runtime mediaExportRuntime) SelectInputs(ctx context.Context, inputs []mediaexport.Input, request edit.ExportRequest) (mediaexport.Selection, error) {
-	selection, err := probeInputSelectionOptions(ctx, runtime.config, inputs, ExportRequest(request))
-	return mediaExportSelection(selection), err
+	selection, err := localmedia.NewRuntime(runtime.config).SelectInputs(ctx, inputs, request)
+	return selection, localMediaError(err)
 }
 
 func (runtime mediaExportRuntime) NearestKeyframe(ctx context.Context, path string, start int64, remote bool, streamIndex int) (mediaexport.Keyframe, error) {
-	return nearestKeyframe(ctx, runtime.config, path, start, remote, streamIndex)
+	frame, err := localmedia.NewRuntime(runtime.config).NearestKeyframe(ctx, path, start, remote, streamIndex)
+	return frame, localMediaError(err)
 }
 
 func (runtime mediaExportRuntime) Run(ctx context.Context, args []string, totalMS int64, report func(int64)) error {
-	if report == nil {
-		_, err := runCommand(ctx, runtime.config.FFmpeg, args...)
-		return err
-	}
-	return runCommandOutput(ctx, runtime.config.FFmpeg, args, &mediaProgressWriter{totalMS: totalMS, report: report})
+	return localMediaError(localmedia.NewRuntime(runtime.config).Run(ctx, args, totalMS, report))
 }
 
 func (runtime mediaExportRuntime) StatSize(path string) (int64, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return 0, err
-	}
-	return info.Size(), nil
+	return localmedia.NewRuntime(runtime.config).StatSize(path)
 }
 
 func (runtime mediaExportRuntime) Probe(ctx context.Context, path string, remote bool) (mediainfo.Info, int64, error) {
-	info, duration, err := probe(ctx, runtime.config, path, remote)
-	return mediainfo.Info(info), duration, err
+	info, duration, err := localmedia.NewRuntime(runtime.config).Probe(ctx, path, remote)
+	return info, duration, localMediaError(err)
 }
 
 func (runtime mediaExportRuntime) CopyDiagnostic(err error, format string) error {
-	return copyExportDiagnostic(err, format)
+	return localMediaError(localmedia.NewRuntime(runtime.config).CopyDiagnostic(err, format))
 }
 
 func (runtime mediaExportRuntime) RenderedFailure(err error, hdr bool) error {
-	return renderedMediaFailure(err, hdr)
+	return localMediaError(localmedia.NewRuntime(runtime.config).RenderedFailure(err, hdr))
 }
