@@ -5,6 +5,7 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 ## Unreleased
 
 ### Fixed
+- Publish the process-cancellation test fixture's readiness marker atomically, preventing an empty intermediate file from causing a false CI failure while retaining descendant-liveness assertions.
 - Admit scoped collection jobs and their project bindings in one transaction. A full project history returns `project_limit` without leaving hidden queued work; existing jobs and partial submissions remain recoverable.
 - Bound project and source-preparation transaction rollback independently of the request deadline, including stalled database responses.
 - Resolve HLS variants, segments and initialization maps against the final playlist URL after guarded HTTP redirects.
