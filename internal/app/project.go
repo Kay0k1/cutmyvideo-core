@@ -69,6 +69,9 @@ func projectPrepared(plan CollectionPlan, selected []string, rendition string, s
 	if plan.Input != "" {
 		return nil, collectionInvalid("", "plan.input", "HTTP projects cannot contain filesystem inputs")
 	}
+	if err := validateHTTPCollectionInputs(plan); err != nil {
+		return nil, err
+	}
 	if identityOnly {
 		c.MaxRanges = 128 * 128
 		c.MaxRangeMS = math.MaxInt64

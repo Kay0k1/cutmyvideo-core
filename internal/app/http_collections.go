@@ -94,6 +94,10 @@ func (s *Server) collectionRequest(w http.ResponseWriter, r *http.Request, owner
 		writeCollectionPlanError(w, &CollectionFieldError{Field: "plan.input", Err: errors.New("HTTP collections require source_id; local input paths are unavailable")})
 		return request, Source{}, nil, false
 	}
+	if err := validateHTTPCollectionInputs(request.Plan); err != nil {
+		writeCollectionPlanError(w, err)
+		return request, Source{}, nil, false
+	}
 	source, err := s.databaseSource(r.Context(), request.SourceID, owner)
 	if err != nil {
 		lookupError(w, err)
@@ -159,6 +163,11 @@ func (s *Server) validateCollection(w http.ResponseWriter, r *http.Request, owne
 // lease for the entire batch. Each clip still receives a fresh preflight report.
 // Remote validation never resolves a media address or launches a downloader.
 func (s *Server) inspectCollection(parent context.Context, source Source, clips []PreparedCollectionClip) ([]PreflightResult, string, context.Context, func(), error) {
+	for _, clip := range clips {
+		if err := checkHTTPRenderReference(parent, source, clip.Request); err != nil {
+			return nil, clip.ID, parent, func() {}, err
+		}
+	}
 	if source.Path == "" {
 		reports := make([]PreflightResult, len(clips))
 		for i, clip := range clips {
@@ -199,10 +208,29 @@ func (s *Server) inspectCollection(parent context.Context, source Source, clips 
 	}
 	release := func() { releaseInspection(); releaseReader(); cancel() }
 	requests := make([]ExportRequest, len(clips))
+	hasReplacement := false
 	for i, clip := range clips {
 		requests[i] = clip.Request
+		hasReplacement = hasReplacement || clip.Request.AudioReplace != nil
 	}
-	reports, failed, err := preflightLocalBatch(ctx, s.Config, source.Path, requests)
+	var reports []PreflightResult
+	failed := -1
+	if hasReplacement {
+		reports = make([]PreflightResult, len(clips))
+		for i, request := range requests {
+			bound, releaseAudio, bindErr := s.pinExportReplacement(ctx, source, request)
+			if bindErr == nil {
+				reports[i], bindErr = PreflightLocal(bound, s.Config, source.Path, request)
+			}
+			releaseAudio()
+			if bindErr != nil {
+				failed, err = i, bindErr
+				break
+			}
+		}
+	} else {
+		reports, failed, err = preflightLocalBatch(ctx, s.Config, source.Path, requests)
+	}
 	if err != nil {
 		clipID := ""
 		if failed >= 0 && failed < len(clips) {
@@ -316,6 +344,13 @@ func (s *Server) submitCollection(w http.ResponseWriter, r *http.Request, owner 
 	}
 	pendingByID := make(map[string]PreparedCollectionClip, len(pending))
 	for _, clip := range pending {
+		if err := checkHTTPRenderReference(r.Context(), source, clip.Request); err != nil {
+			diagnostic, status := collectionAdmissionDiagnostic(err)
+			diagnostic.ClipID = clip.ID
+			collectionFailPending(&result, diagnostic, false)
+			writeCollectionSubmission(w, result, status)
+			return
+		}
 		pendingByID[clip.ID] = clip
 	}
 	for i := range result.Clips {

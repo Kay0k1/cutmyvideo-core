@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
+	"github.com/Kay0k1/cutmyvideo-core/internal/localmedia"
 )
 
 func processJob(parent context.Context, c Config, s *Store, j Job, token string) {
@@ -145,6 +146,23 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 	if source.MediaRemoved {
 		finishFailure("source_removed", "Original recording was removed; reopen it to continue editing")
 		return
+	}
+	if j.Request.AudioReplace != nil {
+		server := &Server{Config: c, Store: s}
+		bound, releaseAudio, bindErr := server.pinExportReplacement(ctx, source, j.Request)
+		if bindErr != nil {
+			if errors.Is(bindErr, ErrNotFound) || errors.Is(bindErr, ErrSourceMediaRemoved) {
+				finishFailure("source_removed", "Replacement recording is unavailable; upload it again before exporting")
+			} else if ctx.Err() != nil {
+				finishFailure("job_timeout", "Processing stopped or exceeded the time limit")
+			} else {
+				problem := exportProblem(bindErr)
+				finishFailure(problem.code, problem.message)
+			}
+			return
+		}
+		ctx = bound
+		defer releaseAudio()
 	}
 	inputs := []mediaInput{{Path: source.Path}}
 	var streams []platformFormat
@@ -513,6 +531,9 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 			if cleanupErr := localSession.Close(); cleanupErr != nil {
 				e = errors.Join(e, cleanupErr)
 			}
+		}
+		if e == nil {
+			e = localMediaError(localmedia.CheckAudioReplacement(itemCtx))
 		}
 		if e != nil {
 			if ctx.Err() != nil {

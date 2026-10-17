@@ -18,6 +18,18 @@ func newJoinedMediaRuntime(c Config) joinedMediaRuntime {
 
 var _ mediaexport.JoinedRuntime = joinedMediaRuntime{}
 
+// Preserve the optional renderer across the service's interface wrapper.
+// Embedding JoinedRuntime alone hides methods outside its historical contract.
+func (runtime joinedMediaRuntime) RenderRuntime() mediaexport.RenderRuntime {
+	provider, ok := runtime.JoinedRuntime.(interface {
+		RenderRuntime() mediaexport.RenderRuntime
+	})
+	if !ok {
+		return nil
+	}
+	return provider.RenderRuntime()
+}
+
 func (runtime joinedMediaRuntime) SelectInputs(ctx context.Context, inputs []mediaexport.Input, request edit.ExportRequest) (mediaexport.Selection, error) {
 	selection, err := runtime.JoinedRuntime.SelectInputs(ctx, inputs, request)
 	return selection, localMediaError(err)
