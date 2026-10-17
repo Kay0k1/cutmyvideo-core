@@ -63,6 +63,12 @@ func renderJobRequest(t *testing.T, server *Server, cookie *http.Cookie, request
 func TestRenderServicePreflightReferencesAndCleanup(t *testing.T) {
 	store, c, server, cookie, source, audio := renderServiceFixture(t)
 	r := transformedServiceRequest(source, audio)
+	encoded, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalidOffset := strings.Replace(string(encoded), `"offset_ms":250`, `"offset_ms":null`, 1)
+	assertHTTPPreflightError(t, newInterfacesHTTPRequest(server.Handler(), context.Background(), cookie, "/api/v1/jobs/preflight", invalidOffset), 400, "invalid_request")
 	report := httpPreflightReport(t, httpPreflightRequest(t, server.Handler(), context.Background(), cookie, r))
 	if report.Video == nil || report.Video.Width != 192 || report.Video.Height != 192 || report.Request.AudioReplace.SourceID != audio.ID {
 		t.Fatalf("transformed preflight mismatch: %+v", report)

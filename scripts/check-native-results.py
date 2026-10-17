@@ -42,6 +42,7 @@ CORE15_LOCALMEDIA_REQUIRED = {
     "TestAnalysisPCMIndependentChannelEnergyAndSplitWrites",
     "TestAnalysisPCMRejectsPartialNonFiniteAndBudgetOverflow",
     "TestAnalysisKeepMarginsAndEmptyTimeline",
+    "TestAnalysisKeepEventBudgetRefusesUntruncatedAlternatingAudio",
     "TestAnalysisOptionsAndWindowBudgets",
     "TestAnalysisVideoStreamingParserIndependentBoundaries",
     "TestAnalysisVideoParserRejectsMalformedAndOversizedStreams",
@@ -56,6 +57,7 @@ CORE15_EDIT_REQUIRED = {
     "TestCutListChapterLineEndingsAndLiteralCarriageReturn",
     "TestCutListRejectsInvalidOrExcessiveInput",
     "TestRenderValidationAndCollectionIsolation",
+    "TestRenderReplacementJSONDoesNotTurnNullIntoZeroOffset",
 }
 CORE15_MEDIAEXPORT_REQUIRED = {
     "TestLoudnessReportParsesCompleteBoundedMachineBlock",

@@ -92,6 +92,38 @@ func TestAnalysisKeepMarginsAndEmptyTimeline(t *testing.T) {
 	}
 }
 
+func TestAnalysisKeepEventBudgetRefusesUntruncatedAlternatingAudio(t *testing.T) {
+	o, _ := silenceOptions(SilenceOptions{ThresholdDB: -40, MinSilenceMS: 10})
+	quiet, audible := make([]byte, 480*4), make([]byte, 480*4)
+	for i := 0; i < len(audible); i += 4 {
+		binary.LittleEndian.PutUint32(audible[i:], math.Float32bits(.25))
+	}
+	for _, pauses := range []int{4095, 4096} {
+		bins := pauses*2 + 1
+		p := newSilencePCM(0, int64(bins*10), 1, o)
+		for i := 0; i < bins; i++ {
+			data := audible
+			if i%2 != 0 {
+				data = quiet
+			}
+			if _, err := p.Write(data); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := p.finish(); err != nil || len(p.silence) != pauses {
+			t.Fatal("known alternating audio was not fully detected", len(p.silence), err)
+		}
+		result, err := p.result(0)
+		if pauses == 4095 {
+			if err != nil || len(result.Keep) != 4096 || result.Keep[4095].EndMS != int64(bins*10) {
+				t.Fatal("valid boundary lost its final audible interval", len(result.Keep), err)
+			}
+		} else if mediaerror.LocalErrorCode(err) != "output_limit" || result.Version != 0 {
+			t.Fatal("oversized keep list was returned or silently truncated", len(result.Keep), err)
+		}
+	}
+}
+
 func TestAnalysisOptionsAndWindowBudgets(t *testing.T) {
 	for _, o := range []SilenceOptions{{ThresholdDB: math.NaN()}, {ThresholdDB: 1}, {MinSilenceMS: -1}, {KeepAfterMS: -1}, {KeepBeforeMS: 5001}, {MinClipMS: 60001}, {AudioTrack: new(-1)}} {
 		if _, err := silenceOptions(o); mediaerror.LocalErrorCode(err) != "invalid_argument" {

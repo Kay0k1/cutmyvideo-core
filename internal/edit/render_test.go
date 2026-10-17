@@ -41,3 +41,21 @@ func TestRenderValidationAndCollectionIsolation(t *testing.T) {
 		t.Fatal("legacy zero request JSON changed", string(encoded), err)
 	}
 }
+
+func TestRenderReplacementJSONDoesNotTurnNullIntoZeroOffset(t *testing.T) {
+	for _, text := range []string{`{"source_id":"audio","offset_ms":null}`, `{"source_id":"audio","offset_ms":1.5}`, `{"source_id":"audio","offset_ms":0,"unsupported":true}`} {
+		var replacement AudioReplace
+		if err := json.Unmarshal([]byte(text), &replacement); err == nil {
+			t.Fatal("invalid replacement JSON accepted", text)
+		}
+	}
+	for _, test := range []struct {
+		text string
+		want int64
+	}{{`{"source_id":"audio"}`, 0}, {`{"source_id":"audio","offset_ms":-250}`, -250}} {
+		var replacement AudioReplace
+		if err := json.Unmarshal([]byte(test.text), &replacement); err != nil || replacement.SourceID != "audio" || replacement.OffsetMS != test.want {
+			t.Fatal("valid replacement JSON rejected", test.text, replacement, err)
+		}
+	}
+}

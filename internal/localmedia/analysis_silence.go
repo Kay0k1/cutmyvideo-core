@@ -64,8 +64,15 @@ func AnalyzeSilence(ctx context.Context, c Config, path string, options SilenceO
 	if err = pcm.finish(); err != nil {
 		return SilenceResult{}, err
 	}
-	result := SilenceResult{Version: 1, StartMS: start, EndMS: end, AnalyzedEndMS: pcm.coverage(), AudioTrack: audio.Index, Silence: pcm.silence}
-	result.Keep = KeepAfterSilence(start, result.AnalyzedEndMS, result.Silence, o.KeepBeforeMS, o.KeepAfterMS, o.MinClipMS)
+	return pcm.result(audio.Index)
+}
+
+func (p *silencePCM) result(audioTrack int) (SilenceResult, error) {
+	result := SilenceResult{Version: 1, StartMS: p.start, EndMS: p.end, AnalyzedEndMS: p.coverage(), AudioTrack: audioTrack, Silence: p.silence}
+	result.Keep = KeepAfterSilence(p.start, result.AnalyzedEndMS, result.Silence, p.options.KeepBeforeMS, p.options.KeepAfterMS, p.options.MinClipMS)
+	if len(result.Keep) > AnalysisMaxEvents {
+		return SilenceResult{}, analysisLimit("silence analysis exceeds 4096 suggested intervals; choose a shorter interval or a larger minimum pause")
+	}
 	return result, nil
 }
 
