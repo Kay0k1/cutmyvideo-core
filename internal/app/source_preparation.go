@@ -152,7 +152,7 @@ func (s *Store) claimSourcePreparation(ctx context.Context, owner, key string, i
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(context.Background())
+	defer rollbackStorage(tx)
 	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, "source-preparation:"+owner); err != nil {
 		return nil, err
 	}

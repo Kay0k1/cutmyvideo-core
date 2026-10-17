@@ -104,6 +104,12 @@ before checking terminal status. It permits current failed/cancelled jobs or
 succeeded jobs with no unexpired ready artifacts, and refuses a succeeded clip
 that still has ready media. This does not change legacy `/jobs` idempotency.
 
+A project retains at most 1,024 job bindings. A new scoped job and its binding
+commit together; reaching that limit returns `project_limit` with
+`retryable:false` before admitting new work. Already attached jobs remain
+recoverable at the limit. A partially admitted collection still returns its
+accepted jobs and diagnostics for the remaining clips.
+
 A handoff token expires in ten minutes. Its first recipient redeems it with its
 own ordinary session into a 24-hour grant. That recipient can recover a lost
 redeem reply with the same token until token expiry; another session receives

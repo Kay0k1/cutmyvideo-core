@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
-import { mkdtemp, readFile, writeFile, rm, unlink, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm, unlink, stat, link } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 
-const { CutmyClient, SourcePreparationError } = await import(process.env.CUTMY_SDK_JS_ENTRY ? pathToFileURL(process.env.CUTMY_SDK_JS_ENTRY).href : '../dist/index.js');
-const { prepareSource, resumeSource } = await import(process.env.CUTMY_SDK_SOURCE_JS_ENTRY ? pathToFileURL(process.env.CUTMY_SDK_SOURCE_JS_ENTRY).href : '../dist/sources.js');
+const mainEntry = process.env.CUTMY_SDK_JS_ENTRY ? pathToFileURL(process.env.CUTMY_SDK_JS_ENTRY).href : new URL('../dist/index.js', import.meta.url).href;
+const sourceEntry = process.env.CUTMY_SDK_SOURCE_JS_ENTRY ? pathToFileURL(process.env.CUTMY_SDK_SOURCE_JS_ENTRY).href : new URL('../dist/sources.js', import.meta.url).href;
+const { CutmyClient, SourcePreparationError } = await import(mainEntry);
+const { prepareSource, resumeSource } = await import(sourceEntry);
 const cookie = 's'.repeat(43), hash = value => createHash('sha256').update(value).digest('hex');
 const limits = { max_source_bytes: 10000000, max_output_bytes: 10000000, max_fetch_bytes: 10000000, max_ranges: 128, max_range_ms: 100000, max_job_ms: 100000 };
 function json(response, value, status = 200) { response.writeHead(status, { 'content-type': 'application/json' }); response.end(JSON.stringify(value)); }
@@ -108,6 +111,64 @@ test('source preparation journal validates both primaries before completing an o
   await writeFile(join(f.project, 'owner.json'), JSON.stringify(owner));
   const result = await resumeSource(new CutmyClient({ baseUrl: f.baseUrl }), f.project, { timeoutMs: 10000 });
   assert.equal(result.complete, true); assert.deepEqual(f.posts, [{ key: 'original-source-key', path: '/api/v1/uploads' }]);
+});
+
+test('fresh consumers recover source initialization interrupted between checkpoint link and unlink', async t => {
+  for (const boundary of ['initialize-source.json', 'owner.json', 'state.json']) {
+    await t.test(boundary, async t => {
+      const f = await fixture(t);
+      // Stop the actual source runner immediately after the selected hard-link
+      // publication. process.exit leaves its filesystem state and lock receipt.
+      const script = `
+        import fs from 'node:fs/promises';
+        import { syncBuiltinESMExports } from 'node:module';
+        import { basename } from 'node:path';
+        const [mainEntry, sourceEntry, baseUrl, path, directory, boundary] = process.argv.slice(1);
+        const original = fs.link;
+        fs.link = async (...args) => {
+          await original(...args);
+          if (basename(args[1]) === boundary) process.exit(99);
+        };
+        syncBuiltinESMExports();
+        const { CutmyClient } = await import(mainEntry);
+        const { prepareSource } = await import(sourceEntry);
+        await prepareSource(new CutmyClient({ baseUrl }), { kind: 'upload', path }, directory,
+          { idempotencyKey: 'crash-source-key', timeoutMs: 10000 });
+        process.exit(1);
+      `;
+      const child = spawn(process.execPath, ['--input-type=module', '-e', script,
+        mainEntry, sourceEntry, f.baseUrl, f.path, f.project, boundary], { stdio: 'ignore', windowsHide: true });
+      const code = await new Promise((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
+      assert.equal(code, 99);
+      assert.equal((await stat(join(f.project, boundary))).nlink, 2);
+      assert.deepEqual(f.posts, []);
+      const result = await resumeSource(new CutmyClient({ baseUrl: f.baseUrl }), f.project, { timeoutMs: 10000 });
+      assert.equal(result.complete, true);
+      assert.deepEqual(f.posts, [{ key: 'crash-source-key', path: '/api/v1/uploads' }]);
+      assert.equal((await stat(join(f.project, 'owner.json'))).nlink, 1);
+      assert.equal((await stat(join(f.project, 'state.json'))).nlink, 1);
+      await assert.rejects(stat(join(f.project, 'initialize-source.json')), { code: 'ENOENT' });
+      const replay = await resumeSource(new CutmyClient({ baseUrl: f.baseUrl }), f.project, { timeoutMs: 10000 });
+      assert.equal(replay.source_id, result.source_id); assert.equal(f.posts.length, 1);
+    });
+  }
+});
+
+test('source journal recovery rejects an unverified hard link before repairing primaries or contacting the server', async t => {
+  const f = await fixture(t);
+  await assert.rejects(prepareSource(f.client, { kind: 'upload', path: f.path }, f.project,
+    { onProgress: value => { if (value.phase === 'created') throw new Error('Stop before upload'); } }),
+    error => error.code === 'callback_error');
+  const state = JSON.parse(await readFile(join(f.project, 'state.json'))), owner = JSON.parse(await readFile(join(f.project, 'owner.json')));
+  const unrelated = join(f.project, 'unrelated.json');
+  await writeFile(unrelated, JSON.stringify({ schema_version: 1, owner, state }), { mode: 0o600 });
+  await link(unrelated, join(f.project, 'initialize-source.json'));
+  await unlink(join(f.project, 'state.json')); await unlink(join(f.project, 'owner.json'));
+  const before = f.calls.length, original = await readFile(unrelated);
+  await assert.rejects(resumeSource(new CutmyClient({ baseUrl: f.baseUrl }), f.project), error => error.code === 'unverified_checkpoint');
+  assert.equal(f.calls.length, before); assert.deepEqual(await readFile(unrelated), original);
+  assert.equal((await stat(unrelated)).nlink, 2);
+  for (const name of ['owner.json', 'state.json']) await assert.rejects(stat(join(f.project, name)), { code: 'ENOENT' });
 });
 
 test('provider preparation fingerprints do not claim a content digest and ready resume does no import', async t => {

@@ -19,7 +19,7 @@ function portablePlan(value: CollectionRequest["plan"]): CollectionRequest["plan
   const fields = (item: unknown, allowed: string[]) => { if (!object(item) || Object.entries(item).some(([key, value]) => !allowed.includes(key) || !["options","crop","clips","ranges"].includes(key) && value !== null && typeof value === "object")) throw new TypeError("Portable project contains unknown edit fields"); };
   const options = (item: unknown) => {
     fields(item, ["format","quality","cut_mode","audio_track","no_audio","subtitle_mode","crop","clear_crop"]);
-    if (object(item) && item.crop !== undefined) fields(item.crop, ["x","y","width","height"]);
+    if (object(item) && item.crop !== undefined && item.crop !== null) fields(item.crop, ["x","y","width","height"]);
   };
   fields(value, ["version","input","options","clips"]);
   if (!Array.isArray(value.clips)) throw new TypeError("Portable project clips must be an array");
