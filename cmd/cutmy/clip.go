@@ -33,6 +33,7 @@ func runClip(args []string, stdout, stderr io.Writer) error {
 	audio := f.String("audio-track", "default", "default, none, or inspected absolute audio stream index")
 	subtitles := f.String("subtitles", "omit", "omit or preserve compatible text subtitles")
 	cropFlag := f.String("crop", "", "normalized upright crop x,y,width,height (accurate MP4 only)")
+	render := registerRenderFlags(f)
 	profile := f.String("profile", "fast", "fast (larger files) or compact")
 	threads := f.Int("threads", 2, "FFmpeg threads, 1 through 32")
 	timeout := f.Duration("timeout", 30*time.Minute, "whole export timeout, including inspection")
@@ -70,13 +71,17 @@ func runClip(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return invalidCLI(err)
 	}
+	options := engine.AdvancedOptions{Options: engine.Options{Quality: *quality, CutMode: *mode}, AudioTrack: audioTrack, NoAudio: noAudio, SubtitleMode: *subtitles, Crop: crop}
+	if err := render.apply(f, &options); err != nil {
+		return invalidCLI(err)
+	}
 	// Media commands run in their own process group. Cancel their context before
 	// exiting on a terminal signal so neither the encoder nor its children leak.
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	ctx, cancel := context.WithTimeout(signalCtx, *timeout)
 	defer cancel()
-	result, err := engine.New(engine.Config{FFmpegPath: os.Getenv("FFMPEG_PATH"), FFprobePath: os.Getenv("FFPROBE_PATH"), EncodeProfile: *profile, FFmpegThreads: *threads, ExportTimeout: *timeout}).ExportWithOptions(ctx, *input, *output, engine.Range{StartMS: startMS, EndMS: endMS}, engine.AdvancedOptions{Options: engine.Options{Quality: *quality, CutMode: *mode}, AudioTrack: audioTrack, NoAudio: noAudio, SubtitleMode: *subtitles, Crop: crop})
+	result, err := engine.New(engine.Config{FFmpegPath: os.Getenv("FFMPEG_PATH"), FFprobePath: os.Getenv("FFPROBE_PATH"), EncodeProfile: *profile, FFmpegThreads: *threads, ExportTimeout: *timeout}).ExportWithOptions(ctx, *input, *output, engine.Range{StartMS: startMS, EndMS: endMS}, options)
 	if err != nil {
 		return err
 	}
