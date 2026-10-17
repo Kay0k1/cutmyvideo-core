@@ -18,21 +18,25 @@ optimizations accelerate collection checks and exports; the
 [15-clip comparison](../benchmarks/2026-10-16-first-draft/README.md) uses the same
 released 1.4.0 client on both sides to measure that server change independently.
 
+Version 1.4.2 completes the core audit and fixes SDK deadline reporting, interrupted
+source preparation and portable crop inheritance. It preserves the existing SDK
+APIs and durable formats. See the [maintenance release scope](release-1.4.2.md).
+
 ## Install versioned packages
 
 Python 3.10 or newer:
 
 ```sh
-python -m pip install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.1/cutmyvideo-1.4.1-py3-none-any.whl'
+python -m pip install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.2/cutmyvideo-1.4.2-py3-none-any.whl'
 ```
 
 Node.js 20.19 or newer, with an ESM project:
 
 ```sh
-npm install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.1/cutmyvideo-sdk-1.4.1.tgz'
+npm install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.2/cutmyvideo-sdk-1.4.2.tgz'
 ```
 
-These are published assets of [release 1.4.1](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.4.1),
+These are published assets of [release 1.4.2](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.4.2),
 not claims of publication to the PyPI/npm registries. No source
 checkout or SDK build is needed. The release also contains the Python source
 distribution, `SDK-MANIFEST.json` and `sdk-provenance.sigstore.json`. They bind the

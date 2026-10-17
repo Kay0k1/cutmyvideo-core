@@ -4,7 +4,11 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
+## 1.4.2 - 2026-10-18
+
 ### Fixed
+- Prefer the original platform audio over automatic dubs for supported inputs, carry extractor selection metadata through cache refresh, and invalidate preview entries created under the earlier selection policy.
+- Terminate owned Unix descendants when their parent exits first, including redirected standard streams, while preserving cancellation, bounded output and primary error behavior.
 - Preserve Python SDK request and job-wait timeout diagnostics when a deadline expires before the request timer or next poll can start, closing the unused connection and retaining the last job report.
 - Publish the process-cancellation test fixture's readiness marker atomically, preventing an empty intermediate file from causing a false CI failure while retaining descendant-liveness assertions.
 - Admit scoped collection jobs and their project bindings in one transaction. A full project history returns `project_limit` without leaving hidden queued work; existing jobs and partial submissions remain recoverable.
@@ -15,6 +19,9 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 - Show fixed refusal codes in the self-hosting lifecycle wrapper while retaining exit status 1 and redacting private exception details.
 
 ### Changed
+- Update `golang.org/x/sys` to 0.44.0 with matching dependency notices and release license verification.
+- Advance Python and TypeScript package metadata, HTTP client identification and installed-package acceptance to 1.4.2.
+- Install the pinned, checksum-verified extractor for native metadata fixtures on all five targets; retain all mandatory native checks.
 - Separate complete joined-export coordination, advisory preflight planning and operation-local media sessions from the server package, preserving stream compatibility, copy/accurate clocks, capability and identity fences, bounded caches, independent repeated outputs and public contracts.
 - Separate single-interval export coordination and shared output-budget rules from server configuration, preserving copy clocks, encoder arguments, progress, diagnostic causes and fresh result verification.
 - Separate probe metadata, deterministic track selection and video geometry/filter rules from server configuration, preserving inspection, rendering and diagnostic behavior.

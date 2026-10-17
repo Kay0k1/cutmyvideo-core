@@ -22,7 +22,7 @@ async function main() {
   const {runCollection,resumeCollection}=await import(pathToFileURL(process.env.CUTMY_SDK_COLLECTION_JS_ENTRY).href);
   const {prepareSource,resumeSource}=await import(pathToFileURL(process.env.CUTMY_SDK_SOURCE_JS_ENTRY).href);
   const metadata=await read(join(dirname(entry),'../package.json'));
-  require(metadata.name==='@cutmyvideo/sdk'&&metadata.version==='1.4.1','requires_release_package');
+  require(metadata.name==='@cutmyvideo/sdk'&&metadata.version==='1.4.2','requires_release_package');
   await mkdir(work,{recursive:true,mode:0o700});
   const sourceDir=join(work,'source'),collection=join(work,'collection');
   const onProgress=async report=>{
