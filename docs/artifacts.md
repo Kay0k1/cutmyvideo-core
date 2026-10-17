@@ -17,6 +17,14 @@ retention limit. CI test diagnostics expire after three days. Release packages,
 provenance, recovery snapshots, production media and database backups are separate
 and keep their existing retention guarantees.
 
+The installed-SDK runner requires at least 2 GiB free on its output filesystem
+before building. After a successful run, it removes its own virtual environments,
+consumer directories, unpacked source/rebuilt wheel and test CLI. It preserves
+the original wheel, source archive and npm package, frozen contract examples,
+logs, complete test-event journal and `SDK-CHECKS.json`. A failed run retains its
+workspace for diagnosis. This cleanup applies only to the new output directory
+owned by that run; it does not prune other runs, caches or release evidence.
+
 For legacy local workspace reports, preview cleanup with:
 
 ```sh

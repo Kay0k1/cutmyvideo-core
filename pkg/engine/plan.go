@@ -10,13 +10,14 @@ import (
 	"unicode"
 
 	"github.com/Kay0k1/cutmyvideo-core/internal/app"
+	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
 	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
 )
 
-type Track = app.Track
-type TrackSelection = app.TrackSelection
-type Segment = app.ArtifactSegment
-type Crop = app.Crop
+type Track = edit.Track
+type TrackSelection = edit.TrackSelection
+type Segment = edit.Segment
+type Crop = edit.Crop
 
 type AdvancedSourceInfo struct {
 	SourceInfo

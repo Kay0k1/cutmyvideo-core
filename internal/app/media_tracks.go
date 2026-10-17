@@ -176,26 +176,6 @@ func (p *probeInfo) validateStreams() error {
 	return nil
 }
 
-// Track identifies an absolute source stream index, rather than an audio ordinal.
-type Track struct {
-	Index           int    `json:"index"`
-	Type            string `json:"type"`
-	Codec           string `json:"codec"`
-	Language        string `json:"language,omitempty"`
-	Title           string `json:"title,omitempty"`
-	Channels        int    `json:"channels,omitempty"`
-	SampleRate      string `json:"sample_rate,omitempty"`
-	Default         bool   `json:"default"`
-	AttachedPicture bool   `json:"attached_picture,omitempty"`
-}
-
-// TrackSelection explains every included or excluded source stream.
-type TrackSelection struct {
-	Track
-	Included bool   `json:"included"`
-	Reason   string `json:"reason"`
-}
-
 func (p *probeInfo) tracks() []Track {
 	tracks := make([]Track, 0, len(p.Streams))
 	for _, s := range p.Streams {

@@ -9,15 +9,16 @@ import (
 	"path/filepath"
 
 	"github.com/Kay0k1/cutmyvideo-core/internal/app"
+	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
 	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
 )
 
-type CollectionPlan = app.CollectionPlan
-type CollectionClip = app.CollectionClip
-type CollectionOptions = app.CollectionOptions
-type CollectionExecution = app.CollectionExecution
-type CollectionRange = app.Range
-type CollectionFieldError = app.CollectionFieldError
+type CollectionPlan = edit.CollectionPlan
+type CollectionClip = edit.CollectionClip
+type CollectionOptions = edit.CollectionOptions
+type CollectionExecution = edit.CollectionExecution
+type CollectionRange = edit.Range
+type CollectionFieldError = edit.CollectionFieldError
 
 type CollectionClipPreflight struct {
 	ID            string             `json:"id"`

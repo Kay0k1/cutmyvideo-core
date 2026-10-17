@@ -69,6 +69,27 @@ Platform import uses yt-dlp with a Node.js runtime; the server image bundles
 these alongside FFmpeg. Node is an import dependency, not an alternative media
 engine. Uploaded/local server files do not require platform extraction.
 
+## Internal component boundaries
+
+`internal/edit` owns the edit models and pure rules for ranges, crop, inherited
+collection options, selected clips and aggregate limits. It uses only the Go
+standard library and receives small source/limit views, without database,
+HTTP, filesystem or media-tool dependencies. Both server and local execution
+use these rules. Existing public Go shapes and the request-validation method
+remain available through compatible aliases and adapters.
+
+Project domain records live in `internal/app/project.go`. Project reads,
+creation, edits, handoffs, grants, retries and scoped job bindings live in
+`internal/app/store_projects.go`, including their existing transactions and
+authorization fences. `http_projects.go` handles request decoding, rate limits,
+database deadlines, response errors and project-scoped URLs. Storage reads keep
+canonical source/artifact URLs; the HTTP boundary rewrites them for project access.
+
+Media execution, probing and queue coordination still share `internal/app`.
+The public engine therefore retains compile-time dependencies on that package;
+local operations continue to run without opening a database. Extracting the
+pure edit rules establishes a smaller boundary for further media separation.
+
 ## Why SQL and JavaScript are here
 
 - `internal/app/migrations/*.sql` are versioned PostgreSQL schema changes.
@@ -94,6 +115,7 @@ installing the other language's SDK.
 | `pkg/engine/` | Public Go library and its tests |
 | `cmd/cutmy/` | Local CLI, API/worker/maintenance entry points |
 | `internal/app/` | Shared media operations and internal server/queue/storage implementation |
+| `internal/edit/` | Standard-library-only edit models, validation and collection normalization |
 | `internal/app/migrations/` | Versioned SQL and expected database catalog layouts |
 | `internal/fsdurable/` | Durable filesystem publication support |
 | `sdk/python/`, `sdk/typescript/` | Client libraries, package guides and tests |
