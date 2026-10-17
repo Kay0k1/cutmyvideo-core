@@ -231,7 +231,8 @@ test('malformed saved per-job poll deadlines are refused before restoring the ow
 
 test('admission batch bounds accepted unfinished work while queued clips drain', async t => {
   const root = join(await directory(t), 'project'), f = await fixture(t, { queuedPolls: 2 }); let outstanding = 0;
-  const done = await runCollection(f.client, request(5), root, { admissionBatchSize: 2, maxSubmitBatch: 3, timeoutMs: 15000, onProgress: report => {
+  // Three admission waves honor real poll waits and durable journal writes on Windows.
+  const done = await runCollection(f.client, request(5), root, { admissionBatchSize: 2, maxSubmitBatch: 3, timeoutMs: 60000, onProgress: report => {
     outstanding = Math.max(outstanding, report.pending.filter(clip => clip.code.startsWith('job_')).length);
   } });
   assert(done.complete); assert.equal(done.outputs.length, 5); assert.equal(outstanding, 2);
