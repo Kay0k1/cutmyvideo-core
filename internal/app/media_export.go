@@ -26,7 +26,7 @@ func mediaExportError(err error) error {
 	if err == mediaexport.ErrOutputLimit {
 		return errOutputLimit
 	}
-	return mediaInfoError(err)
+	return localMediaError(mediaInfoError(err))
 }
 
 type mediaExportRuntime struct{ config Config }

@@ -14,6 +14,7 @@ import (
 
 	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
 	"github.com/Kay0k1/cutmyvideo-core/internal/localmedia"
+	"github.com/Kay0k1/cutmyvideo-core/internal/mediaerror"
 )
 
 func renderServiceFixture(t *testing.T) (*Store, Config, *Server, *http.Cookie, Source, Source) {
@@ -200,5 +201,26 @@ func TestRenderServiceCollectionReplacementIsolation(t *testing.T) {
 	assertHTTPPreflightNoWork(t, store, 0)
 	if _, err := os.Stat(audio.Path); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRenderServiceDiagnosticsKeepPublicCodesAndPrivateCauses(t *testing.T) {
+	private := errors.New("private media diagnostics must not reach API messages")
+	for _, sample := range []struct {
+		err  error
+		code string
+	}{
+		{&mediaerror.Problem{Code: "source_changed", Message: "Source changed; inspect again"}, "source_changed"},
+		{&mediaerror.ProcessFailure{Category: "storage_full", Cause: private}, "storage_full"},
+		{mediaerror.RenderedFailure(&mediaerror.ProcessFailure{Category: "hdr_conversion_unavailable", Cause: private}, true), "hdr_conversion_unavailable"},
+	} {
+		converted := mediaExportError(sample.err)
+		problem := exportProblem(converted)
+		if problem.code != sample.code || strings.Contains(problem.message, private.Error()) {
+			t.Fatal("rendering diagnostic lost its public classification", problem)
+		}
+		if errors.Is(sample.err, private) && !errors.Is(converted, private) {
+			t.Fatal("private diagnostic cause was lost")
+		}
 	}
 }

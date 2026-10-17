@@ -38,6 +38,9 @@ func transformedExport(ctx context.Context, c Config, inputs [][]Input, ranges [
 		return nil, errors.New("media backend does not support the requested rendering options")
 	}
 	rt := provider.RenderRuntime()
+	if rt == nil {
+		return nil, errors.New("media backend does not support the requested rendering options")
+	}
 	if len(ranges) == 0 || len(ranges) > 128 || len(inputs) != len(ranges) {
 		return nil, errors.New("rendered export requires 1 through 128 input intervals")
 	}
