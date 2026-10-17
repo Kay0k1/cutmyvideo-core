@@ -13,6 +13,20 @@ import (
 // Export coordinates one verified media interval. Runtime owns tools, I/O and
 // interface-specific failure classification; this package owns their order.
 func Export(ctx context.Context, c Config, inputs []Input, r edit.Range, request edit.ExportRequest, out string, report func(int64), finalOutput bool, verified *mediainfo.Info, runtime Runtime) (int64, int64, error) {
+	if edit.HasRenderOptions(request) {
+		_, err := transformedExport(ctx, c, [][]Input{inputs}, []edit.Range{r}, request, out, report, finalOutput, runtime)
+		if err != nil {
+			return 0, 0, err
+		}
+		if verified != nil {
+			p, _, err := runtime.Probe(ctx, out, false)
+			if err != nil {
+				return 0, 0, err
+			}
+			*verified = p
+		}
+		return r.StartMS, r.EndMS, nil
+	}
 	if err := edit.ValidateCropMode(request); err != nil {
 		return 0, 0, &mediainfo.Problem{Code: "crop_invalid", Message: err.Error()}
 	}

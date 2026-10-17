@@ -134,8 +134,13 @@ func (e *Engine) ExecuteCollection(ctx context.Context, plan CollectionPlan, out
 			return result, collectionClipError(clip.ID, "export", &Error{Code: CodeOutputLimit, Err: errors.New("selected collection exceeds configured output byte limit")})
 		}
 		path := filepath.Join(workspace, fmt.Sprintf("clip-%d.%s", i, clip.Request.Format))
-		segments, renderErr := localmedia.ExportJoinedLocal(ctx, config, input, path, clip.Request.Ranges, clip.Request)
+		clipCtx, releaseReplacement, pinErr := prepareEngineReplacement(ctx, clip.Request)
+		if pinErr != nil {
+			return result, collectionClipError(clip.ID, "options.audio_replace", pinErr)
+		}
+		segments, renderErr := localmedia.ExportJoinedLocal(clipCtx, config, input, path, clip.Request.Ranges, clip.Request)
 		if renderErr != nil {
+			releaseReplacement()
 			return result, collectionClipError(clip.ID, "export", renderErr)
 		}
 		info, statErr := os.Stat(path)
@@ -146,7 +151,12 @@ func (e *Engine) ExecuteCollection(ctx context.Context, plan CollectionPlan, out
 			return result, collectionClipError(clip.ID, "export", &Error{Code: CodeOutputLimit, Err: errors.New("selected collection exceeds configured output byte limit")})
 		}
 		name := checked.Clips[i].OutputPath
-		published, publishErr := e.publish(ctx, path, name)
+		if checkErr := localmedia.CheckAudioReplacement(clipCtx); checkErr != nil {
+			releaseReplacement()
+			return result, collectionClipError(clip.ID, "options.audio_replace", checkErr)
+		}
+		published, publishErr := e.publish(clipCtx, path, name)
+		releaseReplacement()
 		if publishErr != nil {
 			if errors.Is(publishErr, os.ErrExist) && !errors.Is(publishErr, fsdurable.ErrPublicationUncertain) {
 				publishErr = errors.Join(ErrOutputExists, publishErr)
@@ -203,6 +213,9 @@ func (e *Engine) prepareCollection(ctx context.Context, plan CollectionPlan, inp
 	result = CollectionPreflightResult{Version: 1, Valid: true, Rendition: rendition, SelectedClipIDs: []string{}, Clips: []CollectionClipPreflight{}, Source: PreflightSource{DurationMS: source.DurationMS, Width: source.Width, Height: source.Height, DisplayWidth: source.DisplayWidth, DisplayHeight: source.DisplayHeight}}
 	names := make([]string, len(clips))
 	for i, clip := range clips {
+		if clip.Request.AudioReplace != nil && clip.Request.AudioReplace.SourceID != "" {
+			return CollectionPreflightResult{}, nil, collectionClipError(clip.ID, "options.audio_replace", invalidArgument(errors.New("local engine audio_replace requires input, not source_id")))
+		}
 		names[i] = filepath.Join(dir, localmedia.CollectionOutputFilename(clip, rendition))
 		if _, err = os.Lstat(names[i]); err == nil {
 			return CollectionPreflightResult{}, nil, collectionClipError(clip.ID, "output_path", &messageCause{message: ErrOutputExists.Error(), cause: errors.Join(ErrOutputExists, os.ErrExist)})

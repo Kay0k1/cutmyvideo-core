@@ -27,6 +27,11 @@ func InspectLocal(ctx context.Context, c Config, path string) (Source, error) {
 }
 
 func ExportLocal(ctx context.Context, c Config, path, out string, r Range, options ExportRequest) (int64, int64, error) {
+	ctx, release, err := PrepareAudioReplacement(ctx, options)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer release()
 	if localExportSession(ctx, path, false) == nil {
 		var session *LocalExportSession
 		ctx, session = BeginLocalExport(ctx, path)

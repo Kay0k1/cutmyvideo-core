@@ -9,6 +9,11 @@ import (
 )
 
 func ExportJoinedLocal(ctx context.Context, c Config, path, out string, ranges []Range, request ExportRequest) ([]ArtifactSegment, error) {
+	ctx, release, err := PrepareAudioReplacement(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	if localExportSession(ctx, path, false) == nil {
 		var session *LocalExportSession
 		ctx, session = BeginLocalExport(ctx, path)

@@ -35,6 +35,11 @@ func PreflightLocalWithQueries(ctx context.Context, c Config, path string, reque
 	if path == "" {
 		return PreflightResult{}, &mediaerror.Problem{Code: "invalid_argument", Message: "input path is required"}
 	}
+	ctx, release, err := PrepareAudioReplacement(ctx, request)
+	if err != nil {
+		return PreflightResult{}, err
+	}
+	defer release()
 	absolute, err := filepath.Abs(path)
 	if err != nil {
 		return PreflightResult{}, err
@@ -57,9 +62,17 @@ func PreflightLocalWithQueries(ctx context.Context, c Config, path string, reque
 	if err := PreflightSourceUnchanged(absolute, before); err != nil {
 		return PreflightResult{}, err
 	}
-	result, groups, err := PrepareLocalPreflight(c, absolute, request, probeInfo(p), duration)
+	var replacement *mediainfo.Stream
+	if request.AudioReplace != nil {
+		_, replacement, err = (mediaExportRuntime{config: c}).Replacement(ctx, *request.AudioReplace)
+		if err != nil {
+			return PreflightResult{}, err
+		}
+	}
+	prepared, requirements, err := mediapreflight.PrepareWithReplacement(coremodel.EditLimits(c), absolute, edit.ExportRequest(request), p, duration, replacement)
+	result, groups := mediaPreflightResult(prepared), preflightGroups(requirements)
 	if err != nil {
-		return PreflightResult{}, err
+		return PreflightResult{}, mediaExportError(err)
 	}
 	if err := CheckPreflightCapabilities(ctx, c, groups, &result, query); err != nil {
 		return PreflightResult{}, err
@@ -68,6 +81,9 @@ func PreflightLocalWithQueries(ctx context.Context, c Config, path string, reque
 		return PreflightResult{}, err
 	}
 	if err := PreflightSourceUnchanged(absolute, before); err != nil {
+		return PreflightResult{}, err
+	}
+	if err := CheckAudioReplacement(ctx); err != nil {
 		return PreflightResult{}, err
 	}
 	FinishLocalPreflight(&result)

@@ -40,6 +40,9 @@ func TrackManifest(p Info, video, audio *Stream, request edit.ExportRequest) ([]
 		if track.Type == "audio" && request.NoAudio {
 			item.Reason = "audio_disabled"
 		}
+		if track.Type == "audio" && request.AudioReplace != nil {
+			item.Included, item.Reason = false, "audio_replaced"
+		}
 		if track.Type == "subtitle" {
 			item.Reason = "subtitles_omitted"
 			if request.SubtitleMode == "preserve" {

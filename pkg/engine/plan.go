@@ -18,6 +18,9 @@ type Track = edit.Track
 type TrackSelection = edit.TrackSelection
 type Segment = edit.Segment
 type Crop = edit.Crop
+type AudioNormalize = edit.AudioNormalize
+type Canvas = edit.Canvas
+type AudioReplace = edit.AudioReplace
 
 type AdvancedSourceInfo struct {
 	SourceInfo
@@ -33,10 +36,13 @@ type AdvancedResult struct {
 // positional struct literals. AudioTrack is an absolute inspected stream index.
 type AdvancedOptions struct {
 	Options
-	AudioTrack   *int   `json:"audio_track,omitempty"`
-	NoAudio      bool   `json:"no_audio,omitempty"`
-	SubtitleMode string `json:"subtitle_mode,omitempty"`
-	Crop         *Crop  `json:"crop,omitempty"`
+	AudioTrack     *int            `json:"audio_track,omitempty"`
+	NoAudio        bool            `json:"no_audio,omitempty"`
+	SubtitleMode   string          `json:"subtitle_mode,omitempty"`
+	Crop           *Crop           `json:"crop,omitempty"`
+	AudioNormalize *AudioNormalize `json:"audio_normalize,omitempty"`
+	Canvas         *Canvas         `json:"canvas,omitempty"`
+	AudioReplace   *AudioReplace   `json:"audio_replace,omitempty"`
 }
 type NamedRange struct {
 	Label   string `json:"label"`
@@ -106,6 +112,11 @@ func (e *Engine) ExecutePlan(ctx context.Context, plan Plan, output string) (res
 	if err = request.Validate(e.config, localmedia.Source{DurationMS: source.DurationMS, Path: input}); err != nil {
 		return result, invalidArgument(err)
 	}
+	ctx, releaseReplacement, err := prepareEngineReplacement(ctx, request)
+	if err != nil {
+		return result, err
+	}
+	defer releaseReplacement()
 	ranges := request.Ranges
 	session.SetRanges(ranges)
 	tracks, err := localmedia.SelectExportTracks(source.Tracks, request)
@@ -175,6 +186,9 @@ func (e *Engine) ExecutePlan(ctx context.Context, plan Plan, output string) (res
 				return result, &Error{Code: CodeOutputLimit, Err: errors.New("total batch output exceeds the configured byte limit")}
 			}
 			totalBytes += stat.Size()
+			if err = localmedia.CheckAudioReplacement(ctx); err != nil {
+				return result, err
+			}
 			info, publishErr := e.publish(ctx, path, names[i])
 			if publishErr != nil {
 				if errors.Is(publishErr, os.ErrExist) && !errors.Is(publishErr, fsdurable.ErrPublicationUncertain) {
@@ -193,6 +207,9 @@ func (e *Engine) ExecutePlan(ctx context.Context, plan Plan, output string) (res
 		return result, err
 	}
 	for i, item := range prepared {
+		if err = localmedia.CheckAudioReplacement(ctx); err != nil {
+			return result, err
+		}
 		info, e := e.publish(ctx, item.Path, names[i])
 		if e != nil {
 			if errors.Is(e, os.ErrExist) && !errors.Is(e, fsdurable.ErrPublicationUncertain) {

@@ -12,6 +12,12 @@ type CapabilityGroup struct {
 }
 
 func Prepare(c edit.Limits, path string, request edit.ExportRequest, p mediainfo.Info, duration int64) (Result, []CapabilityGroup, error) {
+	return PrepareWithReplacement(c, path, request, p, duration, nil)
+}
+
+// PrepareWithReplacement receives only already-authorized inspected stream
+// facts. It never resolves a source ID or opens a caller-supplied path.
+func PrepareWithReplacement(c edit.Limits, path string, request edit.ExportRequest, p mediainfo.Info, duration int64, replacement *mediainfo.Stream) (Result, []CapabilityGroup, error) {
 	source := Source{DurationMS: duration}
 	if video := p.SelectedVideo(); video != nil {
 		source.Width, source.Height = video.Width, video.Height
@@ -28,10 +34,19 @@ func Prepare(c edit.Limits, path string, request edit.ExportRequest, p mediainfo
 		value := *request.Crop
 		request.Crop = &value
 	}
+	request.AudioNormalize = edit.CloneAudioNormalize(request.AudioNormalize)
+	request.Canvas = edit.CloneCanvas(request.Canvas)
+	request.AudioReplace = edit.CloneAudioReplace(request.AudioReplace)
 	if err := edit.ValidateExportRequest(&request, c, edit.Source{DurationMS: duration, HasLocalMedia: path != ""}); err != nil {
 		return Result{}, nil, &mediainfo.Problem{Code: "invalid_argument", Message: err.Error()}
 	}
 	selection := mediaexport.Selection{Video: p.SelectedVideo(), Audio: p.SelectedAudio()}
+	if request.AudioReplace != nil {
+		if replacement == nil {
+			return Result{}, nil, &mediainfo.Problem{Code: "audio_track_unavailable", Message: "replacement recording must be inspected before preflight"}
+		}
+		selection.Audio = replacement
+	}
 	if request.NoAudio {
 		selection.Audio = nil
 	} else if request.AudioTrack != nil {
@@ -50,6 +65,9 @@ func Prepare(c edit.Limits, path string, request edit.ExportRequest, p mediainfo
 	tracks, err := mediainfo.TrackManifest(p, selection.Video, selection.Audio, request)
 	if err != nil {
 		return Result{}, nil, err
+	}
+	if request.AudioNormalize != nil && selection.Audio == nil {
+		return Result{}, nil, mediaexport.ErrNoAudio
 	}
 	video, err := ValidateSelection(selection, request)
 	if err != nil {
@@ -90,14 +108,14 @@ func ValidateSelection(selection mediaexport.Selection, request edit.ExportReque
 		}
 		return &Video{Width: selection.Video.Width, Height: selection.Video.Height}, nil
 	}
-	_, hdr, err := mediainfo.CropRenderFilter(selection.Video, request.Quality, request.Crop)
+	_, hdr, err := mediainfo.RenderFilterWithCanvas(selection.Video, request.Quality, request.Crop, request.Canvas)
 	if err != nil {
 		return nil, err
 	}
 	if _, err := mediainfo.EncoderTimeBase(selection.Video); err != nil {
 		return nil, err
 	}
-	width, height, err := mediainfo.OutputGeometryWithCrop(selection.Video, request.Quality, false, request.Crop)
+	width, height, err := mediainfo.RenderGeometry(selection.Video, request.Quality, request.Crop, request.Canvas)
 	return &Video{Width: width, Height: height, HDRToSDR: hdr}, err
 }
 
@@ -121,6 +139,18 @@ func RequiredCapabilities(selection mediaexport.Selection, request edit.ExportRe
 	muxers := []string{muxer}
 	joined := request.OutputMode == "joined"
 	if request.CutMode != "copy" {
+		if request.Canvas != nil {
+			filters = append(filters, "pad")
+		}
+		if request.AudioNormalize != nil {
+			filters = append(filters, "loudnorm")
+		}
+		if edit.HasRenderOptions(request) && selection.Audio != nil {
+			filters = append(filters, "atrim")
+		}
+		if request.AudioReplace != nil {
+			filters = append(filters, "apad")
+		}
 		if request.Format == "mp3" {
 			encoders = append(encoders, "libmp3lame")
 		} else {
@@ -136,15 +166,15 @@ func RequiredCapabilities(selection mediaexport.Selection, request edit.ExportRe
 				filters = append(filters, "zscale", "format", "setparams", "tonemap")
 				bsfs = append(bsfs, "h264_metadata")
 			}
-			if joined {
+			if joined || edit.HasRenderOptions(request) {
 				filters = append(filters, "select")
 			}
 		}
-		if joined && selection.Audio != nil {
+		if (joined || edit.HasRenderOptions(request)) && selection.Audio != nil {
 			filters = append(filters, "aselect", "aresample")
 		}
 	}
-	if joined {
+	if joined || edit.HasRenderOptions(request) {
 		demuxers = append(demuxers, "concat")
 		if request.CutMode == "copy" {
 			if request.Format == "mkv" {
