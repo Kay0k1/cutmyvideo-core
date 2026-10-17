@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
+	"github.com/Kay0k1/cutmyvideo-core/internal/mediaexport"
 )
 
 type CollectionPlan = edit.CollectionPlan
@@ -58,16 +59,13 @@ func CollectionOutputFilename(clip PreparedCollectionClip, rendition string) str
 		Request: edit.ExportRequest(clip.Request), RequestedMS: clip.RequestedMS}, rendition)
 }
 
-type collectionRenditionKey struct{}
-
 // CollectionRenderContext propagates the rendition into the shared encoder.
 // It does not change ranges, crop or audio decisions. Both local exports and
 // queued HTTP workers use this same context and draft encoder settings.
 func CollectionRenderContext(ctx context.Context, rendition string) context.Context {
-	return context.WithValue(ctx, collectionRenditionKey{}, rendition == "draft")
+	return mediaexport.CollectionRenderContext(ctx, rendition)
 }
 
 func CollectionDraft(ctx context.Context) bool {
-	value, _ := ctx.Value(collectionRenditionKey{}).(bool)
-	return value
+	return mediaexport.CollectionDraft(ctx)
 }

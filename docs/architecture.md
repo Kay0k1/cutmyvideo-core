@@ -110,7 +110,16 @@ sentinel, while ordinary validation errors keep their causes. Unknown display
 geometry continues to leave coded dimensions and unrelated audio inspection
 available; rendering validates geometry when an operation needs it.
 
-Media probing, encoding coordination and queue handling still share
+`internal/mediaexport` coordinates one interval's media export, including the
+intermediate producer used by copy joins. It owns validation and selection order,
+copy-clock adjustment, FFmpeg arguments, output budgets and result verification.
+It receives narrow execution/inspection callbacks instead of server configuration
+or direct filesystem, process, network or database access. The app adapters keep
+the existing bounded/streaming stdout paths, diagnostic causes, source sessions,
+file identity checks and decoder-slot ownership. Result metadata is assigned only
+after verification succeeds; final/intermediate output flags remain explicit.
+
+Media probing, joined-export algorithms and queue handling still share
 `internal/app`. The public engine therefore retains compile-time dependencies
 on that package; local operations continue to run without opening a database.
 These smaller internal boundaries support further media separation without
@@ -142,6 +151,7 @@ installing the other language's SDK.
 | `cmd/cutmy/` | Local CLI, API/worker/maintenance entry points |
 | `internal/app/` | Shared media operations and internal server/queue/storage implementation |
 | `internal/edit/` | Standard-library-only edit models, validation and collection normalization |
+| `internal/mediaexport/` | Single-interval export coordination, command construction and result verification |
 | `internal/mediainfo/` | Pure probe metadata, track decisions and video geometry/filter rules |
 | `internal/subtitles/` | Pure supplied-text retiming, cue indexing and clock formatting |
 | `internal/toolrun/` | External tool execution, bounded diagnostics and platform process containment |

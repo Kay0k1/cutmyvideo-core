@@ -11,6 +11,7 @@ CLI_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/cmd/cutmy"
 SUBTITLE_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/subtitles"
 TOOLRUN_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/toolrun"
 MEDIAINFO_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/mediainfo"
+MEDIAEXPORT_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/mediaexport"
 
 AUDIT_MEDIA_REQUIRED = {
     "TestHLSManifestRedirectResolvesFinalRelativeReferences",
@@ -59,6 +60,17 @@ MEDIAINFO_MODULE_REQUIRED = {
 MEDIAINFO_ADAPTER_REQUIRED = {
     "TestMediaInfoErrorBridgePreservesLegacyTypesAndCauses",
     "TestMediaInfoGeometryPreservesValidationOrder",
+}
+MEDIAEXPORT_MODULE_REQUIRED = {
+    "TestSingleExportPreservesCopyClockAndVerificationOrder",
+    "TestSingleExportPreservesFailurePrecedenceAndErrorIdentity",
+    "TestSingleExportPreservesValidationAndCancellationOrder",
+    "TestSingleExportPreservesRenderProfilesAndIntermediateOutputs",
+    "TestMediaExportPackageHasNoIOOrServiceDependencies",
+}
+MEDIAEXPORT_ADAPTER_REQUIRED = {
+    "TestMediaExportBridgePreservesLegacyErrorsAndRuntime",
+    "TestMediaExportBackendPreservesProcessPaths",
 }
 
 NEW_MEDIA_REQUIRED = {
@@ -365,9 +377,11 @@ REQUIRED[0].update(SUBTITLE_MODULE_REQUIRED | MEDIA_BOUNDARY_ENGINE_REQUIRED)
 REQUIRED[1].update(TOOLRUN_MODULE_REQUIRED)
 REQUIRED[0].update(MEDIAINFO_MODULE_REQUIRED)
 REQUIRED[4].update(MEDIAINFO_ADAPTER_REQUIRED)
+REQUIRED[0].update(MEDIAEXPORT_MODULE_REQUIRED)
+REQUIRED[4].update(MEDIAEXPORT_ADAPTER_REQUIRED)
 
 REQUIRED_PACKAGES = [
-    {ENGINE_PACKAGE, FS_PACKAGE, CLI_PACKAGE, SUBTITLE_PACKAGE, MEDIAINFO_PACKAGE},
+    {ENGINE_PACKAGE, FS_PACKAGE, CLI_PACKAGE, SUBTITLE_PACKAGE, MEDIAINFO_PACKAGE, MEDIAEXPORT_PACKAGE},
     {APP_PACKAGE, TOOLRUN_PACKAGE},
     {APP_PACKAGE},
     {APP_PACKAGE},
@@ -377,7 +391,8 @@ REQUIRED_PACKAGES = [
 # The mixed reports must retain each test's owning package. Adding a standalone
 # module must not let its similarly named test satisfy an engine or app result.
 REQUIRED_TEST_PACKAGES = [
-    {name: (MEDIAINFO_PACKAGE if name in MEDIAINFO_MODULE_REQUIRED else
+    {name: (MEDIAEXPORT_PACKAGE if name in MEDIAEXPORT_MODULE_REQUIRED else
+            MEDIAINFO_PACKAGE if name in MEDIAINFO_MODULE_REQUIRED else
             SUBTITLE_PACKAGE if name in SUBTITLE_MODULE_REQUIRED else
             CLI_PACKAGE if name.startswith("TestCLI") or name == "TestParseCrop" else
             FS_PACKAGE if name == "TestConcurrentPublicationHasExactlyOneCompleteWinner" else
