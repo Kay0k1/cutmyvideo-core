@@ -227,8 +227,27 @@ func audio16Packets(t *testing.T, path string) []audio16Packet {
 	}
 	return data.Packets
 }
+
+func audio16CopyFixture(t *testing.T) string {
+	t.Helper()
+	for _, name := range []string{"ffmpeg", "ffprobe"} {
+		if _, err := exec.LookPath(name); err != nil {
+			t.Skip(name + " unavailable")
+		}
+	}
+	path := filepath.Join(t.TempDir(), "deterministic-aac.mp4")
+	// AAC perceptual noise substitution depends on decoder history. Starting
+	// the same unchanged packets midstream can therefore differ by one PCM LSB.
+	// Disable PNS only in this fixture so the exact sample/priming oracle below
+	// detects a real shifted boundary independently of that decoder state.
+	renderTool(t, "-v", "error", "-f", "lavfi", "-i", "color=red:size=160x90:rate=25:duration=4",
+		"-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=4",
+		"-c:v", "libx264", "-threads", "1", "-c:a", "aac", "-aac_pns", "0", path)
+	return path
+}
+
 func TestAACM4APacketCopyAndReorderedJoinActualMedia(t *testing.T) {
-	video, _ := renderFixture(t)
+	video := audio16CopyFixture(t)
 	source := audio16Packets(t, video)
 	known := map[string]float64{}
 	for _, p := range source {

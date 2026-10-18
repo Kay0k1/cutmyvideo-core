@@ -312,8 +312,9 @@ class AudioAdmissionControls(unittest.TestCase):
         old = base.parse_args(['--mode', 'agent-projects-007-to-008', '--revision', '1' * 40, '--output', '/synthetic'])
         self.assertEqual(old.upgrade_from, base.agent_projects_module().BASELINE)
         workflow = (ROOT.parent / '.github/workflows/self-hosting.yml').read_text()
-        self.assertIn('default: ' + audio.MODE, workflow)
-        self.assertEqual(workflow.count("github.event_name != 'workflow_dispatch' && '" + audio.MODE + "'"), 2)
+        self.assertIn('default: poster-artifacts-009-to-010', workflow)
+        self.assertIn(audio.MODE, workflow)
+        self.assertEqual(workflow.count("github.event_name != 'workflow_dispatch' && 'poster-artifacts-009-to-010'"), 2)
         for value in ('external_audio_transition_test.py', 'agent_projects_transition_test.py',
                       'public-audio-controls.log', '--verify-report "$RUNNER_TEMP/public-self-hosting-evidence/acceptance-report.json"'):
             self.assertIn(value, workflow)

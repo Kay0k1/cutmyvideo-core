@@ -103,12 +103,24 @@ func TestPosterHTTPArtifactLifecycleAndOwnership(t *testing.T) {
 	if err = s.DB.QueryRow(context.Background(), "SELECT count(*) FROM image_artifacts WHERE parent_artifact_id=$1", parent.ID).Scan(&count); err != nil || count != 1 {
 		t.Fatal("image reuse", count, err)
 	}
+	storageState := func() [3]int64 {
+		t.Helper()
+		var state [3]int64
+		if err := s.DB.QueryRow(context.Background(), `SELECT (SELECT count(*) FROM storage_files),(SELECT count(*) FROM storage_reservations),(SELECT count(*) FROM artifact_readers)`).Scan(&state[0], &state[1], &state[2]); err != nil {
+			t.Fatal(err)
+		}
+		return state
+	}
+	beforeForeign := storageState()
 	foreign := *cookie
 	foreign.Value = base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32))
 	for _, tc := range []struct{ method, path, body string }{{"POST", url, `{"timestamp_ms":500}`}, {"GET", a.DownloadURL, ""}, {"GET", "/api/v1/image-artifacts/" + a.ID, ""}, {"DELETE", "/api/v1/image-artifacts/" + a.ID, ""}} {
 		if got := posterHTTP(t, server, &foreign, tc.method, tc.path, tc.body); got.Code != 404 {
 			t.Fatal("foreign image access", tc.method, got.Code)
 		}
+	}
+	if after := storageState(); after != beforeForeign {
+		t.Fatal("foreign poster requests changed durable storage state", beforeForeign, after)
 	}
 	for _, body := range []string{`{}`, `null`, `{"timestamp_ms":-1}`, `{"timestamp_ms":2000}`, `{"timestamp_ms":0,"format":"svg"}`, `{"timestamp_ms":0,"unexpected":true}`} {
 		if got := posterHTTP(t, server, cookie, "POST", url, body); got.Code != 400 {
@@ -117,9 +129,13 @@ func TestPosterHTTPArtifactLifecycleAndOwnership(t *testing.T) {
 	}
 	server.Config.MaxOwnerBytes = 1
 	s.ConfigureStorage(server.Config)
+	beforeQuota := storageState()
 	r = posterHTTP(t, server, cookie, "POST", url, `{"timestamp_ms":700}`)
 	if r.Code != 507 {
 		t.Fatal("owner quota ignored", r.Code)
+	}
+	if after := storageState(); after != beforeQuota {
+		t.Fatal("known poster quota refusal changed durable storage state", beforeQuota, after)
 	}
 	// Existing completed images remain recoverable before tightened quota checks.
 	r = posterHTTP(t, server, cookie, "POST", url, `{"timestamp_ms":500,"format":"png"}`)

@@ -57,7 +57,7 @@ func (s *Server) createPoster(w http.ResponseWriter, r *http.Request, owner stri
 		l, a, e := s.Store.acquirePoster(ctx, s.Config, owner, r.PathValue("id"), id, o)
 		return admission{l, a}, e
 	})
-	if accepted.lease.id != "" {
+	if accepted.lease.id != "" && (err == nil || errors.Is(err, errPreviewAdmissionUncertain)) {
 		defer func() {
 			releaseCtx, stop := context.WithTimeout(context.Background(), workerDatabaseTimeout)
 			defer stop()

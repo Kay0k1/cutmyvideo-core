@@ -48,7 +48,7 @@ def workflow_expression(expression, event, mode):
         if isinstance(node, ast.Name) and node.id in values:
             return values[node.id]
         if isinstance(node, ast.Constant) and node.value in (
-                'workflow_dispatch', 'same-schema', transition.MODE, current.MODE, 'source-media-cleanup-005-to-006', 'metadata-resolution-006-to-007', 'agent-projects-007-to-008', 'external-audio-008-to-009'):
+                'workflow_dispatch', 'same-schema', transition.MODE, current.MODE, 'source-media-cleanup-005-to-006', 'metadata-resolution-006-to-007', 'agent-projects-007-to-008', 'external-audio-008-to-009', 'poster-artifacts-009-to-010'):
             return node.value
         if isinstance(node, ast.Compare) and len(node.ops) == len(node.comparators) == 1:
             left, right = read(node.left), read(node.comparators[0])
@@ -328,7 +328,7 @@ class WorkflowModeControls(unittest.TestCase):
         self.go = [step for step in self.steps
                    if step.get('uses', '').startswith('actions/setup-go@')]
 
-    def test_automatic_events_select_external_audio_release_without_historical_go(self):
+    def test_automatic_events_select_poster_release_without_historical_go(self):
         self.assertEqual(set(self.workflow['on']), {'pull_request', 'push', 'workflow_dispatch'})
         self.assertEqual(self.workflow['on']['push']['branches'], ['main'])
         self.assertEqual(len(self.selectors), 2)
@@ -337,16 +337,16 @@ class WorkflowModeControls(unittest.TestCase):
             for supplied in ('', 'same-schema', transition.MODE, current.MODE, 'unknown'):
                 with self.subTest(event=event, supplied=supplied):
                     for selector in self.selectors:
-                        self.assertEqual(workflow_expression(selector, event, supplied), 'external-audio-008-to-009')
+                        self.assertEqual(workflow_expression(selector, event, supplied), 'poster-artifacts-009-to-010')
                     self.assertIs(workflow_expression(self.go[0]['if'], event, supplied), False)
 
     def test_dispatch_defaults_current_and_preserves_explicit_historical_choices(self):
         option = self.workflow['on']['workflow_dispatch']['inputs']['acceptance_mode']
         self.assertEqual(option['type'], 'choice')
-        self.assertEqual(option['options'], ['external-audio-008-to-009', 'agent-projects-007-to-008', 'metadata-resolution-006-to-007', 'source-media-cleanup-005-to-006', current.MODE, 'same-schema', transition.MODE])
+        self.assertEqual(option['options'], ['poster-artifacts-009-to-010', 'external-audio-008-to-009', 'agent-projects-007-to-008', 'metadata-resolution-006-to-007', 'source-media-cleanup-005-to-006', current.MODE, 'same-schema', transition.MODE])
         self.assertEqual(option['required'], 'true')
-        self.assertEqual(option['default'], 'external-audio-008-to-009')
-        for supplied, needs_go in ((option['default'], False), ('agent-projects-007-to-008', False), ('metadata-resolution-006-to-007', False), ('source-media-cleanup-005-to-006', False), (current.MODE, False), ('same-schema', False), (transition.MODE, True)):
+        self.assertEqual(option['default'], 'poster-artifacts-009-to-010')
+        for supplied, needs_go in ((option['default'], False), ('external-audio-008-to-009', False), ('agent-projects-007-to-008', False), ('metadata-resolution-006-to-007', False), ('source-media-cleanup-005-to-006', False), (current.MODE, False), ('same-schema', False), (transition.MODE, True)):
             with self.subTest(mode=supplied):
                 for selector in self.selectors:
                     selected = workflow_expression(selector, 'workflow_dispatch', supplied)

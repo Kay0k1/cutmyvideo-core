@@ -47,33 +47,39 @@ PROJECT_LICENSE = 'dbd22263d7218a09000bf90ab07b53de55b246220392696d52e71b4b0b4b1
 LEGACY_SCHEMAS = frozenset({'20261005-storage-queue-v3', '20261010-cache-retention-v1',
                     '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1',
                     '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1', '20261016-agent-projects-v1'})
-SCHEMAS = LEGACY_SCHEMAS | {'20261018-external-audio-refs-v1'}
+CORE15_SCHEMAS = LEGACY_SCHEMAS | {'20261018-external-audio-refs-v1'}
+SCHEMAS = CORE15_SCHEMAS | {'20261018-poster-artifacts-v1'}
 # Reviewed archive-gate inventory; changing native scenarios requires a new review.
-NATIVE_GROUP_CHECK_COUNTS = (('archive', 4), ('version', 3), ('cli', 4), ('media', 24),
+NATIVE_GROUP_CHECK_COUNTS = (('archive', 4), ('version', 3), ('cli', 4), ('media', 28),
                              ('process', 3), ('service', 13), ('deletion', 6))
 NATIVE_UNIX_PROCESS_CHECKS = 2
+CORE15_NATIVE_GROUP_CHECK_COUNTS = (('archive', 4), ('version', 3), ('cli', 4), ('media', 24),
+                                    ('process', 3), ('service', 13), ('deletion', 6))
 LEGACY_NATIVE_GROUP_CHECK_COUNTS = (('archive', 4), ('version', 3), ('cli', 4), ('media', 18),
                                     ('process', 3), ('service', 13), ('deletion', 6))
 
 
-def core15_source(source):
+def source_policy_version(source):
     # Historical signed releases keep their original sealed acceptance policy.
     # Current candidate builds have no release SemVer and require today's full
     # policy; a lower public version cannot downgrade a current candidate gate.
     if source['mode'] == 'candidate':
-        return True
+        return (1, 6, 0)
     m.require(source['mode'] == 'release', 'Invalid source mode for release policy.')
     m.release_version(source['version'])
     version = m.VERSION.fullmatch(source['version'])
-    return tuple(int(value) for value in version.groups()[:3]) >= (1, 5, 0)
+    return tuple(int(value) for value in version.groups()[:3])
 
 
 def native_group_check_counts(source):
-    return NATIVE_GROUP_CHECK_COUNTS if core15_source(source) else LEGACY_NATIVE_GROUP_CHECK_COUNTS
+    version = source_policy_version(source)
+    return (NATIVE_GROUP_CHECK_COUNTS if version >= (1, 6, 0) else
+            CORE15_NATIVE_GROUP_CHECK_COUNTS if version >= (1, 5, 0) else LEGACY_NATIVE_GROUP_CHECK_COUNTS)
 
 
 def required_schemas(source):
-    return SCHEMAS if core15_source(source) else LEGACY_SCHEMAS
+    version = source_policy_version(source)
+    return SCHEMAS if version >= (1, 6, 0) else CORE15_SCHEMAS if version >= (1, 5, 0) else LEGACY_SCHEMAS
 
 
 def identifier(kind, value):

@@ -25,23 +25,38 @@ ARCHIVE_RECOVERY_CHECKS = (
     'restored_new_upload_MP3_and_copy_MP4_download_range_probe_decode',
     'restored_media_ledger_files_and_counters_match',
 )
-SCHEMA_VERSIONS = frozenset({'20261005-storage-queue-v3', '20261010-cache-retention-v1',
+LEGACY_SCHEMA_VERSIONS = frozenset({'20261005-storage-queue-v3', '20261010-cache-retention-v1',
                              '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1',
-                             '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1', '20261016-agent-projects-v1', '20261018-external-audio-refs-v1'})
+                             '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1', '20261016-agent-projects-v1'})
+CORE15_SCHEMA_VERSIONS = LEGACY_SCHEMA_VERSIONS | {'20261018-external-audio-refs-v1'}
+SCHEMA_VERSIONS = CORE15_SCHEMA_VERSIONS | {'20261018-poster-artifacts-v1'}
 RECOVERY_MEDIA_LABELS = {'before-upgrade', 'after-upgrade-retained', 'after-upgrade-recovered',
                          'after-upgrade-queued', 'before-backup', 'after-restore-retained',
                          'after-restore-recovered', 'after-restore-queued', 'after-restore-first-result',
                          'fresh-after-restore-mp3', 'fresh-after-restore-copy'}
 
 
+def required_schema_versions(source):
+    # Candidates always execute the current full policy, regardless of labels.
+    # Historical signed release receipts retain their exact schema inventory.
+    if source['mode'] == 'candidate':
+        return SCHEMA_VERSIONS
+    m.require(source['mode'] == 'release', 'Invalid source mode for recovery policy.')
+    m.release_version(source['version'])
+    version = tuple(int(value) for value in m.VERSION.fullmatch(source['version']).groups()[:3])
+    return (SCHEMA_VERSIONS if version >= (1, 6, 0) else
+            CORE15_SCHEMA_VERSIONS if version >= (1, 5, 0) else LEGACY_SCHEMA_VERSIONS)
+
+
 def validate_recovery(report, source, manifest, *, repository, run_id, run_attempt, artifact_id, artifact_sha256):
+    schemas = required_schema_versions(source)
     m.require(report.get('ok') is True and report.get('checks') == list(ARCHIVE_RECOVERY_CHECKS),
               'All nine actual archive upgrade/recovery groups are required.')
     m.require(report['historical_revision'] == 'f2be62c42a6a0d3d7a017b40bd683596bc578b95'
               and report['current_revision'] == source['commit']
               and report['go_version'] == f"go version {source['toolchain']} linux/amd64"
-              and set(report['schema_versions']) == SCHEMA_VERSIONS
-              and len(report['schema_versions']) == len(SCHEMA_VERSIONS)
+              and set(report['schema_versions']) == schemas
+              and len(report['schema_versions']) == len(schemas)
               and report['upgrade_storage_defaults_checked'] == 3,
               'Archive recovery revision, schemas or upgrade defaults differ.')
     media = report['artifacts']
@@ -71,7 +86,7 @@ def validate_recovery(report, source, manifest, *, repository, run_id, run_attem
               and receipt['source_commit'] == source['commit']
               and receipt['source_sha256'] == m.digest(m.canonical(source)) and m.HASH.fullmatch(receipt['sha256']),
               'Archive recovery download is not bound to the packaging artifact.')
-    return {'required_groups': 9, 'decoded_media_observations': 11, 'schema_versions': sorted(SCHEMA_VERSIONS),
+    return {'required_groups': 9, 'decoded_media_observations': 11, 'schema_versions': sorted(schemas),
             'binary_sha256': binary_sha, 'report_sha256': m.digest(m.canonical(report))}
 
 
