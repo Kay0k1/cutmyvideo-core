@@ -1,0 +1,2321 @@
+{
+  "Tables": {
+    "agent_project_grants": {
+      "Kind": "r",
+      "Columns": {
+        "expires_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "clock_timestamp() + '24:00:00'::interval",
+          "Identity": "",
+          "Generated": ""
+        },
+        "project_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "recipient": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "FOREIGN KEY (project_id) REFERENCES agent_projects(id) ON DELETE CASCADE",
+        "PRIMARY KEY (project_id, recipient)"
+      ],
+      "Indexes": {
+        "agent_project_grants_expiry_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "expires_at",
+            "project_id"
+          ],
+          "Predicate": ""
+        },
+        "agent_project_grants_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "project_id",
+            "recipient"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    },
+    "agent_project_handoffs": {
+      "Kind": "r",
+      "Columns": {
+        "created_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "clock_timestamp()",
+          "Identity": "",
+          "Generated": ""
+        },
+        "expires_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "clock_timestamp() + '00:10:00'::interval",
+          "Identity": "",
+          "Generated": ""
+        },
+        "project_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "recipient": {
+          "Type": "text",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "redeemed_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "token_hash": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "CHECK (token_hash ~ '^[0-9a-f]{64}$'::text)",
+        "FOREIGN KEY (project_id) REFERENCES agent_projects(id) ON DELETE CASCADE",
+        "PRIMARY KEY (token_hash)"
+      ],
+      "Indexes": {
+        "agent_project_handoffs_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "token_hash"
+          ],
+          "Predicate": ""
+        },
+        "agent_project_handoffs_project_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "project_id",
+            "expires_at"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    },
+    "agent_project_jobs": {
+      "Kind": "r",
+      "Columns": {
+        "clip_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "job_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "project_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE",
+        "FOREIGN KEY (project_id) REFERENCES agent_projects(id) ON DELETE CASCADE",
+        "PRIMARY KEY (project_id, job_id)"
+      ],
+      "Indexes": {
+        "agent_project_jobs_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "project_id",
+            "job_id"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    },
+    "agent_project_retries": {
+      "Kind": "r",
+      "Columns": {
+        "attempt_key": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "clip_intents": {
+          "Type": "jsonb",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "clip_job_keys": {
+          "Type": "jsonb",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "created_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "clock_timestamp()",
+          "Identity": "",
+          "Generated": ""
+        },
+        "intent_hash": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "key": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "project_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "request": {
+          "Type": "jsonb",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "CHECK (intent_hash ~ '^[0-9a-f]{64}$'::text)",
+        "CHECK (length(key) \u003e= 1 AND length(key) \u003c= 128)",
+        "CHECK (octet_length(request::text) \u003c= 1048576)",
+        "FOREIGN KEY (project_id) REFERENCES agent_projects(id) ON DELETE CASCADE",
+        "PRIMARY KEY (project_id, key)"
+      ],
+      "Indexes": {
+        "agent_project_retries_latest_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "project_id",
+            "created_at",
+            "key"
+          ],
+          "Predicate": ""
+        },
+        "agent_project_retries_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "project_id",
+            "key"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    },
+    "agent_projects": {
+      "Kind": "r",
+      "Columns": {
+        "clip_ids": {
+          "Type": "jsonb",
+          "NotNull": true,
+          "Default": "'[]'::jsonb",
+          "Identity": "",
+          "Generated": ""
+        },
+        "collection_key": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "created_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "clock_timestamp()",
+          "Identity": "",
+          "Generated": ""
+        },
+        "expires_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "clock_timestamp() + '7 days'::interval",
+          "Identity": "",
+          "Generated": ""
+        },
+        "id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "owner": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "plan": {
+          "Type": "jsonb",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "rendition": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "revision": {
+          "Type": "bigint",
+          "NotNull": true,
+          "Default": "1",
+          "Identity": "",
+          "Generated": ""
+        },
+        "source_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "source_snapshot": {
+          "Type": "jsonb",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "CHECK (length(collection_key) \u003e= 1 AND length(collection_key) \u003c= 128)",
+        "CHECK (octet_length(plan::text) \u003c= 1048576)",
+        "CHECK (rendition = ANY (ARRAY['draft'::text, 'final'::text]))",
+        "CHECK (revision \u003e 0)",
+        "PRIMARY KEY (id)"
+      ],
+      "Indexes": {
+        "agent_projects_owner_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "owner",
+            "expires_at",
+            "id"
+          ],
+          "Predicate": ""
+        },
+        "agent_projects_owner_key_idx": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "owner",
+            "collection_key"
+          ],
+          "Predicate": ""
+        },
+        "agent_projects_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "id"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    },
+    "app_schema_migrations": {
+      "Kind": "r",
+      "Columns": {
+        "applied_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "clock_timestamp()",
+          "Identity": "",
+          "Generated": ""
+        },
+        "checksum": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "position": {
+          "Type": "integer",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "version": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "CHECK (\"position\" \u003e 0)",
+        "CHECK (checksum ~ '^[0-9a-f]{64}$'::text)",
+        "PRIMARY KEY (\"position\")",
+        "UNIQUE (version)"
+      ],
+      "Indexes": {
+        "app_schema_migrations_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "\"position\""
+          ],
+          "Predicate": ""
+        },
+        "app_schema_migrations_version_key": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "version"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    },
+    "app_schema_versions": {
+      "Kind": "r",
+      "Columns": {
+        "version": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "PRIMARY KEY (version)"
+      ],
+      "Indexes": {
+        "app_schema_versions_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "version"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    },
+    "artifacts": {
+      "Kind": "r",
+      "Columns": {
+        "actual_end_ms": {
+          "Type": "bigint",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "actual_start_ms": {
+          "Type": "bigint",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "created_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "now()",
+          "Identity": "",
+          "Generated": ""
+        },
+        "expires_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "filename": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "job_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "owner": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "path": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "size_bytes": {
+          "Type": "bigint",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "FOREIGN KEY (job_id) REFERENCES jobs(id)",
+        "PRIMARY KEY (id)"
+      ],
+      "Indexes": {
+        "artifacts_job_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "job_id"
+          ],
+          "Predicate": ""
+        },
+        "artifacts_missing_expiry_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "id"
+          ],
+          "Predicate": "expires_at IS NULL"
+        },
+        "artifacts_owner_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "owner"
+          ],
+          "Predicate": ""
+        },
+        "artifacts_path_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "path"
+          ],
+          "Predicate": "path \u003c\u003e ''::text"
+        },
+        "artifacts_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "id"
+          ],
+          "Predicate": ""
+        },
+        "artifacts_retention_expiry_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "expires_at",
+            "created_at",
+            "id"
+          ],
+          "Predicate": "expires_at IS NOT NULL"
+        },
+        "artifacts_retention_legacy_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "created_at",
+            "id"
+          ],
+          "Predicate": "expires_at IS NULL"
+        }
+      },
+      "Triggers": {}
+    },
+    "jobs": {
+      "Kind": "r",
+      "Columns": {
+        "attempts": {
+          "Type": "integer",
+          "NotNull": true,
+          "Default": "0",
+          "Identity": "",
+          "Generated": ""
+        },
+        "audio_source_id": {
+          "Type": "text",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "cancel_requested": {
+          "Type": "boolean",
+          "NotNull": true,
+          "Default": "false",
+          "Identity": "",
+          "Generated": ""
+        },
+        "created_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "now()",
+          "Identity": "",
+          "Generated": ""
+        },
+        "id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "idempotency_key": {
+          "Type": "text",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "items": {
+          "Type": "jsonb",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "lease_token": {
+          "Type": "text",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "lease_until": {
+          "Type": "timestamp with time zone",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "message": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "''::text",
+          "Identity": "",
+          "Generated": ""
+        },
+        "owner": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "request": {
+          "Type": "jsonb",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "source_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "stage": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "'queued'::text",
+          "Identity": "",
+          "Generated": ""
+        },
+        "status": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "'queued'::text",
+          "Identity": "",
+          "Generated": ""
+        },
+        "storage_wait_until": {
+          "Type": "timestamp with time zone",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "updated_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "now()",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "CHECK (audio_source_id IS NULL OR audio_source_id \u003c\u003e source_id)",
+        "FOREIGN KEY (audio_source_id) REFERENCES sources(id) ON DELETE SET NULL",
+        "FOREIGN KEY (source_id) REFERENCES sources(id)",
+        "PRIMARY KEY (id)",
+        "UNIQUE (owner, idempotency_key)"
+      ],
+      "Indexes": {
+        "jobs_audio_source_pin_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "audio_source_id",
+            "id"
+          ],
+          "Predicate": "audio_source_id IS NOT NULL"
+        },
+        "jobs_claim_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "status",
+            "created_at"
+          ],
+          "Predicate": ""
+        },
+        "jobs_owner_idempotency_key_key": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "owner",
+            "idempotency_key"
+          ],
+          "Predicate": ""
+        },
+        "jobs_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "id"
+          ],
+          "Predicate": ""
+        },
+        "jobs_retention_terminal_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "updated_at",
+            "id"
+          ],
+          "Predicate": "status \u003c\u003e ALL (ARRAY['queued'::text, 'running'::text, 'waiting_storage'::text])"
+        },
+        "jobs_source_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "source_id"
+          ],
+          "Predicate": ""
+        },
+        "jobs_source_pin_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "source_id",
+            "id"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {
+        "job_audio_source_derive": {
+          "Function": "derive_job_audio_source",
+          "Enabled": "O",
+          "OldTable": "",
+          "NewTable": "",
+          "Type": 23,
+          "Columns": [
+            "request"
+          ],
+          "When": ""
+        },
+        "job_audio_source_guard": {
+          "Function": "guard_job_audio_source",
+          "Enabled": "O",
+          "OldTable": "",
+          "NewTable": "",
+          "Type": 19,
+          "Columns": [
+            "audio_source_id"
+          ],
+          "When": ""
+        },
+        "job_pin_fence_delete": {
+          "Function": "acquire_source_pin_fence",
+          "Enabled": "O",
+          "OldTable": "",
+          "NewTable": "",
+          "Type": 10,
+          "Columns": null,
+          "When": ""
+        },
+        "job_pin_fence_insert": {
+          "Function": "acquire_source_pin_fence",
+          "Enabled": "O",
+          "OldTable": "",
+          "NewTable": "",
+          "Type": 6,
+          "Columns": null,
+          "When": ""
+        },
+        "job_pin_fence_update": {
+          "Function": "acquire_source_pin_fence",
+          "Enabled": "O",
+          "OldTable": "",
+          "NewTable": "",
+          "Type": 18,
+          "Columns": [
+            "id",
+            "source_id",
+            "request",
+            "audio_source_id"
+          ],
+          "When": ""
+        },
+        "source_job_pin_delete": {
+          "Function": "update_source_job_pins",
+          "Enabled": "O",
+          "OldTable": "pin_old",
+          "NewTable": "",
+          "Type": 8,
+          "Columns": null,
+          "When": ""
+        },
+        "source_job_pin_insert": {
+          "Function": "update_source_job_pins",
+          "Enabled": "O",
+          "OldTable": "",
+          "NewTable": "pin_new",
+          "Type": 4,
+          "Columns": null,
+          "When": ""
+        },
+        "source_job_pin_update": {
+          "Function": "update_source_job_pins",
+          "Enabled": "O",
+          "OldTable": "pin_old",
+          "NewTable": "pin_new",
+          "Type": 16,
+          "Columns": null,
+          "When": ""
+        }
+      }
+    },
+    "queue_owners": {
+      "Kind": "r",
+      "Columns": {
+        "last_claimed": {
+          "Type": "timestamp with time zone",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "last_considered": {
+          "Type": "timestamp with time zone",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "owner": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "PRIMARY KEY (owner)"
+      ],
+      "Indexes": {
+        "queue_owners_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "owner"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    },
+    "source_fingerprints": {
+      "Kind": "r",
+      "Columns": {
+        "fingerprint": {
+          "Type": "jsonb",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "owner": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "source_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE CASCADE",
+        "PRIMARY KEY (source_id)"
+      ],
+      "Indexes": {
+        "source_fingerprints_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "source_id"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    },
+    "source_media_cleanup": {
+      "Kind": "r",
+      "Columns": {
+        "protected_job_ids": {
+          "Type": "text[]",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "requested_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "clock_timestamp()",
+          "Identity": "",
+          "Generated": ""
+        },
+        "source_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "successful_job_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE CASCADE",
+        "PRIMARY KEY (source_id)"
+      ],
+      "Indexes": {
+        "source_media_cleanup_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "source_id"
+          ],
+          "Predicate": ""
+        },
+        "source_media_cleanup_requested_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "requested_at",
+            "source_id"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    },
+    "source_media_readers": {
+      "Kind": "r",
+      "Columns": {
+        "expires_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "source_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE CASCADE",
+        "PRIMARY KEY (id)"
+      ],
+      "Indexes": {
+        "source_media_readers_expiry_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "expires_at",
+            "id"
+          ],
+          "Predicate": ""
+        },
+        "source_media_readers_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "id"
+          ],
+          "Predicate": ""
+        },
+        "source_media_readers_source_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "source_id"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    },
+    "source_metadata_cache": {
+      "Kind": "r",
+      "Columns": {
+        "expires_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "owner": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "payload": {
+          "Type": "bytea",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "source_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "CHECK (octet_length(payload) \u003c= 1048576)",
+        "FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE CASCADE",
+        "PRIMARY KEY (source_id)"
+      ],
+      "Indexes": {
+        "source_metadata_cache_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "source_id"
+          ],
+          "Predicate": ""
+        },
+        "source_metadata_cache_retention_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "expires_at",
+            "source_id"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    },
+    "source_metadata_resolutions": {
+      "Kind": "r",
+      "Columns": {
+        "expires_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "owner": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "source_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "token": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE CASCADE",
+        "PRIMARY KEY (source_id)"
+      ],
+      "Indexes": {
+        "source_metadata_resolutions_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "source_id"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    },
+    "source_pin_audit_progress": {
+      "Kind": "r",
+      "Columns": {
+        "job_count": {
+          "Type": "bigint",
+          "NotNull": true,
+          "Default": "0",
+          "Identity": "",
+          "Generated": ""
+        },
+        "job_cursor": {
+          "Type": "text",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "job_done": {
+          "Type": "boolean",
+          "NotNull": true,
+          "Default": "false",
+          "Identity": "",
+          "Generated": ""
+        },
+        "preview_count": {
+          "Type": "bigint",
+          "NotNull": true,
+          "Default": "0",
+          "Identity": "",
+          "Generated": ""
+        },
+        "preview_cursor": {
+          "Type": "text",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "preview_done": {
+          "Type": "boolean",
+          "NotNull": true,
+          "Default": "false",
+          "Identity": "",
+          "Generated": ""
+        },
+        "revision": {
+          "Type": "bigint",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "source_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "CHECK (job_count \u003e= 0)",
+        "CHECK (preview_count \u003e= 0)",
+        "CHECK (revision \u003e= 0)",
+        "FOREIGN KEY (source_id) REFERENCES sources(id) ON UPDATE CASCADE ON DELETE CASCADE",
+        "PRIMARY KEY (source_id)"
+      ],
+      "Indexes": {
+        "source_pin_audit_progress_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "source_id"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    },
+    "source_preparations": {
+      "Kind": "r",
+      "Columns": {
+        "claim_token": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "created_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "clock_timestamp()",
+          "Identity": "",
+          "Generated": ""
+        },
+        "error_code": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "''::text",
+          "Identity": "",
+          "Generated": ""
+        },
+        "expires_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "clock_timestamp() + '7 days'::interval",
+          "Identity": "",
+          "Generated": ""
+        },
+        "fingerprint": {
+          "Type": "jsonb",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "intent_hash": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "key": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "kind": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "lease_until": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "owner": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "source_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "state": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "CHECK (intent_hash ~ '^[0-9a-f]{64}$'::text)",
+        "CHECK (kind = ANY (ARRAY['upload'::text, 'import'::text]))",
+        "CHECK (length(key) \u003e= 1 AND length(key) \u003c= 128)",
+        "CHECK (state = ANY (ARRAY['processing'::text, 'ready'::text, 'retryable'::text, 'failed'::text]))",
+        "PRIMARY KEY (owner, key)"
+      ],
+      "Indexes": {
+        "source_preparations_expiry_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "expires_at",
+            "owner",
+            "key"
+          ],
+          "Predicate": ""
+        },
+        "source_preparations_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "owner",
+            "key"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    },
+    "source_retention_audit": {
+      "Kind": "r",
+      "Columns": {
+        "id": {
+          "Type": "integer",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "last_created_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "last_source_id": {
+          "Type": "text",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "upper_created_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "upper_source_id": {
+          "Type": "text",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "CHECK ((last_created_at IS NULL) = (last_source_id IS NULL))",
+        "CHECK ((upper_created_at IS NULL) = (upper_source_id IS NULL))",
+        "CHECK (id = 1)",
+        "PRIMARY KEY (id)"
+      ],
+      "Indexes": {
+        "source_retention_audit_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "id"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    },
+    "sources": {
+      "Kind": "r",
+      "Columns": {
+        "created_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "now()",
+          "Identity": "",
+          "Generated": ""
+        },
+        "duration_ms": {
+          "Type": "bigint",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "embed_url": {
+          "Type": "text",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "height": {
+          "Type": "integer",
+          "NotNull": true,
+          "Default": "0",
+          "Identity": "",
+          "Generated": ""
+        },
+        "id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "kind": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "media_removed": {
+          "Type": "boolean",
+          "NotNull": true,
+          "Default": "false",
+          "Identity": "",
+          "Generated": ""
+        },
+        "owner": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "path": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "''::text",
+          "Identity": "",
+          "Generated": ""
+        },
+        "provider": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "''::text",
+          "Identity": "",
+          "Generated": ""
+        },
+        "provider_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "''::text",
+          "Identity": "",
+          "Generated": ""
+        },
+        "retention_job_pins": {
+          "Type": "bigint",
+          "NotNull": true,
+          "Default": "0",
+          "Identity": "",
+          "Generated": ""
+        },
+        "retention_pin_revision": {
+          "Type": "bigint",
+          "NotNull": true,
+          "Default": "0",
+          "Identity": "",
+          "Generated": ""
+        },
+        "retention_pins_valid": {
+          "Type": "boolean",
+          "NotNull": true,
+          "Default": "true",
+          "Identity": "",
+          "Generated": ""
+        },
+        "retention_preview_pins": {
+          "Type": "bigint",
+          "NotNull": true,
+          "Default": "0",
+          "Identity": "",
+          "Generated": ""
+        },
+        "thumbnail_path": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "''::text",
+          "Identity": "",
+          "Generated": ""
+        },
+        "thumbnail_url": {
+          "Type": "text",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "title": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "url": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "''::text",
+          "Identity": "",
+          "Generated": ""
+        },
+        "width": {
+          "Type": "integer",
+          "NotNull": true,
+          "Default": "0",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "CHECK (retention_job_pins \u003e= 0)",
+        "CHECK (retention_pin_revision \u003e= 0)",
+        "CHECK (retention_preview_pins \u003e= 0)",
+        "PRIMARY KEY (id)"
+      ],
+      "Indexes": {
+        "sources_owner_created_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "owner",
+            "created_at"
+          ],
+          "Predicate": ""
+        },
+        "sources_owner_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "owner"
+          ],
+          "Predicate": ""
+        },
+        "sources_path_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "path"
+          ],
+          "Predicate": "path \u003c\u003e ''::text"
+        },
+        "sources_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "id"
+          ],
+          "Predicate": ""
+        },
+        "sources_retention_audit_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "created_at",
+            "id"
+          ],
+          "Predicate": ""
+        },
+        "sources_retention_eligible_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "created_at",
+            "id"
+          ],
+          "Predicate": "retention_pins_valid AND retention_job_pins = 0 AND retention_preview_pins = 0"
+        },
+        "sources_thumbnail_path_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "thumbnail_path"
+          ],
+          "Predicate": "thumbnail_path \u003c\u003e ''::text"
+        }
+      },
+      "Triggers": {
+        "source_pin_fence_delete": {
+          "Function": "acquire_source_pin_fence",
+          "Enabled": "O",
+          "OldTable": "",
+          "NewTable": "",
+          "Type": 10,
+          "Columns": null,
+          "When": ""
+        },
+        "source_pin_fence_insert": {
+          "Function": "acquire_source_pin_fence",
+          "Enabled": "O",
+          "OldTable": "",
+          "NewTable": "",
+          "Type": 6,
+          "Columns": null,
+          "When": ""
+        },
+        "source_pin_fence_update": {
+          "Function": "acquire_source_pin_fence",
+          "Enabled": "O",
+          "OldTable": "",
+          "NewTable": "",
+          "Type": 18,
+          "Columns": [
+            "id"
+          ],
+          "When": ""
+        },
+        "source_pin_seed_insert": {
+          "Function": "seed_source_pins",
+          "Enabled": "O",
+          "OldTable": "",
+          "NewTable": "",
+          "Type": 7,
+          "Columns": null,
+          "When": ""
+        },
+        "source_pin_seed_update": {
+          "Function": "seed_source_pins",
+          "Enabled": "O",
+          "OldTable": "",
+          "NewTable": "",
+          "Type": 19,
+          "Columns": [
+            "id"
+          ],
+          "When": ""
+        }
+      }
+    },
+    "storage_counters": {
+      "Kind": "r",
+      "Columns": {
+        "id": {
+          "Type": "integer",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "reserved_bytes": {
+          "Type": "numeric",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "stored_bytes": {
+          "Type": "numeric",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "CHECK (id = 1)",
+        "CHECK (reserved_bytes \u003e= 0::numeric)",
+        "CHECK (stored_bytes \u003e= 0::numeric)",
+        "PRIMARY KEY (id)"
+      ],
+      "Indexes": {
+        "storage_counters_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "id"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    },
+    "storage_files": {
+      "Kind": "r",
+      "Columns": {
+        "delete_failures": {
+          "Type": "integer",
+          "NotNull": true,
+          "Default": "0",
+          "Identity": "",
+          "Generated": ""
+        },
+        "delete_pending": {
+          "Type": "boolean",
+          "NotNull": true,
+          "Default": "false",
+          "Identity": "",
+          "Generated": ""
+        },
+        "delete_retry_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "'-infinity'::timestamp with time zone",
+          "Identity": "",
+          "Generated": ""
+        },
+        "kind": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "observed_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "now()",
+          "Identity": "",
+          "Generated": ""
+        },
+        "owner": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "''::text",
+          "Identity": "",
+          "Generated": ""
+        },
+        "path": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "resource_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "''::text",
+          "Identity": "",
+          "Generated": ""
+        },
+        "size_bytes": {
+          "Type": "bigint",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "CHECK (delete_failures \u003e= 0)",
+        "CHECK (size_bytes \u003e= 0)",
+        "PRIMARY KEY (path)"
+      ],
+      "Indexes": {
+        "storage_files_delete_due_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "delete_retry_at",
+            "path"
+          ],
+          "Predicate": "delete_pending"
+        },
+        "storage_files_orphan_retention_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "observed_at",
+            "path"
+          ],
+          "Predicate": "kind = 'orphan'::text AND NOT delete_pending"
+        },
+        "storage_files_owner_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "owner",
+            "kind"
+          ],
+          "Predicate": ""
+        },
+        "storage_files_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "path"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {
+        "storage_file_delete": {
+          "Function": "update_storage_counter",
+          "Enabled": "O",
+          "OldTable": "storage_old",
+          "NewTable": "",
+          "Type": 8,
+          "Columns": null,
+          "When": ""
+        },
+        "storage_file_insert": {
+          "Function": "update_storage_counter",
+          "Enabled": "O",
+          "OldTable": "",
+          "NewTable": "storage_new",
+          "Type": 4,
+          "Columns": null,
+          "When": ""
+        },
+        "storage_file_update": {
+          "Function": "update_storage_counter",
+          "Enabled": "O",
+          "OldTable": "storage_old",
+          "NewTable": "storage_new",
+          "Type": 16,
+          "Columns": null,
+          "When": ""
+        }
+      }
+    },
+    "storage_reservations": {
+      "Kind": "r",
+      "Columns": {
+        "abandoned_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "expires_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "job_id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "''::text",
+          "Identity": "",
+          "Generated": ""
+        },
+        "kind": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "owner": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "size_bytes": {
+          "Type": "bigint",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "token": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "''::text",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "CHECK (size_bytes \u003e= 0)",
+        "PRIMARY KEY (id)"
+      ],
+      "Indexes": {
+        "storage_reservations_expiry_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "expires_at"
+          ],
+          "Predicate": ""
+        },
+        "storage_reservations_job_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "job_id"
+          ],
+          "Predicate": ""
+        },
+        "storage_reservations_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "id"
+          ],
+          "Predicate": ""
+        },
+        "storage_reservations_preview_pin_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "job_id",
+            "id"
+          ],
+          "Predicate": "kind = 'preview'::text"
+        }
+      },
+      "Triggers": {
+        "preview_pin_fence_delete": {
+          "Function": "acquire_source_pin_fence",
+          "Enabled": "O",
+          "OldTable": "",
+          "NewTable": "",
+          "Type": 10,
+          "Columns": null,
+          "When": ""
+        },
+        "preview_pin_fence_insert": {
+          "Function": "acquire_source_pin_fence",
+          "Enabled": "O",
+          "OldTable": "",
+          "NewTable": "",
+          "Type": 6,
+          "Columns": null,
+          "When": ""
+        },
+        "preview_pin_fence_update": {
+          "Function": "acquire_source_pin_fence",
+          "Enabled": "O",
+          "OldTable": "",
+          "NewTable": "",
+          "Type": 18,
+          "Columns": [
+            "id",
+            "kind",
+            "job_id"
+          ],
+          "When": ""
+        },
+        "source_preview_pin_delete": {
+          "Function": "update_source_preview_pins",
+          "Enabled": "O",
+          "OldTable": "pin_old",
+          "NewTable": "",
+          "Type": 8,
+          "Columns": null,
+          "When": ""
+        },
+        "source_preview_pin_insert": {
+          "Function": "update_source_preview_pins",
+          "Enabled": "O",
+          "OldTable": "",
+          "NewTable": "pin_new",
+          "Type": 4,
+          "Columns": null,
+          "When": ""
+        },
+        "source_preview_pin_update": {
+          "Function": "update_source_preview_pins",
+          "Enabled": "O",
+          "OldTable": "pin_old",
+          "NewTable": "pin_new",
+          "Type": 16,
+          "Columns": null,
+          "When": ""
+        },
+        "storage_reservation_delete": {
+          "Function": "update_storage_counter",
+          "Enabled": "O",
+          "OldTable": "storage_old",
+          "NewTable": "",
+          "Type": 8,
+          "Columns": null,
+          "When": ""
+        },
+        "storage_reservation_insert": {
+          "Function": "update_storage_counter",
+          "Enabled": "O",
+          "OldTable": "",
+          "NewTable": "storage_new",
+          "Type": 4,
+          "Columns": null,
+          "When": ""
+        },
+        "storage_reservation_update": {
+          "Function": "update_storage_counter",
+          "Enabled": "O",
+          "OldTable": "storage_old",
+          "NewTable": "storage_new",
+          "Type": 16,
+          "Columns": null,
+          "When": ""
+        }
+      }
+    },
+    "storage_scan_progress": {
+      "Kind": "r",
+      "Columns": {
+        "completed_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "data_dir": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "generation_mtime_ns": {
+          "Type": "bigint",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "generation_size": {
+          "Type": "bigint",
+          "NotNull": false,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "last_visited_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "'-infinity'::timestamp with time zone",
+          "Identity": "",
+          "Generated": ""
+        },
+        "path": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "position": {
+          "Type": "bigint",
+          "NotNull": true,
+          "Default": "0",
+          "Identity": "",
+          "Generated": ""
+        },
+        "prefix_digest": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "''::text",
+          "Identity": "",
+          "Generated": ""
+        },
+        "scan_kind": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "started_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "clock_timestamp()",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "CHECK (\"position\" \u003e= 0)",
+        "CHECK (prefix_digest = ''::text OR prefix_digest ~ '^[0-9a-f]{64}$'::text)",
+        "PRIMARY KEY (data_dir, scan_kind, path)"
+      ],
+      "Indexes": {
+        "storage_scan_pending_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "data_dir",
+            "scan_kind",
+            "last_visited_at",
+            "path"
+          ],
+          "Predicate": "completed_at IS NULL"
+        },
+        "storage_scan_progress_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "data_dir",
+            "scan_kind",
+            "path"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    },
+    "storage_state": {
+      "Kind": "r",
+      "Columns": {
+        "id": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "PRIMARY KEY (id)"
+      ],
+      "Indexes": {
+        "storage_state_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "id"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    },
+    "storage_work_cleanup": {
+      "Kind": "r",
+      "Columns": {
+        "data_dir": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        },
+        "last_attempt_at": {
+          "Type": "timestamp with time zone",
+          "NotNull": true,
+          "Default": "'-infinity'::timestamp with time zone",
+          "Identity": "",
+          "Generated": ""
+        },
+        "path": {
+          "Type": "text",
+          "NotNull": true,
+          "Default": "",
+          "Identity": "",
+          "Generated": ""
+        }
+      },
+      "Constraints": [
+        "PRIMARY KEY (data_dir, path)"
+      ],
+      "Indexes": {
+        "storage_work_cleanup_attempt_idx": {
+          "Unique": false,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "data_dir",
+            "last_attempt_at",
+            "path"
+          ],
+          "Predicate": ""
+        },
+        "storage_work_cleanup_pkey": {
+          "Unique": true,
+          "Valid": true,
+          "Ready": true,
+          "Columns": [
+            "data_dir",
+            "path"
+          ],
+          "Predicate": ""
+        }
+      },
+      "Triggers": {}
+    }
+  },
+  "Functions": {
+    "acquire_source_pin_fence": "plpgsql\ntrigger\nv\nfalse\n\n\nBEGIN\n PERFORM pg_advisory_xact_lock(736021912360105);\n RETURN NULL;\nEND ",
+    "derive_job_audio_source": "plpgsql\ntrigger\nv\nfalse\n\n\nBEGIN\n NEW.audio_source_id := NULLIF(NEW.request#\u003e\u003e'{audio_replace,source_id}','');\n RETURN NEW;\nEND ",
+    "guard_job_audio_source": "plpgsql\ntrigger\nv\nfalse\n\n\nBEGIN\n IF NEW.request IS NOT DISTINCT FROM OLD.request AND NEW.audio_source_id IS DISTINCT FROM OLD.audio_source_id THEN\n  IF NEW.audio_source_id IS NOT NULL OR EXISTS(SELECT 1 FROM sources WHERE id=OLD.audio_source_id) THEN\n   RAISE EXCEPTION 'external audio membership must be changed through the job request' USING ERRCODE='23514';\n  END IF;\n END IF;\n RETURN NEW;\nEND ",
+    "seed_source_pins": "plpgsql\ntrigger\nv\nfalse\n\n\nBEGIN\n IF TG_OP='UPDATE' THEN\n  IF NEW.id IS NOT DISTINCT FROM OLD.id THEN RETURN NEW; END IF;\n END IF;\n SELECT count(*) INTO NEW.retention_job_pins FROM (\n  SELECT id FROM jobs WHERE source_id=NEW.id\n  UNION ALL SELECT id FROM jobs WHERE audio_source_id=NEW.id\n ) references_to_source;\n SELECT count(*) INTO NEW.retention_preview_pins FROM storage_reservations WHERE kind='preview' AND job_id=NEW.id;\n NEW.retention_pins_valid := true;\n IF TG_OP='INSERT' THEN NEW.retention_pin_revision := 0;\n ELSE NEW.retention_pin_revision := OLD.retention_pin_revision+1; END IF;\n RETURN NEW;\nEND ",
+    "update_source_job_pins": "plpgsql\ntrigger\nv\nfalse\n\n\nDECLARE change record;\nBEGIN\n IF TG_OP='INSERT' THEN\n  FOR change IN SELECT source_id,count(*)::bigint AS delta FROM (\n   SELECT source_id FROM pin_new\n   UNION ALL SELECT audio_source_id FROM pin_new WHERE audio_source_id IS NOT NULL\n  ) memberships GROUP BY source_id ORDER BY source_id LOOP\n   UPDATE sources SET retention_job_pins=CASE WHEN retention_pins_valid THEN retention_job_pins+change.delta ELSE retention_job_pins END,\n    retention_pin_revision=retention_pin_revision+1 WHERE id=change.source_id;\n  END LOOP;\n ELSIF TG_OP='DELETE' THEN\n  FOR change IN SELECT source_id,-count(*)::bigint AS delta FROM (\n   SELECT source_id FROM pin_old\n   UNION ALL SELECT audio_source_id FROM pin_old WHERE audio_source_id IS NOT NULL\n  ) memberships GROUP BY source_id ORDER BY source_id LOOP\n   UPDATE sources SET retention_job_pins=CASE WHEN retention_pins_valid AND retention_job_pins+change.delta\u003e=0 THEN retention_job_pins+change.delta ELSE retention_job_pins END,\n    retention_pins_valid=retention_pins_valid AND retention_job_pins+change.delta\u003e=0,\n    retention_pin_revision=retention_pin_revision+1 WHERE id=change.source_id;\n  END LOOP;\n ELSE\n  FOR change IN\n   WITH new_memberships AS (\n    SELECT id,source_id FROM pin_new\n    UNION ALL SELECT id,audio_source_id FROM pin_new WHERE audio_source_id IS NOT NULL\n   ), old_memberships AS (\n    SELECT id,source_id FROM pin_old\n    UNION ALL SELECT id,audio_source_id FROM pin_old WHERE audio_source_id IS NOT NULL\n   )\n   SELECT source_id,sum(delta)::bigint AS delta FROM (\n    SELECT source_id,1::bigint AS delta FROM (SELECT * FROM new_memberships EXCEPT SELECT * FROM old_memberships) added\n    UNION ALL\n    SELECT source_id,-1::bigint AS delta FROM (SELECT * FROM old_memberships EXCEPT SELECT * FROM new_memberships) removed\n   ) changes GROUP BY source_id ORDER BY source_id\n  LOOP\n   UPDATE sources SET retention_job_pins=CASE WHEN retention_pins_valid AND retention_job_pins+change.delta\u003e=0 THEN retention_job_pins+change.delta ELSE retention_job_pins END,\n    retention_pins_valid=retention_pins_valid AND retention_job_pins+change.delta\u003e=0,\n    retention_pin_revision=retention_pin_revision+1 WHERE id=change.source_id;\n  END LOOP;\n END IF;\n RETURN NULL;\nEND ",
+    "update_source_preview_pins": "plpgsql\ntrigger\nv\nfalse\n\n\nDECLARE change record;\nBEGIN\n IF TG_OP='INSERT' THEN\n  FOR change IN SELECT job_id,count(*)::bigint AS delta FROM pin_new WHERE kind='preview' GROUP BY job_id ORDER BY job_id LOOP\n   UPDATE sources SET retention_preview_pins=CASE WHEN retention_pins_valid THEN retention_preview_pins+change.delta ELSE retention_preview_pins END,\n    retention_pin_revision=retention_pin_revision+1 WHERE id=change.job_id;\n  END LOOP;\n ELSIF TG_OP='DELETE' THEN\n  FOR change IN SELECT job_id,-count(*)::bigint AS delta FROM pin_old WHERE kind='preview' GROUP BY job_id ORDER BY job_id LOOP\n   UPDATE sources SET retention_preview_pins=CASE WHEN retention_pins_valid AND retention_preview_pins+change.delta\u003e=0 THEN retention_preview_pins+change.delta ELSE retention_preview_pins END,\n    retention_pins_valid=retention_pins_valid AND retention_preview_pins+change.delta\u003e=0,\n    retention_pin_revision=retention_pin_revision+1 WHERE id=change.job_id;\n  END LOOP;\n ELSE\n  FOR change IN\n   SELECT job_id,sum(delta)::bigint AS delta FROM (\n    SELECT job_id,1::bigint AS delta FROM (SELECT id,job_id FROM pin_new WHERE kind='preview' EXCEPT SELECT id,job_id FROM pin_old WHERE kind='preview') added\n    UNION ALL\n    SELECT job_id,-1::bigint AS delta FROM (SELECT id,job_id FROM pin_old WHERE kind='preview' EXCEPT SELECT id,job_id FROM pin_new WHERE kind='preview') removed\n   ) changes GROUP BY job_id ORDER BY job_id\n  LOOP\n   UPDATE sources SET retention_preview_pins=CASE WHEN retention_pins_valid AND retention_preview_pins+change.delta\u003e=0 THEN retention_preview_pins+change.delta ELSE retention_preview_pins END,\n    retention_pins_valid=retention_pins_valid AND retention_preview_pins+change.delta\u003e=0,\n    retention_pin_revision=retention_pin_revision+1 WHERE id=change.job_id;\n  END LOOP;\n END IF;\n RETURN NULL;\nEND ",
+    "update_storage_counter": "plpgsql\ntrigger\nv\nfalse\n\n\nDECLARE delta numeric; BEGIN\n IF TG_OP='INSERT' THEN SELECT COALESCE(sum(size_bytes),0) INTO delta FROM storage_new;\n ELSIF TG_OP='DELETE' THEN SELECT -COALESCE(sum(size_bytes),0) INTO delta FROM storage_old;\n ELSE SELECT COALESCE((SELECT sum(size_bytes) FROM storage_new),0)-COALESCE((SELECT sum(size_bytes) FROM storage_old),0) INTO delta; END IF;\n IF delta\u003c\u003e0 THEN\n  IF TG_TABLE_NAME='storage_files' THEN UPDATE storage_counters SET stored_bytes=stored_bytes+delta WHERE id=1;\n  ELSE UPDATE storage_counters SET reserved_bytes=reserved_bytes+delta WHERE id=1; END IF;\n END IF;\n RETURN NULL; END "
+  }
+}

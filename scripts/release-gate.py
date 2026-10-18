@@ -27,7 +27,7 @@ ARCHIVE_RECOVERY_CHECKS = (
 )
 SCHEMA_VERSIONS = frozenset({'20261005-storage-queue-v3', '20261010-cache-retention-v1',
                              '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1',
-                             '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1', '20261016-agent-projects-v1'})
+                             '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1', '20261016-agent-projects-v1', '20261018-external-audio-refs-v1'})
 RECOVERY_MEDIA_LABELS = {'before-upgrade', 'after-upgrade-retained', 'after-upgrade-recovered',
                          'after-upgrade-queued', 'before-backup', 'after-restore-retained',
                          'after-restore-recovered', 'after-restore-queued', 'after-restore-first-result',

@@ -26,10 +26,14 @@ func mediaExportError(err error) error {
 	if err == mediaexport.ErrOutputLimit {
 		return errOutputLimit
 	}
-	return mediaInfoError(err)
+	return localMediaError(mediaInfoError(err))
 }
 
 type mediaExportRuntime struct{ config Config }
+
+func (runtime mediaExportRuntime) RenderRuntime() mediaexport.RenderRuntime {
+	return localmedia.NewRenderRuntime(runtime.config)
+}
 
 func (runtime mediaExportRuntime) SelectInputs(ctx context.Context, inputs []mediaexport.Input, request edit.ExportRequest) (mediaexport.Selection, error) {
 	selection, err := localmedia.NewRuntime(runtime.config).SelectInputs(ctx, inputs, request)

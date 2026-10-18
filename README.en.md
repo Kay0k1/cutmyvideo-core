@@ -25,6 +25,8 @@ Local cutting works without a database, accounts or an HTTP server. SQL belongs 
 
 ## Versions
 
+**1.5.0** adds silence analysis with editable plans, loudness reports and normalization, output canvases, CSV/FFmetadata chapter exchange, scene/black detection and external audio with explicit synchronization. Go, CLI, HTTP and both SDKs expose these operations. [Examples and limits](docs/media-analysis-and-rendering.md) · [Release scope and database upgrade](docs/release-1.5.0.md).
+
 Install CLI archives from the [latest published release](https://github.com/Kay0k1/cutmyvideo-core/releases/latest). Archives support Linux and macOS (amd64/arm64), and Windows (amd64); install FFmpeg separately. Follow [signed-release verification](docs/releases.md#consumer-verification-of-a-new-signed-release) before installation.
 
 **1.4.2** completes the core audit: it fixes queue and SDK recovery edge cases, original-audio selection and descendant-process cleanup. The media engine is separate from the server package; existing Go, CLI, HTTP and SDK contracts are preserved. [Maintenance scope](docs/release-1.4.2.md).
@@ -105,6 +107,7 @@ The API listens on `127.0.0.1:8080`. This example uses reduced development limit
 
 ## Capabilities and boundaries
 
+- Silence and visual-event analysis, LUFS/true peak, audio normalization, padded canvases, CSV/chapters and audio replacement with a timeline offset.
 - Named intervals, separate files and ordered joins, including repeated intervals.
 - Editable clip collections, assembled MP4 drafts, per-clip crop and selected-ID re-exports.
 - MP4 H.264/AAC, MP3, compatible stream copy in MP4/MKV; audio and text-subtitle selection.

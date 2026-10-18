@@ -9,6 +9,9 @@ import (
 // ValidateExportRequest preserves normalization order, including mutations made
 // before a later validation error. Collection normalization owns its copies.
 func ValidateExportRequest(r *ExportRequest, c Limits, s Source) error {
+	if err := ValidateRenderOptions(*r); err != nil {
+		return err
+	}
 	if err := ValidateCropMode(*r); err != nil {
 		return err
 	}

@@ -97,6 +97,10 @@ func planRequest(plan Plan, output string) (input, absoluteOutput string, reques
 		return
 	}
 	o := plan.Options
+	if o.AudioReplace != nil && o.AudioReplace.SourceID != "" {
+		err = invalidArgument(errors.New("local engine audio_replace requires input, not source_id"))
+		return
+	}
 	if o.Quality == "" {
 		o.Quality = "best"
 	}
@@ -120,6 +124,7 @@ func planRequest(plan Plan, output string) (input, absoluteOutput string, reques
 	}
 	request = localmedia.ExportRequest{Ranges: ranges, Format: o.Format, Quality: o.Quality, CutMode: o.CutMode,
 		OutputMode: mode, NoAudio: o.NoAudio, SubtitleMode: o.SubtitleMode}
+	request.AudioNormalize, request.Canvas, request.AudioReplace = edit.CloneAudioNormalize(o.AudioNormalize), edit.CloneCanvas(o.Canvas), edit.CloneAudioReplace(o.AudioReplace)
 	if o.AudioTrack != nil {
 		index := *o.AudioTrack
 		request.AudioTrack = &index

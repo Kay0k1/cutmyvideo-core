@@ -270,6 +270,9 @@ func TestHTTPPublicContract(t *testing.T) {
 	if err := store.SaveJob(context.Background(), job, token); err != nil {
 		t.Fatal(err)
 	}
+	if err := store.ReleaseJobStorage(context.Background(), job.ID, token); err != nil {
+		t.Fatal(err)
+	}
 	request("succeeded-job", "GET", "/api/v1/jobs/{id}", "/api/v1/jobs/"+jobID, nil, nil, 200)
 	request("retained-history", "GET", "/api/v1/jobs", "/api/v1/jobs", nil, nil, 200)
 	// A bounded fixture probe exercises actual track/admission handlers while
@@ -345,6 +348,15 @@ func TestHTTPPublicContract(t *testing.T) {
 		t.Fatal("unauthorized contract fixture was not rejected")
 	}
 	record("session-required", "GET", "/api/v1/sources", w)
+	finalizing := request("delete-during-job-finalization", "DELETE", "/api/v1/sources/{id}", "/api/v1/sources/"+source.ID, nil, nil, 409)
+	if finalizing["body"].(map[string]any)["error"].(map[string]any)["code"] != "source_in_use" {
+		t.Fatal("unfinished job storage did not protect its source", finalizing)
+	}
+	// This fixture acts as the worker: after persisting its terminal state it
+	// must also release the decoder/output workspace before source deletion.
+	if err := store.ReleaseJobStorage(context.Background(), failed.ID, failedToken); err != nil {
+		t.Fatal(err)
+	}
 	request("delete", "DELETE", "/api/v1/sources/{id}", "/api/v1/sources/"+source.ID, nil, nil, 204)
 	// Closed pool is a real driver failure; assert the bounded API vocabulary.
 	store.DB.Close()

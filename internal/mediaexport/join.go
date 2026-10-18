@@ -10,6 +10,9 @@ import (
 )
 
 func ExportJoined(ctx context.Context, c Config, inputs [][]Input, ranges []edit.Range, request edit.ExportRequest, out string, report func(int64), runtime JoinedRuntime) ([]edit.Segment, error) {
+	if edit.HasRenderOptions(request) {
+		return transformedExport(ctx, c, inputs, ranges, request, out, report, true, runtime)
+	}
 	if err := edit.ValidateCropMode(request); err != nil {
 		return nil, &mediainfo.Problem{Code: "crop_invalid", Message: err.Error()}
 	}

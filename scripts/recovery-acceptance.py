@@ -41,12 +41,14 @@ def require(condition, message):
 
 
 def verify_upgrade_snapshot(before, after):
-    """Preserve historical values and validate exactly the 003/005/006 additions."""
+    """Preserve historical values and validate exactly the 003/005/006/009 additions."""
     failure = "Upgrade changed existing sources/jobs/items/leases/storage records"
     require(set(before) == set(after) and {"sources", "jobs", "storage_files", "storage_reservations"} <= set(before), failure)
     pin_fields = {"retention_job_pins", "retention_preview_pins", "retention_pins_valid", "retention_pin_revision"}
     require(all(not pin_fields.intersection(row) for row in before["sources"]),
             "Historical upgrade fixture already contains migration 005 columns")
+    require(all("audio_source_id" not in row for row in before["jobs"]),
+            "Historical upgrade fixture already contains migration 009 columns")
     job_pins = Counter(row["source_id"] for row in before["jobs"])
     preview_pins = Counter(row["job_id"] for row in before["storage_reservations"] if row["kind"] == "preview")
     historical_after = {}
@@ -78,6 +80,10 @@ def verify_upgrade_snapshot(before, after):
                 # Validate known additions first, then compare every historical
                 # field. Unknown additions are still rejected.
                 row = {key: value for key, value in row.items() if key not in pin_fields | {"media_removed"}}
+            elif table == "jobs":
+                require("audio_source_id" in row and row["audio_source_id"] is None,
+                        "Upgrade backfilled an external audio reference or omitted its nullable default")
+                row = {key: value for key, value in row.items() if key != "audio_source_id"}
             historical_after[table].append(row)
 
     def records(snapshot):

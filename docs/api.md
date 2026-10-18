@@ -1,5 +1,10 @@
 # HTTP contract
 
+[Analysis, loudness, canvases, CSV/chapters and external audio (1.5.0)](media-analysis-and-rendering.md)
+describe the new opt-in operations. Their exact request/response shapes are in
+[OpenAPI](../api/openapi.yaml). Analysis accepts owned uploaded sources; external
+audio requires a second upload owned by the same session.
+
 [Saved plans, joined outputs, selected audio and MKV/subtitles](batch-cutting.md).
 
 [Python and TypeScript SDKs](sdk.md) wrap the local CLI and these HTTP workflows.

@@ -36,6 +36,8 @@ def copied(value: Mapping[str, Any], limit: int = 1 << 20) -> dict[str, Any]:
 
 def request_copy(request: Mapping[str, Any]) -> dict[str, Any]:
     data = copied(request)
+    from .media import render_references
+    render_references(data)
     if not isinstance(data.get("source_id"), str) or not data["source_id"] or len(data["source_id"].encode()) > 160:
         raise ValueError("Collection source_id is required")
     plan = data.get("plan")

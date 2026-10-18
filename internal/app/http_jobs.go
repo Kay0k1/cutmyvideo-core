@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
 )
 
 func (s *Server) createJob(w http.ResponseWriter, r *http.Request, owner string) {
@@ -49,7 +51,18 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request, owner string)
 		writeError(w, 400, "invalid_export", err.Error())
 		return
 	}
-	if v.Path != "" && (request.AudioTrack != nil || request.SubtitleMode == "preserve" || request.Crop != nil) {
+	if err = checkHTTPRenderReference(r.Context(), v, request); err != nil {
+		writeError(w, 400, "invalid_export", err.Error())
+		return
+	}
+	if edit.HasRenderOptions(edit.ExportRequest(request)) && v.Path != "" {
+		_, _, ctx, release, inspectErr := s.inspectCollection(r.Context(), v, []PreparedCollectionClip{{Request: request}})
+		defer release()
+		if inspectErr != nil {
+			writePreflightError(w, r, ctx, inspectErr)
+			return
+		}
+	} else if v.Path != "" && (request.AudioTrack != nil || request.SubtitleMode == "preserve" || request.Crop != nil) {
 		timeout := s.Config.SourceTimeout
 		if timeout <= 0 {
 			timeout = 2 * time.Minute

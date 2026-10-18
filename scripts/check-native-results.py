@@ -17,6 +17,83 @@ MEDIASESSION_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/mediasession"
 COREMODEL_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/coremodel"
 MEDIAERROR_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/mediaerror"
 LOCALMEDIA_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/localmedia"
+EDIT_PACKAGE = "github.com/Kay0k1/cutmyvideo-core/internal/edit"
+
+CORE15_ENGINE_REQUIRED = {
+    "TestAnalysisSilenceActualAntiphaseTimelineAndExecutablePlan",
+    "TestAnalysisSilenceAllQuietAllAudibleAndExplicitTrack",
+    "TestAnalysisSilenceReportsUncoveredVideoTail",
+    "TestAnalysisVideoActualSceneAndBlackTimeline",
+    "TestAnalysisPlanBoundsAndSelectedTrack",
+    "TestAnalysisDetectsSourceMutationDuringDecode",
+    "TestAnalysisEngineInvalidInputCancellationAndDeadlines",
+    "TestRenderCanvasAndExternalAudioTimelineActualMedia",
+    "TestRenderMeasuredNormalizationAndLoudnessActualMedia",
+    "TestRenderRejectsIncompatibleOptionsBeforePublication",
+    "TestRenderExternalTrackClockAndInputFences",
+    "TestRenderCanvasPreservesKnownHDRAndVariableClocks",
+    "TestRenderLoudnessWindowSelectionAndActualCoverage",
+    "TestRenderOptionsRefusePreservedTextWithoutLosingExistingCopySupport",
+    "TestCutListPlanRetainsEditableOrderAndMarkers",
+    "TestCutListInterchangeTypedRefusals",
+    "TestCutListChaptersAcceptedByIndependentFFmpeg",
+}
+CORE15_LOCALMEDIA_REQUIRED = {
+    "TestLoudnessCoveragePreservesNativeSourceClockAcrossWrites",
+    "TestLoudnessCoverageRejectsIncompleteOrMalformedFrames",
+    "TestAnalysisPCMIndependentChannelEnergyAndSplitWrites",
+    "TestAnalysisPCMRejectsPartialNonFiniteAndBudgetOverflow",
+    "TestAnalysisKeepMarginsAndEmptyTimeline",
+    "TestAnalysisKeepEventBudgetRefusesUntruncatedAlternatingAudio",
+    "TestAnalysisOptionsAndWindowBudgets",
+    "TestAnalysisVideoStreamingParserIndependentBoundaries",
+    "TestAnalysisVideoParserRejectsMalformedAndOversizedStreams",
+    "TestAnalysisWriterRefusalCancelsAndRetainsCause",
+    "TestAnalysisRuntimeCancelsLiveDecoderAndBudgetRefusal",
+}
+CORE15_EDIT_REQUIRED = {
+    "TestCutListCSVIndependentSegmentsAndMarkers",
+    "TestCutListDecimalMillisecondsHaveNoFloatOrOctalDrift",
+    "TestCutListChapterIndependentClockAndEscapes",
+    "TestCutListOutputChaptersUseActualClock",
+    "TestCutListChapterLineEndingsAndLiteralCarriageReturn",
+    "TestCutListRejectsInvalidOrExcessiveInput",
+    "TestRenderValidationAndCollectionIsolation",
+    "TestRenderReplacementJSONDoesNotTurnNullIntoZeroOffset",
+}
+CORE15_MEDIAEXPORT_REQUIRED = {
+    "TestLoudnessReportParsesCompleteBoundedMachineBlock",
+    "TestRenderedExportRefusesUnavailableOptionalRuntime",
+    "TestRenderedExportRefusesSubtitlePreservationBeforeEffects",
+}
+CORE15_CLI_REQUIRED = {
+    "TestNewInterfacesCLIActualAnalysisAndExplicitTransforms",
+    "TestNewInterfacesCLICutListRoundTripAndActualOutputClock",
+    "TestNewInterfacesCLIStrictFlagsAndJSONErrors",
+    "TestNewInterfacesCLIRelativeReplacementInputsAndLocalIsolation",
+}
+CORE15_SERVICE_REQUIRED = {
+    "TestNewInterfacesHTTPAuthenticationAndStrictObjects",
+    "TestNewInterfacesHTTPCutListMarkersAndOutputClockRoundTrip",
+    "TestNewInterfacesHTTPCutListBoundedText",
+    "TestNewInterfacesHTTPActualAnalysisOwnerIsolationAndCleanup",
+    "TestNewInterfacesHTTPAnalysisRemoteRemovedAndRateGuards",
+    "TestNewInterfacesHTTPAnalysisAdmissionAndCancellationRelease",
+    "TestRenderServicePreflightReferencesAndCleanup",
+    "TestRenderServiceProjectGrantDoesNotAuthorizeSecondaryMedia",
+    "TestRenderServiceWorkerTransformsAndRetainedRecovery",
+    "TestRenderServiceCanvasAndReplacementOwnDecoderBudget",
+    "TestRenderServiceCollectionReplacementIsolation",
+    "TestRenderServiceDiagnosticsKeepPublicCodesAndPrivateCauses",
+}
+CORE15_BOOKWORM_REQUIRED = (CORE15_ENGINE_REQUIRED | CORE15_LOCALMEDIA_REQUIRED | CORE15_EDIT_REQUIRED
+                            | CORE15_MEDIAEXPORT_REQUIRED | CORE15_CLI_REQUIRED)
+EXTERNAL_AUDIO_STORAGE_REQUIRED = {"TestExternalAudioRuntimeDMLGrantsInvokeDerivedPinTriggers"}
+EXTERNAL_AUDIO_RECOVERY_REQUIRED = {
+    "TestExternalAudioPreviousBinaryRefuses009WithoutWrites",
+    "TestExternalAudioCoordinated009BackupRestorePreservesRowsAndMedia",
+    "TestExternalAudioRuntimeDMLGrantsInvokeDerivedPinTriggers",
+}
 
 AUDIT_MEDIA_REQUIRED = {
     "TestHLSManifestRedirectResolvesFinalRelativeReferences",
@@ -448,9 +525,12 @@ REQUIRED[0].update(MEDIASESSION_MODULE_REQUIRED | SOURCE_SUBTITLE_MODULE_REQUIRE
 REQUIRED[4].update(MEDIASESSION_ADAPTER_REQUIRED)
 REQUIRED[0].update(COREMODEL_MODULE_REQUIRED | MEDIAERROR_MODULE_REQUIRED | LOCALMEDIA_MODULE_REQUIRED | ENGINE_DEPENDENCY_REQUIRED)
 REQUIRED[4].update(COREMODEL_MEDIAERROR_ADAPTER_REQUIRED)
+REQUIRED[0].update(CORE15_BOOKWORM_REQUIRED)
+REQUIRED[2].update(CORE15_SERVICE_REQUIRED)
+REQUIRED[3].update(EXTERNAL_AUDIO_STORAGE_REQUIRED)
 
 REQUIRED_PACKAGES = [
-    {ENGINE_PACKAGE, FS_PACKAGE, CLI_PACKAGE, SUBTITLE_PACKAGE, MEDIAINFO_PACKAGE, MEDIAEXPORT_PACKAGE, MEDIAPREFLIGHT_PACKAGE, MEDIASESSION_PACKAGE, COREMODEL_PACKAGE, MEDIAERROR_PACKAGE, LOCALMEDIA_PACKAGE},
+    {ENGINE_PACKAGE, FS_PACKAGE, CLI_PACKAGE, SUBTITLE_PACKAGE, MEDIAINFO_PACKAGE, MEDIAEXPORT_PACKAGE, MEDIAPREFLIGHT_PACKAGE, MEDIASESSION_PACKAGE, COREMODEL_PACKAGE, MEDIAERROR_PACKAGE, LOCALMEDIA_PACKAGE, EDIT_PACKAGE},
     {APP_PACKAGE, TOOLRUN_PACKAGE},
     {APP_PACKAGE},
     {APP_PACKAGE},
@@ -462,13 +542,14 @@ REQUIRED_PACKAGES = [
 REQUIRED_TEST_PACKAGES = [
     {name: (COREMODEL_PACKAGE if name in COREMODEL_MODULE_REQUIRED else
             MEDIAERROR_PACKAGE if name in MEDIAERROR_MODULE_REQUIRED else
-            LOCALMEDIA_PACKAGE if name in LOCALMEDIA_MODULE_REQUIRED else
+            LOCALMEDIA_PACKAGE if name in LOCALMEDIA_MODULE_REQUIRED | CORE15_LOCALMEDIA_REQUIRED else
+            EDIT_PACKAGE if name in CORE15_EDIT_REQUIRED else
             MEDIASESSION_PACKAGE if name in MEDIASESSION_MODULE_REQUIRED else
             MEDIAPREFLIGHT_PACKAGE if name in MEDIAPREFLIGHT_MODULE_REQUIRED else
-            MEDIAEXPORT_PACKAGE if name in MEDIAEXPORT_MODULE_REQUIRED | JOINED_MEDIAEXPORT_REQUIRED else
+            MEDIAEXPORT_PACKAGE if name in MEDIAEXPORT_MODULE_REQUIRED | JOINED_MEDIAEXPORT_REQUIRED | CORE15_MEDIAEXPORT_REQUIRED else
             MEDIAINFO_PACKAGE if name in MEDIAINFO_MODULE_REQUIRED else
             SUBTITLE_PACKAGE if name in SUBTITLE_MODULE_REQUIRED | SOURCE_SUBTITLE_MODULE_REQUIRED else
-            CLI_PACKAGE if name.startswith("TestCLI") or name == "TestParseCrop" else
+            CLI_PACKAGE if name.startswith("TestCLI") or name == "TestParseCrop" or name in CORE15_CLI_REQUIRED else
             FS_PACKAGE if name == "TestConcurrentPublicationHasExactlyOneCompleteWinner" else
             ENGINE_PACKAGE) for name in REQUIRED[0]},
     {name: TOOLRUN_PACKAGE if name in TOOLRUN_MODULE_REQUIRED | TOOLRUN_LIFECYCLE_REQUIRED else APP_PACKAGE for name in REQUIRED[1]},
@@ -523,12 +604,20 @@ if __name__ == "__main__":
     elif len(sys.argv) == 3 and sys.argv[1] == "--draft-cache-service":
         verify_report(sys.argv[2], DRAFT_CACHE_DATABASE_REQUIRED, {APP_PACKAGE})
         print("Bookworm draft artifact ownership, project scope and ZIP checks passed without skips.")
+    elif len(sys.argv) == 3 and sys.argv[1] == "--core15-bookworm":
+        verify_report(sys.argv[2], CORE15_BOOKWORM_REQUIRED,
+                      {ENGINE_PACKAGE, LOCALMEDIA_PACKAGE, CLI_PACKAGE, EDIT_PACKAGE, MEDIAEXPORT_PACKAGE},
+                      REQUIRED_TEST_PACKAGES[0])
+        print("Bookworm's six core feature engine, CLI, streaming and interchange checks passed without skips.")
     elif len(sys.argv) == 3 and sys.argv[1] == "--preflight-contract":
         verify_report(sys.argv[2], PREFLIGHT_CONTRACT_REQUIRED | COLLECTION_CONTRACT_REQUIRED | AGENT_PROJECT_CONTRACT_REQUIRED, {APP_PACKAGE})
         print("Preflight, collection, agent project and subtitle public-handler OpenAPI samples passed without skips.")
     elif len(sys.argv) == 3 and sys.argv[1] == "--agent-project-recovery":
         verify_report(sys.argv[2], AGENT_PROJECT_RECOVERY_REQUIRED, {APP_PACKAGE})
         print("Schema8 previous-binary refusal, restricted runtime and actual PostgreSQL/media restore passed without skips.")
+    elif len(sys.argv) == 3 and sys.argv[1] == "--external-audio-recovery":
+        verify_report(sys.argv[2], EXTERNAL_AUDIO_RECOVERY_REQUIRED, {APP_PACKAGE})
+        print("Schema9 previous-release refusal, derived runtime pins and coordinated media/database restore passed without skips.")
     else:
         verify(sys.argv[1:])
         print("Native media contract, filesystem, CLI, process tree, API/worker and storage checks passed without skips.")

@@ -3,7 +3,14 @@
 Both SDKs support local media through the installed `cutmy` executable and a
 self-hosted HTTP API. They have no runtime dependencies. The API client owns
 one private session; the local client runs the same version 1 cutting plans as
-the CLI. Neither client decides which moments to cut or changes encoding quality.
+the CLI. Exports execute the caller's reviewed plans and preserve explicit encoding quality.
+
+Version 1.5.0 adds pause-based edit suggestions, scene/black-frame analysis,
+loudness measurement and normalization, solid-color canvases, replacement audio,
+and CSV/FFmetadata edit interchange. Both SDKs expose local and HTTP analysis
+and interchange; local helpers can produce an editable existing Plan. The new
+methods require core 1.5.0. See [media analysis and rendering](media-analysis-and-rendering.md)
+and the package guides below for exact options, bounds and ownership rules.
 
 Version 1.4.0 adds [complete, resumable clip collections](sdk-collections.md),
 durable source preparation, explicit failed-clip repair, scoped project review
@@ -27,23 +34,23 @@ APIs and durable formats. See the [maintenance release scope](release-1.4.2.md).
 Python 3.10 or newer:
 
 ```sh
-python -m pip install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.2/cutmyvideo-1.4.2-py3-none-any.whl'
+python -m pip install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.5.0/cutmyvideo-1.5.0-py3-none-any.whl'
 ```
 
 Node.js 20.19 or newer, with an ESM project:
 
 ```sh
-npm install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.2/cutmyvideo-sdk-1.4.2.tgz'
+npm install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.5.0/cutmyvideo-sdk-1.5.0.tgz'
 ```
 
-These are published assets of [release 1.4.2](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.4.2),
-not claims of publication to the PyPI/npm registries. No source
+These commands select the versioned assets of [release 1.5.0](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.5.0).
+They do not use the PyPI/npm registries. No source
 checkout or SDK build is needed. The release also contains the Python source
 distribution, `SDK-MANIFEST.json` and `sdk-provenance.sigstore.json`. They bind the
 exact distributions to the reviewed source and installed HTTP/worker acceptance.
 Follow [release verification](releases.md#consumer-verification-of-a-new-signed-release)
-before installation. The linked release has completed that publication protocol;
-a version number in a source checkout alone does not establish a published package.
+before installation, after the release is published. A version number in a
+source checkout alone does not establish a published or verified package.
 
 For development, use `python -m pip install ./sdk/python`; the TypeScript package
 can be built with `npm ci && npm pack` in `sdk/typescript`.
@@ -191,6 +198,14 @@ consumers during a download and after eight ready files, resume to 15 clips,
 replay without new work, change two clips and produce selected drafts.
 Downloaded bytes match the published artifact;
 independent full decoding checks durations, selected audio, geometry and manifests.
+
+Core 1.5 adds installed local and HTTP media workflows for each language. They
+measure known pauses/black frames, round-trip chapter markers, and render real
+normalization, canvas and replacement-audio outputs. Independent checks verify
+LUFS, pixels, tone frequency, silence padding and the unchanged timeline. The
+full installed HTTP gate requires 21 named parent/consumer checks and preserves
+all 15 checks required by signed 1.4 releases. JavaScript rejects nonfinite render
+numbers before copying or serialization, so they cannot become null defaults.
 
 ```sh
 python -m pip install --require-hashes --only-binary=:all: -r scripts/requirements-sdk-build.txt

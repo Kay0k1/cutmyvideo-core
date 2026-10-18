@@ -605,7 +605,7 @@ func TestSourcePinInvokerTriggersWorkWithoutRuntimeFunctionExecute(t *testing.T)
 func TestSourcePinCatalogManifestsDeclareExactManagedFunctionsAndTriggerColumns(t *testing.T) {
 	// A pure conservative-shape control complements real catalog observations.
 	expected := latestSchemaShape()
-	if len(expected.Functions) != 5 {
+	if len(expected.Functions) != 7 || expected.Functions["derive_job_audio_source"] == "" || expected.Functions["guard_job_audio_source"] == "" {
 		t.Fatal("managed pin functions missing from shape")
 	}
 	for _, m := range schemaMigrations[:4] {

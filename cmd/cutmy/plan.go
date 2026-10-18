@@ -38,5 +38,8 @@ func readCuttingPlan(path string) (plan engine.Plan, err error) {
 	if plan.Input != "" && !filepath.IsAbs(plan.Input) {
 		plan.Input = filepath.Join(filepath.Dir(path), plan.Input)
 	}
+	if err := resolveReplacementInput(path, plan.Options.AudioReplace); err != nil {
+		return plan, err
+	}
 	return plan, nil
 }

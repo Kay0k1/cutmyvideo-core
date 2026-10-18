@@ -13,12 +13,18 @@ def _portable_plan(value: Any) -> dict[str, Any]:
     """Edit documents have a closed vocabulary, unlike private server state."""
     def fields(item: Any, allowed: set[str]) -> None:
         if (not isinstance(item, dict) or set(item) - allowed
-                or any(isinstance(value, (dict, list)) for key, value in item.items() if key not in {"options", "crop", "clips", "ranges"})):
+                or any(isinstance(value, (dict, list)) for key, value in item.items() if key not in {"options", "crop", "clips", "ranges", "audio_normalize", "canvas"})):
             raise ValueError("Portable project contains unknown edit fields")
     def options(item: Any) -> None:
-        fields(item, {"format", "quality", "cut_mode", "audio_track", "no_audio", "subtitle_mode", "crop", "clear_crop"})
+        if isinstance(item, dict) and item.get("audio_replace") is not None:
+            raise ValueError("Portable projects require explicit replacement-audio relinking after import")
+        fields(item, {"format", "quality", "cut_mode", "audio_track", "no_audio", "subtitle_mode", "crop", "clear_crop", "audio_normalize", "canvas", "audio_replace", "clear_audio_normalize", "clear_canvas", "clear_audio_replace"})
         if item.get("crop") is not None:
             fields(item["crop"], {"x", "y", "width", "height"})
+        if item.get("audio_normalize") is not None:
+            fields(item["audio_normalize"], {"integrated_lufs", "true_peak_dbtp", "loudness_range_lu"})
+        if item.get("canvas") is not None:
+            fields(item["canvas"], {"width", "height", "fit", "background"})
     fields(value, {"version", "input", "options", "clips"})
     if not isinstance(value.get("clips"), list):
         raise ValueError("Portable project clips must be an array")

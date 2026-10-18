@@ -1,5 +1,6 @@
 /** Node-only durable collection cycle. The browser entry never imports this module. */
 import { createHash, randomUUID } from "node:crypto";
+import { renderReferences } from "./media.js";
 import { link, lstat, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import type { CutmyClient } from "./client.js";
@@ -47,7 +48,7 @@ function retryIDs(state: State, values: unknown): string[] {
 
 function copiedRequest(value: CollectionRequest): CollectionRequest {
   let data: string;
-  try { data = JSON.stringify(value); } catch { fail("invalid_request"); }
+  try { renderReferences(value); data = JSON.stringify(value); } catch { fail("invalid_request"); }
   requireValue(Buffer.byteLength(data) <= JSON_LIMIT, "request_too_large");
   const request = JSON.parse(data) as CollectionRequest;
   requireValue(object(request) && safeID(request.source_id) && object(request.plan) && request.plan.version === 1 && (!request.plan.input || request.plan.input === "") && Array.isArray(request.plan.clips) && request.plan.clips.length > 0 && request.plan.clips.length <= 128, "invalid_request");

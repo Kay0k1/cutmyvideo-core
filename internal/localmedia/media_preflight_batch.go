@@ -32,6 +32,19 @@ func PreflightLocalBatchWithQueries(ctx context.Context, c Config, path string, 
 	if len(requests) > 128 {
 		return nil, 0, &mediaerror.Problem{Code: "invalid_argument", Message: "preflight must contain at most 128 requests"}
 	}
+	for _, request := range requests {
+		if request.AudioReplace != nil {
+			results := make([]PreflightResult, len(requests))
+			for i, item := range requests {
+				result, err := PreflightLocalWithQueries(ctx, c, path, item, inspect, query)
+				if err != nil {
+					return nil, i, err
+				}
+				results[i] = result
+			}
+			return results, -1, nil
+		}
+	}
 	if path == "" {
 		return nil, 0, &mediaerror.Problem{Code: "invalid_argument", Message: "input path is required"}
 	}

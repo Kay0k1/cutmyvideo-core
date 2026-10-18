@@ -90,6 +90,14 @@ func trackManifest(p probeInfo, selection mediaSelection, request ExportRequest)
 
 // InspectExportLocal reports source tracks and their fate for selected options.
 func InspectExportLocal(ctx context.Context, c Config, path string, request ExportRequest) ([]TrackSelection, error) {
+	if err := edit.ValidateRenderOptions(edit.ExportRequest(request)); err != nil {
+		return nil, &mediaerror.Problem{Code: "invalid_argument", Message: err.Error()}
+	}
+	ctx, release, err := PrepareAudioReplacement(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	if err := validateCropMode(request); err != nil {
 		return nil, &mediaerror.Problem{Code: "crop_invalid", Message: err.Error()}
 	}
@@ -100,6 +108,24 @@ func InspectExportLocal(ctx context.Context, c Config, path string, request Expo
 	if request.Crop != nil {
 		if _, _, err := videoOutputGeometryWithCrop(p.selectedVideo(), request.Quality, false, request.Crop); err != nil {
 			return nil, err
+		}
+	}
+	if request.Canvas != nil {
+		if _, _, err := mediainfo.RenderGeometry(p.selectedVideo(), request.Quality, request.Crop, request.Canvas); err != nil {
+			return nil, mediaInfoError(err)
+		}
+	}
+	if request.AudioReplace != nil {
+		if _, _, err := (mediaExportRuntime{config: c}).Replacement(ctx, *request.AudioReplace); err != nil {
+			return nil, err
+		}
+	} else if request.AudioNormalize != nil {
+		selection, err := probeInputSelectionOptions(ctx, c, []mediaInput{{Path: path}}, request)
+		if err != nil {
+			return nil, err
+		}
+		if selection.Audio == nil {
+			return nil, mediaerror.ErrNoAudio
 		}
 	}
 	return SelectExportTracks(p.tracks(), request)

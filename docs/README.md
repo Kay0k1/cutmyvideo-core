@@ -11,6 +11,7 @@ Choose an interface in the README, then follow the relevant guide. The project o
 | Guide | Covers |
 | --- | --- |
 | [CLI and Go library](usage.md) | Installation, inspect/export, errors, local limits and a complete HTTP example |
+| [Analysis, rendering and cut-list exchange](media-analysis-and-rendering.md) | Silence plans, loudness, canvas, scene/black events, CSV/chapters and external audio |
 | [Plans, preflight and joined outputs](batch-cutting.md) | Saved JSON plans, checking before execution, output order, audio and subtitles |
 | [Editable clip collections](clip-collections.md) | Independent clips, ordered fragments, draft/final exports, crop and selected IDs |
 | [Agent workflow](agent-workflow.md) · [Project lifecycle](agent-workflow.md#retention-access-and-recovery) | A reproducible interview-to-clips scenario, safe revisions/retries and independent retention/access deadlines |
@@ -55,6 +56,7 @@ Choose an interface in the README, then follow the relevant guide. The project o
 | [HTTP compatibility](../api/COMPATIBILITY.md) | Frozen API baselines and shared collection/project examples across the core and SDKs |
 | [Changelog](../CHANGELOG.md) | Published versions and unreleased features |
 | [CLI releases](releases.md) | Release-page conventions, reproducible packaging and consumer signature verification |
+| [1.5.0 scope and verification](release-1.5.0.md) | Six engine operations, schema 9 source references and compatible release gates |
 | [1.4.2 maintenance scope](release-1.4.2.md) | Completed core audit, compatibility fixes, original audio and signed CLI/SDK publication |
 | [1.4.1 scope and verification](release-1.4.1.md) | Shared collection preflight, native resource bounds and measured draft-export results |
 | [1.4.0 scope and verification](release-1.4.0.md) | Agent projects, schema 8, subtitle sidecars, signed packages and publication boundaries |

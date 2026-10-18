@@ -1,6 +1,28 @@
 /** Millisecond intervals refer to the original source; order and repeats matter. */
 export interface Range { start_ms: number; end_ms: number; label?: string }
 export interface Crop { x: number; y: number; width: number; height: number }
+export interface AudioNormalize { integrated_lufs: number; true_peak_dbtp: number; loudness_range_lu: number }
+export interface Canvas { width: number; height: number; fit: "contain"; background: string }
+export interface AudioReplace { source_id: string; input?: never; audio_track?: number; offset_ms?: number }
+export interface LocalAudioReplace { input: string; source_id?: never; audio_track?: number; offset_ms?: number }
+export interface AnalysisOptions { start_ms?: number; end_ms?: number }
+export interface LoudnessOptions extends AnalysisOptions { audio_track?: number }
+export interface SilenceOptions extends LoudnessOptions { threshold_db?: number; min_silence_ms?: number; keep_before_ms?: number; keep_after_ms?: number; min_clip_ms?: number }
+export interface VideoAnalysisOptions extends AnalysisOptions { scene_threshold?: number; black_pixel_threshold?: number; black_picture_ratio?: number; min_black_ms?: number }
+export interface AnalysisResult { version: 1; start_ms: number; end_ms: number; analyzed_end_ms: number }
+export interface SilenceResult extends AnalysisResult { audio_track: number; silence: Range[]; keep: Range[] }
+export interface SceneChange { at_ms: number; score: number }
+export interface VideoAnalysisResult extends AnalysisResult { video_track: number; scenes: SceneChange[]; black: Range[] }
+export interface LoudnessResult extends AnalysisResult { audio_track: number; integrated_lufs: number | null; true_peak_dbtp: number | null; loudness_range_lu: number | null }
+export type CutListFormat = "csv" | "ffmetadata";
+export interface CutListEntry { start_ms: number; end_ms: number | null; label: string }
+export interface CutList { version: 1; entries: CutListEntry[] }
+export interface CutListImportRequest { format: CutListFormat; text: string }
+export type CutListExportRequest = { format: CutListFormat } & ({ cut_list: CutList; segments?: never } | { segments: Segment[]; cut_list?: never });
+export type LocalCutListExportRequest = CutListExportRequest | { format: CutListFormat; plan: Plan; cut_list?: never; segments?: never };
+export interface CutListExportResult { version: 1; format: CutListFormat; text: string }
+export interface SilencePlanOptions extends RequestOptions { format?: "mp4" | "mp3"; outputMode?: "joined" | "separate" }
+export interface CutListPlanOptions extends RequestOptions { media: string; durationMs: number; outputMode?: "joined" | "separate" }
 export interface ExportOptions {
   format?: "mp4" | "mp3" | "mkv";
   quality?: "best" | "1080p" | "720p";
@@ -9,8 +31,12 @@ export interface ExportOptions {
   no_audio?: boolean;
   subtitle_mode?: "omit" | "preserve";
   crop?: Crop;
+  audio_normalize?: AudioNormalize;
+  canvas?: Canvas;
+  audio_replace?: AudioReplace | LocalAudioReplace;
 }
 export interface ExportRequest extends ExportOptions {
+  audio_replace?: AudioReplace;
   source_id: string;
   ranges: Range[];
   format: "mp4" | "mp3" | "mkv";
@@ -30,6 +56,12 @@ export interface CollectionOptions {
   no_audio?: boolean | null;
   crop?: Crop | null;
   clear_crop?: boolean;
+  audio_normalize?: AudioNormalize | null;
+  canvas?: Canvas | null;
+  audio_replace?: AudioReplace | LocalAudioReplace | null;
+  clear_audio_normalize?: boolean;
+  clear_canvas?: boolean;
+  clear_audio_replace?: boolean;
 }
 export interface CollectionClip { id: string; label?: string; ranges: Range[]; options?: CollectionOptions }
 export interface CollectionPlan { version: 1; input?: string; options?: CollectionOptions; clips: CollectionClip[] }

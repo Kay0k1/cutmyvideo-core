@@ -28,14 +28,20 @@ type CollectionClip struct {
 // audio. ClearCrop explicitly removes an inherited crop. Crop and ClearCrop
 // together are invalid; resetting audio does not implicitly change NoAudio.
 type CollectionOptions struct {
-	Format       string `json:"format,omitempty"`
-	Quality      string `json:"quality,omitempty"`
-	CutMode      string `json:"cut_mode,omitempty"`
-	AudioTrack   *int   `json:"audio_track,omitempty"`
-	NoAudio      *bool  `json:"no_audio,omitempty"`
-	SubtitleMode string `json:"subtitle_mode,omitempty"`
-	Crop         *Crop  `json:"crop,omitempty"`
-	ClearCrop    bool   `json:"clear_crop,omitempty"`
+	Format              string          `json:"format,omitempty"`
+	Quality             string          `json:"quality,omitempty"`
+	CutMode             string          `json:"cut_mode,omitempty"`
+	AudioTrack          *int            `json:"audio_track,omitempty"`
+	NoAudio             *bool           `json:"no_audio,omitempty"`
+	SubtitleMode        string          `json:"subtitle_mode,omitempty"`
+	Crop                *Crop           `json:"crop,omitempty"`
+	ClearCrop           bool            `json:"clear_crop,omitempty"`
+	AudioNormalize      *AudioNormalize `json:"audio_normalize,omitempty"`
+	Canvas              *Canvas         `json:"canvas,omitempty"`
+	AudioReplace        *AudioReplace   `json:"audio_replace,omitempty"`
+	ClearAudioNormalize bool            `json:"clear_audio_normalize,omitempty"`
+	ClearCanvas         bool            `json:"clear_canvas,omitempty"`
+	ClearAudioReplace   bool            `json:"clear_audio_replace,omitempty"`
 }
 
 // ClipIDs is a selection, not an ordering instruction. Results retain plan
@@ -208,6 +214,27 @@ func NormalizeCollection(plan CollectionPlan, execution CollectionExecution, c L
 func collectionRequest(base, override CollectionOptions) (ExportRequest, error) {
 	request := ExportRequest{Format: "mp4", Quality: "best", CutMode: "accurate"}
 	for _, options := range []CollectionOptions{base, override} {
+		if options.AudioNormalize != nil && options.ClearAudioNormalize || options.Canvas != nil && options.ClearCanvas || options.AudioReplace != nil && options.ClearAudioReplace {
+			return request, collectionInvalid("", "options", "render option and its clear flag cannot be used together")
+		}
+		if options.ClearAudioNormalize {
+			request.AudioNormalize = nil
+		}
+		if options.ClearCanvas {
+			request.Canvas = nil
+		}
+		if options.ClearAudioReplace {
+			request.AudioReplace = nil
+		}
+		if options.AudioNormalize != nil {
+			request.AudioNormalize = CloneAudioNormalize(options.AudioNormalize)
+		}
+		if options.Canvas != nil {
+			request.Canvas = CloneCanvas(options.Canvas)
+		}
+		if options.AudioReplace != nil {
+			request.AudioReplace = CloneAudioReplace(options.AudioReplace)
+		}
 		if options.Crop != nil && options.ClearCrop {
 			return request, collectionInvalid("", "options.crop", "crop and clear_crop cannot be used together")
 		}
@@ -250,6 +277,9 @@ func collectionRequest(base, override CollectionOptions) (ExportRequest, error) 
 func collectionValidateSettings(request ExportRequest) *CollectionFieldError {
 	invalid := func(field, message string) *CollectionFieldError {
 		return &CollectionFieldError{Field: "options." + field, Err: &ArgumentError{Message: message}}
+	}
+	if err := ValidateRenderOptions(request); err != nil {
+		return invalid("render", err.Error())
 	}
 	if request.Format != "mp4" && request.Format != "mp3" && request.Format != "mkv" {
 		return invalid("format", "must be mp4, mp3 or mkv")

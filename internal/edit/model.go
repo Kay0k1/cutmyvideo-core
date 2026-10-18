@@ -9,17 +9,20 @@ type Range struct {
 }
 
 type ExportRequest struct {
-	SourceID      string  `json:"source_id"`
-	Ranges        []Range `json:"ranges"`
-	Format        string  `json:"format"`
-	Quality       string  `json:"quality"`
-	CutMode       string  `json:"cut_mode"`
-	OutputMode    string  `json:"output_mode,omitempty"`
-	AudioTrack    *int    `json:"audio_track,omitempty"`
-	NoAudio       bool    `json:"no_audio,omitempty"`
-	SubtitleMode  string  `json:"subtitle_mode,omitempty"`
-	Crop          *Crop   `json:"crop,omitempty"`
-	CleanupSource bool    `json:"cleanup_source,omitempty"`
+	SourceID       string          `json:"source_id"`
+	Ranges         []Range         `json:"ranges"`
+	Format         string          `json:"format"`
+	Quality        string          `json:"quality"`
+	CutMode        string          `json:"cut_mode"`
+	OutputMode     string          `json:"output_mode,omitempty"`
+	AudioTrack     *int            `json:"audio_track,omitempty"`
+	NoAudio        bool            `json:"no_audio,omitempty"`
+	SubtitleMode   string          `json:"subtitle_mode,omitempty"`
+	Crop           *Crop           `json:"crop,omitempty"`
+	AudioNormalize *AudioNormalize `json:"audio_normalize,omitempty"`
+	Canvas         *Canvas         `json:"canvas,omitempty"`
+	AudioReplace   *AudioReplace   `json:"audio_replace,omitempty"`
+	CleanupSource  bool            `json:"cleanup_source,omitempty"`
 	// Rendition selects a draft without changing the edit plan.
 	Rendition string `json:"rendition,omitempty"`
 }

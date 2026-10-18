@@ -24,7 +24,7 @@ import (
 var ErrSchemaIncompatible = coremodel.ErrSchemaIncompatible
 
 const storeStartupTimeout = 30 * time.Second
-const schemaVersion = "20261016-agent-projects-v1"
+const schemaVersion = "20261018-external-audio-refs-v1"
 
 // Migration SQL is immutable. Append a migration and update the expected shape;
 // never edit a shipped file or reinterpret an existing marker/checksum.
@@ -47,7 +47,8 @@ var schemaMigrations = []schemaMigration{
 	{"20261011-source-retention-v1", "migrations/005_20261011_source_retention_v1.sql", "migrations/005_schema.json"},
 	{"20261012-source-media-cleanup-v1", "migrations/006_20261012_source_media_cleanup_v1.sql", "migrations/006_schema.json"},
 	{"20261014-metadata-resolution-leases-v1", "migrations/007_20261014_metadata_resolution_leases_v1.sql", "migrations/007_schema.json"},
-	{schemaVersion, "migrations/008_20261016_agent_projects_v1.sql", "migrations/008_schema.json"},
+	{"20261016-agent-projects-v1", "migrations/008_20261016_agent_projects_v1.sql", "migrations/008_schema.json"},
+	{schemaVersion, "migrations/009_20261018_external_audio_refs_v1.sql", "migrations/009_schema.json"},
 }
 
 func migrationSQL(m schemaMigration) string {

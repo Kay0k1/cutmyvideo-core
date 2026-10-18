@@ -27,7 +27,7 @@ class SDKReleaseControls(unittest.TestCase):
                        'files': {'sdk/input.py': {'sha256': 'c'*64}, s.PROJECT_CONTRACTS: {'sha256': 'e'*64}}}
         self.run = {'repository': s.REPOSITORY, 'run_id': 123, 'run_attempt': 2}
         self.names = s.package_names('1.4.0')
-        self.receipt = {'installed_consumers': True, 'required_tests': sorted(s.required_tests()),
+        self.receipt = {'installed_consumers': True, 'required_tests': sorted(s.required_tests(self.source['version'])),
                         'source_inputs_sha256': {'sdk/input.py': 'c'*64, s.PROJECT_CONTRACTS: 'e'*64}}
         for kind, name in self.names.items():
             path = self.evidence / ('python-dist' if kind != 'npm' else '') / name
@@ -42,6 +42,20 @@ class SDKReleaseControls(unittest.TestCase):
 
     def rewrite(self, value):
         (self.directory / s.MANIFEST).write_bytes(s.m.canonical(value))
+
+    def test_versioned_media_acceptance_preserves_historical_release_contract(self):
+        old = s.required_tests('v1.4.2')
+        current = s.required_tests('v1.5.0')
+        self.assertEqual(len(old), 15)
+        self.assertEqual(len(current), 21)
+        self.assertTrue(old < current)
+        self.assertEqual(s.required_tests('v0.0.0-candidate.g' + 'a'*40), current)
+        self.assertEqual(s.required_tests('v2.0.0'), current)
+
+    def test_new_candidate_cannot_seal_only_historical_acceptance(self):
+        self.source.update(version='v0.0.0-candidate.g' + 'a'*40, mode='candidate', publishable=False)
+        with self.assertRaisesRegex(ValueError, 'Full installed SDK'):
+            self.seal()
 
     def test_exact_tested_package_bytes_and_source_identity(self):
         value = self.seal()

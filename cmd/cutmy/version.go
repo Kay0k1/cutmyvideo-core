@@ -18,6 +18,9 @@ const usage = `cutmy — manually cut local media or run the self-hosted API
 
 Usage:
   cutmy inspect --input recording.mp4
+  cutmy analyze silence|video|loudness --input recording.mp4
+  cutmy cutlist import --format csv --input cuts.csv
+  cutmy cutlist export --format ffmetadata --segments segments.json
   cutmy clip --input recording.mp4 --start 00:01:00 --end 00:01:30 --output clip.mp4
   cutmy batch --plan cuts.json --output ./clips
   cutmy preflight --plan cuts.json --output ./clips
@@ -35,7 +38,7 @@ Use cutmy <command> --help for flags. Prefix a command with --json-errors for
 a JSON terminal error on stderr; local/argument failures have one JSON envelope.
 Services retain operational stderr logs. Exit codes: 0 success, 2 invalid arguments/config,
 124 timeout, 130 cancellation, 1 other failure.
-Local inspect, preflight, clip, batch and collection need FFmpeg/ffprobe,
+Local inspect, analyze, preflight, clip, batch and collection need FFmpeg/ffprobe,
 but do not need a database. See https://github.com/Kay0k1/cutmyvideo-core
 `
 

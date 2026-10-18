@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -41,14 +43,8 @@ func (s *Store) createJobLimited(ctx context.Context, owner string, r ExportRequ
 			return Job{}, err
 		}
 	}
-	var sourceID, sourceKind string
-	if err = tx.QueryRow(ctx, "SELECT id,kind FROM sources WHERE id=$1 AND owner=$2 FOR KEY SHARE", r.SourceID, owner).Scan(&sourceID, &sourceKind); errors.Is(err, pgx.ErrNoRows) {
-		return Job{}, ErrNotFound
-	}
+	sourceKind, err := checkJobSources(ctx, tx, owner, r)
 	if err != nil {
-		return Job{}, err
-	}
-	if err = checkSourceMedia(ctx, tx, sourceID, owner); err != nil {
 		return Job{}, err
 	}
 	c := s.storageConfig()
@@ -104,7 +100,7 @@ func (s *Store) CreateJob(ctx context.Context, owner string, r ExportRequest, ke
 			return Job{}, err
 		}
 	}
-	if err = checkSourceMedia(ctx, tx, r.SourceID, owner); err != nil {
+	if _, err = checkJobSources(ctx, tx, owner, r); err != nil {
 		return Job{}, err
 	}
 	j, err := insertJob(ctx, tx, owner, r, key)
@@ -112,6 +108,46 @@ func (s *Store) CreateJob(ctx context.Context, owner string, r ExportRequest, ke
 		return j, err
 	}
 	return j, tx.Commit(ctx)
+}
+
+// Both admissions hold the storage/source fence while authorizing and locking
+// every recording. A queued job never depends only on an unchecked JSON ref.
+// Idempotent recovery occurs before this check and retains its original job.
+func checkJobSources(ctx context.Context, tx pgx.Tx, owner string, r ExportRequest) (string, error) {
+	var kind, path string
+	if err := tx.QueryRow(ctx, `SELECT kind,path FROM sources WHERE id=$1 AND owner=$2 FOR KEY SHARE`, r.SourceID, owner).Scan(&kind, &path); errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	} else if err != nil {
+		return "", err
+	}
+	if err := checkSourceMedia(ctx, tx, r.SourceID, owner); err != nil {
+		return "", err
+	}
+	if err := edit.ValidateRenderOptions(edit.ExportRequest(r)); err != nil {
+		return "", &sourceProblem{code: "invalid_export", message: err.Error()}
+	}
+	if r.AudioReplace == nil {
+		return kind, nil
+	}
+	if r.AudioReplace.Input != "" || r.AudioReplace.SourceID == "" || r.AudioReplace.SourceID == r.SourceID {
+		return "", &sourceProblem{code: "invalid_export", message: "audio_replace requires a distinct owner-uploaded source_id"}
+	}
+	if kind != "upload" || path == "" {
+		return "", &sourceProblem{code: "invalid_export", message: "audio replacement requires an uploaded primary recording"}
+	}
+	var audioKind, audioPath string
+	if err := tx.QueryRow(ctx, `SELECT kind,path FROM sources WHERE id=$1 AND owner=$2 FOR KEY SHARE`, r.AudioReplace.SourceID, owner).Scan(&audioKind, &audioPath); errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	} else if err != nil {
+		return "", err
+	}
+	if err := checkSourceMedia(ctx, tx, r.AudioReplace.SourceID, owner); err != nil {
+		return "", err
+	}
+	if audioKind != "upload" || audioPath == "" {
+		return "", &sourceProblem{code: "invalid_export", message: "audio replacement requires an uploaded audio recording"}
+	}
+	return kind, nil
 }
 
 func insertJob(ctx context.Context, db dbExecutor, owner string, r ExportRequest, key string) (Job, error) {

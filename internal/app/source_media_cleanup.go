@@ -34,7 +34,7 @@ func checkSourceMedia(ctx context.Context, db dbExecutor, id, owner string) erro
 // jobs permanently prevent cleanup after a successful retry.
 func requestSourceMediaCleanup(ctx context.Context, tx pgx.Tx, jobID string) error {
 	_, err := tx.Exec(ctx, `INSERT INTO source_media_cleanup(source_id,successful_job_id,protected_job_ids)
- SELECT j.source_id,j.id,ARRAY(SELECT other.id FROM jobs other WHERE other.source_id=j.source_id AND (other.created_at>=j.created_at OR other.updated_at>=j.created_at OR other.status IN ('queued','running','waiting_storage')))
+ SELECT j.source_id,j.id,ARRAY(SELECT other.id FROM jobs other WHERE other.source_id=j.source_id AND (other.created_at>=j.created_at OR other.updated_at>=j.created_at OR other.status IN ('queued','running','waiting_storage')) UNION ALL SELECT other.id FROM jobs other WHERE other.audio_source_id=j.source_id AND (other.created_at>=j.created_at OR other.updated_at>=j.created_at OR other.status IN ('queued','running','waiting_storage')))
  FROM jobs j JOIN sources source ON source.id=j.source_id
  WHERE j.id=$1 AND j.status='succeeded' AND NOT j.cancel_requested AND NOT source.media_removed
  AND j.request->'cleanup_source'='true'::jsonb
@@ -54,8 +54,10 @@ func (s *Store) ProcessSourceMediaCleanup(ctx context.Context, c Config) error {
 	rows, err := s.DB.Query(ctx, `SELECT cleanup.source_id FROM source_media_cleanup cleanup WHERE
  EXISTS(SELECT 1 FROM jobs WHERE id=ANY(cleanup.protected_job_ids) AND status IN ('failed','cancelled')) OR (
  NOT EXISTS(SELECT 1 FROM jobs WHERE source_id=cleanup.source_id AND status IN ('queued','running','waiting_storage'))
+ AND NOT EXISTS(SELECT 1 FROM jobs WHERE audio_source_id=cleanup.source_id AND status IN ('queued','running','waiting_storage'))
  AND NOT EXISTS(SELECT 1 FROM storage_reservations WHERE job_id=cleanup.source_id AND kind='preview')
  AND NOT EXISTS(SELECT 1 FROM storage_reservations reservation JOIN jobs job ON job.id=reservation.job_id WHERE job.source_id=cleanup.source_id AND reservation.kind='job')
+ AND NOT EXISTS(SELECT 1 FROM storage_reservations reservation JOIN jobs job ON job.id=reservation.job_id WHERE job.audio_source_id=cleanup.source_id AND reservation.kind='job')
  AND NOT EXISTS(SELECT 1 FROM source_media_readers WHERE source_id=cleanup.source_id AND expires_at>clock_timestamp()))
  ORDER BY cleanup.requested_at,cleanup.source_id LIMIT 16`)
 	if err != nil {
@@ -93,7 +95,7 @@ func (s *Store) prepareSourceMediaCleanup(ctx context.Context, c Config, id stri
 		return nil, err
 	}
 	var failed, active bool
-	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM jobs WHERE id=ANY($2) AND status IN ('failed','cancelled')),EXISTS(SELECT 1 FROM jobs WHERE source_id=$1 AND status IN ('queued','running','waiting_storage')) OR EXISTS(SELECT 1 FROM storage_reservations WHERE job_id=$1 AND kind='preview') OR EXISTS(SELECT 1 FROM storage_reservations reservation JOIN jobs job ON job.id=reservation.job_id WHERE job.source_id=$1 AND reservation.kind='job') OR EXISTS(SELECT 1 FROM source_media_readers WHERE source_id=$1 AND expires_at>clock_timestamp())`, id, protected).Scan(&failed, &active); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM jobs WHERE id=ANY($2) AND status IN ('failed','cancelled')),EXISTS(SELECT 1 FROM jobs WHERE source_id=$1 AND status IN ('queued','running','waiting_storage')) OR EXISTS(SELECT 1 FROM jobs WHERE audio_source_id=$1 AND status IN ('queued','running','waiting_storage')) OR EXISTS(SELECT 1 FROM storage_reservations WHERE job_id=$1 AND kind='preview') OR EXISTS(SELECT 1 FROM storage_reservations reservation JOIN jobs job ON job.id=reservation.job_id WHERE job.source_id=$1 AND reservation.kind='job') OR EXISTS(SELECT 1 FROM storage_reservations reservation JOIN jobs job ON job.id=reservation.job_id WHERE job.audio_source_id=$1 AND reservation.kind='job') OR EXISTS(SELECT 1 FROM source_media_readers WHERE source_id=$1 AND expires_at>clock_timestamp())`, id, protected).Scan(&failed, &active); err != nil {
 		return nil, err
 	}
 	if failed {

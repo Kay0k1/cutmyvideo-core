@@ -5,12 +5,12 @@ applications. Python 3.10 or later; no runtime dependencies. Requests and result
 use JSON-compatible typed dictionaries, so the same plans can be saved, reviewed,
 or passed between tools without a framework or an agent-specific protocol.
 
-Published release [1.4.2](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.4.2)
+Published release [1.5.0](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.5.0)
 includes a wheel and source archive as signed GitHub release assets. This
 distribution channel is separate from PyPI registry publication. Install the wheel:
 
 ```sh
-python -m pip install https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.2/cutmyvideo-1.4.2-py3-none-any.whl
+python -m pip install https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.5.0/cutmyvideo-1.5.0-py3-none-any.whl
 ```
 
 The preflight methods require a core build with the preflight API/CLI. Local
@@ -356,3 +356,65 @@ PYTHONPATH=sdk/python/src python -m unittest discover -s sdk/python/tests -v
 
 Repository checks also build a wheel and source archive, install them outside
 the checkout, and exercise real local and HTTP media exports.
+
+## Analysis and edit interchange (core 1.5)
+
+```python
+silence = core.analyze_silence('recording.mp4', {'threshold_db': -40, 'min_silence_ms': 500})
+video = core.analyze_video('recording.mp4', {'scene_threshold': 0.3})
+loudness = core.analyze_loudness('recording.mp4')
+# Review this existing Plan before executing it; analysis does not cut anything.
+plan = core.silence_plan('recording.mp4', {'keep_before_ms': 100, 'keep_after_ms': 100})
+cuts = core.import_cut_list({'format': 'csv', 'text': '0,5,Opening\n12,,Answer\n'})
+plan = core.plan_cut_list({'format': 'csv', 'text': '0,5,Opening\n12,,Answer\n'},
+                          'recording.mp4', duration_ms=60000)
+chapters = core.export_cut_list({'format': 'ffmetadata', 'plan': plan})
+```
+
+Analysis times and options use milliseconds. `end_ms=0` means the source end;
+`analyzed_end_ms` records actual decoded coverage. An uncovered tail is never
+assumed to be silence. Silent audio has `None` loudness metrics. Scene scores
+indicate visual changes, and do not select interesting moments. Local analysis
+has a two-minute default deadline; silence/video windows are limited to 30
+minutes. HTTP uses the same methods with an uploaded source ID, and requires
+its owner session. HTTP analysis allows six calls per owner per minute, a
+30-minute window and a two-minute deadline; provider URLs are not fetched.
+
+CSV columns are start seconds, optional end seconds and label, without a header.
+CutList JSON uses integer milliseconds and preserves `end_ms=None` markers.
+FFmetadata needs resolved, ordered, nonoverlapping entries. Local `plan_cut_list`
+resolves the final marker using an explicit media duration. HTTP import/export
+accepts `cut_list` or actual artifact `segments`, and never accepts a local Plan.
+`export_cut_list` takes exactly one `cut_list`, `segments`, or (local only) `plan`.
+
+## Explicit render edits
+
+Add these to a Plan's `options`, an HTTP export request, or collection defaults
+and clip overrides. Use `quality='best'` and `cut_mode='accurate'`; canvas requires
+MP4 output. All normalization targets are explicit:
+
+```python
+edits = {
+    'audio_normalize': {'integrated_lufs': -16, 'true_peak_dbtp': -1, 'loudness_range_lu': 11},
+    'canvas': {'width': 1080, 'height': 1920, 'fit': 'contain', 'background': '#000000'},
+    'audio_replace': {'input': './music.wav', 'offset_ms': 1000},  # local
+}
+# HTTP uses {'source_id': uploaded_audio['id'], 'offset_ms': 1000} instead.
+```
+
+Canvas dimensions must be even, between 2 and 4096. Normalization targets are
+−70…−5 LUFS, −9…0 dBTP and 1…50 LU. A positive audio offset places replacement
+time zero at that video timestamp. Uncovered regions are silent, and exports
+retain their requested duration. Replacement conflicts with `audio_track` and
+`no_audio`. Local relative replacement paths resolve against the caller's
+working directory before the SDK writes its private Plan; the caller is not
+mutated. HTTP requires both primary and replacement sources to be uploaded,
+locally staged and owned by the same session. A scoped project grant covers
+only its primary source: a recipient can recover an existing job but cannot
+submit a new replacement source through that grant.
+
+Collections can clear inherited edits with `clear_audio_normalize`,
+`clear_canvas`, and `clear_audio_replace`. Portable project files preserve
+normalization, canvas and clear flags. A non-null `audio_replace` is explicitly
+refused on portable import/export until the caller relinks the audio: portable
+files must contain neither server source IDs nor local paths.

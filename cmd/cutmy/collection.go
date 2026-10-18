@@ -119,5 +119,13 @@ func readCollectionPlan(path string) (plan engine.CollectionPlan, err error) {
 	if plan.Input != "" && !filepath.IsAbs(plan.Input) {
 		plan.Input = filepath.Join(filepath.Dir(path), plan.Input)
 	}
+	if err := resolveReplacementInput(path, plan.Options.AudioReplace); err != nil {
+		return plan, err
+	}
+	for i := range plan.Clips {
+		if err := resolveReplacementInput(path, plan.Clips[i].Options.AudioReplace); err != nil {
+			return plan, err
+		}
+	}
 	return plan, nil
 }

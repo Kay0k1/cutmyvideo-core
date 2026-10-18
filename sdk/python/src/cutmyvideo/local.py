@@ -15,7 +15,10 @@ from typing import Any, Mapping, Sequence, cast
 
 from .client import _positive
 from .errors import APIError, LocalError
-from .types import BatchResult, CollectionPlan, LocalCollectionPreflight, LocalCollectionResult, LocalPreflightResult, LocalSourceInfo, Plan, SubtitleRequest, SubtitleResult
+from .types import (BatchResult, CollectionPlan, LocalCollectionPreflight, LocalCollectionResult, LocalPreflightResult,
+                    LocalSourceInfo, Plan, SubtitleRequest, SubtitleResult, SilenceOptions, SilenceResult,
+                    VideoAnalysisOptions, VideoAnalysisResult, LoudnessOptions, LoudnessResult, CutList,
+                    CutListImportRequest, LocalCutListExportRequest, CutListExportResult)
 
 _LIMIT = 1 << 20
 
@@ -48,6 +51,76 @@ class LocalCutmy:
 
     def inspect(self, input: str | os.PathLike[str], *, timeout: float = 120) -> LocalSourceInfo:
         return cast(LocalSourceInfo, self._run("inspect", ["--input", str(Path(input).absolute())], timeout))
+
+    def _analyze(self, kind: str, input: str | os.PathLike[str], options: Mapping[str, Any] | None,
+                 timeout: float, extra: list[str] | None = None) -> dict[str, Any]:
+        from .media import analysis_flags
+        return self._run(["analyze", kind], ["--input", str(Path(input).absolute()), "--threads", str(self.threads)]
+                         + analysis_flags(kind, options) + (extra or []), timeout)
+
+    def analyze_silence(self, input: str | os.PathLike[str], options: SilenceOptions | None = None, *, timeout: float = 120) -> SilenceResult:
+        return cast(SilenceResult, self._analyze("silence", input, options, timeout))
+
+    def analyze_video(self, input: str | os.PathLike[str], options: VideoAnalysisOptions | None = None, *, timeout: float = 120) -> VideoAnalysisResult:
+        return cast(VideoAnalysisResult, self._analyze("video", input, options, timeout))
+
+    def analyze_loudness(self, input: str | os.PathLike[str], options: LoudnessOptions | None = None, *, timeout: float = 120) -> LoudnessResult:
+        return cast(LoudnessResult, self._analyze("loudness", input, options, timeout))
+
+    def silence_plan(self, input: str | os.PathLike[str], options: SilenceOptions | None = None, *,
+                     format: str = "mp4", output_mode: str = "joined", timeout: float = 120) -> Plan:
+        if format not in ("mp4", "mp3") or output_mode not in ("joined", "separate"):
+            raise ValueError("Silence plans require mp4|mp3 and joined|separate")
+        return cast(Plan, self._analyze("silence", input, options, timeout, ["--plan", "--format", format, "--output-mode", output_mode]))
+
+    def _cut_operation(self, operation: str, content: str, format: str, timeout: float,
+                       flag: str = "--input", extra: list[str] | None = None) -> dict[str, Any]:
+        from .media import cut_format
+        deadline = time.monotonic() + _positive(timeout, "timeout")
+        cut_format(format)
+        encoded = content.encode("utf-8")
+        if len(encoded) > _LIMIT:
+            raise ValueError("Cut-list input exceeds1MiB")
+        with tempfile.TemporaryDirectory(prefix="cutmy-sdk-cutlist-") as directory:
+            path = Path(directory) / "input.txt"
+            with path.open("xb") as file:
+                if os.name != "nt":
+                    os.chmod(path, 0o600)
+                file.write(encoded)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise LocalError("Local cut-list deadline exceeded", code="timeout")
+            return self._run(["cutlist", operation], ["--format", format, flag, str(path)] + (extra or []), remaining)
+
+    def import_cut_list(self, request: CutListImportRequest | Mapping[str, Any], *, timeout: float = 120) -> CutList:
+        from .media import cut_import
+        body = cut_import(request)
+        return cast(CutList, self._cut_operation("import", body["text"], body["format"], timeout))
+
+    def plan_cut_list(self, request: CutListImportRequest | Mapping[str, Any], media: str | os.PathLike[str], *,
+                      duration_ms: int, output_mode: str = "joined", timeout: float = 120) -> Plan:
+        from .media import cut_import, integer
+        body = cut_import(request)
+        if not integer(duration_ms) or duration_ms == 0 or output_mode not in ("joined", "separate"):
+            raise ValueError("Cut-list plans require a positive duration_ms and joined|separate output_mode")
+        return cast(Plan, self._cut_operation("import", body["text"], body["format"], timeout,
+                    extra=["--plan", "--media", str(Path(media).absolute()), "--duration-ms", str(duration_ms), "--output-mode", output_mode]))
+
+    def export_cut_list(self, request: LocalCutListExportRequest | Mapping[str, Any], *, timeout: float = 120) -> CutListExportResult:
+        from .media import cut_export, cut_format, plan_result
+        if set(request) == {"format", "plan"}:
+            cut_format(request["format"])
+            try:
+                plan_result(request["plan"])
+            except APIError:
+                raise ValueError("Invalid plan") from None
+            body = dict(request)
+            field = "plan"
+        else:
+            body = cut_export(request)
+            field = "cut_list" if "cut_list" in body else "segments"
+        return cast(CutListExportResult, self._cut_operation("export", json.dumps(body[field], ensure_ascii=False, allow_nan=False),
+                    body["format"], timeout, flag="--input" if field == "cut_list" else "--" + field))
 
     def preflight(self, plan: Plan | Mapping[str, Any], output: str | os.PathLike[str],
                   *, timeout: float = 120) -> LocalPreflightResult:
@@ -104,6 +177,11 @@ class LocalCutmy:
         if not isinstance(data.get("input"), str) or not data["input"]:
             raise ValueError("Plan input must be a nonempty local path")
         data["input"] = str(Path(data["input"]).absolute())
+        from .media import render_option_sets, render_references
+        render_references(data, local=True)
+        for options in render_option_sets(data):
+            if options.get("audio_replace") is not None:
+                options["audio_replace"]["input"] = str(Path(options["audio_replace"]["input"]).absolute())
         encoded = json.dumps(data, ensure_ascii=False, allow_nan=False).encode("utf-8")
         if len(encoded) > 1 << 20:
             raise ValueError("Plan exceeds 1 MiB")
@@ -159,7 +237,8 @@ class LocalCutmy:
 
     def _run(self, command: str | list[str], arguments: list[str], timeout: float, *, max_json_bytes: int = _LIMIT) -> dict[str, Any]:
         timeout = _positive(timeout, "timeout")
-        argv = self._binary + ["--json-errors"] + ([command] if isinstance(command, str) else command) + arguments + ["--timeout", f"{timeout:.9f}s"]
+        cli_timeout = [] if isinstance(command, list) and command[0] == "cutlist" else ["--timeout", f"{timeout:.9f}s"]
+        argv = self._binary + ["--json-errors"] + ([command] if isinstance(command, str) else command) + arguments + cli_timeout
         kwargs: dict[str, Any] = {"stdout": subprocess.PIPE, "stderr": subprocess.PIPE, "stdin": subprocess.DEVNULL}
         if os.name == "posix":
             kwargs["start_new_session"] = True
@@ -238,7 +317,19 @@ class LocalCutmy:
             raise LocalError(message, code=code, exit_code=process.returncode, outputs=partial)
         if output is None or output.get("incomplete") is True:
             raise LocalError("Local cutmy returned an invalid successful JSON result", code="invalid_response", outputs=partial)
-        if command == "inspect":
+        if isinstance(command, list) and command[0] in ("analyze", "cutlist"):
+            from .media import analysis_result, cut_list, cut_export_result, plan_result
+            try:
+                if command[0] == "analyze":
+                    plan_result(output) if "--plan" in arguments else analysis_result(command[1], output)
+                elif command[1] == "import":
+                    plan_result(output) if "--plan" in arguments else cut_list(output)
+                else:
+                    cut_export_result(output, arguments[arguments.index("--format") + 1])
+            except APIError:
+                raise LocalError("Local analysis or cut-list result is invalid", code="invalid_response") from None
+            valid = True
+        elif command == "inspect":
             valid = (isinstance(output.get("duration_ms"), int) and not isinstance(output["duration_ms"], bool)
                      and output["duration_ms"] > 0 and isinstance(output.get("tracks"), list))
         elif command == ["collection", "validate"]:

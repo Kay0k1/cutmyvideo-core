@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
 	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
 	"github.com/Kay0k1/cutmyvideo-core/internal/localmedia"
 )
@@ -197,9 +198,15 @@ func (e *Engine) ExportWithOptions(ctx context.Context, input, output string, r 
 		o.Format = strings.TrimPrefix(strings.ToLower(filepath.Ext(output)), ".")
 	}
 	req := localmedia.ExportRequest{Ranges: []localmedia.Range{{StartMS: r.StartMS, EndMS: r.EndMS}}, Format: o.Format, Quality: o.Quality, CutMode: o.CutMode, AudioTrack: o.AudioTrack, NoAudio: o.NoAudio, SubtitleMode: o.SubtitleMode, Crop: o.Crop}
+	req.AudioNormalize, req.Canvas, req.AudioReplace = edit.CloneAudioNormalize(o.AudioNormalize), edit.CloneCanvas(o.Canvas), edit.CloneAudioReplace(o.AudioReplace)
 	if err = req.Validate(e.config, localmedia.Source{DurationMS: s.DurationMS, Path: input}); err != nil {
 		return AdvancedResult{}, invalidArgument(err)
 	}
+	ctx, releaseReplacement, err := prepareEngineReplacement(ctx, req)
+	if err != nil {
+		return AdvancedResult{}, err
+	}
+	defer releaseReplacement()
 	tracks, err := localmedia.SelectExportTracks(s.Tracks, req)
 	if err != nil {
 		return AdvancedResult{}, err
@@ -228,6 +235,9 @@ func (e *Engine) ExportWithOptions(ctx context.Context, input, output string, r 
 	}
 	// Synchronize completed bytes before exclusive linking, then persist the
 	// output directory entry before reporting success.
+	if err = localmedia.CheckAudioReplacement(ctx); err != nil {
+		return AdvancedResult{}, err
+	}
 	info, err := e.publish(ctx, tmp, output)
 	if err != nil {
 		if errors.Is(err, os.ErrExist) && !errors.Is(err, fsdurable.ErrPublicationUncertain) {

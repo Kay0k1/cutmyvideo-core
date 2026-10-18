@@ -3,12 +3,12 @@
 TypeScript clients for local `cutmy` execution and the cutmyvideo-core HTTP API.
 The package has no runtime dependencies. Node 20.19 or newer is required for the
 Node entry; the main HTTP entry also works in browsers with modern Fetch APIs.
-Published release [1.4.2](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.4.2)
+Published release [1.5.0](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.5.0)
 includes a signed npm tarball as a GitHub release asset. This distribution channel
 is separate from npm registry publication. Install the tarball:
 
 ```sh
-npm install https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.4.2/cutmyvideo-sdk-1.4.2.tgz
+npm install https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.5.0/cutmyvideo-sdk-1.5.0.tgz
 ```
 
 ## Local files
@@ -392,3 +392,63 @@ privacy for these methods as for single-job plans.
 Run `npm test` for transport, cancellation, partial result, bounded stream and
 local process tests. Repository CI also installs the packed tarball in a fresh
 consumer and checks both clients against real core media operations.
+
+## Analysis and edit interchange (core 1.5)
+
+```ts
+const silence = await cutmy.analyzeSilence('./recording.mp4', {threshold_db: -40, min_silence_ms: 500});
+const video = await cutmy.analyzeVideo('./recording.mp4', {scene_threshold: .3});
+const loudness = await cutmy.analyzeLoudness('./recording.mp4');
+// Review the editable Plan before executing it. Analysis does not cut media.
+const plan = await cutmy.silencePlan('./recording.mp4', {keep_before_ms: 100, keep_after_ms: 100});
+const text = '0,5,Opening\n12,,Answer\n';
+const cuts = await cutmy.importCutList({format: 'csv', text});
+const imported = await cutmy.planCutList({format: 'csv', text}, {media: './recording.mp4', durationMs: 60000});
+const chapters = await cutmy.exportCutList({format: 'ffmetadata', plan: imported});
+```
+
+Analysis options and results use milliseconds. `end_ms: 0` means source end;
+`analyzed_end_ms` records actual decoded coverage. Uncovered tails are never
+assumed to be silence; silent audio has `null` loudness metrics. Scene scores
+indicate visual changes, rather than interesting moments. The same HTTP methods
+accept uploaded source IDs and require the owner session. HTTP permits six
+analyses per owner per minute, a 30-minute window and a two-minute deadline.
+Local silence/video windows are also bounded to 30 minutes. Local requests
+have a two-minute default deadline. Provider URLs are not fetched for analysis.
+
+CSV contains start seconds, optional end seconds and label, without a header.
+CutList JSON uses integer milliseconds and preserves `end_ms: null` markers.
+FFmetadata requires resolved, ordered, nonoverlapping entries. `planCutList`
+needs an explicit duration to resolve the final marker. `exportCutList` accepts
+exactly one `cut_list`, actual artifact `segments`, or (local only) `plan`.
+HTTP interchange never accepts local Plans or media paths.
+
+## Explicit render edits
+
+Plan options, HTTP exports and collection defaults/overrides support:
+
+```ts
+const edits = {
+  audio_normalize: {integrated_lufs: -16, true_peak_dbtp: -1, loudness_range_lu: 11},
+  canvas: {width: 1080, height: 1920, fit: 'contain' as const, background: '#000000'},
+  audio_replace: {input: './music.wav', offset_ms: 1000}, // local only
+};
+// HTTP uses {source_id: uploadedAudio.id, offset_ms: 1000} instead.
+```
+
+Use `quality: 'best'` and `cut_mode: 'accurate'`; canvas requires MP4. Canvas
+dimensions are even and between 2 and 4096. Normalization targets are explicit:
+−70…−5 LUFS, −9…0 dBTP and 1…50 LU. A positive offset places audio time zero
+at that video timestamp. Uncovered regions become silence; output duration
+stays unchanged. Replacement conflicts with `audio_track` and `no_audio`.
+Relative local replacement paths resolve against configured `cwd` before the
+SDK creates its private Plan. The input object is not mutated.
+
+HTTP requires both sources to be uploaded, locally staged and owned by the same
+session. Scoped project grants cover only the primary source. A recipient can
+recover an existing job but cannot submit a new replacement through the grant.
+Collections support `clear_audio_normalize`, `clear_canvas` and
+`clear_audio_replace`. Portable projects retain normalization, canvas and these
+clear flags. Non-null `audio_replace` is explicitly refused on portable
+import/export until audio is relinked, preserving the guarantee that portable
+files contain neither local paths nor server source IDs.

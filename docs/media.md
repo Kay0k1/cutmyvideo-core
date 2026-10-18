@@ -1,5 +1,11 @@
 # Media selection and rendering
 
+Version 1.5.0 adds [bounded analysis and explicit rendering options](media-analysis-and-rendering.md):
+silence plans, loudness reports/normalization, contain/pad canvases, scene/black
+events, cut-list/chapter interchange and external audio on the source clock.
+Existing exports retain their defaults. Lossy encoded loudness must be measured
+on the completed output when a delivery target requires it.
+
 This policy was **introduced in 1.0.2**. The published
 v0.2.1 archives predate these selection, display-geometry and HDR diagnostics.
 Local CLI, Go SDK and server exports share the media implementation.

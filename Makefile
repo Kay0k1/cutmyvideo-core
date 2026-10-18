@@ -69,6 +69,7 @@ hosting-controls-check:
 	$(PYTHON) -m unittest discover -s scripts -p source_media_cleanup_transition_test.py
 	$(PYTHON) -m unittest discover -s scripts -p metadata_resolution_transition_test.py
 	$(PYTHON) -m unittest discover -s scripts -p agent_projects_transition_test.py
+	$(PYTHON) -m unittest discover -s scripts -p external_audio_transition_test.py
 
 contract-check: api-check
 	CUTMY_REQUIRE_CONTRACT=1 CUTMY_CONTRACT_PYTHON=$(PYTHON) $(GO) test -count=1 ./internal/app -run '^TestHTTPPublicContract$$'

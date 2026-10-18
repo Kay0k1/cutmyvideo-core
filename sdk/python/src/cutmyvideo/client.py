@@ -28,7 +28,9 @@ from urllib.parse import quote, urlsplit
 from .errors import APIError, WaitCancelled, WaitTimeout, JobError
 from .types import Artifact, CollectionRequest, CollectionRunReport, CollectionSubmission, CollectionValidation, ExportRequest, Job, PreflightResult, Source, TrackReport
 from .types import (AgentProject, ProjectCreateRequest, ProjectEditRequest, ProjectHandoff, SourcePreparationInput,
-                    SourcePreparationReceipt, SourcePreparationReport, SubtitleRequest, SubtitleResult)
+                    SourcePreparationReceipt, SourcePreparationReport, SubtitleRequest, SubtitleResult,
+                    SilenceOptions, SilenceResult, VideoAnalysisOptions, VideoAnalysisResult,
+                    LoudnessOptions, LoudnessResult, CutList, CutListImportRequest, CutListExportRequest, CutListExportResult)
 
 _JSON_LIMIT = 1 << 20
 _CHUNK = 64 << 10
@@ -390,7 +392,7 @@ class CutmyClient:
                             abort()
                             return
                 threading.Thread(target=cancel_transfer, daemon=True).start()
-            outgoing = {"Accept": "application/json", "User-Agent": "cutmyvideo-python/1.4.2"}
+            outgoing = {"Accept": "application/json", "User-Agent": "cutmyvideo-python/1.5.0"}
             if self._cookie:
                 outgoing["Cookie"] = "cutmy_session=" + self._cookie
             if headers:
@@ -656,10 +658,14 @@ class CutmyClient:
 
     def create_project(self, request: ProjectCreateRequest | Mapping[str, Any], *, timeout: float | None = None) -> AgentProject:
         from .projects import project_result
+        from .media import render_references
+        render_references(request)
         return cast(AgentProject, project_result(self._json("POST", "/api/v1/projects", request, timeout=timeout, json_limit=16 << 20)))
 
     def edit_project(self, project_id: str, request: ProjectEditRequest | Mapping[str, Any], *, timeout: float | None = None) -> AgentProject:
         from .projects import project_result
+        from .media import render_references
+        render_references(request)
         return cast(AgentProject, project_result(self._json("PUT", "/api/v1/projects/" + self._id(project_id), request, timeout=timeout, json_limit=16 << 20)))
 
     def submit_project_collection(self, project_id: str, *, revision: int, clip_ids: list[str],
@@ -689,6 +695,30 @@ class CutmyClient:
     def get_source(self, source_id: str, *, timeout: float | None = None) -> Source:
         return self._source(self._json("GET", "/api/v1/sources/" + self._id(source_id), timeout=timeout))
 
+    def _analyze(self, kind: str, source_id: str, options: Mapping[str, Any] | None, timeout: float | None) -> dict[str, Any]:
+        from .media import analysis_options, analysis_result
+        body = analysis_options(kind, options)
+        return analysis_result(kind, self._json("POST", "/api/v1/sources/" + self._id(source_id) + "/analysis/" + kind,
+                                               body, timeout=timeout, default=120))
+
+    def analyze_silence(self, source_id: str, options: SilenceOptions | None = None, *, timeout: float | None = None) -> SilenceResult:
+        return cast(SilenceResult, self._analyze("silence", source_id, options, timeout))
+
+    def analyze_video(self, source_id: str, options: VideoAnalysisOptions | None = None, *, timeout: float | None = None) -> VideoAnalysisResult:
+        return cast(VideoAnalysisResult, self._analyze("video", source_id, options, timeout))
+
+    def analyze_loudness(self, source_id: str, options: LoudnessOptions | None = None, *, timeout: float | None = None) -> LoudnessResult:
+        return cast(LoudnessResult, self._analyze("loudness", source_id, options, timeout))
+
+    def import_cut_list(self, request: CutListImportRequest | Mapping[str, Any], *, timeout: float | None = None) -> CutList:
+        from .media import cut_import, cut_list
+        return cast(CutList, cut_list(self._json("POST", "/api/v1/cut-lists/import", cut_import(request), timeout=timeout)))
+
+    def export_cut_list(self, request: CutListExportRequest | Mapping[str, Any], *, timeout: float | None = None) -> CutListExportResult:
+        from .media import cut_export, cut_export_result
+        body = cut_export(request)
+        return cast(CutListExportResult, cut_export_result(self._json("POST", "/api/v1/cut-lists/export", body, timeout=timeout), body["format"]))
+
     def get_tracks(self, source_id: str, *, timeout: float | None = None) -> TrackReport:
         data = self._json("GET", "/api/v1/sources/" + self._id(source_id) + "/tracks", timeout=timeout)
         if not isinstance(data.get("tracks"), list) or any(not isinstance(track, dict) for track in data["tracks"]):
@@ -696,6 +726,8 @@ class CutmyClient:
         return cast(TrackReport, data)
 
     def preflight(self, request: ExportRequest | Mapping[str, Any], *, timeout: float | None = None) -> PreflightResult:
+        from .media import render_references
+        render_references(request)
         data = self._json("POST", "/api/v1/jobs/preflight", request, timeout=timeout)
         if (data.get("valid") is not True or data.get("version") != 1 or isinstance(data.get("version"), bool)
                 or not isinstance(data.get("checks"), list) or not isinstance(data.get("warnings"), list)):
@@ -704,6 +736,8 @@ class CutmyClient:
 
     def create_job(self, request: ExportRequest | Mapping[str, Any], *, idempotency_key: str,
                    timeout: float | None = None) -> Job:
+        from .media import render_references
+        render_references(request)
         if (not isinstance(idempotency_key, str) or not idempotency_key
                 or len(idempotency_key.encode("utf-8")) > 128
                 or not idempotency_key.strip()

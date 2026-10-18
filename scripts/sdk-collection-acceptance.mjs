@@ -5,7 +5,7 @@ import { link, lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rm, sta
 import { dirname, isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const SDK = "typescript", EXPECTED_VERSION = "1.4.2", JSON_LIMIT = 1 << 20;
+const SDK = "typescript", EXPECTED_VERSION = "1.5.0", JSON_LIMIT = 1 << 20;
 const ACTIONS = new Set(["local", "prepare", "validate", "run", "kill-eight", "kill-download", "resume", "replay", "revise-two", "draft-selected"]);
 class AcceptanceFailure extends Error { constructor(code) { super(code); this.code = code; } }
 function require(value, code) { if (!value) throw new AcceptanceFailure(code); }

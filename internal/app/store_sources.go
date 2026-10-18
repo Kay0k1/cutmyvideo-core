@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const sourceSelect = `SELECT id,owner,title,duration_ms,kind,path,url,width,height,embed_url,thumbnail_url,provider_id,provider,thumbnail_path,created_at,EXISTS(SELECT 1 FROM jobs WHERE source_id=sources.id),media_removed,(SELECT fingerprint FROM source_fingerprints WHERE source_id=sources.id AND owner=sources.owner) FROM sources`
+const sourceSelect = `SELECT id,owner,title,duration_ms,kind,path,url,width,height,embed_url,thumbnail_url,provider_id,provider,thumbnail_path,created_at,(EXISTS(SELECT 1 FROM jobs WHERE source_id=sources.id OFFSET 0) OR EXISTS(SELECT 1 FROM jobs WHERE audio_source_id=sources.id OFFSET 0)),media_removed,(SELECT fingerprint FROM source_fingerprints WHERE source_id=sources.id AND owner=sources.owner) FROM sources`
 
 func scanSource(row pgx.Row, c Config) (Source, error) {
 	var v Source

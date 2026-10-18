@@ -30,6 +30,10 @@ func (s *Server) preflightJob(w http.ResponseWriter, r *http.Request, owner stri
 		writeError(w, http.StatusBadRequest, "invalid_export", err.Error())
 		return
 	}
+	if err = checkHTTPRenderReference(r.Context(), source, request); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_export", err.Error())
+		return
+	}
 	if !s.allow("preflight:"+owner, 30) {
 		writeError(w, http.StatusTooManyRequests, "rate_limit", "Too many job inspections; wait a minute")
 		return
@@ -93,6 +97,12 @@ func (s *Server) preflightJob(w http.ResponseWriter, r *http.Request, owner stri
 		return
 	}
 	defer releaseInspection()
+	ctx, releaseAudio, err := s.pinExportReplacement(ctx, source, request)
+	if err != nil {
+		writePreflightError(w, r, ctx, err)
+		return
+	}
+	defer releaseAudio()
 	result, err := PreflightLocal(ctx, s.Config, source.Path, request)
 	if err != nil {
 		writePreflightError(w, r, ctx, err)

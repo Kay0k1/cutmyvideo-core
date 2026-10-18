@@ -48,7 +48,7 @@ if (args[0] === 'orphan-worker') {
   if (!isAbsolute(plan.input) || (process.platform !== 'win32' && (((await stat(planPath)).mode & 0o777) !== 0o600 || ((await stat(dirname(planPath))).mode & 0o777) !== 0o700))) throw new Error('Unsafe temporary plan');
   if (command === 'collection') {
     if (args[2] === 'export') console.log(JSON.stringify(collectionResult));
-    else console.log(JSON.stringify({ version: 1, valid: true, rendition: collectionResult.rendition, source: { duration_ms: 5000 }, selected_clip_ids: flag('--clips').split(','), clips: plan.clips.map(clip => ({ id: clip.id, output_path: flag('--output'), request: { ranges: clip.ranges }, checks: [] })), input: plan.input, plan_path: planPath }));
+    else console.log(JSON.stringify({ version: 1, valid: true, rendition: collectionResult.rendition, source: { duration_ms: 5000 }, selected_clip_ids: flag('--clips').split(','), clips: plan.clips.map(clip => ({ id: clip.id, output_path: flag('--output'), request: { ranges: clip.ranges }, checks: [] })), input: plan.input, plan_path: planPath, plan }));
   }
   else if (command === 'batch') console.log(JSON.stringify({ outputs: [output] }));
   else console.log(JSON.stringify({ version: 1, valid: true, source: { duration_ms: 5000 }, request: { ranges: plan.ranges }, requested_duration_ms: 1000, output_count: 1, track_manifest: [], checks: [{ name: 'request', status: 'passed' }], warnings: [], output_paths: [flag('--output')], input: plan.input, plan_path: planPath }));

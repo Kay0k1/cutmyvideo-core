@@ -45,11 +45,20 @@ func (runtime mediaExportRuntime) NearestKeyframe(ctx context.Context, path stri
 }
 
 func (runtime mediaExportRuntime) Run(ctx context.Context, args []string, totalMS int64, report func(int64)) error {
-	if report == nil {
-		_, err := runCommand(ctx, runtime.config.FFmpeg, args...)
+	if err := CheckAudioReplacement(ctx); err != nil {
 		return err
 	}
-	return runCommandOutput(ctx, runtime.config.FFmpeg, args, &mediaProgressWriter{totalMS: totalMS, report: report})
+	if report == nil {
+		_, err := runCommand(ctx, runtime.config.FFmpeg, args...)
+		if err != nil {
+			return err
+		}
+		return CheckAudioReplacement(ctx)
+	}
+	if err := runCommandOutput(ctx, runtime.config.FFmpeg, args, &mediaProgressWriter{totalMS: totalMS, report: report}); err != nil {
+		return err
+	}
+	return CheckAudioReplacement(ctx)
 }
 
 func (runtime mediaExportRuntime) StatSize(path string) (int64, error) {

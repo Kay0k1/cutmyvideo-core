@@ -92,6 +92,15 @@ func acquireMediaProcessing(ctx context.Context, source Source, streams []platfo
 		if width <= 0 || height <= 0 || width > 8_388_608/height {
 			weight = budget.slots
 		}
+		if canvas := request.Canvas; canvas != nil && (canvas.Width <= 0 || canvas.Height <= 0 || canvas.Width > 8_388_608/canvas.Height) {
+			weight = budget.slots
+		}
+	}
+	// A second independently decoded recording can contain up to eight audio
+	// channels. Serialize these multi-input pipelines conservatively, including
+	// audio-only exports, rather than treating them as a single cheap decoder.
+	if request.AudioReplace != nil {
+		weight = budget.slots
 	}
 	if err := budget.weighted.Acquire(ctx, weight); err != nil {
 		return nil, err
