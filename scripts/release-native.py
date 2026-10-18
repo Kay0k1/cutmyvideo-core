@@ -41,6 +41,8 @@ CORE15_MEDIA_CHECKS = (
     'canvas_contain_padding', 'cut_list_csv_chapter_roundtrip',
     'video_scene_black_analysis', 'external_audio_timeline',
 )
+CORE16_MEDIA_CHECKS = ('lossless_audio_pcm_identity', 'aac_m4a_packet_extraction',
+                       'speed_pitch_and_target_size', 'verified_output_poster')
 REQUIRED_CHECKS = {
     'archive': ('external_source_and_manifest_hash', 'full_five_archive_bundle', 'safe_exact_native_six_files',
                 'embedded_go_and_documents'),
@@ -48,7 +50,7 @@ REQUIRED_CHECKS = {
     'cli': ('help', 'invalid_argument_single_json', 'missing_input_single_json', 'no_database_for_local_cli'),
     'media': ('real_fixture_oracles', 'inspect_coded_and_display_geometry', 'accurate_mp4', 'copy_mp4', 'mp3',
               'full_decode', 'default_audio_880hz', 'rotated_corners', 'existing_output_preserved',
-              'cropped_accurate_mp4', 'crop_copy_refused', 'cropped_saved_plan_joined') + COLLECTION_MEDIA_CHECKS + CORE15_MEDIA_CHECKS,
+              'cropped_accurate_mp4', 'crop_copy_refused', 'cropped_saved_plan_joined') + COLLECTION_MEDIA_CHECKS + CORE15_MEDIA_CHECKS + CORE16_MEDIA_CHECKS,
     'process': PROCESS_CHECKS,
     'service': ('real_server_and_worker', 'session_upload_exact_bytes', 'preview_miss_and_hit', 'queued_job_completion',
                 'download_decode_geometry_audio', 'ownership_404', 'range_206', 'same_binary_healthchecks',
@@ -594,11 +596,70 @@ class Native:
         outputs['cropped_joined'] = {'sha256': file_hash(joined), 'probe': self.probe(joined)}
         collection = self.collection_media(env)
         core15 = self.core15_media(env, batch['outputs'][0]['segments'])
+        core16 = self.core16_media(env)
         return ['real_fixture_oracles', 'inspect_coded_and_display_geometry', 'accurate_mp4', 'copy_mp4',
                 'mp3', 'full_decode', 'default_audio_880hz', 'rotated_corners', 'existing_output_preserved',
                 'cropped_accurate_mp4', 'crop_copy_refused', 'cropped_saved_plan_joined', *COLLECTION_MEDIA_CHECKS,
-                *CORE15_MEDIA_CHECKS], {
-                    'fixture': fixture, 'inspect': info, 'outputs': outputs, 'collection': collection, 'core15': core15}
+                *CORE15_MEDIA_CHECKS, *CORE16_MEDIA_CHECKS], {
+                    'fixture': fixture, 'inspect': info, 'outputs': outputs, 'collection': collection, 'core15': core15, 'core16': core16}
+
+    def core16_media(self, env):
+        """Exercise the extracted immutable executable, never a source build."""
+        def call(*args):
+            stdout, stderr, _ = self.app(*args, env=env)
+            require(not stderr, 'Archived delivery CLI wrote unexpected diagnostics')
+            return json.loads(stdout)
+
+        source = self.work / 'delivery-original.wav'
+        samples = [int(10000 * math.sin(2 * math.pi * 997 * i / 48000)) for i in range(3 * 48000)]
+        pcm = b''.join(struct.pack('<h', value) for value in samples)
+        with wave.open(str(source), 'wb') as file:
+            file.setnchannels(1); file.setsampwidth(2); file.setframerate(48000); file.writeframes(pcm)
+        audio = {}
+        for fmt, codec in (('wav', 'pcm_s24le'), ('flac', 'flac')):
+            path = self.work / ('delivery-lossless.' + fmt)
+            result = call('clip', '--input', source, '--output', path, '--end', '2', '--threads', '1')
+            info = self.probe(path)
+            require(len(info['streams']) == 1 and info['streams'][0]['codec_name'] == codec
+                    and info['streams'][0]['channels'] == 1 and info['streams'][0]['sample_rate'] == '48000'
+                    and int(info['streams'][0]['bits_per_raw_sample']) == 24,
+                    'Archived lossless output profile differs')
+            decoded = self.ff('-i', path, '-map', '0:a:0', '-c:a', 'pcm_s16le', '-f', 's16le', '-')
+            require(decoded == pcm[:2 * 48000 * 2] and result['size_bytes'] == path.stat().st_size,
+                    'Archived lossless output changed independently authored samples')
+            audio[fmt] = dict(bytes=path.stat().st_size, sha256=file_hash(path), decoded_pcm_sha256=m.digest(decoded))
+
+        extracted = self.work / 'delivery-extracted.m4a'
+        call('clip', '--input', self.input, '--output', extracted, '--end', '2', '--mode', 'copy', '--threads', '1')
+        streams = self.probe(extracted)['streams']
+        require(len(streams) == 1 and streams[0]['codec_name'] == 'aac', 'Archived M4A extraction changed codecs/streams')
+        self.decode(extracted); self.tone(extracted)
+        def packets(path, selection):
+            raw, _, _ = self.commands.run([self.ffprobe, '-v', 'error', '-select_streams', selection,
+                '-show_packets', '-show_data_hash', 'sha256', '-show_entries', 'packet=data_hash', '-of', 'json', path])
+            return [item['data_hash'] for item in json.loads(raw)['packets']]
+        original_packets, extracted_packets = packets(self.input, 'a:1'), packets(extracted, 'a:0')
+        require(extracted_packets and any(original_packets[i:i+len(extracted_packets)] == extracted_packets
+                                         for i in range(len(original_packets)-len(extracted_packets)+1)),
+                'Archived M4A output is not an unchanged contiguous AAC packet sequence')
+
+        video = self.work / 'delivery-sized-speed.mp4'
+        result = call('clip', '--input', self.input, '--output', video, '--end', '2', '--speed', '2',
+                      '--target-size-bytes', '262144', '--threads', '1')
+        self.decode(video); self.tone(video)
+        info = self.probe(video)
+        require(abs(float(info['format']['duration']) - 1) < .15 and 32 < video.stat().st_size <= 262144
+                and result['size_bytes'] == video.stat().st_size, 'Archived speed/target output is incomplete or oversized')
+        poster = self.work / 'delivery-poster.png'
+        image = call('poster', '--input', video, '--output', poster, '--at', '0.5', '--format', 'png')
+        poster_info = self.probe(poster)['streams'][0]
+        self.ff('-i', poster, '-frames:v', '1', '-f', 'null', '-')
+        require(poster_info['codec_name'] == 'png' and poster_info['width'] == self.video(video)['width']
+                and poster_info['height'] == self.video(video)['height'] and image['size_bytes'] == poster.stat().st_size
+                and image['timestamp_ms'] == 500, 'Archived output poster acknowledgement/geometry differs')
+        return dict(lossless=audio, extracted_aac_packets=len(extracted_packets), m4a_sha256=file_hash(extracted),
+                    speed_output=result, duration_seconds=float(info['format']['duration']),
+                    target_size_bytes=262144, poster=image, poster_sha256=file_hash(poster))
 
     def core15_media(self, env, actual_segments):
         # Author PCM directly. The independent timeline/channel oracle cannot
@@ -1233,7 +1294,9 @@ class Native:
         for name in ('corners.ppm', 'input.mp4', 'unrotated.mp4', 'accurate.mp4', 'copy.mp4', 'mp3.mp3', 'preview.mp4', 'download.mp4',
                      'feature-analysis.wav', 'feature-silence-plan.json', 'feature-silence.mp3', 'feature-normalized.mp3',
                      'feature-canvas.mp4', 'feature-markers.csv', 'feature-cut-plan.json', 'feature-chapters.txt',
-                     'feature-actual-segments.json', 'feature-scenes.mp4', 'feature-replacement.wav', 'feature-replaced.mp4'):
+                     'feature-actual-segments.json', 'feature-scenes.mp4', 'feature-replacement.wav', 'feature-replaced.mp4',
+                     'delivery-original.wav', 'delivery-lossless.wav', 'delivery-lossless.flac',
+                     'delivery-extracted.m4a', 'delivery-sized-speed.mp4', 'delivery-poster.png'):
             path = self.work / name
             if path.is_file():
                 shutil.copyfile(path, destination / name)

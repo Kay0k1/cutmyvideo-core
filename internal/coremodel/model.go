@@ -3,6 +3,7 @@
 package coremodel
 
 import (
+	"errors"
 	"time"
 
 	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
@@ -75,7 +76,13 @@ type Source struct {
 type ExportRequest edit.ExportRequest
 
 func (r *ExportRequest) Validate(c Config, s Source) error {
-	return edit.ValidateExportRequest((*edit.ExportRequest)(r), EditLimits(c), EditSource(s))
+	if err := edit.ValidateExportRequest((*edit.ExportRequest)(r), EditLimits(c), EditSource(s)); err != nil {
+		return err
+	}
+	if c.MaxOutputBytes > 0 && r.TargetSizeBytes > c.MaxOutputBytes {
+		return errors.New("target_size_bytes exceeds the configured output byte limit; choose a smaller target")
+	}
+	return nil
 }
 
 func EditLimits(c Config) edit.Limits {

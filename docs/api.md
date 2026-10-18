@@ -371,3 +371,7 @@ computer are outside server retention.
 ZIP entries use the fragment label, the original media extension and numeric order prefixes to make duplicate labels safe. Media bytes are streamed without recompression, a persistent archive or a browser-sized aggregate buffer. The original can already be removed. Individual downloads retain range resumption; an interrupted ZIP download restarts from the beginning.
 
 Video preview accepts optional `window_ms=6000` or `window_ms=30000` (default). Position alignment follows the selected length, and short windows have a separate cache identity. The response's source-time headers remain authoritative. Storyboard and waveform windows retain their existing thirty-second contract.
+
+## Core 1.6 delivery and image artifacts
+
+Export requests and collection options add bounded `speed` fractions and `target_size_bytes`; collections add `clear_speed` and `clear_target_size`. WAV/FLAC are accurate audio outputs; M4A is compatible AAC copy. Poster creation uses `POST /artifacts/{id}/poster` on a terminal verified owned output and returns a separate `ImageArtifact`. Read, download and delete it through `/image-artifacts/{id}` and `/image-artifacts/{id}/download`. These operations require the owner session and retain parent/byte/reader bounds. See [controlled export](controlled-export.md) and [schema 9→10](poster-upgrade.md). Existing source thumbnails and media-artifact routes retain their behavior.

@@ -11,8 +11,9 @@ const hash = text => createHash('sha256').update(text).digest('hex');
 
 test('local subtitle wrapper passes a private literal request and handles results larger than the ordinary JSON cap', async () => {
   const local = new LocalCutmy({ binary: process.execPath, binaryArgs: [fileURLToPath(new URL('./fake-cli.mjs', import.meta.url))] });
-  for (const body of [request(), request('x'.repeat(450000), 3)]) {
+  for (const body of [request(), { ...request(), version: 2 }, request('x'.repeat(450000), 3)]) {
     const result = await local.retimeSubtitles(body, { timeoutMs: 5000 });
+    assert.equal(result.version, 1);
     assert.deepEqual(result.outputs.map(item => item.clip_id), body.outputs.map(item => item.clip_id));
     for (const item of result.outputs) { assert.equal(item.text, body.text); assert.equal(item.sha256, hash(item.text)); }
   }
@@ -36,6 +37,7 @@ test('HTTP subtitle wrapper verifies hashes/identities and strips unknown fields
   const result = await client.retimeSubtitles(body);
   assert.deepEqual(received[0], body); assert(result.outputs.reduce((sum, item) => sum + item.text.length, 0) > 1 << 20);
   assert(!JSON.stringify(result).includes('private-do-not-return'));
+  const opted = { ...request(), version: 2 }; assert.equal((await client.retimeSubtitles(opted)).version, 1); assert.deepEqual(received.at(-1), opted);
   config.badHash = true;
   await assert.rejects(client.retimeSubtitles(request()), error => error instanceof ApiError && error.code === 'invalid_response');
 });

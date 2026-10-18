@@ -196,10 +196,61 @@ def snapshot(document):
             result[method.upper() + " " + route] = contract
     return result
 
+# Reviewed 1.6.0 extension: only caller-selected format echoes at these exact
+# historical response positions may gain the three newly supported containers.
+# Both original node shape and complete legacy vocabulary remain mandatory.
+ECHOED_DELIVERY_FORMATS = {
+    'POST /api/v1/jobs/preflight/response/200/request/format': ['mp4', 'mp3', 'mkv'],
+    'POST /api/v1/collections/validate/response/200/clips/items/preflight/request/format': ['mp4', 'mp3', 'mkv'],
+    'POST /api/v1/collections/response/202/clips/items/request/format': ['mp4', 'mp3', 'mkv'],
+    'POST /api/v1/collections/response/default/oneOf/1/clips/items/request/format': ['mp4', 'mp3', 'mkv'],
+    'POST /api/v1/projects/response/201/plan/options/format': ['', 'mp4', 'mp3', 'mkv'],
+    'POST /api/v1/projects/response/201/plan/clips/items/options/format': ['', 'mp4', 'mp3', 'mkv'],
+    'POST /api/v1/projects/response/201/jobs/items/request/format': ['mp4', 'mp3', 'mkv'],
+    'POST /api/v1/projects/response/201/clips/items/request/format': ['mp4', 'mp3', 'mkv'],
+    'POST /api/v1/projects/response/200/plan/options/format': ['', 'mp4', 'mp3', 'mkv'],
+    'POST /api/v1/projects/response/200/plan/clips/items/options/format': ['', 'mp4', 'mp3', 'mkv'],
+    'POST /api/v1/projects/response/200/jobs/items/request/format': ['mp4', 'mp3', 'mkv'],
+    'POST /api/v1/projects/response/200/clips/items/request/format': ['mp4', 'mp3', 'mkv'],
+    'GET /api/v1/projects/{project}/response/200/plan/options/format': ['', 'mp4', 'mp3', 'mkv'],
+    'GET /api/v1/projects/{project}/response/200/plan/clips/items/options/format': ['', 'mp4', 'mp3', 'mkv'],
+    'GET /api/v1/projects/{project}/response/200/jobs/items/request/format': ['mp4', 'mp3', 'mkv'],
+    'GET /api/v1/projects/{project}/response/200/clips/items/request/format': ['mp4', 'mp3', 'mkv'],
+    'PUT /api/v1/projects/{project}/response/200/plan/options/format': ['', 'mp4', 'mp3', 'mkv'],
+    'PUT /api/v1/projects/{project}/response/200/plan/clips/items/options/format': ['', 'mp4', 'mp3', 'mkv'],
+    'PUT /api/v1/projects/{project}/response/200/jobs/items/request/format': ['mp4', 'mp3', 'mkv'],
+    'PUT /api/v1/projects/{project}/response/200/clips/items/request/format': ['mp4', 'mp3', 'mkv'],
+    'POST /api/v1/projects/handoffs/redeem/response/200/project/plan/options/format': ['', 'mp4', 'mp3', 'mkv'],
+    'POST /api/v1/projects/handoffs/redeem/response/200/project/plan/clips/items/options/format': ['', 'mp4', 'mp3', 'mkv'],
+    'POST /api/v1/projects/handoffs/redeem/response/200/project/jobs/items/request/format': ['mp4', 'mp3', 'mkv'],
+    'POST /api/v1/projects/handoffs/redeem/response/200/project/clips/items/request/format': ['mp4', 'mp3', 'mkv'],
+    'POST /api/v1/projects/{project}/collections/response/202/clips/items/request/format': ['mp4', 'mp3', 'mkv'],
+    'POST /api/v1/projects/{project}/collections/validate/response/200/clips/items/preflight/request/format': ['mp4', 'mp3', 'mkv'],
+    'POST /api/v1/projects/{project}/collections/retry/response/202/clips/items/request/format': ['mp4', 'mp3', 'mkv'],
+}
+DELIVERY_FORMAT_ADDITIONS = {"wav", "flac", "m4a"}
+
+def reviewed_delivery_format_extension(old, new, direction, location):
+    legacy = ECHOED_DELIVERY_FORMATS.get(location)
+    if direction != "response" or legacy is None:
+        return False
+    if old != {"type": "string", "enum": legacy} or set(new) != {"type", "enum"} or new.get("type") != "string" or not isinstance(new.get("enum"), list):
+        return False
+    before, after = set(legacy), set(new["enum"])
+    return len(after) == len(new["enum"]) and before <= after and after - before <= DELIVERY_FORMAT_ADDITIONS
+
+def reviewed_subtitle_version_extension(old, new, direction, location):
+    return (direction == "request" and location == "POST /api/v1/subtitles/retime/request/version"
+            and old == {"type": "integer", "const": 1} and type(old.get("const")) is int
+            and new == {"type": "integer", "enum": [1, 2]}
+            and all(type(value) is int for value in new.get("enum", [])))
+
 def compare_schema(old, new, direction, location, failures):
     if not isinstance(old, dict) or not isinstance(new, dict):
         if old != new:
             failures.append(location + ": schema shape changed")
+        return
+    if reviewed_subtitle_version_extension(old, new, direction, location):
         return
     handled = {"type", "properties", "required", "enum", "additionalProperties", "items", "oneOf", "anyOf", "allOf",
                "maxLength", "maxItems", "maximum", "x-maxBytes", "minLength", "minItems", "minimum"}
@@ -219,7 +270,7 @@ def compare_schema(old, new, direction, location, failures):
         failures.append(location + ": enum constraint changed incompatibly")
     if "enum" in old and "enum" in new and not is_code:
         a, b = set(old["enum"]), set(new["enum"])
-        if not (a <= b if direction == "request" else b <= a):
+        if not (a <= b if direction == "request" else b <= a) and not reviewed_delivery_format_extension(old, new, direction, location):
             failures.append(location + ": incompatible enum")
     a, b = set(old.get("required", [])), set(new.get("required", []))
     if not (b <= a if direction == "request" else a <= b):

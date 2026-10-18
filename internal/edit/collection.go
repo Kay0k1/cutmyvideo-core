@@ -42,6 +42,10 @@ type CollectionOptions struct {
 	ClearAudioNormalize bool            `json:"clear_audio_normalize,omitempty"`
 	ClearCanvas         bool            `json:"clear_canvas,omitempty"`
 	ClearAudioReplace   bool            `json:"clear_audio_replace,omitempty"`
+	Speed               *Speed          `json:"speed,omitempty"`
+	TargetSizeBytes     int64           `json:"target_size_bytes,omitempty"`
+	ClearSpeed          bool            `json:"clear_speed,omitempty"`
+	ClearTargetSize     bool            `json:"clear_target_size,omitempty"`
 }
 
 // ClipIDs is a selection, not an ordering instruction. Results retain plan
@@ -214,6 +218,21 @@ func NormalizeCollection(plan CollectionPlan, execution CollectionExecution, c L
 func collectionRequest(base, override CollectionOptions) (ExportRequest, error) {
 	request := ExportRequest{Format: "mp4", Quality: "best", CutMode: "accurate"}
 	for _, options := range []CollectionOptions{base, override} {
+		if options.Speed != nil && options.ClearSpeed || options.TargetSizeBytes != 0 && options.ClearTargetSize {
+			return request, collectionInvalid("", "options", "speed or target size and its clear flag cannot be used together")
+		}
+		if options.ClearSpeed {
+			request.Speed = nil
+		}
+		if options.ClearTargetSize {
+			request.TargetSizeBytes = 0
+		}
+		if options.Speed != nil {
+			request.Speed = CloneSpeed(options.Speed)
+		}
+		if options.TargetSizeBytes != 0 {
+			request.TargetSizeBytes = options.TargetSizeBytes
+		}
 		if options.AudioNormalize != nil && options.ClearAudioNormalize || options.Canvas != nil && options.ClearCanvas || options.AudioReplace != nil && options.ClearAudioReplace {
 			return request, collectionInvalid("", "options", "render option and its clear flag cannot be used together")
 		}
@@ -281,8 +300,8 @@ func collectionValidateSettings(request ExportRequest) *CollectionFieldError {
 	if err := ValidateRenderOptions(request); err != nil {
 		return invalid("render", err.Error())
 	}
-	if request.Format != "mp4" && request.Format != "mp3" && request.Format != "mkv" {
-		return invalid("format", "must be mp4, mp3 or mkv")
+	if !ValidOutputFormat(request.Format) {
+		return invalid("format", "must be mp4, mp3, mkv, wav, flac or m4a")
 	}
 	if request.Quality != "best" && request.Quality != "720p" && request.Quality != "1080p" {
 		return invalid("quality", "must be best, 720p or 1080p")
@@ -296,16 +315,19 @@ func collectionValidateSettings(request ExportRequest) *CollectionFieldError {
 	if request.NoAudio && request.AudioTrack != nil {
 		return invalid("audio_track", "audio_track conflicts with no_audio")
 	}
-	if request.NoAudio && request.Format == "mp3" {
-		return invalid("no_audio", "mp3 requires audio")
+	if request.NoAudio && IsAudioOnly(request.Format) {
+		return invalid("no_audio", "audio export requires audio")
 	}
-	if request.Format == "mp3" && request.CutMode == "copy" {
-		return invalid("cut_mode", "mp3 requires accurate mode")
+	if (request.Format == "mp3" || IsLosslessAudio(request.Format)) && request.CutMode == "copy" {
+		return invalid("cut_mode", "mp3, wav and flac require accurate mode")
+	}
+	if request.Format == "m4a" && request.CutMode != "copy" {
+		return invalid("cut_mode", "m4a requires compatible AAC copy mode")
 	}
 	if request.Format == "mkv" && request.CutMode != "copy" {
 		return invalid("cut_mode", "mkv requires copy mode")
 	}
-	if request.SubtitleMode == "preserve" && (request.CutMode != "copy" || request.Format == "mp3") {
+	if request.SubtitleMode == "preserve" && (request.CutMode != "copy" || IsAudioOnly(request.Format)) {
 		return invalid("subtitle_mode", "preserve requires video copy mode")
 	}
 	if err := ValidateCropMode(request); err != nil {

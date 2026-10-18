@@ -84,7 +84,7 @@ func BuildSilencePlan(input string, result SilenceResult, options AdvancedOption
 		// original-audio selection when a separate recording was requested.
 		request := edit.ExportRequest{Format: options.Format, Quality: options.Quality, CutMode: options.CutMode,
 			AudioTrack: options.AudioTrack, NoAudio: options.NoAudio, SubtitleMode: options.SubtitleMode,
-			AudioNormalize: options.AudioNormalize, Canvas: options.Canvas, AudioReplace: options.AudioReplace}
+			AudioNormalize: options.AudioNormalize, Canvas: options.Canvas, AudioReplace: options.AudioReplace, Speed: options.Speed, TargetSizeBytes: options.TargetSizeBytes}
 		if request.Format == "" {
 			request.Format = "mp4"
 		}

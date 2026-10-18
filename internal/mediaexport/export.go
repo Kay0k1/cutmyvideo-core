@@ -13,7 +13,13 @@ import (
 // Export coordinates one verified media interval. Runtime owns tools, I/O and
 // interface-specific failure classification; this package owns their order.
 func Export(ctx context.Context, c Config, inputs []Input, r edit.Range, request edit.ExportRequest, out string, report func(int64), finalOutput bool, verified *mediainfo.Info, runtime Runtime) (int64, int64, error) {
-	if edit.HasRenderOptions(request) {
+	if err := ValidateTargetSize(c, request); err != nil {
+		return 0, 0, err
+	}
+	if request.Format == "m4a" {
+		return exportAAC(ctx, c, inputs, r, request, out, report, finalOutput, verified, runtime)
+	}
+	if edit.RequiresRenderPipeline(request) {
 		_, err := transformedExport(ctx, c, [][]Input{inputs}, []edit.Range{r}, request, out, report, finalOutput, runtime)
 		if err != nil {
 			return 0, 0, err
@@ -24,6 +30,9 @@ func Export(ctx context.Context, c Config, inputs []Input, r edit.Range, request
 		}
 		if verified != nil {
 			*verified = p
+		}
+		if request.Speed != nil {
+			return r.StartMS, r.EndMS, nil
 		}
 		return r.StartMS, r.StartMS + duration, nil
 	}

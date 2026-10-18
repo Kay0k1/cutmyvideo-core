@@ -13,16 +13,18 @@ def _portable_plan(value: Any) -> dict[str, Any]:
     """Edit documents have a closed vocabulary, unlike private server state."""
     def fields(item: Any, allowed: set[str]) -> None:
         if (not isinstance(item, dict) or set(item) - allowed
-                or any(isinstance(value, (dict, list)) for key, value in item.items() if key not in {"options", "crop", "clips", "ranges", "audio_normalize", "canvas"})):
+                or any(isinstance(value, (dict, list)) for key, value in item.items() if key not in {"options", "crop", "clips", "ranges", "audio_normalize", "canvas", "speed"})):
             raise ValueError("Portable project contains unknown edit fields")
     def options(item: Any) -> None:
         if isinstance(item, dict) and item.get("audio_replace") is not None:
             raise ValueError("Portable projects require explicit replacement-audio relinking after import")
-        fields(item, {"format", "quality", "cut_mode", "audio_track", "no_audio", "subtitle_mode", "crop", "clear_crop", "audio_normalize", "canvas", "audio_replace", "clear_audio_normalize", "clear_canvas", "clear_audio_replace"})
+        fields(item, {"format", "quality", "cut_mode", "audio_track", "no_audio", "subtitle_mode", "crop", "clear_crop", "audio_normalize", "canvas", "audio_replace", "clear_audio_normalize", "clear_canvas", "clear_audio_replace", "speed", "target_size_bytes", "clear_speed", "clear_target_size"})
         if item.get("crop") is not None:
             fields(item["crop"], {"x", "y", "width", "height"})
         if item.get("audio_normalize") is not None:
             fields(item["audio_normalize"], {"integrated_lufs", "true_peak_dbtp", "loudness_range_lu"})
+        if item.get("speed") is not None:
+            fields(item["speed"], {"numerator", "denominator"})
         if item.get("canvas") is not None:
             fields(item["canvas"], {"width", "height", "fit", "background"})
     fields(value, {"version", "input", "options", "clips"})
@@ -81,6 +83,7 @@ def project_result(value: Any) -> dict[str, Any]:
             or not isinstance(value.get("revision"), int) or isinstance(value["revision"], bool) or value["revision"] < 1
             or not isinstance(value.get("jobs"), list) or len(value["jobs"]) > 128 or not isinstance(value.get("clips"), list)):
         raise APIError("Invalid project response", code="invalid_response")
+    from .media import delivery_options
     try:
         source = public_source(value["source"])
         body = request_copy({"source_id": value["source_id"], "plan": value["plan"], "rendition": value["rendition"],
@@ -90,6 +93,7 @@ def project_result(value: Any) -> dict[str, Any]:
         for item in value["clips"]:
             if not isinstance(item.get("request"), dict) or item["request"].get("source_id") != source["id"]:
                 raise ValueError()
+            delivery_options(item["request"])
         ids = []
         all_ids = {clip["id"] for clip in body["plan"]["clips"]}
         for item in value["jobs"]:
@@ -100,6 +104,7 @@ def project_result(value: Any) -> dict[str, Any]:
                     or not isinstance(item.get("job"), dict) or not isinstance(item["job"].get("id"), str)
                     or not OPAQUE_ID.fullmatch(item["job"]["id"])):
                 raise ValueError()
+            delivery_options(item["request"])
         if len(set(ids)) != len(ids):
             raise ValueError()
     except (ValueError, KeyError, TypeError):

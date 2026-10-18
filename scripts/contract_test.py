@@ -23,6 +23,55 @@ class ContractChecks(unittest.TestCase):
         cls.baselines = dict(contract.frozen_baselines())
         cls.baseline = cls.baselines["compatibility-v1.4.1.json"]
 
+    def test_subtitle_v2_is_an_exact_request_only_extension(self):
+        old, new = {"type": "integer", "const": 1}, {"type": "integer", "enum": [1, 2]}
+        location = "POST /api/v1/subtitles/retime/request/version"
+        failures = []
+        contract.compare_schema(old, new, "request", location, failures)
+        self.assertEqual(failures, [])
+        for changed in ({"type": "integer", "enum": [1, 2, 3]}, {"type": "integer", "enum": [2]},
+                        {"type": "integer", "enum": [True, 2]}, {"type": "number", "enum": [1, 2]},
+                        {"type": "integer", "enum": [1, 2], "minimum": 1}):
+            failures = []
+            contract.compare_schema(old, changed, "request", location, failures)
+            self.assertTrue(failures)
+        for direction, path in (("response", location), ("request", location.replace("subtitles", "other")),
+                                ("response", "POST /api/v1/subtitles/retime/response/200/version")):
+            failures = []
+            contract.compare_schema(old, new, direction, path, failures)
+            self.assertTrue(failures)
+
+    def test_delivery_formats_allow_only_reviewed_caller_controlled_echoes(self):
+        self.assertEqual(len(contract.ECHOED_DELIVERY_FORMATS), 27)
+        for location, legacy in contract.ECHOED_DELIVERY_FORMATS.items():
+            old = {"type": "string", "enum": legacy}
+            new = {"type": "string", "enum": legacy + ["wav", "flac", "m4a"]}
+            with self.subTest(location=location):
+                failures = []
+                contract.compare_schema(old, new, "response", location, failures)
+                self.assertEqual(failures, [])
+                for changed in ({"type": "string", "enum": [v for v in new["enum"] if v != "mp3"]},
+                                {"type": "string", "enum": new["enum"] + ["avi"]},
+                                {"type": "string", "enum": new["enum"], "maxLength": 100},
+                                {"type": ["string", "null"], "enum": new["enum"]}):
+                    self.assertFalse(contract.reviewed_delivery_format_extension(old, changed, "response", location))
+                failures = []
+                contract.compare_schema(old, new, "response", location.replace("/format", "/other_format"), failures)
+                self.assertTrue(failures)
+
+    def test_unrelated_format_and_response_enums_remain_closed(self):
+        old = {"type": "string", "enum": ["mp4", "mp3", "mkv"]}
+        new = {"type": "string", "enum": ["mp4", "mp3", "mkv", "wav"]}
+        for location in ("GET /api/v1/new-endpoint/response/200/request/format",
+                         "POST /api/v1/jobs/preflight/response/200/source/format",
+                         "POST /api/v1/jobs/preflight/response/200/request/cut_mode"):
+            failures = []
+            contract.compare_schema(old, new, "response", location, failures)
+            self.assertTrue(failures)
+        changed = copy.deepcopy(self.document)
+        changed["components"]["schemas"]["ExportRequest"]["properties"]["format"]["enum"].append("avi")
+        self.assertTrue(contract.check_compatibility(changed))
+
     def test_media_analysis_routes_reject_null_and_unknown_options(self):
         for kind in ('silence', 'video', 'loudness'):
             route = '/api/v1/sources/{id}/analysis/' + kind

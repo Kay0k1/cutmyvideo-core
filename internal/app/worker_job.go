@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
 	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
 	"github.com/Kay0k1/cutmyvideo-core/internal/localmedia"
 )
@@ -379,6 +380,11 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 				}
 			} else {
 				reserve := outputBudget(c, selected, j.Request)
+				if transient := exportTransientBudget(c, selected, j.Request); transient < 0 || transient > (1<<63-1)-reserve {
+					storageOK = false
+				} else {
+					reserve += transient
+				}
 				if !joined {
 					subtitles, reserveErr := subtitleWorkBudget(c, j.Request, reserve)
 					if reserveErr != nil || subtitles > (1<<63-1)-reserve {
@@ -535,6 +541,13 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 		if e == nil {
 			e = localMediaError(localmedia.CheckAudioReplacement(itemCtx))
 		}
+		if e == nil && !joined && j.Request.Speed != nil {
+			var duration int64
+			duration, e = edit.OutputDurationMS(end-start, j.Request.Speed)
+			if e == nil {
+				segments = []ArtifactSegment{{Index: i, Label: item.Label, SourceStartMS: start, SourceEndMS: end, OutputEndMS: duration}}
+			}
+		}
 		if e != nil {
 			if ctx.Err() != nil {
 				finishFailure("job_timeout", "Processing stopped or exceeded the time limit")
@@ -596,8 +609,10 @@ func processJobWithPublisher(parent context.Context, c Config, s *Store, j Job, 
 			continue
 		}
 		a := Artifact{ID: id, Filename: fmt.Sprintf("cut-%02d-%s.%s", i+1, item.ID[5:13], j.Request.Format), SizeBytes: info.Size(), DownloadURL: "/api/v1/artifacts/" + id + "/download", ActualStartMS: start, ActualEndMS: end}
-		if joined {
+		if joined || len(segments) != 0 {
 			a.Segments = &segments
+		}
+		if joined {
 			a.Filename = "cut-joined-" + item.ID[5:13] + "." + j.Request.Format
 		}
 		if trackManifest != nil {

@@ -76,11 +76,13 @@ def collection_inputs():
         "go.mod", "go.sum", PROJECT_CONTRACTS, "scripts/check-sdks.py", "scripts/sdk_checks_test.py",
         "scripts/sdk-smoke.py", "scripts/sdk-smoke.mjs",
         "scripts/sdk-media-acceptance.py", "scripts/sdk-media-acceptance.mjs",
+        "scripts/sdk-delivery-acceptance.py", "scripts/sdk-delivery-acceptance.mjs",
         "scripts/sdk-collection-acceptance.py", "scripts/sdk-collection-acceptance.mjs",
         "scripts/sdk-agent-project-acceptance.py", "scripts/sdk-agent-project-acceptance.mjs",
         "scripts/sdk-collection-acceptance-verify.py", "scripts/sdk-collection-acceptance-verify-test.py",
         "internal/app/sdk_integration_test.go", "internal/app/sdk_collections_integration_test.go",
         "internal/app/sdk_agent_projects_integration_test.go", "internal/app/sdk_media_integration_test.go",
+        "internal/app/sdk_delivery_integration_test.go",
         "sdk/python/README.md", "sdk/python/pyproject.toml", "sdk/python/src/cutmyvideo/py.typed",
         "sdk/typescript/README.md", "sdk/typescript/package.json", "sdk/typescript/package-lock.json",
         "sdk/typescript/tsconfig.json")]
@@ -227,6 +229,13 @@ void client.exportCutList({format: "csv", cut_list: {version: 1, entries: [{star
 void local.silencePlan("input.mp4", {threshold_db: -40});
 void local.planCutList({format: "csv", text: "0,,Scene"}, {media: "input.mp4", durationMs: 1000});
 void client.preflight({source_id: "src", ranges: [{start_ms: 0, end_ms: 1000}], format: "mp4", quality: "best", cut_mode: "accurate", audio_normalize: {integrated_lufs: -16, true_peak_dbtp: -1, loudness_range_lu: 11}, canvas: {width: 1080, height: 1920, fit: "contain", background: "#000000"}, audio_replace: {source_id: "owned-upload", offset_ms: 1000}});
+void client.preflight({source_id: "src", ranges: [{start_ms: 0, end_ms: 1000}], format: "wav", quality: "best", cut_mode: "accurate"});
+void client.preflight({source_id: "src", ranges: [{start_ms: 0, end_ms: 1000}], format: "mp4", quality: "best", cut_mode: "accurate", speed: {numerator: 5, denominator: 4}, target_size_bytes: 262144});
+void client.retimeSubtitles({version: 2, format: "srt", text: "", outputs: [{clip_id: "speed", segments: []}]});
+void client.createPoster("artifact", {timestamp_ms: 1250, format: "png"});
+void client.getImageArtifact("image"); void client.downloadImageArtifact("image"); void client.deleteImageArtifact("image");
+void local.generatePoster("finished.mp4", "poster.jpg", {timestamp_ms: 1250});
+void client.validateCollection({...request, plan: {...request.plan, options: {speed: {numerator: 5, denominator: 4}, target_size_bytes: 262144}, clips: [{id: "reset", ranges: [{start_ms: 0, end_ms: 1000}], options: {clear_speed: true, clear_target_size: true}}]}});
 void client.validateCollection(request);
 void client.submitCollection(request, {idempotencyKey: "saved-key"});
 void runCollection(client, request, "/private/project", {timeoutMs: 1800000, onProgress: report => { console.log(report.outputs.map(output => output.clip_id)); }});
@@ -243,7 +252,7 @@ void local.executeCollection({...request.plan, input: "/media/interview.mp4"}, "
     binary = output / ("cutmy.exe" if os.name == "nt" else "cutmy")
     run(["go", "build", "-trimpath", "-o", str(binary), "./cmd/cutmy"], cwd=ROOT, env=env, log=output / "core-build.log")
     env.update(CUTMY_REQUIRE_SDK="1", CUTMY_SDK_PYTHON=consumer_python, CUTMY_SDK_NODE=node, CUTMY_SDK_BINARY=str(binary))
-    top_level = {"TestInstalledSDKLocalWorkflow", "TestInstalledSDKCollectionLocalWorkflow", "TestInstalledSDKMediaLocalWorkflow"}
+    top_level = {"TestInstalledSDKLocalWorkflow", "TestInstalledSDKCollectionLocalWorkflow", "TestInstalledSDKMediaLocalWorkflow", "TestInstalledSDKDeliveryLocalWorkflow"}
     if args.http:
         if not env.get("TEST_DATABASE_URL"):
             parser.error("--http requires an isolated TEST_DATABASE_URL")
@@ -251,6 +260,7 @@ void local.executeCollection({...request.plan, input: "/media/interview.mp4"}, "
         top_level.add("TestInstalledSDKCollectionHTTPWorkflow")
         top_level.add("TestInstalledSDKAgentProjectWorkflow")
         top_level.add("TestInstalledSDKMediaHTTPWorkflow")
+        top_level.add("TestInstalledSDKDeliveryHTTPWorkflow")
     required = top_level | {f"{name}/{language}" for name in top_level for language in ("python", "typescript")}
     selector = "^(" + "|".join(sorted(top_level)) + ")$"
     run(["go", "test", "-json", "-race", "-count=1", "-timeout=15m" if args.http else "-timeout=3m", "./internal/app", "-run", selector],

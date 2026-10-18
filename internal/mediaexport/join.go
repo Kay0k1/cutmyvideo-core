@@ -10,7 +10,13 @@ import (
 )
 
 func ExportJoined(ctx context.Context, c Config, inputs [][]Input, ranges []edit.Range, request edit.ExportRequest, out string, report func(int64), runtime JoinedRuntime) ([]edit.Segment, error) {
-	if edit.HasRenderOptions(request) {
+	if err := ValidateTargetSize(c, request); err != nil {
+		return nil, err
+	}
+	if request.Format == "m4a" {
+		return joinAAC(ctx, c, inputs, ranges, request, out, report, runtime)
+	}
+	if edit.RequiresRenderPipeline(request) {
 		return transformedExport(ctx, c, inputs, ranges, request, out, report, true, runtime)
 	}
 	if err := edit.ValidateCropMode(request); err != nil {
@@ -91,10 +97,10 @@ func VerifyJoined(ctx context.Context, path string, request edit.ExportRequest, 
 	if e != nil {
 		return p, e
 	}
-	if request.Format != "mp3" && p.SelectedVideo() == nil {
+	if !edit.IsAudioOnly(request.Format) && p.SelectedVideo() == nil {
 		return p, mediainfo.ErrUnsupported
 	}
-	if request.Format == "mp3" && p.SelectedAudio() == nil {
+	if edit.IsAudioOnly(request.Format) && p.SelectedAudio() == nil {
 		return p, ErrNoAudio
 	}
 	if math.Abs(float64(duration-expected)) > 350 {

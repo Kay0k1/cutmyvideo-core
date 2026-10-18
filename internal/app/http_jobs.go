@@ -55,7 +55,7 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request, owner string)
 		writeError(w, 400, "invalid_export", err.Error())
 		return
 	}
-	if edit.HasRenderOptions(edit.ExportRequest(request)) && v.Path != "" {
+	if (edit.RequiresRenderPipeline(edit.ExportRequest(request)) || request.Format == "m4a") && v.Path != "" {
 		_, _, ctx, release, inspectErr := s.inspectCollection(r.Context(), v, []PreparedCollectionClip{{Request: request}})
 		defer release()
 		if inspectErr != nil {
@@ -187,6 +187,15 @@ func serveFileWithDraftHint(w http.ResponseWriter, r *http.Request, path, name s
 	n, _ := f.Read(buffer)
 	_, _ = f.Seek(0, io.SeekStart)
 	contentType := http.DetectContentType(buffer[:n])
+	// These signatures identify verified audio containers that the standard
+	// sniffer either does not recognize or classifies as video MP4.
+	if n >= 4 && string(buffer[:4]) == "fLaC" {
+		contentType = "audio/flac"
+	} else if n >= 12 && string(buffer[:4]) == "RF64" && string(buffer[8:12]) == "WAVE" {
+		contentType = "audio/wav"
+	} else if n >= 12 && string(buffer[4:8]) == "ftyp" && string(buffer[8:12]) == "M4A " {
+		contentType = "audio/mp4"
+	}
 	if !strings.HasPrefix(contentType, "video/") && !strings.HasPrefix(contentType, "audio/") && contentType != "application/ogg" {
 		contentType = "application/octet-stream"
 	}

@@ -21,8 +21,8 @@ func ValidateExportRequest(r *ExportRequest, c Limits, s Source) error {
 	if len(r.Ranges) > c.MaxRanges {
 		return fmt.Errorf("choose between 1 and %d ranges (received %d); remove extra ranges or submit another job", c.MaxRanges, len(r.Ranges))
 	}
-	if r.Format != "mp4" && r.Format != "mp3" && r.Format != "mkv" {
-		return errors.New("format must be mp4, mp3, or mkv")
+	if !ValidOutputFormat(r.Format) {
+		return errors.New("format must be mp4, mp3, mkv, wav, flac, or m4a")
 	}
 	if r.Quality != "1080p" && r.Quality != "720p" && r.Quality != "best" {
 		return errors.New("quality must be 1080p, 720p, or best")
@@ -41,8 +41,11 @@ func ValidateExportRequest(r *ExportRequest, c Limits, s Source) error {
 	} else {
 		r.Rendition = ""
 	}
-	if r.Format == "mp3" && r.CutMode == "copy" {
-		return errors.New("MP3 export requires accurate mode; preserving arbitrary input audio as MP3 is not possible")
+	if (r.Format == "mp3" || IsLosslessAudio(r.Format)) && r.CutMode == "copy" {
+		return errors.New("MP3, WAV and FLAC exports require accurate mode")
+	}
+	if r.Format == "m4a" && r.CutMode != "copy" {
+		return errors.New("M4A export requires compatible AAC copy mode")
 	}
 	if r.Format == "mkv" && r.CutMode != "copy" {
 		return errors.New("MKV export requires copy mode; choose MP4 for accurate cutting")
@@ -59,13 +62,13 @@ func ValidateExportRequest(r *ExportRequest, c Limits, s Source) error {
 	if r.NoAudio && r.AudioTrack != nil {
 		return errors.New("choose audio_track or no_audio, not both")
 	}
-	if r.NoAudio && r.Format == "mp3" {
-		return errors.New("MP3 export requires audio; enable audio or choose a video format")
+	if r.NoAudio && IsAudioOnly(r.Format) {
+		return errors.New("audio export requires audio; enable audio or choose a video format")
 	}
 	if r.AudioTrack != nil && !s.HasLocalMedia {
 		return errors.New("audio track selection requires an uploaded file; upload the source to select its audio track")
 	}
-	if r.SubtitleMode == "preserve" && (r.CutMode != "copy" || r.Format == "mp3") {
+	if r.SubtitleMode == "preserve" && (r.CutMode != "copy" || IsAudioOnly(r.Format)) {
 		return errors.New("subtitle preservation requires MP4 or MKV copy mode; choose copy mode or omit subtitles")
 	}
 	if r.SubtitleMode == "preserve" && !s.HasLocalMedia {
@@ -78,6 +81,9 @@ func ValidateExportRequest(r *ExportRequest, c Limits, s Source) error {
 	}
 	if r.SubtitleMode == "omit" {
 		r.SubtitleMode = ""
+	}
+	if r.Speed != nil {
+		r.Speed, _ = NormalizeSpeed(r.Speed)
 	}
 	var total int64
 	for i := range r.Ranges {
@@ -106,7 +112,12 @@ func ValidateExportRequest(r *ExportRequest, c Limits, s Source) error {
 		if duration > c.MaxJobMS-total {
 			return fmt.Errorf("%s: total selected duration exceeds %d ms; shorten or remove ranges", context, c.MaxJobMS)
 		}
+		from, _ := OutputDurationMS(total, r.Speed)
 		total += duration
+		to, err := OutputDurationMS(total, r.Speed)
+		if err != nil || to <= from {
+			return fmt.Errorf("%s: speed interval is too short or too long for millisecond output mapping", context)
+		}
 	}
 	return nil
 }

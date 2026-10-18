@@ -25,6 +25,8 @@ Local cutting works without a database, accounts or an HTTP server. SQL belongs 
 
 ## Versions
 
+**1.6.0** adds WAV/FLAC and compatible AAC-to-M4A copying, constant playback speed with preserved pitch, MP4 exports under an explicit byte ceiling, and posters from finished outputs. Go, CLI, HTTP and both SDKs expose these operations; plans and collections preserve inheritance and explicit resets. [Usage and limits](docs/controlled-export.md) · [Release scope](docs/release-1.6.0.md) · [Schema 9→10 upgrade](docs/poster-upgrade.md).
+
 **1.5.0** adds silence analysis with editable plans, loudness reports and normalization, output canvases, CSV/FFmetadata chapter exchange, scene/black detection and external audio with explicit synchronization. Go, CLI, HTTP and both SDKs expose these operations. [Examples and limits](docs/media-analysis-and-rendering.md) · [Release scope and database upgrade](docs/release-1.5.0.md).
 
 Install CLI archives from the [latest published release](https://github.com/Kay0k1/cutmyvideo-core/releases/latest). Archives support Linux and macOS (amd64/arm64), and Windows (amd64); install FFmpeg separately. Follow [signed-release verification](docs/releases.md#consumer-verification-of-a-new-signed-release) before installation.

@@ -385,10 +385,11 @@ func observeStorageBatch(ctx context.Context, tx pgx.Tx, c Config, p storageScan
 	// Ownership is adopted inside each batch, without a final full-table path
 	// rewrite. Published files win; orphan observations only increase charges.
 	_, err := tx.Exec(ctx, `INSERT INTO storage_files(path,owner,resource_id,kind,size_bytes,observed_at)
-	 SELECT f.path,COALESCE(s.owner,a.owner,''),COALESCE(s.id,a.id,''),CASE WHEN s.id IS NOT NULL THEN 'source' WHEN a.id IS NOT NULL THEN 'artifact' ELSE $4 END,f.size,f.modified
+	 SELECT f.path,COALESCE(s.owner,a.owner,i.owner,''),COALESCE(s.id,a.id,i.id,''),CASE WHEN s.id IS NOT NULL THEN 'source' WHEN a.id IS NOT NULL THEN 'artifact' WHEN i.id IS NOT NULL THEN 'image_artifact' ELSE $4 END,f.size,f.modified
 	 FROM unnest($1::text[],$2::bigint[],$3::timestamptz[]) AS f(path,size,modified)
 	 LEFT JOIN LATERAL (SELECT id,owner FROM sources WHERE (path<>'' AND path=f.path) OR (thumbnail_path<>'' AND thumbnail_path=f.path) LIMIT 1) s ON true
 	 LEFT JOIN LATERAL (SELECT id,owner FROM artifacts WHERE path<>'' AND path=f.path LIMIT 1) a ON true
+	 LEFT JOIN LATERAL (SELECT id,owner FROM image_artifacts WHERE path=f.path LIMIT 1) i ON true
 	 ON CONFLICT(path) DO UPDATE SET owner=excluded.owner,resource_id=excluded.resource_id,kind=excluded.kind,size_bytes=GREATEST(storage_files.size_bytes,excluded.size_bytes),observed_at=GREATEST(storage_files.observed_at,excluded.observed_at)
 	 WHERE storage_files.kind IN ('orphan','work_orphan') AND NOT storage_files.delete_pending
 	 AND (storage_files.size_bytes<excluded.size_bytes OR storage_files.observed_at<excluded.observed_at OR storage_files.kind<>excluded.kind)`, paths, sizes, modified, kind)

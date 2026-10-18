@@ -68,6 +68,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/jobs/{id}/download.zip", s.withSession(s.downloadArchive))
 	mux.HandleFunc("POST /api/v1/jobs/{id}/cancel", s.withSession(s.cancelJob))
 	mux.HandleFunc("GET /api/v1/artifacts/{id}/download", s.withSession(s.download))
+	mux.HandleFunc("POST /api/v1/artifacts/{id}/poster", s.withSession(s.createPoster))
+	mux.HandleFunc("GET /api/v1/image-artifacts/{id}", s.withSession(s.getImageArtifact))
+	mux.HandleFunc("GET /api/v1/image-artifacts/{id}/download", s.withSession(s.downloadImageArtifact))
+	mux.HandleFunc("DELETE /api/v1/image-artifacts/{id}", s.withSession(s.deleteImageArtifact))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")

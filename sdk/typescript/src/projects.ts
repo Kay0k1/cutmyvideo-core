@@ -19,12 +19,13 @@ function request(value: unknown): CollectionRequest {
   return value as unknown as CollectionRequest;
 }
 function portablePlan(value: CollectionRequest["plan"]): CollectionRequest["plan"] {
-  const fields = (item: unknown, allowed: string[]) => { if (!object(item) || Object.entries(item).some(([key, value]) => !allowed.includes(key) || !["options","crop","clips","ranges","audio_normalize","canvas"].includes(key) && value !== null && typeof value === "object")) throw new TypeError("Portable project contains unknown edit fields"); };
+  const fields = (item: unknown, allowed: string[]) => { if (!object(item) || Object.entries(item).some(([key, value]) => !allowed.includes(key) || !["options","crop","clips","ranges","audio_normalize","canvas","speed"].includes(key) && value !== null && typeof value === "object")) throw new TypeError("Portable project contains unknown edit fields"); };
   const options = (item: unknown) => {
     if (object(item) && item.audio_replace !== undefined && item.audio_replace !== null) throw new TypeError("Portable projects require explicit replacement-audio relinking after import");
-    fields(item, ["format","quality","cut_mode","audio_track","no_audio","subtitle_mode","crop","clear_crop","audio_normalize","canvas","audio_replace","clear_audio_normalize","clear_canvas","clear_audio_replace"]);
+    fields(item, ["format","quality","cut_mode","audio_track","no_audio","subtitle_mode","crop","clear_crop","audio_normalize","canvas","audio_replace","clear_audio_normalize","clear_canvas","clear_audio_replace","speed","target_size_bytes","clear_speed","clear_target_size"]);
     if (object(item) && item.crop !== undefined && item.crop !== null) fields(item.crop, ["x","y","width","height"]);
     if (object(item) && item.audio_normalize !== undefined && item.audio_normalize !== null) fields(item.audio_normalize, ["integrated_lufs","true_peak_dbtp","loudness_range_lu"]);
+    if (object(item) && item.speed !== undefined && item.speed !== null) fields(item.speed, ["numerator","denominator"]);
     if (object(item) && item.canvas !== undefined && item.canvas !== null) fields(item.canvas, ["width","height","fit","background"]);
   };
   fields(value, ["version","input","options","clips"]);
@@ -62,10 +63,12 @@ export function projectResult(value: unknown): AgentProject {
     const jobs: AgentProject["jobs"] = [], clips: AgentProject["clips"] = [];
     for (const clip of value.clips) {
       if (!object(clip) || !object(clip.request) || clip.request.source_id !== source.id) throw new Error("scope");
+      renderReferences(clip.request);
       clips.push({ clip_id: String(clip.clip_id), request: clip.request as unknown as AgentProject["clips"][number]["request"] });
     }
     for (const item of value.jobs) {
       if (!object(item) || typeof item.clip_id !== "string" || !allIDs.includes(item.clip_id) || typeof item.current !== "boolean" || item.current && !ids.includes(item.clip_id) || !object(item.request) || item.request.source_id !== source.id || !object(item.job) || typeof item.job.id !== "string" || !/^[A-Za-z0-9_-]{1,160}$/.test(item.job.id)) throw new Error("scope");
+      renderReferences(item.request);
       jobs.push({ clip_id: item.clip_id, current: item.current, request: item.request as unknown as AgentProject["jobs"][number]["request"], job: item.job as unknown as AgentProject["jobs"][number]["job"] });
     }
     if (new Set(jobs.map(job => job.clip_id)).size !== jobs.length) throw new Error("scope");

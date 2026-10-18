@@ -87,7 +87,7 @@ func (s *Store) drainStorageDeleteBatch(ctx context.Context, c Config, paths []s
 	if _, err = tx.Exec(ctx, "SET LOCAL lock_timeout='750ms'"); err != nil {
 		return err
 	}
-	rows, err := tx.Query(ctx, `SELECT f.path,EXISTS(SELECT 1 FROM sources s WHERE (s.path=f.path AND s.path<>'') OR (s.thumbnail_path=f.path AND s.thumbnail_path<>'')) OR EXISTS(SELECT 1 FROM artifacts a WHERE a.path=f.path AND a.path<>'') FROM storage_files f WHERE f.path=ANY($1) AND f.delete_pending AND f.delete_retry_at<=statement_timestamp() ORDER BY f.delete_retry_at,f.path LIMIT $2 FOR UPDATE OF f`, paths, storageBatch)
+	rows, err := tx.Query(ctx, `SELECT f.path,EXISTS(SELECT 1 FROM sources s WHERE (s.path=f.path AND s.path<>'') OR (s.thumbnail_path=f.path AND s.thumbnail_path<>'')) OR EXISTS(SELECT 1 FROM artifacts a WHERE a.path=f.path AND a.path<>'') OR EXISTS(SELECT 1 FROM image_artifacts image WHERE image.path=f.path) FROM storage_files f WHERE f.path=ANY($1) AND f.delete_pending AND f.delete_retry_at<=statement_timestamp() ORDER BY f.delete_retry_at,f.path LIMIT $2 FOR UPDATE OF f`, paths, storageBatch)
 	if err != nil {
 		return err
 	}

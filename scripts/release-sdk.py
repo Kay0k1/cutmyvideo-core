@@ -106,6 +106,10 @@ def required_tests(version=None):
     # candidates and releases from 1.5 require both real media workflows too.
     if version is None or version.startswith('v0.0.0-candidate.') or tuple(map(int, m.VERSION.fullmatch(version).group(1, 2, 3))) >= (1, 5, 0):
         top.update({'TestInstalledSDKMediaLocalWorkflow', 'TestInstalledSDKMediaHTTPWorkflow'})
+    # Preserve 1.5's21 checks;1.6 and new candidates also require independently
+    # decoded delivery/audio/poster results from both installed packages.
+    if version is None or version.startswith('v0.0.0-candidate.') or tuple(map(int, m.VERSION.fullmatch(version).group(1, 2, 3))) >= (1, 6, 0):
+        top.update({'TestInstalledSDKDeliveryLocalWorkflow', 'TestInstalledSDKDeliveryHTTPWorkflow'})
     return top | {name + '/' + sdk for name in top for sdk in ('python', 'typescript')}
 
 

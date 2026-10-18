@@ -71,13 +71,18 @@ func TestExternalAudioMigration008UpgradePreservesRowsAndReadOnlyReopen(t *testi
 		return data
 	}
 	before := rows()
-	s := openMigrationStore(t, f)
+	// Observe the real immutable008→009 boundary before upgrading to current.
+	applyMigrationFixture(t, f, 8)
 	if after := rows(); after != before {
 		t.Fatal("009 rewrote legacy source/job/artifact/history rows")
 	}
 	var ref *string
-	if err = s.DB.QueryRow(ctx, `SELECT audio_source_id FROM jobs WHERE id='old-job'`).Scan(&ref); err != nil || ref != nil {
+	if err = f.db.QueryRow(ctx, `SELECT audio_source_id FROM jobs WHERE id='old-job'`).Scan(&ref); err != nil || ref != nil {
 		t.Fatal("legacy request gained an external reference", ref, err)
+	}
+	s := openMigrationStore(t, f)
+	if after := rows(); after != before {
+		t.Fatal("current upgrade rewrote legacy source/job/artifact/history rows")
 	}
 	assertMigrationLedger(t, s)
 	snapshot := migrationSnapshot(t, s.DB)
@@ -88,7 +93,7 @@ func TestExternalAudioMigration008UpgradePreservesRowsAndReadOnlyReopen(t *testi
 		}
 		reopened.DB.Close()
 		if after := migrationSnapshot(t, s.DB); after != snapshot {
-			t.Fatal("009 compatible reopen wrote catalog/history/application data")
+			t.Fatal("current compatible reopen wrote catalog/history/application data")
 		}
 	}
 }

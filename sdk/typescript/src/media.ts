@@ -1,4 +1,5 @@
 /** Validate bounded analysis and cut-list JSON without Node or media dependencies. */
+import { deliveryOptions } from "./delivery.js";
 import { ApiError } from "./errors.js";
 import { JSON_LIMIT, object } from "./protocol.js";
 import type { CutList, CutListExportRequest, CutListExportResult, CutListFormat, CutListImportRequest } from "./types.js";
@@ -73,6 +74,7 @@ export function renderOptionSets(value: unknown): Record<string, unknown>[] {
 }
 /** JSON.stringify would silently replace nonfinite render numbers with null. */
 export function renderFinite(value: unknown): void {
+  for (const options of renderOptionSets(value)) deliveryOptions(options);
   for (const options of renderOptionSets(value)) for (const field of ["audio_normalize", "canvas", "audio_replace"]) {
     const edit = options[field];
     if (object(edit) && Object.values(edit).some(v => typeof v === "number" && !Number.isFinite(v))) throw new TypeError("Render options require finite numeric values");
@@ -81,10 +83,23 @@ export function renderFinite(value: unknown): void {
 export function renderReferences<T>(value: T, local = false): T {
   renderFinite(value);
   for (const options of renderOptionSets(value)) {
+    deliveryOptions(options);
     const replacement = options.audio_replace;
     if (replacement === undefined || replacement === null) continue;
     const field = local ? "input" : "source_id", forbidden = local ? "source_id" : "input";
     if (!object(replacement) || forbidden in replacement || typeof replacement[field] !== "string" || !replacement[field] || (replacement[field] as string).includes("\0")) throw new TypeError(local ? "audio_replace requires only a local input" : "HTTP audio_replace requires source_id and cannot open local paths");
   }
   return value;
+}
+
+export function posterOptions(value: unknown): { timestamp_ms: number; format: "jpeg" | "png" } {
+  if (!object(value) || Object.keys(value).some(k => !["timestamp_ms","format"].includes(k)) || !Number.isSafeInteger(value.timestamp_ms) || Number(value.timestamp_ms) < 0 || value.format !== undefined && value.format !== "jpeg" && value.format !== "png") throw new TypeError("Poster requires a nonnegative integer output timestamp and jpeg|png");
+  return { timestamp_ms: value.timestamp_ms as number, format: value.format === "png" ? "png" : "jpeg" };
+}
+export function posterResult<T>(value: unknown, expected: { timestamp_ms: number; format: string }, parent?: string): T {
+  if (!object(value) || !Number.isSafeInteger(value.timestamp_ms) || Number(value.timestamp_ms) < 0 || !["jpeg","png"].includes(String(value.format)) || !["width","height","size_bytes"].every(k => Number.isSafeInteger(value[k]) && Number(value[k]) > 0) || Number(value.width) * Number(value.height) > 16777216 || Number(value.size_bytes) > 16777216 || value.timestamp_ms !== expected.timestamp_ms || value.format !== expected.format) invalid("Invalid poster dimensions, size, format or output clock");
+  if (parent === undefined) {
+    if (typeof value.path !== "string" || !value.path || value.path.includes("\0")) invalid("Invalid local poster path");
+  } else if (value.parent_artifact_id !== parent || typeof value.id !== "string" || !/^[A-Za-z0-9_-]{1,160}$/.test(value.id) || typeof value.filename !== "string" || !value.filename || /[/\\\0]/.test(value.filename) || value.download_url !== `/api/v1/image-artifacts/${encodeURIComponent(value.id)}/download` || !(value.expires_at === null || typeof value.expires_at === "string")) invalid("Invalid owner-protected image artifact identity");
+  return value as T;
 }

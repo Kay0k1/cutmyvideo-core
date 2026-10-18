@@ -250,3 +250,7 @@ HTTP uses `no-store` even though the server retains a private authorized cache.
 
 Detailed statuses, diagnostics and retention are in the [API guide](api.md).
 Operators should follow the [runbook](operations.md).
+
+## Audio delivery, speed, byte ceilings and output posters
+
+Core 1.6 adds `clip --speed 1.25 --target-size-bytes 8000000`, WAV/FLAC/AAC-in-M4A outputs, and `poster --input finished.mp4 --at 1.250 --output poster.jpg`. See [controlled export](controlled-export.md) for exact compatibility, source/output clocks, collection resets and limits.

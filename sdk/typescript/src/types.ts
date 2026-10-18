@@ -1,5 +1,6 @@
 /** Millisecond intervals refer to the original source; order and repeats matter. */
 export interface Range { start_ms: number; end_ms: number; label?: string }
+export interface Speed { numerator: number; denominator: number }
 export interface Crop { x: number; y: number; width: number; height: number }
 export interface AudioNormalize { integrated_lufs: number; true_peak_dbtp: number; loudness_range_lu: number }
 export interface Canvas { width: number; height: number; fit: "contain"; background: string }
@@ -24,7 +25,7 @@ export interface CutListExportResult { version: 1; format: CutListFormat; text: 
 export interface SilencePlanOptions extends RequestOptions { format?: "mp4" | "mp3"; outputMode?: "joined" | "separate" }
 export interface CutListPlanOptions extends RequestOptions { media: string; durationMs: number; outputMode?: "joined" | "separate" }
 export interface ExportOptions {
-  format?: "mp4" | "mp3" | "mkv";
+  format?: "mp4" | "mp3" | "mkv" | "wav" | "flac" | "m4a";
   quality?: "best" | "1080p" | "720p";
   cut_mode?: "accurate" | "copy";
   audio_track?: number;
@@ -34,12 +35,14 @@ export interface ExportOptions {
   audio_normalize?: AudioNormalize;
   canvas?: Canvas;
   audio_replace?: AudioReplace | LocalAudioReplace;
+  speed?: Speed;
+  target_size_bytes?: number;
 }
 export interface ExportRequest extends ExportOptions {
   audio_replace?: AudioReplace;
   source_id: string;
   ranges: Range[];
-  format: "mp4" | "mp3" | "mkv";
+  format: "mp4" | "mp3" | "mkv" | "wav" | "flac" | "m4a";
   quality: "best" | "1080p" | "720p";
   cut_mode: "accurate" | "copy";
   output_mode?: "separate" | "joined";
@@ -48,7 +51,7 @@ export interface ExportRequest extends ExportOptions {
 }
 /** Omitted collection options inherit; -1 resets automatic audio. */
 export interface CollectionOptions {
-  format?: "" | "mp4" | "mp3" | "mkv";
+  format?: "" | "mp4" | "mp3" | "mkv" | "wav" | "flac" | "m4a";
   quality?: "" | "best" | "1080p" | "720p";
   cut_mode?: "" | "accurate" | "copy";
   subtitle_mode?: "" | "omit" | "preserve";
@@ -62,6 +65,10 @@ export interface CollectionOptions {
   clear_audio_normalize?: boolean;
   clear_canvas?: boolean;
   clear_audio_replace?: boolean;
+  speed?: Speed | null;
+  target_size_bytes?: number;
+  clear_speed?: boolean;
+  clear_target_size?: boolean;
 }
 export interface CollectionClip { id: string; label?: string; ranges: Range[]; options?: CollectionOptions }
 export interface CollectionPlan { version: 1; input?: string; options?: CollectionOptions; clips: CollectionClip[] }
@@ -73,7 +80,7 @@ export type SourcePreparationInput = { kind: "upload"; path: string } | { kind: 
 export interface SourcePreparationReceipt { version: 1; key: string; state: "processing" | "ready" | "retryable" | "failed"; source_id?: string; source?: Source; fingerprint?: SourceFingerprint; retry_after_ms?: number; error?: { code: string; message: string; retryable: boolean } }
 export interface SourcePreparationReport { complete: boolean; phase: string; source_id?: string; source?: Source; fingerprint?: SourceFingerprint; error?: { code: string; message?: string; retryable: boolean } }
 export interface SourceSubmissionOptions extends RequestOptions { idempotencyKey?: string; fingerprint?: ContentFingerprint }
-export interface SubtitleRequest { version: 1; format: "srt" | "vtt"; text: string; output_format?: "srt" | "vtt"; outputs: { clip_id: string; segments: Segment[] }[] }
+export interface SubtitleRequest { version: 1 | 2; format: "srt" | "vtt"; text: string; output_format?: "srt" | "vtt"; outputs: { clip_id: string; segments: Segment[] }[] }
 export interface SubtitleResult { version: 1; outputs: { clip_id: string; format: "srt" | "vtt"; text: string; cue_count: number; sha256: string }[] }
 export interface PortableProject { kind: "cutmy.collection.project"; version: 1; source: { fingerprint?: SourceFingerprint; duration_ms?: number; title?: string }; plan: CollectionPlan; clip_ids?: string[]; rendition?: "final" | "draft" }
 export interface ProjectClipJob { clip_id: string; job_id: string }
@@ -185,3 +192,7 @@ export interface ArtifactDownload {
   /** Cancel/release the response if the stream will not be consumed. */
   cancel(reason?: unknown): Promise<void>;
 }
+
+export interface PosterOptions { timestamp_ms: number; format?: "jpeg" | "png" }
+export interface PosterResult { path: string; size_bytes: number; width: number; height: number; timestamp_ms: number; format: "jpeg" | "png" }
+export interface ImageArtifact { id: string; parent_artifact_id: string; filename: string; size_bytes: number; download_url: string; width: number; height: number; timestamp_ms: number; expires_at: string | null; format: "jpeg" | "png"; [key: string]: unknown }

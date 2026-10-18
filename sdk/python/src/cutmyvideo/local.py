@@ -15,7 +15,7 @@ from typing import Any, Mapping, Sequence, cast
 
 from .client import _positive
 from .errors import APIError, LocalError
-from .types import (BatchResult, CollectionPlan, LocalCollectionPreflight, LocalCollectionResult, LocalPreflightResult,
+from .types import (PosterResult, BatchResult, CollectionPlan, LocalCollectionPreflight, LocalCollectionResult, LocalPreflightResult,
                     LocalSourceInfo, Plan, SubtitleRequest, SubtitleResult, SilenceOptions, SilenceResult,
                     VideoAnalysisOptions, VideoAnalysisResult, LoudnessOptions, LoudnessResult, CutList,
                     CutListImportRequest, LocalCutListExportRequest, CutListExportResult)
@@ -51,6 +51,16 @@ class LocalCutmy:
 
     def inspect(self, input: str | os.PathLike[str], *, timeout: float = 120) -> LocalSourceInfo:
         return cast(LocalSourceInfo, self._run("inspect", ["--input", str(Path(input).absolute())], timeout))
+
+    def generate_poster(self, input: str | os.PathLike[str], output: str | os.PathLike[str], options: Mapping[str, Any], *, timeout: float = 30) -> PosterResult:
+        from .media import poster_options, poster_result
+        body = poster_options(options)
+        timestamp = body["timestamp_ms"]
+        value = self._run("poster", ["--input", str(Path(input).absolute()), "--output", str(Path(output).absolute()), "--at", f"{timestamp // 1000}.{timestamp % 1000:03d}", "--format", body["format"], "--threads", str(self.threads)], timeout)
+        try:
+            return cast(PosterResult, poster_result(value, body))
+        except APIError:
+            raise LocalError("Local poster result is invalid", code="invalid_response") from None
 
     def _analyze(self, kind: str, input: str | os.PathLike[str], options: Mapping[str, Any] | None,
                  timeout: float, extra: list[str] | None = None) -> dict[str, Any]:
@@ -329,6 +339,8 @@ class LocalCutmy:
             except APIError:
                 raise LocalError("Local analysis or cut-list result is invalid", code="invalid_response") from None
             valid = True
+        elif command == "poster":
+            valid = isinstance(output.get("path"), str) and output.get("format") in ("jpeg", "png")
         elif command == "inspect":
             valid = (isinstance(output.get("duration_ms"), int) and not isinstance(output["duration_ms"], bool)
                      and output["duration_ms"] > 0 and isinstance(output.get("tracks"), list))
@@ -353,6 +365,12 @@ class LocalCutmy:
             valid = (isinstance(output.get("outputs"), list)
                      and all(isinstance(item, dict) and isinstance(item.get("path"), str)
                              for item in output["outputs"]))
+        if valid and command == "preflight" and "request" in output:
+            from .media import delivery_response
+            try:
+                delivery_response(output["request"])
+            except APIError:
+                valid = False
         if not valid:
             raise LocalError("Local cutmy returned an invalid successful JSON result", code="invalid_response")
         return output

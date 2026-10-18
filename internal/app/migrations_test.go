@@ -210,7 +210,7 @@ func TestMetadataResolutionMigrationPreserves006RowsAndRestartsWithoutWrites(t *
  'cache',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(c),'xmin',c.xmin::text) ORDER BY source_id) FROM source_metadata_cache c),
  'counters',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(c),'xmin',c.xmin::text) ORDER BY id) FROM storage_counters c),
  'ledger',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(m),'xmin',m.xmin::text) ORDER BY position) FROM app_schema_migrations m WHERE position<=6),
- 'versions',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(v),'xmin',v.xmin::text) ORDER BY version) FROM app_schema_versions v WHERE version NOT IN($1,$2,$3)))`, schemaMigrations[6].version, schemaMigrations[7].version, schemaVersion).Scan(&data); err != nil {
+ 'versions',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(v),'xmin',v.xmin::text) ORDER BY version) FROM app_schema_versions v WHERE version NOT IN($1,$2,$3,$4)))`, schemaMigrations[6].version, schemaMigrations[7].version, schemaMigrations[8].version, schemaVersion).Scan(&data); err != nil {
 			t.Fatal(err)
 		}
 		return string(data)
@@ -252,7 +252,7 @@ func TestAgentProjectsMigrationPreserves007RowsAndRestartsWithoutWrites(t *testi
 	before := historicalRowsSnapshot(t, f.db)
 	history := func() string {
 		var raw []byte
-		if err := f.db.QueryRow(context.Background(), `SELECT jsonb_build_object('ledger',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(m),'xmin',m.xmin::text) ORDER BY position) FROM app_schema_migrations m WHERE position<=7),'versions',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(v),'xmin',v.xmin::text) ORDER BY version) FROM app_schema_versions v WHERE version NOT IN($1,$2)))`, schemaMigrations[7].version, schemaVersion).Scan(&raw); err != nil {
+		if err := f.db.QueryRow(context.Background(), `SELECT jsonb_build_object('ledger',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(m),'xmin',m.xmin::text) ORDER BY position) FROM app_schema_migrations m WHERE position<=7),'versions',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(v),'xmin',v.xmin::text) ORDER BY version) FROM app_schema_versions v WHERE version NOT IN($1,$2,$3)))`, schemaMigrations[7].version, schemaMigrations[8].version, schemaVersion).Scan(&raw); err != nil {
 			t.Fatal(err)
 		}
 		return string(raw)

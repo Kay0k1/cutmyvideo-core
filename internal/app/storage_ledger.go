@@ -183,13 +183,20 @@ func remainingJobMediaReserve(c Config, j Job, platform bool) (int64, error) {
 		}
 		return 0, nil
 	}
-	var size, staging, sourceText int64
+	var size, staging, sourceText, transient int64
 	for _, item := range j.Items {
 		if item.Status == "succeeded" && item.Artifact != nil {
 			continue
 		}
 		r := Range{StartMS: item.StartMS, EndMS: item.EndMS}
 		budget := outputBudget(c, r, j.Request)
+		// Producers run sequentially. Retain one shared peak workspace in
+		// addition to every unfinished final output's independent ceiling.
+		work := exportTransientBudget(c, r, j.Request)
+		if work < 0 {
+			return 0, errStorageUnavailable
+		}
+		transient = max(transient, work)
 		// Source text is shared across the operation. Rebased text and the
 		// subtitle-free media producer remain charged per unfinished output.
 		if subtitles, err := subtitleStageBudget(j.Request, budget, subtitleTrackAllowance); err != nil || subtitles > math.MaxInt64-budget {
@@ -212,6 +219,10 @@ func remainingJobMediaReserve(c Config, j Job, platform bool) (int64, error) {
 		return 0, errStorageUnavailable
 	}
 	size += sourceText
+	if transient > math.MaxInt64-size {
+		return 0, errStorageUnavailable
+	}
+	size += transient
 	// Only one interval is staged at a time. Published files are charged
 	// separately, while the unfinished outputs retain their exact ceilings.
 	if staging < 0 || staging > (math.MaxInt64-size)/2 {

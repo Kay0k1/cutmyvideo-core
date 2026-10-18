@@ -3,12 +3,12 @@
 TypeScript clients for local `cutmy` execution and the cutmyvideo-core HTTP API.
 The package has no runtime dependencies. Node 20.19 or newer is required for the
 Node entry; the main HTTP entry also works in browsers with modern Fetch APIs.
-Published release [1.5.0](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.5.0)
+Published release [1.6.0](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.6.0)
 includes a signed npm tarball as a GitHub release asset. This distribution channel
 is separate from npm registry publication. Install the tarball:
 
 ```sh
-npm install https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.5.0/cutmyvideo-sdk-1.5.0.tgz
+npm install https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.6.0/cutmyvideo-sdk-1.6.0.tgz
 ```
 
 ## Local files
@@ -452,3 +452,28 @@ Collections support `clear_audio_normalize`, `clear_canvas` and
 clear flags. Non-null `audio_replace` is explicitly refused on portable
 import/export until audio is relinked, preserving the guarantee that portable
 files contain neither local paths nor server source IDs.
+
+
+## Controlled export (core 1.6)
+
+Plans accept `format: "wav" | "flac"` for fixed PCM24/FLAC24 preserving the
+inspected rate and channels, or compatible AAC `format: "m4a", cut_mode: "copy"`.
+Accurate final MP4/MP3 supports `speed: {numerator: 5, denominator: 4}`;
+final H.264 MP4 also supports `target_size_bytes: 8000000`. Collection options
+`clear_speed` and `clear_target_size` explicitly remove inherited controls.
+Portable project roundtrips retain these edits and reject malformed numbers.
+
+```ts
+import { downloadImageArtifactToFile } from '@cutmyvideo/sdk/local';
+const image = await client.createPoster(parentArtifactId, {timestamp_ms: 1250, format: 'png'});
+await client.getImageArtifact(image.id);
+await downloadImageArtifactToFile(client, image.id, 'poster.png', {maxBytes: 16 << 20});
+await client.deleteImageArtifact(image.id);
+// Or keep the entire operation local:
+await cutmy.generatePoster('finished.mp4', 'poster.jpg', {timestamp_ms: 1250});
+```
+
+Poster timestamps use the finished output clock. `downloadImageArtifact(id)`
+also exposes a bounded stream for browser callers; consume it or call `cancel()`.
+The owner's session is required and arbitrary returned URLs are never followed.
+See the core's `docs/controlled-export.md` for exact limits and conflicts.

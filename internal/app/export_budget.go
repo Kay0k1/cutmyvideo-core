@@ -29,6 +29,10 @@ func outputBudget(c Config, r Range, request ExportRequest) int64 {
 	return mediaexport.OutputBudget(mediaExportConfig(c), r, edit.ExportRequest(request))
 }
 
+func exportTransientBudget(c Config, r Range, request ExportRequest) int64 {
+	return mediaexport.TransientBudget(mediaExportConfig(c), r, edit.ExportRequest(request))
+}
+
 func joinedOutputRange(request ExportRequest) Range {
 	return mediaexport.JoinedOutputRange(edit.ExportRequest(request))
 }
@@ -66,6 +70,11 @@ func joinedWorkBudget(c Config, request ExportRequest, platform bool) (int64, er
 		return 0, errStorageUnavailable
 	}
 	size += subtitles
+	transient := exportTransientBudget(c, joinedOutputRange(request), request)
+	if transient < 0 || transient > math.MaxInt64-size {
+		return 0, errStorageUnavailable
+	}
+	size += transient
 	var copyTransient int64
 	for _, selected := range request.Ranges {
 		if request.CutMode == "copy" {

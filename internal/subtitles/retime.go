@@ -186,13 +186,14 @@ func parseSuppliedSubtitles(ctx context.Context, request RetimeRequest) ([]suppl
 
 // Retime produces bounded UTF-8 sidecars using actual export maps.
 // Intervals are half-open. Source cuts may repeat or be reordered; output maps
-// must be ordered and non-overlapping. Clocks are translated, never stretched.
+// must be ordered and non-overlapping. Version1 retains translation and tail
+// clamping. Version2 explicitly opts into affine source-to-output time scaling.
 func Retime(ctx context.Context, request RetimeRequest) (RetimeResult, error) {
 	result := RetimeResult{Version: 1, Outputs: []Sidecar{}}
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
-	if request.Version != 1 || (request.Format != "srt" && request.Format != "vtt") {
+	if (request.Version != 1 && request.Version != 2) || (request.Format != "srt" && request.Format != "vtt") {
 		return result, subtitleInvalid("invalid_subtitles", "version/format")
 	}
 	if request.OutputFormat == "" {
@@ -256,8 +257,18 @@ func Retime(ctx context.Context, request RetimeRequest) (RetimeResult, error) {
 				if end <= start {
 					continue
 				}
-				start = segment.OutputStartMS + start - segment.SourceStartMS
-				end = min(segment.OutputEndMS, segment.OutputStartMS+end-segment.SourceStartMS)
+				if request.Version == 2 {
+					// Both spans are bounded to720hours during map validation.
+					// Their product plus half a span fits in int64, including
+					// the maximum permitted clock. Round each endpoint once.
+					sourceSpan := segment.SourceEndMS - segment.SourceStartMS
+					outputSpan := segment.OutputEndMS - segment.OutputStartMS
+					start = segment.OutputStartMS + ((start-segment.SourceStartMS)*outputSpan+sourceSpan/2)/sourceSpan
+					end = segment.OutputStartMS + ((end-segment.SourceStartMS)*outputSpan+sourceSpan/2)/sourceSpan
+				} else {
+					start = segment.OutputStartMS + start - segment.SourceStartMS
+					end = min(segment.OutputEndMS, segment.OutputStartMS+end-segment.SourceStartMS)
+				}
 				if end <= start {
 					continue
 				}

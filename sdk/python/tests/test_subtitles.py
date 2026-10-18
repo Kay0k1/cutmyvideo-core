@@ -17,8 +17,9 @@ def request(text="1\n00:00:01,000 --> 00:00:02,000\nПривет $(literal)\n", 
 class SubtitleTests(unittest.TestCase):
     def test_local_retime_uses_private_literal_request_and_allows_bounded_large_results(self):
         local = LocalCutmy([sys.executable, str(Path(__file__).with_name("cli_helper.py")), "subtitles"])
-        for body in (request(), request("x" * 450000, 3)):
+        for body in (request(), {**request(), "version": 2}, request("x" * 450000, 3)):
             result = local.retime_subtitles(body, timeout=5)
+            self.assertEqual(result["version"], 1)
             self.assertEqual([item["clip_id"] for item in result["outputs"]], [item["clip_id"] for item in body["outputs"]])
             for item in result["outputs"]:
                 self.assertEqual(item["text"], body["text"])
@@ -52,6 +53,9 @@ class SubtitleTests(unittest.TestCase):
         self.assertEqual(received[0], body)
         self.assertGreater(sum(len(item["text"]) for item in result["outputs"]), 1 << 20)
         self.assertNotIn("private-do-not-return", json.dumps(result))
+        opted = {**request(), "version": 2}
+        self.assertEqual(client.retime_subtitles(opted)["version"], 1)
+        self.assertEqual(received[-1], opted)
         config["bad_hash"] = True
         with self.assertRaises(APIError) as failed: client.retime_subtitles(request())
         self.assertEqual(failed.exception.code, "invalid_response")

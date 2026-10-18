@@ -199,6 +199,7 @@ func (e *Engine) ExportWithOptions(ctx context.Context, input, output string, r 
 	}
 	req := localmedia.ExportRequest{Ranges: []localmedia.Range{{StartMS: r.StartMS, EndMS: r.EndMS}}, Format: o.Format, Quality: o.Quality, CutMode: o.CutMode, AudioTrack: o.AudioTrack, NoAudio: o.NoAudio, SubtitleMode: o.SubtitleMode, Crop: o.Crop}
 	req.AudioNormalize, req.Canvas, req.AudioReplace = edit.CloneAudioNormalize(o.AudioNormalize), edit.CloneCanvas(o.Canvas), edit.CloneAudioReplace(o.AudioReplace)
+	req.Speed, req.TargetSizeBytes = edit.CloneSpeed(o.Speed), o.TargetSizeBytes
 	if err = req.Validate(e.config, localmedia.Source{DurationMS: s.DurationMS, Path: input}); err != nil {
 		return AdvancedResult{}, invalidArgument(err)
 	}
@@ -245,5 +246,6 @@ func (e *Engine) ExportWithOptions(ctx context.Context, input, output string, r 
 		}
 		return AdvancedResult{}, err
 	}
-	return AdvancedResult{Result: Result{Path: output, SizeBytes: info.Size(), ActualStartMS: start, ActualEndMS: end}, TrackManifest: tracks, Segments: []Segment{{SourceStartMS: start, SourceEndMS: end, OutputEndMS: end - start}}}, nil
+	outputDuration, _ := edit.OutputDurationMS(end-start, req.Speed)
+	return AdvancedResult{Result: Result{Path: output, SizeBytes: info.Size(), ActualStartMS: start, ActualEndMS: end}, TrackManifest: tracks, Segments: []Segment{{SourceStartMS: start, SourceEndMS: end, OutputEndMS: outputDuration}}}, nil
 }
