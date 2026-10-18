@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
 	"github.com/Kay0k1/cutmyvideo-core/internal/localmedia"
 )
 
@@ -55,7 +56,8 @@ func (e *Engine) AnalyzeVideo(ctx context.Context, path string, options VideoAna
 // ordered, nonoverlapping ranges are accepted; an all-silent or uncovered
 // result cannot silently become an empty export or discard an unknown tail.
 // Edit Keep first, or analyze another window, when a suggestion needs changes.
-// Unless NoAudio is explicitly requested, the analysis audio selection is kept.
+// The analysis audio selection is kept unless NoAudio or AudioReplace is
+// explicitly requested. Replacement selects its own recording and stream.
 func BuildSilencePlan(input string, result SilenceResult, options AdvancedOptions, outputMode string) (Plan, error) {
 	bad := func(message string) (Plan, error) { return Plan{}, invalidArgument(errors.New(message)) }
 	if strings.TrimSpace(input) == "" || result.Version != 1 || result.StartMS < 0 || result.EndMS <= result.StartMS || result.EndMS-result.StartMS > localmedia.AnalysisMaxWindowMS || result.AnalyzedEndMS <= result.StartMS || result.AnalyzedEndMS > result.EndMS || result.AudioTrack < 0 {
@@ -73,7 +75,29 @@ func BuildSilencePlan(input string, result SilenceResult, options AdvancedOption
 	if outputMode != "joined" && outputMode != "separate" {
 		return bad("output_mode must be separate or joined")
 	}
-	if options.NoAudio {
+	if options.AudioReplace != nil {
+		if options.AudioReplace.SourceID != "" || strings.TrimSpace(options.AudioReplace.Input) == "" {
+			return bad("local engine audio_replace requires input, not source_id")
+		}
+		// Resolve validation defaults without changing the caller's options.
+		// In particular, never turn the analysis stream into an explicit
+		// original-audio selection when a separate recording was requested.
+		request := edit.ExportRequest{Format: options.Format, Quality: options.Quality, CutMode: options.CutMode,
+			AudioTrack: options.AudioTrack, NoAudio: options.NoAudio, SubtitleMode: options.SubtitleMode,
+			AudioNormalize: options.AudioNormalize, Canvas: options.Canvas, AudioReplace: options.AudioReplace}
+		if request.Format == "" {
+			request.Format = "mp4"
+		}
+		if request.Quality == "" {
+			request.Quality = "best"
+		}
+		if request.CutMode == "" {
+			request.CutMode = "accurate"
+		}
+		if err := edit.ValidateRenderOptions(request); err != nil {
+			return Plan{}, invalidArgument(err)
+		}
+	} else if options.NoAudio {
 		if options.AudioTrack != nil {
 			return bad("choose no_audio or an audio_track, not both")
 		}

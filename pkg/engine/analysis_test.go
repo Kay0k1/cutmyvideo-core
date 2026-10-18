@@ -237,6 +237,75 @@ func TestAnalysisPlanBoundsAndSelectedTrack(t *testing.T) {
 	if plan, err := BuildSilencePlan("source.mp4", valid, AdvancedOptions{NoAudio: true}, "joined"); err != nil || plan.Options.AudioTrack != nil || !plan.Options.NoAudio {
 		t.Fatal("explicit silent video not supported", plan, err)
 	}
+	for name, options := range map[string]AdvancedOptions{
+		"replacement with defaults": {AudioReplace: &AudioReplace{Input: "recorder.wav"}},
+		"replacement with explicit stream": {Options: Options{Format: "mp4", Quality: "best", CutMode: "accurate"},
+			AudioReplace: &AudioReplace{Input: "recorder.wav", AudioTrack: new(1), OffsetMS: -100}},
+		"replacement with normalization and canvas": {AudioReplace: &AudioReplace{Input: "recorder.wav", AudioTrack: new(0), OffsetMS: 100},
+			AudioNormalize: &AudioNormalize{IntegratedLUFS: new(-16.0), TruePeakDBTP: new(-1.0), LoudnessRangeLU: new(11.0)},
+			Canvas:         &Canvas{Width: 320, Height: 240, Fit: "contain", Background: "#000000"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			before, err := json.Marshal(options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			plan, err := BuildSilencePlan("source.mp4", valid, options, "joined")
+			if err != nil {
+				t.Fatal(err)
+			}
+			encoded, err := json.Marshal(plan)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var decoded Plan
+			if err := json.Unmarshal(encoded, &decoded); err != nil {
+				t.Fatal(err)
+			}
+			_, _, request, err := planRequest(decoded, "export.mp4")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := request.Validate(localmedia.Config{MaxRanges: 128, MaxRangeMS: 1000, MaxJobMS: 1000}, localmedia.Source{Path: "source.mp4", DurationMS: 1000}); err != nil {
+				t.Fatalf("generated replacement plan cannot execute after JSON roundtrip: %v; plan=%s", err, encoded)
+			}
+			after, err := json.Marshal(options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if decoded.Options.AudioTrack != nil || decoded.Options.AudioReplace == nil || string(before) != string(after) {
+				t.Fatal("replacement selection changed", decoded.Options, options)
+			}
+			expected, _ := json.Marshal(options.AudioReplace)
+			actual, _ := json.Marshal(decoded.Options.AudioReplace)
+			if string(actual) != string(expected) {
+				t.Fatalf("replacement changed across plan JSON: got %s, want %s", actual, expected)
+			}
+		})
+	}
+	for name, mutate := range map[string]func(*AdvancedOptions){
+		"explicit analyzed original stream":  func(o *AdvancedOptions) { o.AudioTrack = new(2) },
+		"explicit different original stream": func(o *AdvancedOptions) { o.AudioTrack = new(3) },
+		"no audio":                           func(o *AdvancedOptions) { o.NoAudio = true },
+		"HTTP reference":                     func(o *AdvancedOptions) { o.AudioReplace = &AudioReplace{SourceID: "http-source"} },
+		"both references":                    func(o *AdvancedOptions) { o.AudioReplace.SourceID = "http-source" },
+		"empty reference":                    func(o *AdvancedOptions) { o.AudioReplace.Input = "" },
+		"blank reference":                    func(o *AdvancedOptions) { o.AudioReplace.Input = " \t" },
+		"negative replacement stream":        func(o *AdvancedOptions) { o.AudioReplace.AudioTrack = new(-1) },
+		"offset too early":                   func(o *AdvancedOptions) { o.AudioReplace.OffsetMS = -86400001 },
+		"offset too late":                    func(o *AdvancedOptions) { o.AudioReplace.OffsetMS = 86400001 },
+		"copy mode":                          func(o *AdvancedOptions) { o.CutMode = "copy" },
+		"MKV":                                func(o *AdvancedOptions) { o.Format = "mkv" },
+		"subtitle preservation":              func(o *AdvancedOptions) { o.SubtitleMode = "preserve" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			options := AdvancedOptions{AudioReplace: &AudioReplace{Input: "recorder.wav"}}
+			mutate(&options)
+			if _, err := BuildSilencePlan("source.mp4", valid, options, "joined"); CodeOf(err) != CodeInvalidArgument {
+				t.Fatalf("invalid replacement plan accepted: %+v; %v", options, err)
+			}
+		})
+	}
 }
 
 func TestAnalysisDetectsSourceMutationDuringDecode(t *testing.T) {
