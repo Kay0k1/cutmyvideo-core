@@ -54,7 +54,7 @@ func TestEditAdapterPreservesCollectionErrorChains(t *testing.T) {
 	}{
 		{"rendition", "", "rendition", "must be final or draft", "rendition: must be final or draft", 1,
 			func() error { _, err := NormalizeCollectionRendition("unknown"); return err }},
-		{"format", "one", "options.format", "must be mp4, mp3 or mkv", `clip "one" options.format: must be mp4, mp3 or mkv`, 1,
+		{"format", "one", "options.format", "must be mp4, mp3, mkv, wav, flac or m4a", `clip "one" options.format: must be mp4, mp3, mkv, wav, flac or m4a`, 1,
 			func() error { return validate(CollectionOptions{Format: "gif"}) }},
 		{"nested-crop", "one", "options.crop", "crop and clear_crop cannot be used together", `clip "one" options.crop: options.crop: crop and clear_crop cannot be used together`, 2,
 			func() error { return validate(CollectionOptions{Crop: &Crop{Width: 1, Height: 1}, ClearCrop: true}) }},
