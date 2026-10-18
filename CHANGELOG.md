@@ -4,7 +4,7 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
-## [1.6.0] - 2026-10-18
+## 1.6.0 - 2026-10-18
 
 - Export selected audio as PCM24 WAV or FLAC24, preserving inspected sample rate and channel count; copy compatible AAC packets into M4A with explicit boundary diagnostics.
 - Apply a bounded rational speed to accurate MP4/MP3 while preserving audio pitch and actual source/output segment maps, including reordered and repeated intervals.
