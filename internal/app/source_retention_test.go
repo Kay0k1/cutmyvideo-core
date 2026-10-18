@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -605,8 +606,28 @@ func TestSourcePinInvokerTriggersWorkWithoutRuntimeFunctionExecute(t *testing.T)
 func TestSourcePinCatalogManifestsDeclareExactManagedFunctionsAndTriggerColumns(t *testing.T) {
 	// A pure conservative-shape control complements real catalog observations.
 	expected := latestSchemaShape()
-	if len(expected.Functions) != 7 || expected.Functions["derive_job_audio_source"] == "" || expected.Functions["guard_job_audio_source"] == "" {
+	functions := []string{"acquire_source_pin_fence", "derive_job_audio_source", "guard_job_audio_source", "seed_source_pins", "tombstone_image_artifact", "update_source_job_pins", "update_source_preview_pins", "update_storage_counter"}
+	if len(expected.Functions) != len(functions) {
 		t.Fatal("managed pin functions missing from shape")
+	}
+	for _, name := range functions {
+		if expected.Functions[name] == "" {
+			t.Fatalf("managed function %s missing from shape", name)
+		}
+	}
+	// Poster deletion must acquire the existing fence before any parent/image
+	// statement, then retain a charged tombstone for every deleted image row.
+	for _, want := range []struct {
+		table, name string
+		trigger     schemaTrigger
+	}{
+		{"artifacts", "artifact_poster_delete_fence", schemaTrigger{Function: "acquire_source_pin_fence", Enabled: "O", Type: 10}},
+		{"image_artifacts", "image_artifact_delete_fence", schemaTrigger{Function: "acquire_source_pin_fence", Enabled: "O", Type: 10}},
+		{"image_artifacts", "image_artifact_tombstone", schemaTrigger{Function: "tombstone_image_artifact", Enabled: "O", Type: 9}},
+	} {
+		if got := expected.Tables[want.table].Triggers[want.name]; !reflect.DeepEqual(got, want.trigger) {
+			t.Fatalf("poster trigger %s.%s changed semantics: %+v", want.table, want.name, got)
+		}
 	}
 	for _, m := range schemaMigrations[:4] {
 		old := expectedSchemaShape(m.shape)
@@ -616,6 +637,18 @@ func TestSourcePinCatalogManifestsDeclareExactManagedFunctionsAndTriggerColumns(
 	}
 	for _, change := range []func(schemaShape){
 		func(s schemaShape) { s.Functions["update_source_job_pins"] += "changed" },
+		func(s schemaShape) { delete(s.Functions, "tombstone_image_artifact") },
+		func(s schemaShape) { s.Functions["tombstone_image_artifact"] += "changed" },
+		func(s schemaShape) {
+			x := s.Tables["artifacts"].Triggers["artifact_poster_delete_fence"]
+			x.Type = 9 // AFTER ROW cannot substitute for the BEFORE STATEMENT fence.
+			s.Tables["artifacts"].Triggers["artifact_poster_delete_fence"] = x
+		},
+		func(s schemaShape) {
+			x := s.Tables["image_artifacts"].Triggers["image_artifact_tombstone"]
+			x.Type = 8 // An AFTER STATEMENT trigger loses each deleted row's metadata.
+			s.Tables["image_artifacts"].Triggers["image_artifact_tombstone"] = x
+		},
 		func(s schemaShape) {
 			x := s.Tables["jobs"].Triggers["job_pin_fence_update"]
 			x.Columns = []string{"id"}

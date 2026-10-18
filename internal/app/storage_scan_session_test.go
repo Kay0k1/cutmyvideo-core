@@ -615,7 +615,7 @@ func TestStorageScanSessionReadBatchLookupFailureRollsBackAndRecovers(t *testing
 			t.Error("owned lookup role cleanup", err)
 		}
 	})
-	if _, err = s.DB.Exec(ctx, `GRANT USAGE ON SCHEMA `+pgx.Identifier{namespace}.Sanitize()+` TO `+ident+`; GRANT SELECT,UPDATE ON storage_scan_progress,storage_counters TO `+ident+`; GRANT SELECT ON sources,artifacts TO `+ident+`; GRANT INSERT,UPDATE ON storage_files TO `+ident); err != nil {
+	if _, err = s.DB.Exec(ctx, `GRANT USAGE ON SCHEMA `+pgx.Identifier{namespace}.Sanitize()+` TO `+ident+`; GRANT SELECT,UPDATE ON storage_scan_progress,storage_counters TO `+ident+`; GRANT SELECT ON sources,artifacts,image_artifacts TO `+ident+`; GRANT INSERT,UPDATE ON storage_files TO `+ident); err != nil {
 		t.Fatal(err)
 	}
 	config := s.DB.Config()
@@ -638,12 +638,12 @@ func TestStorageScanSessionReadBatchLookupFailureRollsBackAndRecovers(t *testing
 	runtime := &Store{DB: db}
 	var backend int32
 	var effectiveRole string
-	var canReadCursor, canUpdateCursor, canReadFiles, canLogin bool
-	if err = db.QueryRow(ctx, `SELECT pg_backend_pid(),current_user,has_table_privilege(current_user,'storage_scan_progress','SELECT'),has_table_privilege(current_user,'storage_scan_progress','UPDATE'),has_table_privilege(current_user,'storage_files','SELECT'),(SELECT rolcanlogin FROM pg_roles WHERE rolname=current_user)`).Scan(&backend, &effectiveRole, &canReadCursor, &canUpdateCursor, &canReadFiles, &canLogin); err != nil {
+	var canReadCursor, canUpdateCursor, canReadFiles, canReadImages, canLogin bool
+	if err = db.QueryRow(ctx, `SELECT pg_backend_pid(),current_user,has_table_privilege(current_user,'storage_scan_progress','SELECT'),has_table_privilege(current_user,'storage_scan_progress','UPDATE'),has_table_privilege(current_user,'storage_files','SELECT'),has_table_privilege(current_user,'image_artifacts','SELECT'),(SELECT rolcanlogin FROM pg_roles WHERE rolname=current_user)`).Scan(&backend, &effectiveRole, &canReadCursor, &canUpdateCursor, &canReadFiles, &canReadImages, &canLogin); err != nil {
 		t.Fatal(err)
 	}
-	if effectiveRole != role || !canReadCursor || !canUpdateCursor || canReadFiles || canLogin {
-		t.Fatal("owned role did not isolate the denied lookup", effectiveRole, canReadCursor, canUpdateCursor, canReadFiles, canLogin)
+	if effectiveRole != role || !canReadCursor || !canUpdateCursor || canReadFiles || !canReadImages || canLogin {
+		t.Fatal("owned role did not isolate the denied lookup", effectiveRole, canReadCursor, canUpdateCursor, canReadFiles, canReadImages, canLogin)
 	}
 	// The fixture locks only the cursor row, not the storage fence. Waiting on
 	// that row proves the first batched cursor query executes before the denied

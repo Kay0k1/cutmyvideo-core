@@ -12,8 +12,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"strings"
+	"runtime"
 	"testing"
 	"time"
 
@@ -299,15 +300,11 @@ CREATE CONSTRAINT TRIGGER reject_poster_test_commit AFTER INSERT ON image_artifa
 		t.Fatal("crash cleanup removed unrelated image", err)
 	}
 	// Client cancellation stops the whole process group and retires the reader.
-	marker := filepath.Join(server.Config.DataDir, "poster-running")
-	script := filepath.Join(server.Config.DataDir, "poster-ffmpeg")
-	quoted := "'" + strings.ReplaceAll(marker, "'", "'\"'\"'") + "'"
-	if err = os.WriteFile(script, []byte("#!/bin/sh\n: > "+quoted+"\nsleep 60\n"), 0700); err != nil {
-		t.Fatal(err)
-	}
-	server.Config.FFmpeg = script
+	blockedFFmpeg, marker := posterBlockingProcess(t)
+	server.Config.FFmpeg = blockedFFmpeg
 	request := databaseRequest("POST", "/api/v1/artifacts/"+parent.ID+"/poster", `{"timestamp_ms":100,"format":"png"}`, &http.Cookie{Name: "cutmy_session", Value: base64.RawURLEncoding.EncodeToString(make([]byte, 32))})
 	cancelCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	done := make(chan struct{})
 	go func() {
 		server.Handler().ServeHTTP(httptest.NewRecorder(), request.WithContext(cancelCtx))
@@ -324,4 +321,37 @@ CREATE CONSTRAINT TRIGGER reject_poster_test_commit AFTER INSERT ON image_artifa
 	if err = s.DB.QueryRow(ctx, "SELECT (SELECT count(*) FROM artifact_readers)+(SELECT count(*) FROM storage_reservations WHERE kind='poster')").Scan(&leases); err != nil || leases != 0 {
 		t.Fatal("cancelled poster retained reader/reservation", leases, err)
 	}
+}
+
+// posterBlockingProcess is a native executable on every supported platform.
+// FFmpeg arguments are ignored: creating the marker proves that rendering has
+// reached a real child process before the request is cancelled.
+func posterBlockingProcess(t *testing.T) (string, string) {
+	t.Helper()
+	dir := t.TempDir()
+	source := filepath.Join(dir, "poster-blocking-process.go")
+	program := `package main
+import (
+    "os"
+    "time"
+)
+func main() {
+    path, err := os.Executable()
+    if err != nil { os.Exit(2) }
+    if err := os.WriteFile(path+".running", []byte("started"), 0600); err != nil { os.Exit(3) }
+    time.Sleep(60*time.Second)
+}
+`
+	if err := os.WriteFile(source, []byte(program), 0600); err != nil {
+		t.Fatal(err)
+	}
+	helper := filepath.Join(dir, "poster-blocking-process")
+	if runtime.GOOS == "windows" {
+		helper += ".exe"
+	}
+	build := exec.Command("go", "build", "-p=1", "-trimpath", "-o", helper, source)
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build native poster cancellation witness: %v\n%s", err, output)
+	}
+	return helper, helper + ".running"
 }
