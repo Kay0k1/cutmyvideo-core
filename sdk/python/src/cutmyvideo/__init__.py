@@ -15,7 +15,7 @@ from .types import (
     ContentFingerprint, ProviderFingerprint, SourceFingerprint, SourcePreparationInput, SourcePreparationReport,
     SubtitleMap, SubtitleRequest, SubtitleOutput, SubtitleResult,
     SourcePreparationReceipt, AgentProject, ProjectClip, ProjectJob, ProjectClipJob, ProjectCreateRequest, ProjectEditRequest, ProjectHandoff,
-    AudioNormalize, Canvas, AudioReplace, LocalAudioReplace, AnalysisOptions, SilenceOptions, SilenceResult,
+    Speed, PosterOptions, PosterResult, ImageArtifact, AudioNormalize, Canvas, AudioReplace, LocalAudioReplace, AnalysisOptions, SilenceOptions, SilenceResult,
     VideoAnalysisOptions, VideoAnalysisResult, SceneChange, LoudnessOptions, LoudnessResult,
     CutList, CutListEntry, CutListImportRequest, CutListExportRequest, LocalCutListExportRequest, CutListExportResult,
 )
@@ -34,7 +34,7 @@ __all__ = [
     "SubtitleMap", "SubtitleRequest", "SubtitleOutput", "SubtitleResult",
     "export_portable_project", "import_portable_project",
     "SourcePreparationReceipt", "AgentProject", "ProjectClip", "ProjectJob", "ProjectClipJob", "ProjectCreateRequest", "ProjectEditRequest", "ProjectHandoff",
-    "AudioNormalize", "Canvas", "AudioReplace", "LocalAudioReplace", "AnalysisOptions", "SilenceOptions", "SilenceResult",
+    "Speed", "PosterOptions", "PosterResult", "ImageArtifact", "AudioNormalize", "Canvas", "AudioReplace", "LocalAudioReplace", "AnalysisOptions", "SilenceOptions", "SilenceResult",
     "VideoAnalysisOptions", "VideoAnalysisResult", "SceneChange", "LoudnessOptions", "LoudnessResult",
     "CutList", "CutListEntry", "CutListImportRequest", "CutListExportRequest", "LocalCutListExportRequest", "CutListExportResult",
 ]

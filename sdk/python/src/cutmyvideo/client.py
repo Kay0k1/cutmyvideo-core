@@ -26,7 +26,7 @@ from typing import Any, Callable, Mapping, cast
 from urllib.parse import quote, urlsplit
 
 from .errors import APIError, WaitCancelled, WaitTimeout, JobError
-from .types import Artifact, CollectionRequest, CollectionRunReport, CollectionSubmission, CollectionValidation, ExportRequest, Job, PreflightResult, Source, TrackReport
+from .types import ImageArtifact, Artifact, CollectionRequest, CollectionRunReport, CollectionSubmission, CollectionValidation, ExportRequest, Job, PreflightResult, Source, TrackReport
 from .types import (AgentProject, ProjectCreateRequest, ProjectEditRequest, ProjectHandoff, SourcePreparationInput,
                     SourcePreparationReceipt, SourcePreparationReport, SubtitleRequest, SubtitleResult,
                     SilenceOptions, SilenceResult, VideoAnalysisOptions, VideoAnalysisResult,
@@ -437,7 +437,12 @@ class CutmyClient:
             if 200 <= response.status < 300 and destination is not None:
                 if response.status != 200:
                     raise APIError("Expected a complete artifact response", code="invalid_response", status=response.status)
+                if path.startswith("/api/v1/image-artifacts/") and response.getheader("Content-Type", "").split(";", 1)[0].strip().lower() not in ("image/jpeg", "image/png"):
+                    raise APIError("Image download returned an unexpected media type", code="invalid_response", status=response.status)
                 return self._save_download(response, connection, deadline, destination, max_bytes)
+            if method == "DELETE" and response.status == 204:
+                self._read_bounded(response, connection, deadline, 0)
+                return None
             payload = self._read_bounded(response, connection, deadline, json_limit)
             try:
                 data = json.loads(payload)
@@ -719,6 +724,32 @@ class CutmyClient:
         body = cut_export(request)
         return cast(CutListExportResult, cut_export_result(self._json("POST", "/api/v1/cut-lists/export", body, timeout=timeout), body["format"]))
 
+    def create_poster(self, artifact_id: str, options: Mapping[str, Any], *, timeout: float | None = None) -> ImageArtifact:
+        from .media import poster_options, poster_result
+        body = poster_options(options)
+        return cast(ImageArtifact, poster_result(self._json("POST", "/api/v1/artifacts/" + self._id(artifact_id) + "/poster", body, timeout=timeout, default=120), body, artifact_id))
+
+    def get_image_artifact(self, image_id: str, *, timeout: float | None = None) -> ImageArtifact:
+        from .media import poster_result
+        value = self._json("GET", "/api/v1/image-artifacts/" + self._id(image_id), timeout=timeout)
+        if not isinstance(value, dict) or value.get("id") != image_id or not isinstance(value.get("parent_artifact_id"), str) or not value["parent_artifact_id"]:
+            raise APIError("Invalid image artifact identity", code="invalid_response")
+        return cast(ImageArtifact, poster_result(value, {"timestamp_ms": value.get("timestamp_ms"), "format": value.get("format")}, value["parent_artifact_id"]))
+
+    def delete_image_artifact(self, image_id: str, *, timeout: float | None = None) -> None:
+        self._json("DELETE", "/api/v1/image-artifacts/" + self._id(image_id), timeout=timeout)
+
+    def download_image(self, image: ImageArtifact | Mapping[str, Any] | str, destination: str | os.PathLike[str], *, timeout: float | None = None, max_bytes: int | None = None) -> Path:
+        identifier = image if isinstance(image, str) else image.get("id")
+        path = "/api/v1/image-artifacts/" + self._id(cast(str, identifier)) + "/download"
+        if max_bytes is not None and (type(max_bytes) is not int or max_bytes < 1):
+            raise ValueError("max_bytes must be a positive integer")
+        max_bytes = min(max_bytes if max_bytes is not None else 16777216, 16777216)
+        target = Path(destination).absolute()
+        if target.exists() or target.is_symlink():
+            raise FileExistsError("Download destination already exists")
+        return cast(Path, self._exchange("GET", path, self._deadline(timeout, self.download_timeout), destination=target, max_bytes=max_bytes))
+
     def get_tracks(self, source_id: str, *, timeout: float | None = None) -> TrackReport:
         data = self._json("GET", "/api/v1/sources/" + self._id(source_id) + "/tracks", timeout=timeout)
         if not isinstance(data.get("tracks"), list) or any(not isinstance(track, dict) for track in data["tracks"]):
@@ -732,6 +763,9 @@ class CutmyClient:
         if (data.get("valid") is not True or data.get("version") != 1 or isinstance(data.get("version"), bool)
                 or not isinstance(data.get("checks"), list) or not isinstance(data.get("warnings"), list)):
             raise APIError("Server returned an invalid preflight report", code="invalid_response")
+        from .media import delivery_response
+        if "request" in data:
+            delivery_response(data["request"])
         return cast(PreflightResult, data)
 
     def create_job(self, request: ExportRequest | Mapping[str, Any], *, idempotency_key: str,
@@ -758,6 +792,10 @@ class CutmyClient:
                 or any(not isinstance(item, dict) or not isinstance(item.get("clip_id"), str)
                        or not isinstance(item.get("preflight"), dict) for item in data["clips"])):
             raise APIError("Invalid collection validation response", code="invalid_response")
+        from .media import delivery_response
+        for item in data["clips"]:
+            if "request" in item["preflight"]:
+                delivery_response(item["preflight"]["request"])
         return cast(CollectionValidation, data)
 
     def submit_collection(self, request: CollectionRequest | Mapping[str, Any], *, idempotency_key: str,

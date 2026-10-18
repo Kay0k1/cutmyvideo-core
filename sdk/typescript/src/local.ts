@@ -7,7 +7,8 @@ import { tmpdir } from "node:os";
 import { ApiError, LocalError } from "./errors.js";
 import { decode, JSON_LIMIT, object, positive } from "./protocol.js";
 import { subtitleRequest, subtitleResult } from "./subtitles.js";
-import { analysisFlags, analysisResult, cutImport, cutExport, cutList, cutFormat, cutExportResult, planResult, renderOptionSets, renderReferences } from "./media.js";
+import { analysisFlags, analysisResult, cutImport, cutExport, cutList, cutFormat, cutExportResult, planResult, renderOptionSets, renderReferences, posterOptions, posterResult } from "./media.js";
+import type { PosterOptions, PosterResult } from "./types.js";
 import type { AnalysisKind } from "./media.js";
 import type { SilenceOptions, SilenceResult, VideoAnalysisOptions, VideoAnalysisResult, LoudnessOptions, LoudnessResult, SilencePlanOptions, CutList, CutListFormat, CutListImportRequest, LocalCutListExportRequest, CutListExportResult, CutListPlanOptions } from "./types.js";
 import type { SubtitleRequest, SubtitleResult } from "./types.js";
@@ -103,6 +104,11 @@ export class LocalCutmy {
       if (remaining <= 0) throw new LocalError("The operation timed out", { code: "timeout" });
       return await this.#mediaResult(this.#run(["cutlist",operation,"--format",format,flag,path,...extra],"object",remaining,options.signal),validate);
     } finally { await rm(directory,{recursive:true,force:true}); }
+  }
+  async generatePoster(input: string, output: string, options: PosterOptions, request: RequestOptions = {}): Promise<PosterResult> {
+    const body = posterOptions(options), timeout = positive(request.timeoutMs ?? 30000, "timeoutMs");
+    if (!input || !output) throw new TypeError("Poster input and output are required");
+    return this.#mediaResult(this.#run(["poster","--input",resolve(this.#cwd,input),"--output",resolve(this.#cwd,output),"--at",`${Math.floor(body.timestamp_ms / 1000)}.${String(body.timestamp_ms % 1000).padStart(3,"0")}`,"--format",body.format,"--threads",String(this.#threads),"--timeout",`${timeout}ms`],"object",timeout,request.signal), value => posterResult<PosterResult>(value,body));
   }
   preflight(plan: Plan, output: string, options: RequestOptions = {}): Promise<LocalPreflightResult> { return this.#plan("preflight", plan, output, options); }
   executePlan(plan: Plan, output: string, options: RequestOptions = {}): Promise<BatchResult> { return this.#plan("batch", plan, output, options); }
@@ -255,7 +261,9 @@ export async function uploadFile(client: CutmyClient, path: string, options: Req
 }
 
 /** Downloads beside the destination and exclusively publishes it; existing files survive. */
-export async function downloadArtifactToFile(client: CutmyClient, id: string, output: string, options: DownloadOptions = {}): Promise<string> {
+export function downloadArtifactToFile(client: CutmyClient, id: string, output: string, options: DownloadOptions = {}): Promise<string> { return downloadResourceToFile(client,id,output,options,false); }
+export function downloadImageArtifactToFile(client: CutmyClient, id: string, output: string, options: DownloadOptions = {}): Promise<string> { return downloadResourceToFile(client,id,output,options,true); }
+async function downloadResourceToFile(client: CutmyClient, id: string, output: string, options: DownloadOptions, image: boolean): Promise<string> {
   const destination = resolve(output);
   const parent = dirname(destination);
   let workspace: string | undefined;
@@ -263,7 +271,7 @@ export async function downloadArtifactToFile(client: CutmyClient, id: string, ou
   try {
     workspace = await mkdtemp(join(parent, ".cutmy-download-"));
     const temporary = join(workspace, "download");
-    const download = await client.downloadArtifact(id, options);
+    const download = await (image ? client.downloadImageArtifact(id, options) : client.downloadArtifact(id, options));
     reader = download.stream.getReader();
     const file = await open(temporary, "wx", 0o600);
     try {

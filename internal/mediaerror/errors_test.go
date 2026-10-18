@@ -17,6 +17,8 @@ func TestMediaErrorPreservesClassificationAndCauses(t *testing.T) {
 		{nil, ""}, {raw, ""}, {errors.New("unsupported_stream"), ""},
 		{ErrNoAudio, "audio_missing"}, {ErrOutputLimit, "output_limit"}, {ErrUnsupportedStream, "unsupported_media"},
 		{&Problem{Code: "crop_invalid", Message: "crop"}, "invalid_argument"},
+		{&Problem{Code: "target_size_unattainable", Message: "bounded target"}, "target_size_unattainable"},
+		{&Problem{Code: "copy_audio_unsupported", Message: "AAC required"}, "copy_audio_unsupported"},
 		{process, "copy_incompatible"}, {&ProcessFailure{Cause: raw, Category: "unknown"}, "processing_failed"},
 		{&ProcessFailure{Cause: ErrNoAudio, Category: "storage_full"}, "audio_missing"},
 		{&InspectionFailure{Cause: process}, "copy_incompatible"}, {&InspectionFailure{Cause: raw}, "unsupported_media"},

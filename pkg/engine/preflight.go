@@ -125,6 +125,7 @@ func planRequest(plan Plan, output string) (input, absoluteOutput string, reques
 	request = localmedia.ExportRequest{Ranges: ranges, Format: o.Format, Quality: o.Quality, CutMode: o.CutMode,
 		OutputMode: mode, NoAudio: o.NoAudio, SubtitleMode: o.SubtitleMode}
 	request.AudioNormalize, request.Canvas, request.AudioReplace = edit.CloneAudioNormalize(o.AudioNormalize), edit.CloneCanvas(o.Canvas), edit.CloneAudioReplace(o.AudioReplace)
+	request.Speed, request.TargetSizeBytes = edit.CloneSpeed(o.Speed), o.TargetSizeBytes
 	if o.AudioTrack != nil {
 		index := *o.AudioTrack
 		request.AudioTrack = &index

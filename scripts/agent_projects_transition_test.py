@@ -268,9 +268,9 @@ class ProjectAdmissionControls(unittest.TestCase):
 
     def test_workflow_requires_new_default_mode_controls_and_exact_receipt_verification(self):
         workflow = (ROOT.parent / '.github/workflows/self-hosting.yml').read_text()
-        self.assertIn('default: external-audio-008-to-009', workflow)
+        self.assertIn('default: poster-artifacts-009-to-010', workflow)
         self.assertIn(projects.MODE, workflow)
-        self.assertEqual(workflow.count("github.event_name != 'workflow_dispatch' && 'external-audio-008-to-009'"), 2)
+        self.assertEqual(workflow.count("github.event_name != 'workflow_dispatch' && 'poster-artifacts-009-to-010'"), 2)
         self.assertIn('agent_projects_transition_test.py', workflow)
         self.assertIn('public-projects-controls.log', workflow)
         self.assertIn('--verify-report "$RUNNER_TEMP/public-self-hosting-evidence/acceptance-report.json"', workflow)

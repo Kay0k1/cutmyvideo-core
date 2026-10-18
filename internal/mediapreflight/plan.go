@@ -37,6 +37,7 @@ func PrepareWithReplacement(c edit.Limits, path string, request edit.ExportReque
 	request.AudioNormalize = edit.CloneAudioNormalize(request.AudioNormalize)
 	request.Canvas = edit.CloneCanvas(request.Canvas)
 	request.AudioReplace = edit.CloneAudioReplace(request.AudioReplace)
+	request.Speed = edit.CloneSpeed(request.Speed)
 	if err := edit.ValidateExportRequest(&request, c, edit.Source{DurationMS: duration, HasLocalMedia: path != ""}); err != nil {
 		return Result{}, nil, &mediainfo.Problem{Code: "invalid_argument", Message: err.Error()}
 	}
@@ -83,9 +84,17 @@ func PrepareWithReplacement(c edit.Limits, path string, request edit.ExportReque
 }
 
 func ValidateSelection(selection mediaexport.Selection, request edit.ExportRequest) (*Video, error) {
-	if request.Format == "mp3" {
+	if edit.IsAudioOnly(request.Format) {
 		if selection.Audio == nil {
 			return nil, mediaexport.ErrNoAudio
+		}
+		if edit.IsLosslessAudio(request.Format) {
+			if _, err := mediaexport.LosslessAudioProfile(selection.Audio, request.Format); err != nil {
+				return nil, err
+			}
+		}
+		if request.Format == "m4a" && selection.Audio.CodecName != "aac" {
+			return nil, &mediainfo.Problem{Code: "copy_audio_unsupported", Message: "M4A copy requires an AAC audio stream"}
 		}
 		return nil, nil
 	}
@@ -133,6 +142,9 @@ func Finish(result *Result) {
 func RequiredCapabilities(selection mediaexport.Selection, request edit.ExportRequest, tracks []edit.TrackSelection, video *Video) []CapabilityGroup {
 	var encoders, filters, demuxers, bsfs []string
 	muxer := request.Format
+	if muxer == "m4a" {
+		muxer = "ipod"
+	}
 	if muxer == "mkv" {
 		muxer = "matroska"
 	}
@@ -145,13 +157,34 @@ func RequiredCapabilities(selection mediaexport.Selection, request edit.ExportRe
 		if request.AudioNormalize != nil {
 			filters = append(filters, "loudnorm")
 		}
-		if edit.HasRenderOptions(request) && selection.Audio != nil {
+		if edit.RequiresRenderPipeline(request) && selection.Audio != nil {
 			filters = append(filters, "atrim")
 		}
 		if request.AudioReplace != nil {
 			filters = append(filters, "apad")
 		}
-		if request.Format == "mp3" {
+		if request.Speed != nil {
+			filters = append(filters, "atempo", "apad")
+			if !edit.IsAudioOnly(request.Format) {
+				filters = append(filters, "setpts")
+			}
+		}
+		if request.TargetSizeBytes > 0 {
+			muxers = append(muxers, "null")
+		}
+		if edit.IsLosslessAudio(request.Format) {
+			muxers = append(muxers, "wav")
+			demuxers = append(demuxers, "wav")
+			filters = append(filters, "apad")
+			if request.AudioReplace != nil {
+				filters = append(filters, "adelay")
+			}
+			if request.Format == "wav" {
+				encoders = append(encoders, "pcm_s24le")
+			} else {
+				encoders = append(encoders, "flac", "pcm_s24le")
+			}
+		} else if request.Format == "mp3" {
 			encoders = append(encoders, "libmp3lame")
 		} else {
 			encoders = append(encoders, "libx264")
@@ -166,18 +199,20 @@ func RequiredCapabilities(selection mediaexport.Selection, request edit.ExportRe
 				filters = append(filters, "zscale", "format", "setparams", "tonemap")
 				bsfs = append(bsfs, "h264_metadata")
 			}
-			if joined || edit.HasRenderOptions(request) {
+			if joined || edit.RequiresRenderPipeline(request) {
 				filters = append(filters, "select")
 			}
 		}
-		if (joined || edit.HasRenderOptions(request)) && selection.Audio != nil {
+		if (joined || edit.RequiresRenderPipeline(request)) && selection.Audio != nil {
 			filters = append(filters, "aselect", "aresample")
 		}
 	}
-	if joined || edit.HasRenderOptions(request) {
+	if joined || edit.RequiresRenderPipeline(request) {
 		demuxers = append(demuxers, "concat")
 		if request.CutMode == "copy" {
-			if request.Format == "mkv" {
+			if request.Format == "m4a" {
+				demuxers = append(demuxers, "mov")
+			} else if request.Format == "mkv" {
 				demuxers = append(demuxers, "matroska")
 			} else {
 				demuxers = append(demuxers, "mov")

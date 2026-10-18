@@ -49,7 +49,7 @@ class AggregateControls(unittest.TestCase):
                          'go_version': f"go version {self.source['toolchain']} linux/amd64",
                          'schema_versions': ['20261005-storage-queue-v3', '20261010-cache-retention-v1',
                                              '20261010-ordered-migrations-v1', '20261010-storage-maintenance-v1',
-                                             '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1', '20261016-agent-projects-v1', '20261018-external-audio-refs-v1'],
+                                             '20261011-source-retention-v1', '20261012-source-media-cleanup-v1', '20261014-metadata-resolution-leases-v1', '20261016-agent-projects-v1', '20261018-external-audio-refs-v1', '20261018-poster-artifacts-v1'],
                          'upgrade_storage_defaults_checked': 3,
                          'artifacts': [{'label': label, 'bytes': 100, 'sha256': 'e' * 64, 'duration_seconds': 1,
                                         'codecs': {'audio': 'mp3'} if label == 'fresh-after-restore-mp3'
@@ -72,7 +72,8 @@ class AggregateControls(unittest.TestCase):
     def test_exact_five_targets_and_required_scenarios(self):
         receipts = self.check()
         self.assertEqual(len(receipts), 5)
-        self.assertTrue(all(receipt['required_groups'] == 7 and receipt['required_checks'] >= 37 for receipt in receipts))
+        self.assertTrue(all(receipt['required_groups'] == 7 and receipt['required_checks'] ==
+                            (61 if receipt['os'] == 'windows' else 63) for receipt in receipts))
 
     def test_missing_extra_duplicate_and_wrong_target(self):
         self.reject(self.reports[:-1])
@@ -169,6 +170,54 @@ class AggregateControls(unittest.TestCase):
                 else: value['schema_versions'] = [name for name in schemas if name != '20261018-external-audio-refs-v1']
                 with self.assertRaises((RuntimeError, ValueError)):
                     gate.validate_recovery(value, self.source, self.manifest, **kwargs)
+
+    def test_aggregate_requires_every_core16_observation_from_all_five_native_archives(self):
+        self.assertEqual(len(fixture.n.CORE16_MEDIA_CHECKS), 4)
+        for index, report in enumerate(self.reports):
+            for name in fixture.n.CORE16_MEDIA_CHECKS:
+                for mutation in ('missing', 'failed', 'skip'):
+                    with self.subTest(target=report['target'], name=name, mutation=mutation):
+                        wrong = deepcopy(self.reports)
+                        checks = wrong[index]['groups']['media']['checks']
+                        check = next(item for item in checks if item['name'] == name)
+                        if mutation == 'missing': checks.remove(check)
+                        elif mutation == 'failed': check['ok'] = False
+                        else: check['skip'] = True
+                        self.reject(wrong)
+
+    def test_recovery_policy_preserves_schema8_and9_but_requires10_for_current_sources(self):
+        kwargs = {key: value for key, value in self.kwargs.items() if key not in ('manifest_sha256', 'event_sha')}
+        policies = (gate.LEGACY_SCHEMA_VERSIONS, gate.CORE15_SCHEMA_VERSIONS, gate.SCHEMA_VERSIONS)
+        self.assertEqual([len(names) for names in policies], [8, 9, 10])
+        for mode, version, tier in (('release', 'v1.4.2', 0), ('release', 'v1.5.0-rc.1', 1),
+                                   ('release', 'v1.5.0', 1), ('release', 'v1.5.99', 1),
+                                   ('release', 'v1.6.0-rc.1', 2), ('release', 'v1.6.0', 2),
+                                   ('release', 'v2.0.0', 2), ('candidate', self.source['version'], 2),
+                                   ('candidate', 'v1.4.2', 2)):
+            source = dict(self.source, mode=mode, version=version)
+            value = deepcopy(self.recovery)
+            value['schema_versions'] = sorted(policies[tier])
+            external = value['current_external_archive']
+            external['source_sha256'] = external['archive_receipt']['source_sha256'] = m.digest(m.canonical(source))
+            external['runtime_version']['version'] = version
+            with self.subTest(mode=mode, version=version):
+                receipt = gate.validate_recovery(value, source, self.manifest, **kwargs)
+                self.assertEqual(receipt['schema_versions'], sorted(policies[tier]))
+                for other, schemas in enumerate(policies):
+                    if other != tier:
+                        wrong = deepcopy(value)
+                        wrong['schema_versions'] = sorted(schemas)
+                        with self.assertRaises((ValueError, RuntimeError)):
+                            gate.validate_recovery(wrong, source, self.manifest, **kwargs)
+
+    def test_gate_and_trust_freeze_identical_versioned_schema_inventories(self):
+        spec = importlib.util.spec_from_file_location('gate_trust_policy', Path(__file__).with_name('release-trust.py'))
+        trust = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(trust)
+        for mode, version in (('release', 'v1.4.2'), ('release', 'v1.5.0'), ('release', 'v1.6.0'),
+                              ('candidate', self.source['version'])):
+            source = dict(self.source, mode=mode, version=version)
+            self.assertEqual(gate.required_schema_versions(source), trust.required_schemas(source))
 
     def test_actual_archive_recovery_passes(self):
         kwargs = {key: value for key, value in self.kwargs.items() if key not in ('manifest_sha256', 'event_sha')}

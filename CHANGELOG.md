@@ -4,6 +4,15 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
+## [1.6.0] - 2026-10-18
+
+- Export selected audio as PCM24 WAV or FLAC24, preserving inspected sample rate and channel count; copy compatible AAC packets into M4A with explicit boundary diagnostics.
+- Apply a bounded rational speed to accurate MP4/MP3 while preserving audio pitch and actual source/output segment maps, including reordered and repeated intervals.
+- Encode final H.264 MP4 with an explicit per-file target-size ceiling using bounded two-pass work; impossible targets fail without silently changing picture dimensions or audio selection.
+- Generate an inspected JPEG/PNG from a finished output timestamp. HTTP image artifacts have separate owner-protected metadata/download/delete routes, quotas and parent-reader leases (schema 10).
+- Carry delivery options and explicit inheritance resets through Go, CLI, HTTP, Python/TypeScript SDKs and portable plans. Existing requests retain their defaults. SDK 1.6 packages require additional installed-consumer delivery checks; older signed-release acceptance remains versioned.
+- See [controlled export](docs/controlled-export.md) and the coordinated [schema 9→10 upgrade](docs/poster-upgrade.md). New browser controls are a separate web release.
+
 ## 1.5.0 - 2026-10-18
 
 ### Added

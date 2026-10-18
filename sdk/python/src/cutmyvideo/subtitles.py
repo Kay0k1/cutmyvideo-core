@@ -14,7 +14,7 @@ def subtitle_request(value: Mapping[str, Any]) -> dict[str, Any]:
     if len(encoded) > 4 << 20:
         raise ValueError("Subtitle request exceeds 4 MiB")
     data = json.loads(encoded)
-    if (data.get("version") != 1 or isinstance(data.get("version"), bool) or data.get("format") not in ("srt", "vtt")
+    if (type(data.get("version")) is not int or data["version"] not in (1, 2) or data.get("format") not in ("srt", "vtt")
             or not isinstance(data.get("text"), str) or len(data["text"].encode()) > 512 << 10
             or data.get("output_format", data["format"]) not in ("srt", "vtt")
             or not isinstance(data.get("outputs"), list) or not 1 <= len(data["outputs"]) <= 128):

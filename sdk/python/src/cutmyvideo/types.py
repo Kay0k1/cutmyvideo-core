@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 
 class Range(TypedDict):
@@ -12,6 +12,11 @@ class Range(TypedDict):
 
 class NamedRange(Range, total=False):
     label: str
+
+
+class Speed(TypedDict):
+    numerator: int
+    denominator: int
 
 
 class Crop(TypedDict):
@@ -153,6 +158,8 @@ class ExportRequest(_ExportRequired, total=False):
     audio_normalize: AudioNormalize | None
     canvas: Canvas | None
     audio_replace: AudioReplace | None
+    speed: Speed | None
+    target_size_bytes: int
 
 
 class PlanOptions(TypedDict, total=False):
@@ -166,6 +173,8 @@ class PlanOptions(TypedDict, total=False):
     audio_normalize: AudioNormalize | None
     canvas: Canvas | None
     audio_replace: LocalAudioReplace | AudioReplace | None
+    speed: Speed | None
+    target_size_bytes: int
 
 
 class _PlanRequired(TypedDict):
@@ -304,7 +313,7 @@ class SubtitleMap(TypedDict):
 
 
 class SubtitleRequest(TypedDict, total=False):
-    version: int
+    version: Literal[1, 2]
     format: str
     text: str
     output_format: str
@@ -421,6 +430,8 @@ class CollectionOptions(PlanOptions, total=False):
     clear_audio_normalize: bool
     clear_canvas: bool
     clear_audio_replace: bool
+    clear_speed: bool
+    clear_target_size: bool
 
 
 class _CollectionClipRequired(TypedDict):
@@ -591,3 +602,30 @@ class ProjectHandoff(TypedDict):
     project_id: str
     token: str
     expires_at: str
+
+
+class PosterOptions(TypedDict, total=False):
+    timestamp_ms: int
+    format: str
+
+
+class PosterResult(TypedDict):
+    path: str
+    size_bytes: int
+    width: int
+    height: int
+    timestamp_ms: int
+    format: str
+
+
+class ImageArtifact(TypedDict):
+    format: str
+    id: str
+    parent_artifact_id: str
+    filename: str
+    size_bytes: int
+    download_url: str
+    width: int
+    height: int
+    timestamp_ms: int
+    expires_at: str | None

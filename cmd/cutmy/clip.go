@@ -25,7 +25,7 @@ func runClip(args []string, stdout, stderr io.Writer) error {
 	f := flag.NewFlagSet("clip", flag.ContinueOnError)
 	f.SetOutput(stderr)
 	input := f.String("input", "", "local input file")
-	output := f.String("output", "", "output .mp4, .mp3, or .mkv (copy) file")
+	output := f.String("output", "", "output .mp4/.mp3, .wav/.flac, or .mkv/.m4a (copy) file")
 	start := f.String("start", "0", "start in seconds or HH:MM:SS.mmm")
 	end := f.String("end", "", "end in seconds or HH:MM:SS.mmm")
 	quality := f.String("quality", "best", "best, 1080p, or 720p")

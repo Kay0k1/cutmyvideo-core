@@ -51,7 +51,7 @@ func TestExternalAudioPreviousBinaryRefuses009WithoutWrites(t *testing.T) {
 		t.Fatal("previous binary is not exact v1.4.2 source/toolchain/target")
 	}
 	f := newMigrationFixture(t)
-	store := openMigrationStore(t, f)
+	store := installPosterPredecessor(t, f, 9)
 	a, b := storedSource(t, store, "owner"), storedSource(t, store, "owner")
 	if _, err = store.CreateJob(ctx, "owner", audioRefRequest(a, b), "retained-schema009"); err != nil {
 		t.Fatal(err)
@@ -72,13 +72,23 @@ func TestExternalAudioPreviousBinaryRefuses009WithoutWrites(t *testing.T) {
 	if migrationSnapshot(t, store.DB) != before {
 		t.Fatal("schema8 refusal wrote009 catalog/history/rows")
 	}
+	legacy := posterLegacyRows(t, store.DB)
 	compatible, err := OpenStore(ctx, f.url)
 	if err != nil {
 		t.Fatal(err)
 	}
 	compatible.DB.Close()
-	if migrationSnapshot(t, store.DB) != before {
-		t.Fatal("compatible009 startup wrote retained state")
+	if posterLegacyRows(t, store.DB) != legacy {
+		t.Fatal("009→current upgrade changed retained009 rows or history")
+	}
+	current := migrationSnapshot(t, store.DB)
+	compatible, err = OpenStore(ctx, f.url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compatible.DB.Close()
+	if migrationSnapshot(t, store.DB) != current {
+		t.Fatal("current compatible startup wrote retained state")
 	}
 	after, err := os.ReadFile(previous)
 	if err != nil || sha256.Sum256(after) != hash {

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
 	"github.com/Kay0k1/cutmyvideo-core/internal/fsdurable"
 	"github.com/Kay0k1/cutmyvideo-core/internal/localmedia"
 	"github.com/Kay0k1/cutmyvideo-core/internal/mediaerror"
@@ -190,7 +191,7 @@ func pickStreams(info platformInfo, quality, format string) ([]platformFormat, e
 	var supported []*platformFormat
 	preferOriginal := false
 	for _, f := range candidates {
-		if f.ACodec == "none" && (format == "mp3" || isHLS(*f) || progressiveAudio == nil) {
+		if f.ACodec == "none" && (edit.IsAudioOnly(format) || isHLS(*f) || progressiveAudio == nil) {
 			continue
 		}
 		supported = append(supported, f)
@@ -238,7 +239,7 @@ func pickStreams(info platformInfo, quality, format string) ([]platformFormat, e
 	if video == nil {
 		video = fallbackVideo
 	}
-	if format == "mp3" {
+	if edit.IsAudioOnly(format) {
 		if video != nil && video.ACodec != "none" && (audio == nil || video.LanguagePreference > audio.LanguagePreference) {
 			return []platformFormat{*video}, nil
 		}

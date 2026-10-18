@@ -92,6 +92,25 @@ class NativeControls(unittest.TestCase):
                             check['skip'] = True
                         self.reject(value)
 
+    def test_all_four_core16_observations_are_required_on_every_archived_target(self):
+        self.assertEqual(len(n.CORE16_MEDIA_CHECKS), 4)
+        for target, arch in n.m.TARGETS:
+            for name in n.CORE16_MEDIA_CHECKS:
+                self.assertIn(name, n.required_checks(target)['media'])
+                for mutation in ('missing', 'failed', 'skip'):
+                    with self.subTest(target=target, arch=arch, name=name, mutation=mutation):
+                        value = report(target)
+                        value['target']['arch'] = value['runtime_version']['arch'] = arch
+                        checks = value['groups']['media']['checks']
+                        check = next(item for item in checks if item['name'] == name)
+                        if mutation == 'missing':
+                            checks.remove(check)
+                        elif mutation == 'failed':
+                            check['ok'] = False
+                        else:
+                            check['skip'] = True
+                        self.reject(value)
+
     def test_changed_binary_and_suppressed_errors_rejected(self):
         for mutation in ('before', 'after', 'archive', 'errors', 'ok'):
             with self.subTest(mutation=mutation):

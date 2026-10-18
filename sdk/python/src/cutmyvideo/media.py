@@ -1,6 +1,8 @@
 """Bounded public analysis and cut-list JSON; no media tools run in this module."""
 from __future__ import annotations
 
+import re
+
 import math
 from typing import Any, Mapping
 
@@ -144,6 +146,7 @@ def render_option_sets(value: Mapping[str, Any]):
 
 def render_references(value: Mapping[str, Any], *, local: bool = False) -> None:
     for options in render_option_sets(value):
+        delivery_options(options)
         replacement = options.get("audio_replace")
         if replacement is None:
             continue
@@ -151,3 +154,56 @@ def render_references(value: Mapping[str, Any], *, local: bool = False) -> None:
         if (not isinstance(replacement, dict) or forbidden in replacement or not isinstance(replacement.get(field), str)
                 or not replacement[field] or "\0" in replacement[field]):
             raise ValueError("audio_replace requires only a local input" if local else "HTTP audio_replace requires source_id and cannot open local paths")
+
+
+def delivery_options(options: Mapping[str, Any]) -> None:
+    speed = options.get("speed")
+    if speed is not None:
+        if (not isinstance(speed, dict) or set(speed) != {"numerator", "denominator"}
+                or any(type(speed[k]) is not int or not 1 <= speed[k] <= 1000 for k in speed)
+                or speed["numerator"] * 2 < speed["denominator"] or speed["numerator"] > speed["denominator"] * 2):
+            raise ValueError("speed requires numerator/denominator1..1000 and ratio0.5..2")
+    size = options.get("target_size_bytes", 0)
+    if type(size) is not int or not 0 <= size <= 9007199254740991:
+        raise ValueError("target_size_bytes must be a nonnegative safe integer")
+    for field in ("clear_speed", "clear_target_size"):
+        if field in options and type(options[field]) is not bool:
+            raise ValueError(field + " must be boolean")
+    if options.get("clear_speed") is True and speed is not None or options.get("clear_target_size") is True and size != 0:
+        raise ValueError("A delivery option cannot be set and cleared together")
+
+
+def delivery_response(value: Any) -> None:
+    if not isinstance(value, dict):
+        raise APIError("Invalid delivery response", code="invalid_response")
+    try:
+        delivery_options(value)
+    except (ValueError, TypeError):
+        raise APIError("Invalid delivery response options", code="invalid_response") from None
+
+
+def poster_options(value: Mapping[str, Any]) -> dict[str, Any]:
+    if (not isinstance(value, Mapping) or set(value) - {"timestamp_ms", "format"}
+            or type(value.get("timestamp_ms")) is not int or not 0 <= value["timestamp_ms"] <= 9007199254740991
+            or value.get("format", "jpeg") not in ("jpeg", "png")):
+        raise ValueError("Poster requires a nonnegative integer output timestamp and jpeg|png")
+    return {"timestamp_ms": value["timestamp_ms"], "format": value.get("format", "jpeg")}
+
+
+def poster_result(value: Any, expected: Mapping[str, Any], parent: str | None = None) -> dict[str, Any]:
+    if (not isinstance(value, dict) or any(type(value.get(k)) is not int or value[k] <= 0 for k in ("width", "height", "size_bytes"))
+            or value["width"] * value["height"] > 16777216 or value["size_bytes"] > 16777216
+            or value.get("timestamp_ms") != expected["timestamp_ms"] or type(value.get("timestamp_ms")) is not int
+            or value["timestamp_ms"] < 0 or value.get("format") not in ("jpeg", "png")
+            or value.get("format") != expected["format"]):
+        raise APIError("Invalid poster dimensions, size, format or output clock", code="invalid_response")
+    if parent is None:
+        if not isinstance(value.get("path"), str) or not value["path"] or "\0" in value["path"]:
+            raise APIError("Invalid local poster path", code="invalid_response")
+    elif (value.get("parent_artifact_id") != parent or not isinstance(value.get("id"), str)
+            or not re.fullmatch(r"[A-Za-z0-9_-]{1,160}", value["id"])
+            or not isinstance(value.get("filename"), str) or not value["filename"] or any(c in value["filename"] for c in "/\\\0")
+            or value.get("download_url") != "/api/v1/image-artifacts/" + value["id"] + "/download"
+            or "expires_at" not in value or value["expires_at"] is not None and not isinstance(value["expires_at"], str)):
+        raise APIError("Invalid owner-protected image artifact identity", code="invalid_response")
+    return value

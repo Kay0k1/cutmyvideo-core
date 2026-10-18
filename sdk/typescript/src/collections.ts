@@ -114,7 +114,7 @@ function readState(value: unknown): State {
   for (const [id, receipt] of Object.entries(state.receipts)) {
     requireValue(object(receipt) && id === receipt.artifact_id && safeID(id) && clipID(receipt.clip_id) && safeID(receipt.job_id) && ["final","draft"].includes(receipt.rendition) && typeof receipt.path === "string" && typeof receipt.part === "string" && Number.isSafeInteger(receipt.size_bytes) && receipt.size_bytes > 0 && Number.isSafeInteger(receipt.offset) && receipt.offset >= 0 && receipt.offset <= receipt.size_bytes && digestPattern.test(receipt.prefix_sha256) && ["intent","part","prepared","complete"].includes(receipt.phase) && Array.isArray(receipt.segments) && Array.isArray(receipt.track_manifest), "invalid_state");
     const prefix = "files/" + receipt.clip_id + "." + receipt.rendition + "." + id + ".";
-    requireValue(receipt.path.startsWith(prefix) && ["mp4","mp3","mkv"].includes(receipt.path.slice(prefix.length)) && /^parts\/[A-Za-z0-9_-]+\.[a-f0-9-]{36}\.part$/.test(receipt.part), "invalid_state");
+    requireValue(receipt.path.startsWith(prefix) && ["mp4","mp3","mkv","wav","flac","m4a"].includes(receipt.path.slice(prefix.length)) && /^parts\/[A-Za-z0-9_-]+\.[a-f0-9-]{36}\.part$/.test(receipt.part), "invalid_state");
     if (receipt.phase === "prepared" || receipt.phase === "complete") requireValue(receipt.offset === receipt.size_bytes && typeof receipt.sha256 === "string" && digestPattern.test(receipt.sha256), "invalid_state");
     if (receipt.last_modified !== undefined) requireValue(typeof receipt.last_modified === "string" && receipt.last_modified.length <= 128 && !/[\x00-\x1f\x7f]/.test(receipt.last_modified), "invalid_state");
   }
@@ -269,7 +269,7 @@ async function cycle(client: CutmyClient, directory: string, options: Collection
       if (!receipt) {
         requireValue(Object.keys(state!.receipts).length < 4096, "receipt_limit");
         const format = effective.format;
-        requireValue(["mp4","mp3","mkv"].includes(format), "invalid_response");
+        requireValue(["mp4","mp3","mkv","wav","flac","m4a"].includes(format), "invalid_response");
         const rendition = state!.request.rendition ?? "final";
         receipt = { clip_id: id, job_id: job.id, artifact_id: artifact.id, rendition, path: "files/" + id + "." + rendition + "." + artifact.id + "." + format, part: "parts/" + artifact.id + "." + randomUUID() + ".part", size_bytes: artifact.size_bytes, offset: 0, prefix_sha256: EMPTY_HASH, phase: "intent", segments: artifact.segments ?? [], track_manifest: artifact.track_manifest ?? [] };
         requireValue(!(await existsRegular(childPath(root, receipt.path))), "output_exists");

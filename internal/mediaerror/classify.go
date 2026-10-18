@@ -10,7 +10,7 @@ func LocalErrorCode(err error) string {
 		switch problem.Code {
 		case "crop_invalid":
 			return "invalid_argument"
-		case "invalid_argument", "source_changed", "tool_unavailable", "encoder_unavailable", "filter_unavailable", "muxer_unavailable", "demuxer_unavailable", "bitstream_filter_unavailable", "audio_missing", "output_limit", "copy_incompatible", "copy_quality_unsupported", "hdr_conversion_unavailable", "audio_track_unavailable", "subtitle_unsupported", "subtitle_unavailable", "join_incompatible":
+		case "invalid_argument", "source_changed", "tool_unavailable", "encoder_unavailable", "filter_unavailable", "muxer_unavailable", "demuxer_unavailable", "bitstream_filter_unavailable", "audio_missing", "output_limit", "copy_incompatible", "copy_quality_unsupported", "hdr_conversion_unavailable", "audio_track_unavailable", "subtitle_unsupported", "subtitle_unavailable", "join_incompatible", "target_size_unattainable", "copy_audio_unsupported":
 			return problem.Code
 		case "unsupported_stream":
 			return "unsupported_media"

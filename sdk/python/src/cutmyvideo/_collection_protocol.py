@@ -77,6 +77,9 @@ def submission(data: Any, job_validator: Any) -> dict[str, Any]:
             if not isinstance(item, dict) or not isinstance(item.get("retryable"), bool):
                 raise ValueError()
             ids.append(clip_id(item.get("clip_id")))
+            if "request" in item:
+                from .media import delivery_response
+                delivery_response(item["request"])
             if item.get("job") is not None:
                 job_validator(item["job"])
             elif not isinstance(item.get("error"), dict) or not isinstance(item["error"].get("code"), str):

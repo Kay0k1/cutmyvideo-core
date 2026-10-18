@@ -102,7 +102,7 @@ func (s *Store) acquirePreviewAfterCacheLookup(ctx context.Context, c Config, so
 	}
 	var pending bool
 	var active, weight int
-	if err = tx.QueryRow(ctx, `SELECT count(*),COALESCE(sum(`+previewWeightSQL+`),0),COALESCE(bool_or(r.job_id=$1 AND r.token=$2),false) FROM storage_reservations r LEFT JOIN sources s ON s.id=r.job_id WHERE r.kind='preview'`, source.ID, key).Scan(&active, &weight, &pending); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT count(*),COALESCE(sum(`+previewWeightSQL+`),0),COALESCE(bool_or(r.job_id=$1 AND r.token=$2),false) FROM storage_reservations r LEFT JOIN sources s ON s.id=r.job_id WHERE r.kind IN ('preview','poster')`, source.ID, key).Scan(&active, &weight, &pending); err != nil {
 		return nil, err
 	}
 	if pending {

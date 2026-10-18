@@ -37,7 +37,7 @@ type Selection struct {
 
 func (s Selection) MapArgs(format string) []string {
 	var args []string
-	if format != "mp3" && s.Video != nil {
+	if !edit.IsAudioOnly(format) && s.Video != nil {
 		args = append(args, "-map", fmt.Sprintf("%d:%d", s.VideoInput, s.Video.Index))
 	}
 	if s.Audio != nil {

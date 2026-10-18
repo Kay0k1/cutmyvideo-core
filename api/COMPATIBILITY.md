@@ -71,3 +71,30 @@ do not regenerate it from current source merely to make a failed gate pass.
 The [checker](../scripts/check-contract.py), its
 [negative controls](../scripts/contract_test.py), and
 [actual-handler fixtures](../internal/app/http_contract_test.go) run in CI.
+
+
+## Reviewed 1.6.0 caller-selected output formats
+
+WAV, FLAC and compatible AAC-in-M4A are explicit new output choices. The
+unchanged historical snapshots still describe MP4/MP3/MKV. Requests using those
+legacy choices retain their formats and defaults. A client selecting a new
+format, or opening a project saved with it, can receive that same choice in
+normalized preflight, collection and project plan/request echoes.
+
+The checker permits only these three additions at27 explicitly listed historical
+response positions. It requires the exact historical string/enum node shape,
+preserves every old value (including collection inheritance's empty string),
+and rejects other formats, unrelated response enum widening, changed types and
+new validation constraints. It does not make all fields named `format` open.
+Negative controls exercise every reviewed position. Baseline files and their
+pinned hashes remain unchanged. Clients must preserve new selected formats or
+report unsupported functionality; they must never treat an unfamiliar audio
+container as MP4 or silently discard delivery controls.
+
+The 1.6 subtitle retiming extension is also explicitly bounded: only the
+`POST /api/v1/subtitles/retime` request's `version` can change from integer
+constant 1 to the exact integer enumeration `[1, 2]`. Version 1 retains its
+existing clipping semantics. Version 2 opts into scaling supplied cues across
+actual source/output spans, including changed playback speed. The response
+continues to use version 1. This exception permits neither response version
+widening nor changes to other version fields; negative controls cover both.

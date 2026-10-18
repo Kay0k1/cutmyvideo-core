@@ -14,7 +14,7 @@ const MaxStreams = 32
 
 // Keep probing to the fields that determine stream selection and rendering.
 // In particular, do not request arbitrary tags or the full display matrix.
-const ProbeEntries = "format=duration,start_time:stream=index,codec_type,codec_name,start_time,width,height,sample_rate,channels,time_base,extradata_hash,sample_aspect_ratio,pix_fmt,color_primaries,color_transfer,color_space,color_range:stream_disposition=default,attached_pic:stream_tags=language,title:stream_side_data=rotation"
+const ProbeEntries = "format=duration,start_time:stream=index,codec_type,codec_name,start_time,duration,width,height,sample_rate,channels,bits_per_raw_sample,time_base,extradata_hash,sample_aspect_ratio,pix_fmt,color_primaries,color_transfer,color_space,color_range:stream_disposition=default,attached_pic:stream_tags=language,title:stream_side_data=rotation"
 
 type Info struct {
 	Format struct {
@@ -34,9 +34,11 @@ type Stream struct {
 	CodecName         string `json:"codec_name"`
 	SampleRate        string `json:"sample_rate"`
 	Channels          int    `json:"channels"`
+	BitsPerRawSample  int    `json:"bits_per_raw_sample,string,omitempty"`
 	TimeBase          string `json:"time_base"`
 	ExtradataHash     string `json:"extradata_hash"`
 	StartTime         string `json:"start_time"`
+	Duration          string `json:"duration,omitempty"`
 	Width             int    `json:"width"`
 	Height            int    `json:"height"`
 	SampleAspectRatio string `json:"sample_aspect_ratio"`

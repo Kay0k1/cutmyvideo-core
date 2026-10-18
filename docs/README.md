@@ -65,3 +65,7 @@ Choose an interface in the README, then follow the relevant guide. The project o
 | [Artifact retention](artifacts.md) | Keeping large diagnostics outside the source tree |
 | [Security reporting](../SECURITY.md) | Private vulnerability reports |
 | [Dependency notices](../THIRD_PARTY_NOTICES.md) | Third-party licenses and module identities |
+
+- [Controlled export: audio formats, speed, byte targets and output posters](controlled-export.md)
+- [Core1.6.0 scope and verification](release-1.6.0.md)
+- [Poster/schema9→10 upgrade and rollback](poster-upgrade.md)

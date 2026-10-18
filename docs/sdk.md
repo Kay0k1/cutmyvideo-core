@@ -34,16 +34,16 @@ APIs and durable formats. See the [maintenance release scope](release-1.4.2.md).
 Python 3.10 or newer:
 
 ```sh
-python -m pip install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.5.0/cutmyvideo-1.5.0-py3-none-any.whl'
+python -m pip install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.6.0/cutmyvideo-1.6.0-py3-none-any.whl'
 ```
 
 Node.js 20.19 or newer, with an ESM project:
 
 ```sh
-npm install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.5.0/cutmyvideo-sdk-1.5.0.tgz'
+npm install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.6.0/cutmyvideo-sdk-1.6.0.tgz'
 ```
 
-These commands select the versioned assets of [release 1.5.0](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.5.0).
+These commands select the versioned assets of [release 1.6.0](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.6.0).
 They do not use the PyPI/npm registries. No source
 checkout or SDK build is needed. The release also contains the Python source
 distribution, `SDK-MANIFEST.json` and `sdk-provenance.sigstore.json`. They bind the
@@ -216,3 +216,7 @@ make sdk-check SDK_REPORT_DIR=/tmp/new-cutmy-sdk-evidence
 CI requires installed local consumers on all five supported native targets and
 HTTP/worker acceptance on Linux. Missing prerequisites or skipped SDK consumers
 cannot pass the evidence gate. No package registry publication is performed.
+
+## Core 1.6 delivery controls
+
+Both SDKs preserve speed fractions, target byte ceilings and collection reset flags in local/HTTP/portable plans. They add explicit local poster creation and owner-protected HTTP image create/get/download/delete methods. See [controlled export](controlled-export.md) for typed examples, numerical bounds and audio-format compatibility. SDK 1.6 release checks require independently decoded installed-package delivery workflows in addition to every historical check.

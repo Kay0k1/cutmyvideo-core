@@ -56,6 +56,8 @@ const (
 	// not add those capabilities. Compatible copy and audio-only export may work.
 	CodeHDRConversionUnavailable ErrorCode = "hdr_conversion_unavailable"
 	CodeOutputLimit              ErrorCode = "output_limit"
+	CodeTargetSizeUnattainable   ErrorCode = "target_size_unattainable"
+	CodeCopyAudioUnsupported     ErrorCode = "copy_audio_unsupported"
 	CodeCopyIncompatible         ErrorCode = "copy_incompatible"
 	CodeCopyQualityUnsupported   ErrorCode = "copy_quality_unsupported"
 	CodeStorageFull              ErrorCode = "storage_full"

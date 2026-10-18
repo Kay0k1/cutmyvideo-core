@@ -210,7 +210,7 @@ func TestMetadataResolutionMigrationPreserves006RowsAndRestartsWithoutWrites(t *
  'cache',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(c),'xmin',c.xmin::text) ORDER BY source_id) FROM source_metadata_cache c),
  'counters',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(c),'xmin',c.xmin::text) ORDER BY id) FROM storage_counters c),
  'ledger',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(m),'xmin',m.xmin::text) ORDER BY position) FROM app_schema_migrations m WHERE position<=6),
- 'versions',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(v),'xmin',v.xmin::text) ORDER BY version) FROM app_schema_versions v WHERE version NOT IN($1,$2,$3)))`, schemaMigrations[6].version, schemaMigrations[7].version, schemaVersion).Scan(&data); err != nil {
+ 'versions',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(v),'xmin',v.xmin::text) ORDER BY version) FROM app_schema_versions v WHERE version NOT IN($1,$2,$3,$4)))`, schemaMigrations[6].version, schemaMigrations[7].version, schemaMigrations[8].version, schemaVersion).Scan(&data); err != nil {
 			t.Fatal(err)
 		}
 		return string(data)
@@ -252,7 +252,7 @@ func TestAgentProjectsMigrationPreserves007RowsAndRestartsWithoutWrites(t *testi
 	before := historicalRowsSnapshot(t, f.db)
 	history := func() string {
 		var raw []byte
-		if err := f.db.QueryRow(context.Background(), `SELECT jsonb_build_object('ledger',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(m),'xmin',m.xmin::text) ORDER BY position) FROM app_schema_migrations m WHERE position<=7),'versions',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(v),'xmin',v.xmin::text) ORDER BY version) FROM app_schema_versions v WHERE version NOT IN($1,$2)))`, schemaMigrations[7].version, schemaVersion).Scan(&raw); err != nil {
+		if err := f.db.QueryRow(context.Background(), `SELECT jsonb_build_object('ledger',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(m),'xmin',m.xmin::text) ORDER BY position) FROM app_schema_migrations m WHERE position<=7),'versions',(SELECT jsonb_agg(jsonb_build_object('row',to_jsonb(v),'xmin',v.xmin::text) ORDER BY version) FROM app_schema_versions v WHERE version NOT IN($1,$2,$3)))`, schemaMigrations[7].version, schemaMigrations[8].version, schemaVersion).Scan(&raw); err != nil {
 			t.Fatal(err)
 		}
 		return string(raw)
@@ -658,6 +658,7 @@ func TestMigrationSQLChecksumsArePinnedAcrossWindowsNewlines(t *testing.T) {
 		"20261014-metadata-resolution-leases-v1": "01f421ef7efdf02386f7d284491ccf1bccee2dc3014a24f24b85bcd356dcbc0f",
 		"20261016-agent-projects-v1":             "40990aab92ee4bcdadeae7b7f0f21ad308804f30c054372907c15d2c14a51a92",
 		"20261018-external-audio-refs-v1":        "3304ef39020de23eb9546e27bb9ecd74eea0cb7b67ec5620cb111afa8f41d58c",
+		"20261018-poster-artifacts-v1":           "29bbb3c1c0c2de5e9fb3232c9b9e6098e50ec8b0287c476087e39ffa27012cbf",
 	}
 	for _, migration := range schemaMigrations {
 		t.Run(migration.version, func(t *testing.T) {

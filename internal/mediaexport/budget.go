@@ -11,6 +11,26 @@ import (
 // Allow container headers, decoder context and the final muxer's metadata.
 const ContainerAllowance int64 = 16 << 20
 
+const TargetPassLogLimit int64 = 8 << 20
+const TargetPassLogReservation int64 = 16 << 20
+
+// TransientBudget is the peak private media workspace in addition to the final
+// output reservation. Joined callers pass the aggregate source duration; a
+// separate batch needs the maximum, since its pieces execute sequentially.
+func TransientBudget(c Config, r edit.Range, request edit.ExportRequest) int64 {
+	var budget int64
+	if edit.IsLosslessAudio(request.Format) {
+		budget = BoundedMediaBytes(r.EndMS-r.StartMS, 192000*8*24, ContainerAllowance, c.MaxOutputBytes)
+	}
+	if request.TargetSizeBytes > 0 {
+		if budget > math.MaxInt64-TargetPassLogReservation {
+			return math.MaxInt64
+		}
+		budget += TargetPassLogReservation
+	}
+	return budget
+}
+
 func BoundedMediaBytes(durationMS, bitsPerSecond, allowance, limit int64) int64 {
 	if limit <= 0 || durationMS <= 0 || bitsPerSecond <= 0 {
 		return limit
@@ -47,8 +67,20 @@ func OutputBudget(c Config, r edit.Range, request edit.ExportRequest) int64 {
 		return c.MaxOutputBytes // Older snapshots and migration/test callers.
 	}
 	duration := r.EndMS - r.StartMS
+	if scaled, err := edit.OutputDurationMS(duration, request.Speed); err == nil {
+		duration = scaled
+	}
+	if request.TargetSizeBytes > 0 {
+		return min(c.MaxOutputBytes, request.TargetSizeBytes)
+	}
 	rate := int64(224_000)
-	if request.Format != "mp3" {
+	if edit.IsLosslessAudio(request.Format) {
+		return BoundedMediaBytes(duration, 192000*8*32, ContainerAllowance, c.MaxOutputBytes)
+	}
+	if request.Format == "m4a" {
+		return BoundedMediaBytes(duration+100, 8000000, ContainerAllowance, c.MaxOutputBytes)
+	}
+	if !edit.IsAudioOnly(request.Format) {
 		if request.CutMode == "copy" {
 			// Original files can be much denser than streaming video. This is a
 			// generous 1 Gb/s hard ceiling, including up to 30s keyframe

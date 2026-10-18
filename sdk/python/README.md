@@ -5,12 +5,12 @@ applications. Python 3.10 or later; no runtime dependencies. Requests and result
 use JSON-compatible typed dictionaries, so the same plans can be saved, reviewed,
 or passed between tools without a framework or an agent-specific protocol.
 
-Published release [1.5.0](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.5.0)
+Published release [1.6.0](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.6.0)
 includes a wheel and source archive as signed GitHub release assets. This
 distribution channel is separate from PyPI registry publication. Install the wheel:
 
 ```sh
-python -m pip install https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.5.0/cutmyvideo-1.5.0-py3-none-any.whl
+python -m pip install https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.6.0/cutmyvideo-1.6.0-py3-none-any.whl
 ```
 
 The preflight methods require a core build with the preflight API/CLI. Local
@@ -418,3 +418,29 @@ Collections can clear inherited edits with `clear_audio_normalize`,
 normalization, canvas and clear flags. A non-null `audio_replace` is explicitly
 refused on portable import/export until the caller relinks the audio: portable
 files must contain neither server source IDs nor local paths.
+
+
+## Controlled export (core 1.6)
+
+`format="wav"`/`"flac"` creates PCM24/FLAC24 with the inspected rate and
+channels. `format="m4a", cut_mode="copy"` requires compatible AAC and rejects
+rendering effects. These choices work in ordinary and collection plans.
+
+Accurate final MP4/MP3 accepts `speed={"numerator":5,"denominator":4}`;
+final H.264 MP4 additionally accepts `target_size_bytes=8000000`. Collection
+`clear_speed=True` and `clear_target_size=True` reset inherited controls.
+Portable project roundtrips retain these fields without retaining credentials.
+
+```python
+image = client.create_poster(parent_artifact_id, {"timestamp_ms": 1250, "format": "png"})
+client.get_image_artifact(image["id"])
+client.download_image(image, "poster.png", max_bytes=16 << 20)
+client.delete_image_artifact(image["id"])
+# Or keep the entire operation local:
+core.generate_poster("finished.mp4", "poster.jpg", {"timestamp_ms": 1250})
+```
+
+Poster timestamps use the finished output clock, not the original source.
+Image methods use the owner's session and separate image IDs. Downloads preserve
+existing files and use protected ID routes, never arbitrary response URLs.
+See the core's `docs/controlled-export.md` for exact bounds and incompatibilities.

@@ -357,7 +357,7 @@ class _Cycle:
         cid = clip_id(item.get("clip_id"))
         if not isinstance(item.get("job_id"), str) or not OPAQUE_ID.fullmatch(item["job_id"]):
             raise ValueError("Saved job identity is invalid")
-        expected = r"files/" + re.escape(cid) + r"\.(final|draft)\." + re.escape(item["artifact_id"]) + r"\.(mp4|mp3|mkv)"
+        expected = r"files/" + re.escape(cid) + r"\.(final|draft)\." + re.escape(item["artifact_id"]) + r"\.(mp4|mp3|mkv|wav|flac|m4a)"
         if not isinstance(item.get("path"), str) or not re.fullmatch(expected, item["path"]):
             raise ValueError("Saved output path does not match its clip/artifact identity")
 
@@ -620,7 +620,7 @@ class _Cycle:
         if size + reserved > self.max_bytes:
             self.fail("output_limit", "Collection exceeds saved output byte budget")
         fmt = row.get("effective_request", {}).get("format", "mp4")
-        if fmt not in ("mp4", "mp3", "mkv"):
+        if fmt not in ("mp4", "mp3", "mkv", "wav", "flac", "m4a"):
             self.fail("invalid_response", "Artifact format is unsupported")
         rendition = self.state["request"].get("rendition", "final")
         final = f"files/{cid}.{rendition}.{aid}.{fmt}"

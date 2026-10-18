@@ -88,6 +88,26 @@ CORE15_SERVICE_REQUIRED = {
 }
 CORE15_BOOKWORM_REQUIRED = (CORE15_ENGINE_REQUIRED | CORE15_LOCALMEDIA_REQUIRED | CORE15_EDIT_REQUIRED
                             | CORE15_MEDIAEXPORT_REQUIRED | CORE15_CLI_REQUIRED)
+CORE16_ENGINE_REQUIRED = {
+    "TestLosslessAudioProfilesAndOrderedSamplesActualMedia",
+    "TestSpeedPitchReplacementOrderAndSourceMapsActualMedia",
+    "TestTargetSizeTwoPassCompleteOutputActualMedia",
+    "TestTargetSizeCancelledPassLeavesNoOutputActualMedia",
+    "TestAACM4APacketCopyAndReorderedJoinActualMedia",
+    "TestPosterEngineVerifiedOutputTimestamp",
+}
+CORE16_SERVICE_REQUIRED = {
+    "TestCore16HTTPExportOptionsAndRetainedRecovery",
+    "TestCore16ExportAdmissionRejectsOperatorTargetAndIncompatibleAudio",
+    "TestCore16VerifiedAudioDownloadMIMETypes",
+    "TestPosterHTTPArtifactLifecycleAndOwnership",
+    "TestPosterParentReaderFencesAndPublication",
+}
+CORE16_SUBTITLE_REQUIRED = {"TestRetimeVersion2ScalesWhileVersion1KeepsClamping"}
+CORE16_CLI_REQUIRED = {"TestDeliveryFlagsExactRational", "TestPosterCLIValidation", "TestDeliveryCLIWorkflow"}
+POSTER_RECOVERY_REQUIRED = {"TestPosterSchema009UpgradeAndPriorBinaryRefusal",
+                            "TestPosterCoordinated010BackupRestorePreservesImages",
+                            "TestPosterRuntimeGrantsPermitLifecycleWithoutOwnership"}
 EXTERNAL_AUDIO_STORAGE_REQUIRED = {"TestExternalAudioRuntimeDMLGrantsInvokeDerivedPinTriggers"}
 EXTERNAL_AUDIO_RECOVERY_REQUIRED = {
     "TestExternalAudioPreviousBinaryRefuses009WithoutWrites",
@@ -526,7 +546,9 @@ REQUIRED[4].update(MEDIASESSION_ADAPTER_REQUIRED)
 REQUIRED[0].update(COREMODEL_MODULE_REQUIRED | MEDIAERROR_MODULE_REQUIRED | LOCALMEDIA_MODULE_REQUIRED | ENGINE_DEPENDENCY_REQUIRED)
 REQUIRED[4].update(COREMODEL_MEDIAERROR_ADAPTER_REQUIRED)
 REQUIRED[0].update(CORE15_BOOKWORM_REQUIRED)
+REQUIRED[0].update(CORE16_ENGINE_REQUIRED | CORE16_CLI_REQUIRED | CORE16_SUBTITLE_REQUIRED)
 REQUIRED[2].update(CORE15_SERVICE_REQUIRED)
+REQUIRED[2].update(CORE16_SERVICE_REQUIRED)
 REQUIRED[3].update(EXTERNAL_AUDIO_STORAGE_REQUIRED)
 
 REQUIRED_PACKAGES = [
@@ -548,8 +570,8 @@ REQUIRED_TEST_PACKAGES = [
             MEDIAPREFLIGHT_PACKAGE if name in MEDIAPREFLIGHT_MODULE_REQUIRED else
             MEDIAEXPORT_PACKAGE if name in MEDIAEXPORT_MODULE_REQUIRED | JOINED_MEDIAEXPORT_REQUIRED | CORE15_MEDIAEXPORT_REQUIRED else
             MEDIAINFO_PACKAGE if name in MEDIAINFO_MODULE_REQUIRED else
-            SUBTITLE_PACKAGE if name in SUBTITLE_MODULE_REQUIRED | SOURCE_SUBTITLE_MODULE_REQUIRED else
-            CLI_PACKAGE if name.startswith("TestCLI") or name == "TestParseCrop" or name in CORE15_CLI_REQUIRED else
+            SUBTITLE_PACKAGE if name in SUBTITLE_MODULE_REQUIRED | SOURCE_SUBTITLE_MODULE_REQUIRED | CORE16_SUBTITLE_REQUIRED else
+            CLI_PACKAGE if name.startswith("TestCLI") or name == "TestParseCrop" or name in CORE15_CLI_REQUIRED | CORE16_CLI_REQUIRED else
             FS_PACKAGE if name == "TestConcurrentPublicationHasExactlyOneCompleteWinner" else
             ENGINE_PACKAGE) for name in REQUIRED[0]},
     {name: TOOLRUN_PACKAGE if name in TOOLRUN_MODULE_REQUIRED | TOOLRUN_LIFECYCLE_REQUIRED else APP_PACKAGE for name in REQUIRED[1]},
@@ -609,6 +631,10 @@ if __name__ == "__main__":
                       {ENGINE_PACKAGE, LOCALMEDIA_PACKAGE, CLI_PACKAGE, EDIT_PACKAGE, MEDIAEXPORT_PACKAGE},
                       REQUIRED_TEST_PACKAGES[0])
         print("Bookworm's six core feature engine, CLI, streaming and interchange checks passed without skips.")
+    elif len(sys.argv) == 3 and sys.argv[1] == "--core16-bookworm":
+        verify_report(sys.argv[2], CORE16_ENGINE_REQUIRED | CORE16_CLI_REQUIRED | CORE16_SUBTITLE_REQUIRED,
+                      {ENGINE_PACKAGE, CLI_PACKAGE, SUBTITLE_PACKAGE}, REQUIRED_TEST_PACKAGES[0])
+        print("Bookworm's four core1.6 delivery feature checks passed without skips.")
     elif len(sys.argv) == 3 and sys.argv[1] == "--preflight-contract":
         verify_report(sys.argv[2], PREFLIGHT_CONTRACT_REQUIRED | COLLECTION_CONTRACT_REQUIRED | AGENT_PROJECT_CONTRACT_REQUIRED, {APP_PACKAGE})
         print("Preflight, collection, agent project and subtitle public-handler OpenAPI samples passed without skips.")
@@ -618,6 +644,9 @@ if __name__ == "__main__":
     elif len(sys.argv) == 3 and sys.argv[1] == "--external-audio-recovery":
         verify_report(sys.argv[2], EXTERNAL_AUDIO_RECOVERY_REQUIRED, {APP_PACKAGE})
         print("Schema9 previous-release refusal, derived runtime pins and coordinated media/database restore passed without skips.")
+    elif len(sys.argv) == 3 and sys.argv[1] == "--poster-recovery":
+        verify_report(sys.argv[2], POSTER_RECOVERY_REQUIRED, {APP_PACKAGE})
+        print("Schema10 poster upgrade and previous-release refusal passed without skips.")
     else:
         verify(sys.argv[1:])
         print("Native media contract, filesystem, CLI, process tree, API/worker and storage checks passed without skips.")

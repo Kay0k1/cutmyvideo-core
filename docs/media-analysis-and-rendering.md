@@ -1,5 +1,7 @@
 # Analysis, rendering and cut-list exchange (1.5.0)
 
+Core 1.6 expands audio formats and adds speed, byte targets and finished-output posters; see [controlled export](controlled-export.md). The examples below describe the 1.5 operations.
+
 These opt-in operations are available in Go, CLI, HTTP and both SDKs. Existing
 plans retain their previous behavior. The separate browser editor does not gain
 new controls from this core release.
@@ -79,7 +81,7 @@ Filesystem paths and provider/remote recordings are rejected for replacement.
 A project handoff covers its primary recording; adding replacement audio requires
 the owner's session. Retained accepted work remains recoverable before new checks.
 
-Normalization and replacement require accurate MP4 or MP3 and conflict with
+Normalization and replacement require accurate MP4 or MP3 in 1.5; 1.6 additionally supports accurate WAV/FLAC. They conflict with
 `no_audio`; replacement conflicts with original `audio_track`. Collection clips
 inherit these options and can use `clear_audio_normalize`, `clear_canvas`,
 `clear_audio_replace`. Portable SDK documents cannot transfer replacement paths

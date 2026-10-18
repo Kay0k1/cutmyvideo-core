@@ -344,7 +344,9 @@ func TestMetadataRetentionConcurrentCleanersPreserveFreshRows(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "media_error":
-				if _, err := s.DB.Exec(ctx, "DROP TABLE artifacts"); err != nil {
+				// Keep derivative/reader foreign keys intact while making the
+				// media query fail with the same genuine missing-relation error.
+				if _, err := s.DB.Exec(ctx, "ALTER TABLE artifacts RENAME TO artifacts_fault_injected"); err != nil {
 					t.Fatal(err)
 				}
 			}

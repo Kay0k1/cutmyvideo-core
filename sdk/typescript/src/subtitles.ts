@@ -6,7 +6,7 @@ export function subtitleRequest(value: SubtitleRequest): SubtitleRequest {
   const encoded = JSON.stringify(value);
   if (new TextEncoder().encode(encoded).length > 4 << 20) throw new TypeError("Subtitle request exceeds 4 MiB");
   const request = JSON.parse(encoded) as SubtitleRequest;
-  if (!object(request) || request.version !== 1 || !["srt","vtt"].includes(request.format) || typeof request.text !== "string" || new TextEncoder().encode(request.text).length > 512 << 10 || !["srt","vtt"].includes(request.output_format ?? request.format) || !Array.isArray(request.outputs) || !request.outputs.length || request.outputs.length > 128) throw new TypeError("Invalid subtitle request");
+  if (!object(request) || !([1,2] as number[]).includes(request.version) || !["srt","vtt"].includes(request.format) || typeof request.text !== "string" || new TextEncoder().encode(request.text).length > 512 << 10 || !["srt","vtt"].includes(request.output_format ?? request.format) || !Array.isArray(request.outputs) || !request.outputs.length || request.outputs.length > 128) throw new TypeError("Invalid subtitle request");
   const ids = request.outputs.map(output => output.clip_id);
   if (!ids.every(id => typeof id === "string" && /^[a-z0-9][a-z0-9_-]{0,63}$/.test(id) && !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/.test(id)) || new Set(ids).size !== ids.length || request.outputs.some(output => !Array.isArray(output.segments) || !output.segments.length || output.segments.length > 128) || request.outputs.reduce((sum, output) => sum + output.segments.length, 0) > 4096) throw new TypeError("Invalid subtitle output maps");
   return request;

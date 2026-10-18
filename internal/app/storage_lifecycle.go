@@ -117,6 +117,10 @@ WHERE cache.source_id=ANY(ARRAY(SELECT source_id FROM metadata_retention_candida
 		return storageCleanupBatch{}, err
 	}
 
+	if err = s.cleanupPosterState(ctx, tx, s.storageConfig()); err != nil {
+		return storageCleanupBatch{}, err
+	}
+
 	// Materialize at most one deletion batch, then match its IDs directly through
 	// the primary key instead of scanning the table again in a semi join. OFFSET 0
 	// keeps artifact/job pin probes correlated: the small expired candidate set
@@ -130,11 +134,13 @@ WHERE cache.source_id=ANY(ARRAY(SELECT source_id FROM metadata_retention_candida
   (SELECT a.id,a.created_at FROM artifacts a
    WHERE a.expires_at<=now()
    AND NOT EXISTS(SELECT 1 FROM jobs j WHERE j.id=a.job_id AND j.status IN ('queued','running','waiting_storage') OFFSET 0)
+   AND NOT EXISTS(SELECT 1 FROM artifact_readers reader WHERE reader.artifact_id=a.id OFFSET 0)
    ORDER BY a.created_at LIMIT $2)
   UNION ALL
   (SELECT a.id,a.created_at FROM artifacts a
    WHERE a.expires_at IS NULL AND a.created_at<=now()-($1*interval '1 second')
    AND NOT EXISTS(SELECT 1 FROM jobs j WHERE j.id=a.job_id AND j.status IN ('queued','running','waiting_storage') OFFSET 0)
+   AND NOT EXISTS(SELECT 1 FROM artifact_readers reader WHERE reader.artifact_id=a.id OFFSET 0)
    ORDER BY a.created_at LIMIT $2)
  ) expired ORDER BY created_at LIMIT $2
 )
@@ -228,8 +234,11 @@ func (s *Store) DeleteSource(ctx context.Context, id, owner string) ([]string, e
 	if err != nil {
 		return nil, err
 	}
+	if _, err = tx.Exec(ctx, `DELETE FROM artifact_readers reader USING artifacts a,jobs j WHERE reader.artifact_id=a.id AND a.job_id=j.id AND j.source_id=$1 AND reader.expires_at<=clock_timestamp()`, id); err != nil {
+		return nil, err
+	}
 	var active bool
-	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM jobs WHERE source_id=$1 AND status IN ('queued','running','waiting_storage')) OR EXISTS(SELECT 1 FROM jobs WHERE audio_source_id=$1 AND status IN ('queued','running','waiting_storage')) OR EXISTS(SELECT 1 FROM storage_reservations WHERE kind='job' AND job_id IN (SELECT id FROM jobs WHERE source_id=$1)) OR EXISTS(SELECT 1 FROM storage_reservations WHERE kind='job' AND job_id IN (SELECT id FROM jobs WHERE audio_source_id=$1)) OR EXISTS(SELECT 1 FROM storage_reservations WHERE kind='preview' AND job_id=$1) OR EXISTS(SELECT 1 FROM source_media_readers WHERE source_id=$1 AND expires_at>clock_timestamp())", id).Scan(&active); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM jobs WHERE source_id=$1 AND status IN ('queued','running','waiting_storage')) OR EXISTS(SELECT 1 FROM jobs WHERE audio_source_id=$1 AND status IN ('queued','running','waiting_storage')) OR EXISTS(SELECT 1 FROM storage_reservations WHERE kind='job' AND job_id IN (SELECT id FROM jobs WHERE source_id=$1)) OR EXISTS(SELECT 1 FROM storage_reservations WHERE kind='job' AND job_id IN (SELECT id FROM jobs WHERE audio_source_id=$1)) OR EXISTS(SELECT 1 FROM storage_reservations WHERE kind='preview' AND job_id=$1) OR EXISTS(SELECT 1 FROM source_media_readers WHERE source_id=$1 AND expires_at>clock_timestamp()) OR EXISTS(SELECT 1 FROM artifact_readers reader JOIN artifacts a ON a.id=reader.artifact_id JOIN jobs j ON j.id=a.job_id WHERE j.source_id=$1)", id).Scan(&active); err != nil {
 		return nil, err
 	}
 	if active {

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: cutmyvideo-core HTTP API
-  version: 1.5.0
+  version: 1.6.0
   description: >-
     Manual media selection and asynchronous separate or joined export. Clients
     must ignore unknown response fields and accept unknown additive error codes
@@ -1407,6 +1407,63 @@ paths:
                 $ref: '#/components/schemas/SubtitleRetimeResult'
         default:
           $ref: '#/components/responses/Error'
+  /api/v1/artifacts/{id}/poster:
+    parameters:
+      - {$ref: '#/components/parameters/ID'}
+    post:
+      description: Create one inspected JPEG/PNG from a terminal owned verified output. Timestamp uses the finished output clock. Project/handoff access does not grant this owner-only mutation. Synchronous bounded30-second operation; identical parent/timestamp/format returns the existing image.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PosterRequest'}
+      responses:
+        '201':
+          description: Image artifact created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ImageArtifact'}
+        '200':
+          description: Existing identical image artifact
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ImageArtifact'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/image-artifacts/{id}:
+    parameters:
+      - {$ref: '#/components/parameters/ID'}
+    get:
+      description: Read an owned retained image artifact; absent, foreign or expired IDs return404.
+      responses:
+        '200':
+          description: Image artifact
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ImageArtifact'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      description: Delete this owned derivative only; active readers/preparation prevent deletion. Parent video remains available.
+      responses:
+        '204': {description: Image artifact removed}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/image-artifacts/{id}/download:
+    parameters:
+      - {$ref: '#/components/parameters/ID'}
+    get:
+      description: Owner-protected inspected image bytes. Never follows a client-supplied URL. Ordinary private conditional and Range semantics apply.
+      responses:
+        '200':
+          description: Complete image
+          content:
+            image/jpeg:
+              schema: {type: string, format: binary}
+            image/png:
+              schema: {type: string, format: binary}
+        '206': {description: Requested image byte range}
+        '304': {description: Authorized image unchanged}
+        '412': {description: Request precondition failed}
+        '416': {$ref: '#/components/responses/RangeError'}
+        default: {$ref: '#/components/responses/Error'}
 components:
   securitySchemes:
     SessionCookie:
@@ -1598,6 +1655,35 @@ components:
         y: {type: number, minimum: 0, maximum: 1}
         width: {type: number, exclusiveMinimum: 0, maximum: 1}
         height: {type: number, exclusiveMinimum: 0, maximum: 1}
+    Speed:
+      type: object
+      additionalProperties: false
+      required: [numerator, denominator]
+      description: Constant rational playback speed0.5..2; both terms1..1000. Runtime reduces the fraction and omits unity. Accurate MP4/MP3 only; pitch is preserved and maps retain source/output endpoints.
+      properties:
+        numerator: {type: integer, minimum: 1, maximum: 1000}
+        denominator: {type: integer, minimum: 1, maximum: 1000}
+    PosterRequest:
+      type: object
+      additionalProperties: false
+      required: [timestamp_ms]
+      properties:
+        timestamp_ms: {type: integer, minimum: 0, description: Strictly before the measured finished video duration.}
+        format: {type: string, enum: [jpeg, png], default: jpeg}
+    ImageArtifact:
+      type: object
+      required: [id, parent_artifact_id, filename, size_bytes, download_url, width, height, timestamp_ms, expires_at, format]
+      properties:
+        id: {type: string}
+        parent_artifact_id: {type: string}
+        filename: {type: string}
+        size_bytes: {type: integer, minimum: 1, maximum: 16777216}
+        download_url: {type: string, description: Same-origin owner-protected image-artifact download route.}
+        width: {type: integer, minimum: 1}
+        height: {type: integer, minimum: 1}
+        timestamp_ms: {type: integer, minimum: 0}
+        expires_at: {type: [string, 'null'], format: date-time}
+        format: {type: string, enum: [jpeg, png]}
     AudioNormalize:
       type: object
       additionalProperties: false
@@ -2015,7 +2101,7 @@ components:
           type: array
           minItems: 1
           items: {$ref: '#/components/schemas/Range'}
-        format: {type: string, enum: [mp4, mp3, mkv], description: MKV requires copy; MP3 requires accurate.}
+        format: {type: string, enum: [mp4, mp3, mkv, wav, flac, m4a], description: MKV and AAC-only M4A require copy; MP3/WAV/FLAC require accurate. WAV PCM24 and FLAC24 preserve inspected sample rate and channels1..8.}
         quality: {type: string, enum: [1080p, 720p, best]}
         cut_mode: {type: string, enum: [accurate, copy], description: MP3 requires accurate. Copy preserves source resolution; select best for original quality. A lower explicit cap fails with copy_quality_unsupported instead of silently resizing or exceeding the cap.}
         output_mode: {type: string, enum: [separate, joined], default: separate, description: Separate publishes each range independently. Joined publishes one artifact in submitted range order; its actual bounds describe the output timeline and segments describe each source interval.}
@@ -2026,6 +2112,8 @@ components:
         audio_normalize: {$ref: '#/components/schemas/AudioNormalize'}
         canvas: {$ref: '#/components/schemas/Canvas'}
         audio_replace: {$ref: '#/components/schemas/AudioReplace'}
+        speed: {$ref: '#/components/schemas/Speed'}
+        target_size_bytes: {type: integer, minimum: 0, description: 'Zero/omitted disables the requested ceiling. Positive values require final accurate H.264 MP4 and cannot exceed operator output limits. Applies per published media file, including audio/container overhead; impossible targets fail without implicit quality/resolution changes.'}
         rendition: {type: string, enum: [final, draft], default: final, description: Draft requires accurate MP4 and uses a 720p cap plus ultrafast CRF28 encoding. Omitted/final retains installed final encoder settings. Persisted normalized final requests omit this field.}
     CollectionRequest:
       type: object
@@ -2073,7 +2161,7 @@ components:
       additionalProperties: false
       description: Clip options override collection options. Empty strings and omitted/null pointers inherit. Defaults are MP4, best, accurate, automatic audio and omitted subtitles. Explicit no_audio false enables inherited audio; audio_track -1 resets inherited selection to automatic. clear_crop removes inherited crop; crop and clear_crop together fail. Settings must be compatible after inheritance.
       properties:
-        format: {type: string, enum: ['', mp4, mp3, mkv]}
+        format: {type: string, enum: ['', mp4, mp3, mkv, wav, flac, m4a]}
         quality: {type: string, enum: ['', best, 1080p, 720p]}
         cut_mode: {type: string, enum: ['', accurate, copy]}
         subtitle_mode: {type: string, enum: ['', omit, preserve]}
@@ -2099,6 +2187,13 @@ components:
             - {$ref: '#/components/schemas/AudioReplace'}
             - {type: 'null'}
         clear_audio_replace: {type: boolean}
+        speed:
+          oneOf:
+            - {$ref: '#/components/schemas/Speed'}
+            - {type: 'null'}
+        clear_speed: {type: boolean, description: Remove inherited speed; cannot accompany a non-null speed.}
+        target_size_bytes: {type: integer, minimum: 0, description: Positive values override inherited target; zero/omitted inherits.}
+        clear_target_size: {type: boolean, description: Remove inherited byte target; cannot accompany a positive target.}
     CollectionDiagnostic:
       type: object
       required: [code, message]
@@ -2464,7 +2559,7 @@ components:
       additionalProperties: false
       required: [version, format, text, outputs]
       properties:
-        version: {type: integer, const: 1}
+        version: {type: integer, enum: [1, 2], description: Version 1 retains historical clipping; version 2 scales supplied cues to actual source/output segment spans.}
         format: {type: string, enum: [srt, vtt]}
         text: {type: string, maxLength: 524288, description: At most 512 KiB of valid UTF-8 supplied text}
         output_format: {type: string, enum: [srt, vtt], description: Defaults to the input format}

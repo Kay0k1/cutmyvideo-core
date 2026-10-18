@@ -29,7 +29,7 @@ func TrackManifest(p Info, video, audio *Stream, request edit.ExportRequest) ([]
 		if track.Type == "audio" {
 			item.Reason = "audio_not_selected"
 		}
-		if track.Type == "video" && video != nil && track.Index == video.Index && request.Format != "mp3" {
+		if track.Type == "video" && video != nil && track.Index == video.Index && !edit.IsAudioOnly(request.Format) {
 			item.Included = true
 			item.Reason = "selected_video"
 		}

@@ -37,20 +37,39 @@ type AudioReplace struct {
 var canvasColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 func HasRenderOptions(r ExportRequest) bool {
-	return r.Canvas != nil || r.AudioNormalize != nil || r.AudioReplace != nil
+	return r.Canvas != nil || r.AudioNormalize != nil || r.AudioReplace != nil || r.Speed != nil || r.TargetSizeBytes != 0
 }
 
 // ValidateRenderOptions is shared by admission, preflight and every producer.
 // It never changes caller-owned option values.
 func ValidateRenderOptions(r ExportRequest) error {
+	if IsLosslessAudio(r.Format) && r.CutMode != "accurate" {
+		return errors.New("WAV and FLAC require accurate mode")
+	}
 	if !HasRenderOptions(r) {
 		return nil
 	}
-	if r.CutMode != "accurate" || r.Format == "mkv" {
-		return errors.New("canvas, audio_normalize and audio_replace require accurate MP4 or MP3; copy mode cannot apply rendering options")
+	if r.CutMode != "accurate" || r.Format == "mkv" || r.Format == "m4a" {
+		return errors.New("rendering options require accurate MP4, MP3, WAV or FLAC; copy mode cannot apply rendering options")
 	}
 	if r.SubtitleMode == "preserve" {
 		return errors.New("rendering options require subtitles omitted; subtitle preservation requires copy mode")
+	}
+	if r.Speed != nil {
+		if _, err := NormalizeSpeed(r.Speed); err != nil {
+			return err
+		}
+		if r.Format != "mp4" && r.Format != "mp3" {
+			return errors.New("speed requires accurate MP4 or MP3")
+		}
+	}
+	if r.TargetSizeBytes != 0 {
+		if r.TargetSizeBytes < 0 {
+			return errors.New("target_size_bytes must be positive when enabled")
+		}
+		if r.Format != "mp4" || r.Rendition == "draft" {
+			return errors.New("target_size_bytes requires final accurate MP4")
+		}
 	}
 	if v := r.Canvas; v != nil {
 		if r.Format != "mp4" {

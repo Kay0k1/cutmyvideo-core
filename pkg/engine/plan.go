@@ -21,6 +21,7 @@ type Crop = edit.Crop
 type AudioNormalize = edit.AudioNormalize
 type Canvas = edit.Canvas
 type AudioReplace = edit.AudioReplace
+type Speed = edit.Speed
 
 type AdvancedSourceInfo struct {
 	SourceInfo
@@ -36,13 +37,15 @@ type AdvancedResult struct {
 // positional struct literals. AudioTrack is an absolute inspected stream index.
 type AdvancedOptions struct {
 	Options
-	AudioTrack     *int            `json:"audio_track,omitempty"`
-	NoAudio        bool            `json:"no_audio,omitempty"`
-	SubtitleMode   string          `json:"subtitle_mode,omitempty"`
-	Crop           *Crop           `json:"crop,omitempty"`
-	AudioNormalize *AudioNormalize `json:"audio_normalize,omitempty"`
-	Canvas         *Canvas         `json:"canvas,omitempty"`
-	AudioReplace   *AudioReplace   `json:"audio_replace,omitempty"`
+	AudioTrack      *int            `json:"audio_track,omitempty"`
+	NoAudio         bool            `json:"no_audio,omitempty"`
+	SubtitleMode    string          `json:"subtitle_mode,omitempty"`
+	Crop            *Crop           `json:"crop,omitempty"`
+	AudioNormalize  *AudioNormalize `json:"audio_normalize,omitempty"`
+	Canvas          *Canvas         `json:"canvas,omitempty"`
+	AudioReplace    *AudioReplace   `json:"audio_replace,omitempty"`
+	Speed           *Speed          `json:"speed,omitempty"`
+	TargetSizeBytes int64           `json:"target_size_bytes,omitempty"`
 }
 type NamedRange struct {
 	Label   string `json:"label"`
@@ -196,7 +199,8 @@ func (e *Engine) ExecutePlan(ctx context.Context, plan Plan, output string) (res
 				}
 				return result, publishErr
 			}
-			result.Outputs = append(result.Outputs, BatchOutput{Result: Result{Path: names[i], SizeBytes: info.Size(), ActualStartMS: start, ActualEndMS: end}, Label: r.Label, Segments: []Segment{{Index: i, Label: r.Label, SourceStartMS: start, SourceEndMS: end, OutputEndMS: end - start}}, TrackManifest: tracks})
+			outputDuration, _ := edit.OutputDurationMS(end-start, request.Speed)
+			result.Outputs = append(result.Outputs, BatchOutput{Result: Result{Path: names[i], SizeBytes: info.Size(), ActualStartMS: start, ActualEndMS: end}, Label: r.Label, Segments: []Segment{{Index: i, Label: r.Label, SourceStartMS: start, SourceEndMS: end, OutputEndMS: outputDuration}}, TrackManifest: tracks})
 			if counts[key] > 1 {
 				completed[key] = reusable{names[i], info, start, end}
 			}

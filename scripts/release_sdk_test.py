@@ -49,8 +49,11 @@ class SDKReleaseControls(unittest.TestCase):
         self.assertEqual(len(old), 15)
         self.assertEqual(len(current), 21)
         self.assertTrue(old < current)
-        self.assertEqual(s.required_tests('v0.0.0-candidate.g' + 'a'*40), current)
-        self.assertEqual(s.required_tests('v2.0.0'), current)
+        delivery = s.required_tests('v1.6.0')
+        self.assertEqual(len(delivery), 27)
+        self.assertTrue(current < delivery)
+        self.assertEqual(s.required_tests('v0.0.0-candidate.g' + 'a'*40), delivery)
+        self.assertEqual(s.required_tests('v2.0.0'), delivery)
 
     def test_new_candidate_cannot_seal_only_historical_acceptance(self):
         self.source.update(version='v0.0.0-candidate.g' + 'a'*40, mode='candidate', publishable=False)

@@ -29,6 +29,10 @@ type RenderRuntime interface {
 
 type renderProvider interface{ RenderRuntime() RenderRuntime }
 
+type boundedWorkspaceRunner interface {
+	RunBoundedWorkspace(context.Context, []string, int64, func(int64), string, int64) error
+}
+
 func transformedExport(ctx context.Context, c Config, inputs [][]Input, ranges []edit.Range, request edit.ExportRequest, out string, report func(int64), final bool, runtime Runtime) ([]edit.Segment, error) {
 	if err := edit.ValidateRenderOptions(request); err != nil {
 		return nil, &mediainfo.Problem{Code: "invalid_argument", Message: err.Error()}
@@ -49,6 +53,19 @@ func transformedExport(ctx context.Context, c Config, inputs [][]Input, ranges [
 		return nil, err
 	}
 	defer rt.RemoveAll(dir)
+	var passDir string
+	var passRunner boundedWorkspaceRunner
+	if request.TargetSizeBytes != 0 {
+		var ok bool
+		passRunner, ok = rt.(boundedWorkspaceRunner)
+		if !ok {
+			return nil, errors.New("media backend cannot supervise bounded two-pass statistics")
+		}
+		passDir, err = rt.NewWorkspace(dir, ".passes-")
+		if err != nil {
+			return nil, err
+		}
+	}
 	var selection Selection
 	for i, row := range inputs {
 		if len(row) < 1 || len(row) > 2 || len(row) != len(inputs[0]) {
@@ -69,7 +86,7 @@ func transformedExport(ctx context.Context, c Config, inputs [][]Input, ranges [
 			return nil, &mediainfo.Problem{Code: "join_incompatible", Message: "joined intervals require compatible source streams"}
 		}
 	}
-	if request.Format != "mp3" && selection.Video == nil {
+	if !edit.IsAudioOnly(request.Format) && selection.Video == nil {
 		return nil, mediainfo.ErrUnsupported
 	}
 	if request.AudioReplace != nil {
@@ -84,8 +101,22 @@ func transformedExport(ctx context.Context, c Config, inputs [][]Input, ranges [
 			inputs[i] = append(row, external)
 		}
 	}
-	if request.AudioNormalize != nil && selection.Audio == nil || request.Format == "mp3" && selection.Audio == nil {
+	if request.AudioNormalize != nil && selection.Audio == nil || edit.IsAudioOnly(request.Format) && selection.Audio == nil {
 		return nil, ErrNoAudio
+	}
+	var losslessArgs []string
+	if edit.IsLosslessAudio(request.Format) {
+		losslessArgs, err = LosslessAudioProfile(selection.Audio, request.Format)
+		if err != nil {
+			return nil, err
+		}
+	}
+	protectedInputs := inputs
+	if edit.IsLosslessAudio(request.Format) {
+		inputs, selection, err = prepareLosslessTimeline(ctx, c, rt, dir, inputs, ranges, selection)
+		if err != nil {
+			return nil, err
+		}
 	}
 	threads := c.FFmpegThreads
 	if threads < 1 || threads > 32 {
@@ -99,8 +130,25 @@ func transformedExport(ctx context.Context, c Config, inputs [][]Input, ranges [
 			return nil, errors.New("rendered intervals exceed the supported finite timeline")
 		}
 		d := r.EndMS - r.StartMS
-		segments = append(segments, edit.Segment{Index: i, Label: r.Label, SourceStartMS: r.StartMS, SourceEndMS: r.EndMS, OutputStartMS: elapsed, OutputEndMS: elapsed + d})
+		from, e := edit.OutputDurationMS(elapsed, request.Speed)
+		if e != nil {
+			return nil, e
+		}
 		elapsed += d
+		to, e := edit.OutputDurationMS(elapsed, request.Speed)
+		if e != nil {
+			return nil, e
+		}
+		segments = append(segments, edit.Segment{Index: i, Label: r.Label, SourceStartMS: r.StartMS, SourceEndMS: r.EndMS, OutputStartMS: from, OutputEndMS: to})
+	}
+	sourceElapsed := elapsed
+	elapsed, err = edit.OutputDurationMS(sourceElapsed, request.Speed)
+	if err != nil || elapsed <= 0 {
+		return nil, &mediainfo.Problem{Code: "invalid_argument", Message: "speed output timeline must contain at least one millisecond"}
+	}
+	videoRate, err := targetVideoRate(c, request, elapsed, selection.Audio)
+	if err != nil {
+		return nil, err
 	}
 	for col := range inputs[0] {
 		var plan strings.Builder
@@ -135,7 +183,7 @@ func transformedExport(ctx context.Context, c Config, inputs [][]Input, ranges [
 		}
 		base = append(base, "-protocol_whitelist", protocols, "-format_whitelist", InputFormats+",concat")
 		decoderThreads := threads
-		if request.Format != "mp3" && col == selection.VideoInput && threads <= 2 {
+		if !edit.IsAudioOnly(request.Format) && col == selection.VideoInput && threads <= 2 {
 			decoderThreads = 1
 		}
 		base = append(base, InputBounds(decoderThreads)...)
@@ -145,7 +193,11 @@ func transformedExport(ctx context.Context, c Config, inputs [][]Input, ranges [
 	if request.AudioReplace != nil {
 		audioFilter += ",apad"
 	}
-	audioFilter += ",atrim=duration=" + Seconds(elapsed)
+	audioFilter += ",atrim=duration=" + Seconds(sourceElapsed)
+	if request.Speed != nil {
+		rate := float64(request.Speed.Numerator) / float64(request.Speed.Denominator)
+		audioFilter += ",atempo=" + strconv.FormatFloat(rate, 'g', 17, 64) + ",apad,atrim=duration=" + Seconds(elapsed)
+	}
 	if request.AudioNormalize != nil {
 		measure := append([]string(nil), base...)
 		measure[2] = "info"
@@ -170,7 +222,8 @@ func transformedExport(ctx context.Context, c Config, inputs [][]Input, ranges [
 	args = append(args, selection.MapArgs(request.Format)...)
 	args = append(args, "-t", Seconds(elapsed))
 	hdr := false
-	if request.Format != "mp3" {
+	var videoArgs []string
+	if !edit.IsAudioOnly(request.Format) {
 		filter, isHDR, err := mediainfo.RenderFilterWithCanvas(selection.Video, request.Quality, request.Crop, request.Canvas)
 		if err != nil {
 			return nil, err
@@ -180,20 +233,44 @@ func transformedExport(ctx context.Context, c Config, inputs [][]Input, ranges [
 		if err != nil {
 			return nil, err
 		}
-		rate := VideoBitrate(c, edit.Range{EndMS: elapsed}, request)
-		args = append(args, "-vf", "select=concatdec_select,"+filter, "-c:v", "libx264", "-maxrate", strconv.FormatInt(rate, 10), "-bufsize", strconv.FormatInt(rate*2, 10), "-pix_fmt", "yuv420p", "-fps_mode:v", "passthrough", "-enc_time_base:v", clock)
-		if CollectionDraft(ctx) {
-			args = append(args, "-preset", "ultrafast", "-crf", "28", "-coder", "1")
-		} else if c.FFmpegProfile == "compact" {
-			args = append(args, "-preset", "veryfast", "-crf", "20")
-		} else {
-			args = append(args, "-preset", "ultrafast", "-crf", "18", "-coder", "1")
+		if request.Speed != nil {
+			filter += fmt.Sprintf(",setpts=PTS*%d/%d", request.Speed.Denominator, request.Speed.Numerator)
 		}
-		args = append(args, mediainfo.HDROutputColorArgs(hdr)...)
+		videoArgs = append(videoArgs, "-vf", "select=concatdec_select,"+filter, "-c:v", "libx264", "-maxrate", strconv.FormatInt(videoRate, 10), "-bufsize", strconv.FormatInt(videoRate*2, 10), "-pix_fmt", "yuv420p", "-fps_mode:v", "passthrough", "-enc_time_base:v", clock)
+		if CollectionDraft(ctx) {
+			videoArgs = append(videoArgs, "-preset", "ultrafast", "-crf", "28", "-coder", "1")
+		} else if c.FFmpegProfile == "compact" {
+			videoArgs = append(videoArgs, "-preset", "veryfast")
+			if request.TargetSizeBytes == 0 {
+				videoArgs = append(videoArgs, "-crf", "20")
+			}
+		} else {
+			videoArgs = append(videoArgs, "-preset", "ultrafast", "-coder", "1")
+			if request.TargetSizeBytes == 0 {
+				videoArgs = append(videoArgs, "-crf", "18")
+			}
+		}
+		if request.TargetSizeBytes != 0 {
+			videoArgs = append(videoArgs, "-b:v", strconv.FormatInt(videoRate, 10), "-frames:v", "1000000")
+		}
+		videoArgs = append(videoArgs, mediainfo.HDROutputColorArgs(hdr)...)
+		if request.TargetSizeBytes != 0 {
+			pass := append([]string(nil), base...)
+			pass = append(pass, "-map", fmt.Sprintf("%d:%d", selection.VideoInput, selection.Video.Index), "-t", Seconds(elapsed))
+			pass = append(pass, videoArgs...)
+			pass = append(pass, "-an", "-sn", "-threads", strconv.Itoa(threads), "-pass", "1", "-passlogfile", rt.JoinPath(passDir, "video"), "-f", "null", "-")
+			if e := passRunner.RunBoundedWorkspace(ctx, pass, elapsed, nil, passDir, TargetPassLogLimit); e != nil {
+				return nil, rt.RenderedFailure(e, hdr)
+			}
+			videoArgs = append(videoArgs, "-pass", "2", "-passlogfile", rt.JoinPath(passDir, "video"))
+		}
+		args = append(args, videoArgs...)
 	}
 	if selection.Audio != nil {
 		args = append(args, "-af", audioFilter)
-		if request.Format == "mp3" {
+		if edit.IsLosslessAudio(request.Format) {
+			args = append(args, losslessArgs...)
+		} else if request.Format == "mp3" {
 			args = append(args, "-c:a", "libmp3lame", "-b:a", "192k")
 		} else {
 			rate := "192k"
@@ -204,20 +281,40 @@ func transformedExport(ctx context.Context, c Config, inputs [][]Input, ranges [
 		}
 		// loudnorm's dynamic true-peak processing upsamples internally. Choose a
 		// portable explicit encoder rate instead of inheriting its 192 kHz rate.
-		if request.AudioNormalize != nil {
+		if request.AudioNormalize != nil && !edit.IsLosslessAudio(request.Format) {
 			args = append(args, "-ar", "48000")
 		}
 	}
 	request.Ranges = ranges
 	limit := JoinedOutputBudget(c, request)
+	if request.TargetSizeBytes != 0 {
+		limit = request.TargetSizeBytes + 1
+	}
 	args = append(args, mediainfo.AudioMetadataArgs(selection.Audio)...)
 	args = append(args, "-threads", strconv.Itoa(threads), "-map_metadata", "-1", "-map_chapters", "-1", "-fs", strconv.FormatInt(limit, 10))
 	if request.Format == "mp4" && final {
 		args = append(args, "-movflags", "+faststart")
 	}
 	args = append(args, out)
-	if err := rt.Run(ctx, args, elapsed, report); err != nil {
+	progress := report
+	if report != nil && request.Speed != nil {
+		inverse := &edit.Speed{Numerator: request.Speed.Denominator, Denominator: request.Speed.Numerator}
+		progress = func(ms int64) {
+			source, _ := edit.OutputDurationMS(max(0, ms), inverse)
+			report(min(sourceElapsed, source))
+		}
+	}
+	var runErr error
+	if passRunner != nil {
+		runErr = passRunner.RunBoundedWorkspace(ctx, args, elapsed, progress, passDir, TargetPassLogLimit)
+	} else {
+		runErr = rt.Run(ctx, args, elapsed, progress)
+	}
+	if err := runErr; err != nil {
 		if size, e := rt.StatSize(out); e == nil && size >= limit {
+			if request.TargetSizeBytes != 0 {
+				return nil, targetFailure("complete encoded output exceeds target_size_bytes")
+			}
 			return nil, ErrOutputLimit
 		}
 		return nil, rt.RenderedFailure(err, hdr)
@@ -231,12 +328,28 @@ func transformedExport(ctx context.Context, c Config, inputs [][]Input, ranges [
 		return nil, err
 	}
 	if size >= limit {
+		if request.TargetSizeBytes != 0 {
+			return nil, targetFailure("complete encoded output exceeds target_size_bytes")
+		}
 		return nil, ErrOutputLimit
 	}
 	if math.Abs(float64(duration-elapsed)) > 350 {
+		if request.TargetSizeBytes != 0 {
+			return nil, targetFailure("target size cannot contain the complete output timeline")
+		}
 		return nil, errors.New("rendered result duration does not match the requested timeline")
 	}
-	if request.Format != "mp3" {
+	if request.TargetSizeBytes != 0 {
+		video := p.SelectedVideo()
+		if video == nil {
+			return nil, targetFailure("target size output has no video stream")
+		}
+		seconds, e := strconv.ParseFloat(video.Duration, 64)
+		if e != nil || math.IsNaN(seconds) || math.IsInf(seconds, 0) || math.Abs(seconds*1000-float64(elapsed)) > 350 {
+			return nil, targetFailure("target size output does not contain the complete video timeline")
+		}
+	}
+	if !edit.IsAudioOnly(request.Format) {
 		if err := mediainfo.ValidateRenderedVideoWithCanvas(p, selection.Video, request.Quality, hdr, request.Crop, request.Canvas); err != nil {
 			return nil, err
 		}
@@ -244,7 +357,10 @@ func transformedExport(ctx context.Context, c Config, inputs [][]Input, ranges [
 	if selection.Audio != nil && p.SelectedAudio() == nil {
 		return nil, ErrNoAudio
 	}
-	for _, row := range inputs {
+	if err := ValidateAudioOutput(p, selection.Audio, request.Format); err != nil {
+		return nil, err
+	}
+	for _, row := range protectedInputs {
 		for _, input := range row {
 			if err := rt.CheckSource(ctx, input); err != nil {
 				return nil, err

@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 
+	"github.com/Kay0k1/cutmyvideo-core/internal/edit"
+
 	"golang.org/x/sync/semaphore"
 )
 
@@ -77,7 +79,7 @@ func acquireMediaProcessing(ctx context.Context, source Source, streams []platfo
 		return func() {}, nil
 	}
 	weight := int64(1)
-	if request.Format != "mp3" {
+	if !edit.IsAudioOnly(request.Format) {
 		width, height := source.Width, source.Height
 		if source.Path == "" {
 			width, height = 0, 0

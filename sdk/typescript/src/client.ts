@@ -3,7 +3,8 @@ import { abortedError, abortable, boundedJSON, budget, decode, delay, endpointID
 import { preparationKey, preparationReceipt, uploadFingerprint } from "./source_protocol.js";
 import { subtitleRequest, subtitleResult } from "./subtitles.js";
 import { projectResult } from "./projects.js";
-import { analysisOptions, analysisResult, cutImport, cutExport, cutList, cutExportResult, renderReferences } from "./media.js";
+import { analysisOptions, analysisResult, cutImport, cutExport, cutList, cutExportResult, renderReferences, posterOptions, posterResult } from "./media.js";
+import type { PosterOptions, ImageArtifact } from "./types.js";
 import type { AnalysisKind } from "./media.js";
 import type { SilenceOptions, SilenceResult, VideoAnalysisOptions, VideoAnalysisResult, LoudnessOptions, LoudnessResult, CutList, CutListImportRequest, CutListExportRequest, CutListExportResult } from "./types.js";
 import type { AgentProject, ProjectCreateRequest, ProjectEditRequest, ProjectHandoff } from "./types.js";
@@ -108,6 +109,7 @@ export class CutmyClient {
       });
       if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new ApiError("Redirect responses are refused", { code: "redirect_refused", status: response.status, ...context }); }
       this.#captureSession(response);
+      if (kind === "empty" && response.status === 204) { await response.body?.cancel(); return undefined as T; }
       const value = await boundedJSON(response, jsonLimit);
       if (kind === "collection-submission" && [200,202,207,400,408,410,413,429,500,502,503,504].includes(response.status) && object(value) && value.version === 1 && Array.isArray(value.clips)) {
         const report = decode<CollectionSubmission>(value, kind);
@@ -180,6 +182,17 @@ export class CutmyClient {
     const body = cutExport(request);
     return cutExportResult(await this.#request("POST","api/v1/cut-lists/export",body,"object",options),body.format);
   }
+  async createPoster(artifactId: string, options: PosterOptions, request: RequestOptions = {}): Promise<ImageArtifact> {
+    const body = posterOptions(options);
+    return posterResult<ImageArtifact>(await this.#request("POST", `api/v1/artifacts/${endpointID(artifactId)}/poster`, body, "object", { ...request, timeoutMs: request.timeoutMs ?? 120000 }), body, artifactId);
+  }
+  async getImageArtifact(id: string, options: RequestOptions = {}): Promise<ImageArtifact> {
+    const value = await this.#request<unknown>("GET", `api/v1/image-artifacts/${endpointID(id)}`, undefined, "object", options);
+    if (!object(value) || value.id !== id || typeof value.parent_artifact_id !== "string" || !value.parent_artifact_id) throw new ApiError("Invalid image artifact identity", { code: "invalid_response" });
+    return posterResult<ImageArtifact>(value, { timestamp_ms: Number(value.timestamp_ms), format: String(value.format) }, value.parent_artifact_id);
+  }
+  deleteImageArtifact(id: string, options: RequestOptions = {}): Promise<void> { return this.#request("DELETE", `api/v1/image-artifacts/${endpointID(id)}`, undefined, "empty", options); }
+  downloadImageArtifact(id: string, options: DownloadOptions = {}): Promise<ArtifactDownload> { return this.#download(id, options, undefined, true); }
   getTracks(id: string, options: RequestOptions = {}): Promise<Tracks> { return this.#request("GET", `api/v1/sources/${endpointID(id)}/tracks`, undefined, "tracks", { ...options, timeoutMs: options.timeoutMs ?? this.#sourceMs }); }
   preflight(request: ExportRequest, options: RequestOptions = {}): Promise<PreflightResult> { return this.#request("POST", "api/v1/jobs/preflight", renderReferences(request), "preflight", { ...options, timeoutMs: options.timeoutMs ?? this.#sourceMs }); }
   validateCollection(request: CollectionRequest, options: RequestOptions = {}): Promise<CollectionValidation> {
@@ -223,9 +236,10 @@ export class CutmyClient {
     if (options.ifRange !== undefined && (options.ifRange.length > 128 || /[\x00-\x1f\x7f]/.test(options.ifRange))) throw new TypeError("ifRange must be a bounded validator");
     return this.#download(id, options, options);
   }
-  async #download(id: string, options: DownloadOptions, range?: RangeDownloadOptions): Promise<ArtifactRangeDownload> {
-    const path = `api/v1/artifacts/${endpointID(id)}/download`;
+  async #download(id: string, options: DownloadOptions, range?: RangeDownloadOptions, image = false): Promise<ArtifactRangeDownload> {
+    const path = `api/v1/${image ? "image-artifacts" : "artifacts"}/${endpointID(id)}/download`;
     if (options.maxBytes !== undefined && (!Number.isSafeInteger(options.maxBytes) || options.maxBytes < 1)) throw new TypeError("maxBytes must be a positive safe integer");
+    if (image) options = { ...options, maxBytes: Math.min(options.maxBytes ?? 16777216, 16777216) };
     const scope = budget(options.timeoutMs ?? this.#transferMs, options.signal);
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     let response: Response | undefined;
@@ -243,6 +257,7 @@ export class CutmyClient {
         throw new ApiError(envelope && typeof envelope.message === "string" ? envelope.message : "Download failed", { code: envelope && typeof envelope.code === "string" ? envelope.code : "http_error", status: response.status, ...retryAfter(response) });
       }
       if (response.status !== 200 && !(range && range.offset > 0 && response.status === 206)) { await response.body?.cancel(); throw new ApiError("Download returned an incomplete response", { code: "invalid_response", status: response.status }); }
+      if (image && !["image/jpeg","image/png"].includes((response.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase())) { await response.body?.cancel(); throw new ApiError("Image download returned an unexpected media type", { code: "invalid_response", status: response.status }); }
       const encoding = response.headers.get("content-encoding")?.trim().toLowerCase();
       if (range && encoding && encoding !== "identity") { await response.body?.cancel(); throw new ApiError("Ranged artifact transfer requires identity content encoding", { code: "content_encoding_unsupported", status: response.status }); }
       const header = response.headers.get("content-length");
