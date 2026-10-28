@@ -64,7 +64,7 @@ identify HEAD. It resolves an immutable commit, tree and all tracked input blobs
 into `SOURCE.json`, then builds from a private materialized copy of those blobs.
 Ignored or concurrently edited working files cannot become compiler input. The
 original checkout is checked again before and after building. It requires the
-exact `toolchain` version from go.mod (Go 1.27.2), readonly modules, disabled CGO,
+exact `toolchain` version from go.mod (Go 1.27.3), readonly modules, disabled CGO,
 trimmed paths, fixed target baselines and commit-time metadata. Caller GOFLAGS and
 workspaces are disabled. It does not deploy anything.
 
@@ -180,7 +180,7 @@ Manual dispatch verifies an existing tag containing this archive protocol withou
 publication; older tags are refused rather than rebuilt with newer scripts. Neither path
 deploys production. Inspect the draft before publishing it.
 
-Current-source CI uses Go 1.27.2 and requires runtime/media/cancellation plus
+Current-source CI uses Go 1.27.3 and requires runtime/media/cancellation plus
 the PostgreSQL API/worker path on every shipped Linux, macOS and Windows target.
 These source jobs gate final archive acceptance along with upgrade/recovery acceptance. The
 historical upgrade/restore source gate remains required. A separate Linux amd64

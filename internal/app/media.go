@@ -292,11 +292,6 @@ func keyframeProbeBounds(start int64) (from, until int64) {
 	return mediaexport.KeyframeProbeBounds(start)
 }
 
-func probeKeyframes(ctx context.Context, c Config, path string, remote bool, streamIndex int, from, until int64) ([]copyKeyframe, error) {
-	frames, e := localmedia.ProbeKeyframes(ctx, c, path, remote, streamIndex, from, until)
-	return frames, localMediaError(e)
-}
-
 func selectCopyKeyframe(frames []copyKeyframe, start int64) (copyKeyframe, error) {
 	return mediaexport.SelectCopyKeyframe(frames, start)
 }

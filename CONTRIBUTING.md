@@ -13,7 +13,7 @@ and platform-import dependencies below are for the full server acceptance suite.
 See the [repository map](docs/architecture.md) and
 [documentation index](docs/README.md) before adding a new top-level guide.
 
-Use Go 1.27.2 (the security-patched CI/release toolchain; module minimum 1.26.9),
+Use Go 1.27.3 (the security-patched CI/release toolchain; module minimum 1.26.9),
 FFmpeg/ffprobe with libx264/AAC/libmp3lame, Python 3 and PostgreSQL 17. Platform
 imports also need Node.js. Offline metadata tests use the same checksum-pinned
 yt-dlp as the runtime.

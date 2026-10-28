@@ -4,6 +4,11 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
+- Build with Go 1.27.3, which fixes GO-2026-6809 in `crypto/x509`.
+- Track inspection now waits for an active poster decoder instead of exceeding the shared decoder pool.
+- The engine releases a collection clip's audio-replacement binding on every error path.
+- The Caddy example sends HSTS, `nosniff` and referrer-policy headers.
+
 ## 1.6.0 - 2026-10-18
 
 - Export selected audio as PCM24 WAV or FLAC24, preserving inspected sample rate and channel count; copy compatible AAC packets into M4A with explicit boundary diagnostics.

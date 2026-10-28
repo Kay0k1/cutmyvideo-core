@@ -19,10 +19,6 @@ const maxThumbnailBytes int64 = 2 << 20
 
 // Only locally staged, inspected images are shown by clients. Signed extractor
 // addresses never become visible URLs; the source owner guards the endpoint.
-func fetchThumbnail(ctx context.Context, c Config, id, raw string) (string, error) {
-	return fetchThumbnailWithLimit(ctx, c, id, raw, maxThumbnailBytes)
-}
-
 func fetchThumbnailWithLimit(ctx context.Context, c Config, id, raw string, limit int64) (string, error) {
 	return fetchThumbnailWithClient(ctx, c, id, raw, limit, safeClient)
 }
