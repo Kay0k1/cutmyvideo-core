@@ -8,7 +8,7 @@ owner sessions. It does not use production services or live providers.
 
 ## Run the gate
 
-Use Linux, Go 1.27.2, Python 3.10 or newer, Git, FFmpeg/ffprobe and an isolated
+Use Linux, Go 1.27.3, Python 3.10 or newer, Git, FFmpeg/ffprobe and an isolated
 PostgreSQL server with permission to create and drop databases. Fetch repository
 history containing immutable v0.2.1 commit
 `f2be62c42a6a0d3d7a017b40bd683596bc578b95`; a shallow current-only checkout is
