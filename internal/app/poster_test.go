@@ -189,6 +189,9 @@ func TestPosterParentReaderFencesAndPublication(t *testing.T) {
 	if _, _, err = s.acquirePoster(ctx, server.Config, source.Owner, parent.ID, newID("img"), o); !errors.Is(err, errSourceServerBusy) {
 		t.Fatal("poster decoder admission is unbounded", err)
 	}
+	if err = s.reserveSourceInspection(ctx, source, newID("inspection"), time.Minute); !errors.Is(err, errSourceServerBusy) {
+		t.Fatal("source inspection ignored the active poster decoder", err)
+	}
 	if _, err = s.DB.Exec(ctx, "UPDATE artifacts SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", parent.ID); err != nil {
 		t.Fatal(err)
 	}
