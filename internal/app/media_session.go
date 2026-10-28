@@ -41,15 +41,6 @@ func (s *LocalExportSession) unchanged() (os.FileInfo, error) {
 	return file, mediaInfoError(err)
 }
 
-func (s *LocalExportSession) inspect(ctx context.Context, c Config) (probeInfo, error) {
-	p, e := (&localmedia.LocalExportSession{Session: s.Session}).Inspect(ctx, c)
-	return probeInfo(p), localMediaError(e)
-}
-
-func (s *LocalExportSession) nearestKeyframe(ctx context.Context, c Config, start int64, stream int) (copyKeyframe, error) {
-	return s.nearestKeyframeWithProbe(ctx, c, start, stream, probeKeyframes)
-}
-
 type keyframeProbeFunc func(context.Context, Config, string, bool, int, int64, int64) ([]copyKeyframe, error)
 
 func (s *LocalExportSession) nearestKeyframeWithProbe(ctx context.Context, c Config, start int64, stream int, inspect keyframeProbeFunc) (copyKeyframe, error) {
