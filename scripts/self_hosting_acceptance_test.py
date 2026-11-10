@@ -26,21 +26,21 @@ spec.loader.exec_module(a)
 
 def successful_report():
     current, head = '1' * 40, '2' * 40
-    def image(commit, tree, image_hash, source_hash):
+    def image(commit, tree, image_hash, source_hash, toolchain):
         version, stamp = 'v0.0.0-candidate.g' + commit, '2026-10-11T01:00:00Z'
         return {'source_commit': commit, 'tree': tree, 'source_sha256': source_hash * 64,
                 'image_id': 'sha256:' + image_hash * 64, 'version': version, 'build_time': stamp,
-                'toolchain': 'go1.27.2', 'runtime_version': {'version': version, 'commit': commit,
-                 'build_time': stamp, 'go_version': 'go1.27.2', 'os': 'linux', 'arch': 'amd64'},
+                'toolchain': toolchain, 'runtime_version': {'version': version, 'commit': commit,
+                 'build_time': stamp, 'go_version': toolchain, 'os': 'linux', 'arch': 'amd64'},
                 'tools': {'ffmpeg': 'FFmpeg fixture', 'ffprobe': 'ffprobe fixture', 'yt_dlp': 'fixture', 'node': 'fixture'}}
-    now = image(current, '3' * 40, 'b', 'c')
+    now = image(current, '3' * 40, 'b', 'c', a.pinned_toolchain())
     report = {'schema_version': 1, 'ok': True, 'errors': [], 'expected_checkout': current,
             'provider': {'GITHUB_REPOSITORY': 'Kay0k1/cutmyvideo-core', 'GITHUB_EVENT_NAME': 'pull_request',
                          'GITHUB_RUN_ID': '123456', 'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_SHA': current},
             'checkout': {'commit': current, 'tree': '3' * 40, 'parents': ['4' * 40, head],
                          'head_commit': head, 'head_tree': '3' * 40, 'head_parents': [a.UPGRADE_FROM],
                          'approved_A_is_ancestor': True, 'clean': True},
-            'images': {'old': image(a.UPGRADE_FROM, a.UPGRADE_TREE, 'a', 'd'),
+            'images': {'old': image(a.UPGRADE_FROM, a.UPGRADE_TREE, 'a', 'd', a.BASELINE_TOOLCHAIN),
                        'current': now, 'restored': deepcopy(now)},
             'groups': {name: {'status': 'pass', 'checks': {check: {'ok': True} for check in checks}}
                        for name, checks in a.GROUPS.items()},
@@ -136,6 +136,34 @@ class ReceiptControls(unittest.TestCase):
             with self.subTest(mutation=mutation):
                 report = successful_report(); mutation(report)
                 with self.assertRaises(RuntimeError): a.validate_report(report)
+
+    def test_each_image_requires_its_own_pinned_toolchain(self):
+        pinned = next(line.split()[1] for line in (ROOT.parent / 'go.mod').read_text().splitlines()
+                      if line.startswith('toolchain '))
+        self.assertEqual(a.pinned_toolchain(), pinned)
+        self.assertEqual(a.BASELINE_TOOLCHAIN, 'go1.27.2')
+        def claim(label, toolchain):
+            def mutation(report):
+                report['images'][label].update(toolchain=toolchain)
+                report['images'][label]['runtime_version'].update(go_version=toolchain)
+            return mutation
+        other = 'go1.27.1'
+        self.assertNotIn(other, (pinned, a.BASELINE_TOOLCHAIN))
+        mutations = [claim(label, other) for label in ('old', 'current', 'restored')]
+        mutations.append(lambda r: r['images']['current']['runtime_version'].update(go_version=other))
+        if pinned != a.BASELINE_TOOLCHAIN:
+            mutations += [claim('old', pinned), claim('current', a.BASELINE_TOOLCHAIN), claim('restored', a.BASELINE_TOOLCHAIN)]
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                report = successful_report(); mutation(report)
+                with self.assertRaisesRegex(RuntimeError, 'image/source/version/tool identity incomplete'):
+                    a.validate_report(report)
+        for content in ('module example.invalid/cutmy\n\ngo 1.26.9\n',
+                        'toolchain go1.27.2\ntoolchain go1.27.3\n', 'toolchain go1.27\n', ' toolchain go1.27.3\n'):
+            with self.subTest(content=content), tempfile.TemporaryDirectory() as directory:
+                Path(directory, 'go.mod').write_text(content)
+                with patch.object(a, 'REPO', Path(directory)), self.assertRaisesRegex(RuntimeError, 'exactly one Go toolchain'):
+                    a.pinned_toolchain()
 
     def test_push_must_use_checkout_as_head(self):
         report = successful_report(); report['provider']['GITHUB_EVENT_NAME'] = 'push'
