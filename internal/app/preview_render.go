@@ -8,10 +8,6 @@ import (
 	"strconv"
 )
 
-func trimPreviewWorkspace(ctx context.Context, dir string) error {
-	return trimWindowWorkspace(ctx, dir, "preview.mp4")
-}
-
 func trimWindowWorkspace(ctx context.Context, dir, filename string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {

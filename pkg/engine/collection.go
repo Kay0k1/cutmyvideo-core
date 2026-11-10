@@ -145,9 +145,11 @@ func (e *Engine) ExecuteCollection(ctx context.Context, plan CollectionPlan, out
 		}
 		info, statErr := os.Stat(path)
 		if statErr != nil {
+			releaseReplacement()
 			return result, collectionClipError(clip.ID, "export", statErr)
 		}
 		if info.Size() > config.MaxOutputBytes {
+			releaseReplacement()
 			return result, collectionClipError(clip.ID, "export", &Error{Code: CodeOutputLimit, Err: errors.New("selected collection exceeds configured output byte limit")})
 		}
 		name := checked.Clips[i].OutputPath

@@ -371,7 +371,9 @@ class WorkflowModeControls(unittest.TestCase):
         self.assertEqual(self.selectors[0], self.selectors[1])
         self.assertEqual(self.go[0]['uses'],
                          'actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16')
-        self.assertEqual(self.go[0]['with'], {'go-version': '1.27.2', 'cache': 'false'})
+        toolchain = next(line.split()[1] for line in (REPO / 'go.mod').read_text().splitlines()
+                         if line.startswith('toolchain '))
+        self.assertEqual(self.go[0]['with'], {'go-version': toolchain.removeprefix('go'), 'cache': 'false'})
         mode_steps = [step for step in self.steps if 'ACCEPTANCE_MODE' in step.get('env', {})]
         self.assertTrue(all('--mode "$ACCEPTANCE_MODE"' in step['run'] for step in mode_steps))
         for expression in ('${{ github.sha }}', '${{ github.event.pull_request.head.sha }}',

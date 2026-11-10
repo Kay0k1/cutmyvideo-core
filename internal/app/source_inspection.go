@@ -31,7 +31,7 @@ func (s *Store) reserveSourceInspection(ctx context.Context, source Source, id s
 		return ErrNotFound
 	}
 	var weight int
-	if err = tx.QueryRow(ctx, `SELECT COALESCE(sum(`+previewWeightSQL+`),0) FROM storage_reservations r LEFT JOIN sources s ON s.id=r.job_id WHERE r.kind='preview'`).Scan(&weight); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT COALESCE(sum(`+previewWeightSQL+`),0) FROM storage_reservations r LEFT JOIN sources s ON s.id=r.job_id WHERE r.kind IN ('preview','poster')`).Scan(&weight); err != nil {
 		return err
 	}
 	needed := 1

@@ -67,10 +67,6 @@ func probeInputSelectionOptions(ctx context.Context, c Config, inputs []mediaInp
 	return selection, nil
 }
 
-func (s mediaSelection) mapArgs(format string) []string {
-	return mediaExportSelection(s).MapArgs(format)
-}
-
 func (p *probeInfo) validateStreams() error {
 	return mediaInfoError((*mediainfo.Info)(p).ValidateStreams())
 }

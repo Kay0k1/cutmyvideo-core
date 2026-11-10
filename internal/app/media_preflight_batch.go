@@ -27,7 +27,6 @@ func pinPreflightExecutable(configured string) (preflightExecutable, error) {
 func (tool preflightExecutable) backend() localmedia.PreflightExecutable {
 	return localmedia.PreflightExecutable{Configured: tool.configured, Path: tool.path, File: tool.file}
 }
-func (tool preflightExecutable) unchanged() error { return localMediaError(tool.backend().Unchanged()) }
 
 type preflightBatchScope struct {
 	path    string
@@ -43,9 +42,6 @@ func (scope *preflightBatchScope) backend() *localmedia.PreflightBatchScope {
 		out.Encoder = &tool
 	}
 	return out
-}
-func (scope *preflightBatchScope) unchanged(ctx context.Context) error {
-	return localMediaError(scope.backend().Unchanged(ctx))
 }
 
 type preflightCapabilityListing struct {

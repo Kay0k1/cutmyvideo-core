@@ -1,6 +1,12 @@
 # Replace video.example.org with CUTMY_DOMAIN from the private .env file.
 # Caddy runs on the host; the API is bound only to host loopback.
 video.example.org {
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
 	reverse_proxy 127.0.0.1:8080 {
 		# Normalize rather than trusting a client-supplied forwarding chain.
 		header_up X-Forwarded-For {remote_host}

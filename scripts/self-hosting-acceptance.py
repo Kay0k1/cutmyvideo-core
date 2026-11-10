@@ -41,6 +41,9 @@ sys.dont_write_bytecode = True
 REPO = Path(__file__).resolve().parents[1]
 UPGRADE_FROM = '0f93cd654a998be7740ba1d6fee4a44a6f7b3464'
 UPGRADE_TREE = '58a431cf209a36b8acb0052ca77653b480814d48'
+# Every admitted predecessor image was built by this toolchain. The candidate and
+# restored images must use the one pinned by the tested checkout's go.mod.
+BASELINE_TOOLCHAIN = 'go1.27.2'
 APPLICATION_REFERENCE = '06bb74bca90a79fbf399c01cf71f7f44af186431'
 APPLICATION_FILES_SHA256 = 'a1aa7b968c06eaeb075d2cd73f8afbf309a1bc12121d1a3e598ba2561e785f90'
 POLICY_FILTER_LIMIT = 4 * 1024 * 1024
@@ -268,6 +271,12 @@ def poster_artifacts_module():
     return sys.modules[name]
 
 
+def pinned_toolchain():
+    pinned = re.findall(r'^toolchain (go[0-9]+\.[0-9]+\.[0-9]+)$', (REPO / 'go.mod').read_text(encoding='utf-8'), re.M)
+    require(len(pinned) == 1, 'go.mod must pin exactly one Go toolchain')
+    return pinned[0]
+
+
 def validate_report(report, evidence_directory=None):
     """Fail closed even if all visible partial check records say PASS."""
     mode = report.get('mode', 'same-schema')
@@ -328,11 +337,12 @@ def validate_report(report, evidence_directory=None):
             and images['restored']['image_id'] == images['current']['image_id']
             and images['restored']['source_sha256'] == images['current']['source_sha256'],
             'actual old/new/restored image identity mismatch')
+    toolchains = {'old': BASELINE_TOOLCHAIN, 'current': pinned_toolchain(), 'restored': pinned_toolchain()}
     for label, image in images.items():
         require(SHA.fullmatch(image.get('source_commit', '')) and SHA.fullmatch(image.get('tree', ''))
                 and HASH.fullmatch(image.get('source_sha256', ''))
                 and re.fullmatch(r'sha256:[0-9a-f]{64}', image.get('image_id', ''))
-                and image.get('toolchain') == 'go1.27.2'
+                and image.get('toolchain') == toolchains[label]
                 and image.get('version') == 'v0.0.0-candidate.g' + image['source_commit']
                 and re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', image.get('build_time', ''))
                 and image.get('runtime_version') == {'version': image.get('version'), 'commit': image['source_commit'],

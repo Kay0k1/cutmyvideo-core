@@ -45,7 +45,7 @@ Collections, drafts and preflight were introduced in **1.3.0**; the new preparat
 
 ## Quick start: a local file
 
-Install FFmpeg/ffprobe with libx264, AAC and libmp3lame. Use a verified release binary or build current sources with Go 1.26.9+ (CI and releases use 1.27.2):
+Install FFmpeg/ffprobe with libx264, AAC and libmp3lame. Use a verified release binary or build current sources with Go 1.26.9+ (CI and releases use 1.27.3):
 
 ```sh
 git clone https://github.com/Kay0k1/cutmyvideo-core.git

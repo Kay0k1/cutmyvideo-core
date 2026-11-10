@@ -7,11 +7,6 @@ import (
 	"github.com/Kay0k1/cutmyvideo-core/internal/mediaexport"
 )
 
-// Reservations follow the selected duration, with the very same byte ceiling
-// enforced by the producer. A ten-second clip must not reserve a 16 GiB file.
-// Allow container headers, decoder context and the final muxer's metadata.
-const exportContainerAllowance int64 = mediaexport.ContainerAllowance
-
 const subtitleTrackAllowance int64 = maxMediaStreams * (8 << 20)
 
 // One extracted source copy and one rebased output copy can coexist per track.

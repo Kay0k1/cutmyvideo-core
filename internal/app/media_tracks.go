@@ -36,14 +36,6 @@ func (s mediaSelection) mapArgs(format string) []string {
 	return mediaExportSelection(s).MapArgs(format)
 }
 
-func (p *probeInfo) validateStreams() error {
-	return mediaInfoError((*mediainfo.Info)(p).ValidateStreams())
-}
-
-func (p *probeInfo) tracks() []Track {
-	return (*mediainfo.Info)(p).Tracks()
-}
-
 // InspectExportLocal reports source tracks and their fate for selected options.
 func InspectExportLocal(ctx context.Context, c Config, path string, request ExportRequest) ([]TrackSelection, error) {
 	tracks, e := localmedia.InspectExportLocal(ctx, c, path, request)
