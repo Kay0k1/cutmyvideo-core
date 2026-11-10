@@ -18,12 +18,12 @@ import (
 
 func runAnalyze(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
-		_, err := fmt.Fprintln(stdout, "Usage: cutmy analyze silence|video|loudness --input recording.mp4 [--start 0 --end 30]\nPrints bounded source-timeline analysis as JSON; silence --plan prints an editable cutting plan without exporting media.")
+		_, err := fmt.Fprintln(stdout, "Usage: cutmy analyze silence|video|loudness|repeats --input recording.mp4 [--start 0 --end 30]\nPrints bounded source-timeline analysis as JSON; silence --plan prints an editable cutting plan without exporting media.")
 		return err
 	}
 	kind := args[0]
-	if kind != "silence" && kind != "video" && kind != "loudness" {
-		return invalidCLI(errors.New("analyze requires silence, video or loudness"))
+	if kind != "silence" && kind != "video" && kind != "loudness" && kind != "repeats" {
+		return invalidCLI(errors.New("analyze requires silence, video, loudness or repeats"))
 	}
 	f := flag.NewFlagSet("analyze "+kind, flag.ContinueOnError)
 	f.SetOutput(stderr)
@@ -33,8 +33,13 @@ func runAnalyze(args []string, stdout, stderr io.Writer) error {
 	timeout := f.Duration("timeout", 2*time.Minute, "whole analysis deadline including inspection")
 	threads := f.Int("threads", 2, "FFmpeg decoder threads, 1 through 32")
 	var audio string
-	if kind != "video" {
+	if kind != "video" && kind != "repeats" {
 		f.StringVar(&audio, "audio-track", "default", "default or inspected absolute audio stream index")
+	}
+	var repeats engine.RepeatsOptions
+	if kind == "repeats" {
+		f.Int64Var(&repeats.MinGapMS, "min-gap-ms", 2000, "ignore repeats closer than this, 500 through 1800000 ms")
+		f.StringVar(&repeats.Band, "band", "full", "full, vocal or drums")
 	}
 	var silence engine.SilenceOptions
 	var video engine.VideoAnalysisOptions
@@ -94,7 +99,7 @@ func runAnalyze(args []string, stdout, stderr io.Writer) error {
 		}
 	}
 	var audioTrack *int
-	if kind != "video" {
+	if kind != "video" && kind != "repeats" {
 		var noAudio bool
 		audioTrack, noAudio, err = parseAudioSelection(audio)
 		if err != nil || noAudio {
@@ -127,6 +132,9 @@ func runAnalyze(args []string, stdout, stderr io.Writer) error {
 		result, err = e.AnalyzeVideo(ctx, *input, video)
 	case "loudness":
 		result, err = e.AnalyzeLoudness(ctx, *input, engine.LoudnessOptions{StartMS: startMS, EndMS: endMS, AudioTrack: audioTrack})
+	case "repeats":
+		repeats.StartMS, repeats.EndMS = startMS, endMS
+		result, err = e.AnalyzeRepeats(ctx, *input, repeats)
 	}
 	if err != nil {
 		return err

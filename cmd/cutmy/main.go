@@ -53,6 +53,9 @@ func runArgs(args []string, stdout, stderr io.Writer) error {
 	if args[0] == "analyze" {
 		return runAnalyze(args[1:], stdout, stderr)
 	}
+	if args[0] == "sync" {
+		return runSync(args[1:], stdout, stderr)
+	}
 	if args[0] == "cutlist" {
 		return runCutList(args[1:], stdout, stderr)
 	}
