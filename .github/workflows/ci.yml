@@ -425,7 +425,8 @@ jobs:
           previous_binary="$RUNNER_TEMP/cutmy-schema007"
           mkdir -m 700 "$previous_source"
           git archive e4a0477b727ccfbbf21f86027fdd07f6ffe78419 | tar -x -C "$previous_source"
-          go build -C "$previous_source" -trimpath -buildvcs=false -ldflags '-X main.version=v1.3.0 -X main.commit=e4a0477b727ccfbbf21f86027fdd07f6ffe78419' -o "$previous_binary" ./cmd/cutmy
+          # Each published predecessor pins go1.27.2 in its go.mod; build it with that exact toolchain.
+          GOTOOLCHAIN=go1.27.2 go build -C "$previous_source" -trimpath -buildvcs=false -ldflags '-X main.version=v1.3.0 -X main.commit=e4a0477b727ccfbbf21f86027fdd07f6ffe78419' -o "$previous_binary" ./cmd/cutmy
           export CUTMY_TEST_PREVIOUS_SCHEMA007_BINARY="$previous_binary"
           export CUTMY_TEST_PREVIOUS_SCHEMA007_SHA256="$(sha256sum "$previous_binary" | cut -d ' ' -f 1)"
           "$previous_binary" version
@@ -450,7 +451,8 @@ jobs:
           previous_binary="$RUNNER_TEMP/cutmy-schema008"
           mkdir -m 700 "$previous_source"
           git archive 106d0d2d7887540768cc21e3bd4e2c71629af6c4 | tar -x -C "$previous_source"
-          go build -C "$previous_source" -trimpath -buildvcs=false -ldflags '-X main.version=v1.4.2 -X main.commit=106d0d2d7887540768cc21e3bd4e2c71629af6c4' -o "$previous_binary" ./cmd/cutmy
+          # Each published predecessor pins go1.27.2 in its go.mod; build it with that exact toolchain.
+          GOTOOLCHAIN=go1.27.2 go build -C "$previous_source" -trimpath -buildvcs=false -ldflags '-X main.version=v1.4.2 -X main.commit=106d0d2d7887540768cc21e3bd4e2c71629af6c4' -o "$previous_binary" ./cmd/cutmy
           export CUTMY_TEST_PREVIOUS_SCHEMA008_BINARY="$previous_binary"
           export CUTMY_TEST_PREVIOUS_SCHEMA008_SHA256="$(sha256sum "$previous_binary" | cut -d ' ' -f 1)"
           "$previous_binary" version
@@ -475,7 +477,8 @@ jobs:
           previous_binary="$RUNNER_TEMP/cutmy-schema009"
           mkdir -m 700 "$previous_source"
           git archive ca334380ef6f8a8aa9e336b2817eb183501528b6 | tar -x -C "$previous_source"
-          go build -C "$previous_source" -trimpath -buildvcs=false -ldflags '-X main.version=v1.5.0 -X main.commit=ca334380ef6f8a8aa9e336b2817eb183501528b6' -o "$previous_binary" ./cmd/cutmy
+          # Each published predecessor pins go1.27.2 in its go.mod; build it with that exact toolchain.
+          GOTOOLCHAIN=go1.27.2 go build -C "$previous_source" -trimpath -buildvcs=false -ldflags '-X main.version=v1.5.0 -X main.commit=ca334380ef6f8a8aa9e336b2817eb183501528b6' -o "$previous_binary" ./cmd/cutmy
           export CUTMY_TEST_PREVIOUS_SCHEMA009_BINARY="$previous_binary"
           export CUTMY_TEST_PREVIOUS_SCHEMA009_SHA256="$(sha256sum "$previous_binary" | cut -d ' ' -f 1)"
           "$previous_binary" version
