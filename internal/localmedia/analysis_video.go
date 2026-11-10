@@ -71,6 +71,10 @@ type videoAnalysisParser struct {
 	blackUntil   int64
 	hasBlackFrom bool
 	hasBlackEnd  bool
+	// skipScene accepts frames without a scene score; other receives
+	// metadata keys this parser does not interpret.
+	skipScene bool
+	other     func(key, value string) error
 }
 
 func newVideoAnalysisParser(start, end int64, track int, options VideoAnalysisOptions) *videoAnalysisParser {
@@ -173,6 +177,9 @@ func (p *videoAnalysisParser) parseLine(line string) error {
 		}
 	default:
 		// Ignore unrelated frame metadata, but its bytes/line size still count.
+		if p.other != nil {
+			return p.other(key, value)
+		}
 	}
 	return nil
 }
@@ -181,10 +188,10 @@ func (p *videoAnalysisParser) frame() error {
 	if !p.haveFrame {
 		return nil
 	}
-	if !p.haveScore {
+	if !p.haveScore && !p.skipScene {
 		return analysisMalformed()
 	}
-	if p.atMS > p.result.StartMS && p.score >= p.options.SceneThreshold {
+	if p.haveScore && p.atMS > p.result.StartMS && p.score >= p.options.SceneThreshold {
 		if len(p.result.Scenes)+len(p.result.Black) >= AnalysisMaxEvents {
 			return analysisLimit("video analysis exceeds 4096 detected events; choose a shorter interval or a higher scene threshold")
 		}

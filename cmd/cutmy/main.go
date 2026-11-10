@@ -65,6 +65,9 @@ func runArgs(args []string, stdout, stderr io.Writer) error {
 	if args[0] == "poster" {
 		return runPoster(args[1:], stdout, stderr)
 	}
+	if args[0] == "qc" {
+		return runQC(args[1:], stdout, stderr)
+	}
 	if args[0] != "server" && args[0] != "worker" && args[0] != "maintenance" && args[0] != "healthcheck" && args[0] != "worker-healthcheck" {
 		return invalidCLI(fmt.Errorf("unknown command %q; use cutmy --help", args[0]))
 	}

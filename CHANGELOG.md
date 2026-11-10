@@ -10,6 +10,7 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 - The engine releases a collection clip's audio-replacement binding on every error path.
 - The Caddy example sends HSTS, `nosniff` and referrer-policy headers.
 - `cutmy sync` places a reference recording inside up to 16 inputs by sound and reports `input_ms = ref_ms + offset_ms`: to the sample for recordings cut from one master, within a few milliseconds for a remix that keeps the vocal. It measures small speed differences, reports each part of an edited input, and answers `no_match` or `ambiguous` instead of an untrustworthy offset. `cutmy analyze repeats` lists material that returns later in one recording. Go: `SyncAudio`, `AnalyzeRepeats`, error code `no_match`.
+- `cutmy qc` measures a finished file without writing media: frame count and timing from packet timestamps (cfr/vfr, gaps with missing frames, duplicate timestamps), black and frozen intervals, loudness, true peak, clipped float samples, edge silence, audio/video start and duration offsets and MP4 fast start. `--expect fps=30,size=1080x1920,cfr,no-drops,…` checks requirements; a failure prints the report and exits 1 with code `expectation_failed`. Go: `QC`, error code `expectation_failed`.
 
 ## 1.6.0 - 2026-10-18
 

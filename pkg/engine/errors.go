@@ -72,8 +72,11 @@ const (
 	CodeStorageInitializing      ErrorCode = "storage_initializing"
 	// CodeNoMatch means audio alignment found no single trustworthy placement.
 	// The accompanying result lists what was found for each input.
-	CodeNoMatch          ErrorCode = "no_match"
-	CodeProcessingFailed ErrorCode = "processing_failed"
+	CodeNoMatch ErrorCode = "no_match"
+	// CodeExpectationFailed means a measured file did not meet an expectation.
+	// The accompanying report lists every check and its outcome.
+	CodeExpectationFailed ErrorCode = "expectation_failed"
+	CodeProcessingFailed  ErrorCode = "processing_failed"
 )
 
 // Error describes an operation failure without losing its underlying cause.
