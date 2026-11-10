@@ -70,7 +70,10 @@ const (
 	CodePublicationUncertain     ErrorCode = "publication_uncertain"
 	CodeSchemaIncompatible       ErrorCode = "schema_incompatible"
 	CodeStorageInitializing      ErrorCode = "storage_initializing"
-	CodeProcessingFailed         ErrorCode = "processing_failed"
+	// CodeExpectationFailed means a measured file did not meet an expectation.
+	// The accompanying report lists every check and its outcome.
+	CodeExpectationFailed ErrorCode = "expectation_failed"
+	CodeProcessingFailed  ErrorCode = "processing_failed"
 )
 
 // Error describes an operation failure without losing its underlying cause.

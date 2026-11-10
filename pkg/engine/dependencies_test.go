@@ -34,6 +34,7 @@ var engineRuntimePackages = map[string]string{
 	engineModule + "/internal/mediaexport":    "internal/mediaexport",
 	engineModule + "/internal/mediainfo":      "internal/mediainfo",
 	engineModule + "/internal/mediapreflight": "internal/mediapreflight",
+	engineModule + "/internal/mediaqc":        "internal/mediaqc",
 	engineModule + "/internal/mediasession":   "internal/mediasession",
 	engineModule + "/internal/subtitles":      "internal/subtitles",
 	engineModule + "/internal/toolrun":        "internal/toolrun",
