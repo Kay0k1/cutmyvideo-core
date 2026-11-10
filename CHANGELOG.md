@@ -8,6 +8,7 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 - Track inspection now waits for an active poster decoder instead of exceeding the shared decoder pool.
 - The engine releases a collection clip's audio-replacement binding on every error path.
 - The Caddy example sends HSTS, `nosniff` and referrer-policy headers.
+- `cutmy sync` places a reference recording inside up to 16 inputs by sound and reports `input_ms = ref_ms + offset_ms`: to the sample for recordings cut from one master, within a few milliseconds for a remix that keeps the vocal. It measures small speed differences, reports each part of an edited input, and answers `no_match` or `ambiguous` instead of an untrustworthy offset. `cutmy analyze repeats` lists material that returns later in one recording. Go: `SyncAudio`, `AnalyzeRepeats`, error code `no_match`.
 
 ## 1.6.0 - 2026-10-18
 
