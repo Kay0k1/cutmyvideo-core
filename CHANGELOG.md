@@ -4,6 +4,7 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 
 ## Unreleased
 
+- Add `cutmy sheet` and `Engine.GenerateSheet`: labelled contact sheets of recordings or images with a version 1 JSON index from every cell to its source time. Frames are chosen by count, interval, explicit times or scenes and shown as displayed at that time; long sheets continue on numbered pages, and a comparison of two recordings reports luma SSIM per pair. See [contact sheets](docs/sheet.md).
 - Build with Go 1.27.3, which fixes GO-2026-6809 in `crypto/x509`.
 - Track inspection now waits for an active poster decoder instead of exceeding the shared decoder pool.
 - The engine releases a collection clip's audio-replacement binding on every error path.
