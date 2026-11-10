@@ -22,6 +22,7 @@ Usage:
   cutmy sync --ref track.wav --input clip.mp4
   cutmy cutlist import --format csv --input cuts.csv
   cutmy cutlist export --format ffmetadata --segments segments.json
+  cutmy sheet --input recording.mp4 --count 48 --output sheet.jpg
   cutmy poster --input completed.mp4 --at 1.250 --output poster.jpg
   cutmy clip --input recording.mp4 --start 00:01:00 --end 00:01:30 --output clip.mp4
   cutmy batch --plan cuts.json --output ./clips

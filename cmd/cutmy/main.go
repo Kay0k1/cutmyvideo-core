@@ -59,6 +59,9 @@ func runArgs(args []string, stdout, stderr io.Writer) error {
 	if args[0] == "cutlist" {
 		return runCutList(args[1:], stdout, stderr)
 	}
+	if args[0] == "sheet" {
+		return runSheet(args[1:], stdout, stderr)
+	}
 	if args[0] == "poster" {
 		return runPoster(args[1:], stdout, stderr)
 	}
