@@ -12,6 +12,9 @@ Choose an interface in the README, then follow the relevant guide. The project o
 | --- | --- |
 | [CLI and Go library](usage.md) | Installation, inspect/export, errors, local limits and a complete HTTP example |
 | [Analysis, rendering and cut-list exchange](media-analysis-and-rendering.md) | Silence plans, loudness, canvas, scene/black events, CSV/chapters and external audio |
+| [Audio alignment](sync.md) | Offset of a track inside clips, takes and remixes; repeats inside one recording |
+| [Contact sheets](sheet.md) | Labelled frame grids with a JSON index from every cell to its source time, image sheets and two-recording comparison |
+| [Finished-file checks](qc.md) | Frame count and timing, drops, black/frozen picture, loudness, clipping, A/V offsets, fast start and expectations |
 | [Plans, preflight and joined outputs](batch-cutting.md) | Saved JSON plans, checking before execution, output order, audio and subtitles |
 | [Editable clip collections](clip-collections.md) | Independent clips, ordered fragments, draft/final exports, crop and selected IDs |
 | [Agent workflow](agent-workflow.md) · [Project lifecycle](agent-workflow.md#retention-access-and-recovery) | A reproducible interview-to-clips scenario, safe revisions/retries and independent retention/access deadlines |

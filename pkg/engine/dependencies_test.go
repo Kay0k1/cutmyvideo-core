@@ -26,6 +26,7 @@ const engineModule = "github.com/Kay0k1/cutmyvideo-core"
 // deliberately compare the engine's public types with the service adapters.
 var engineRuntimePackages = map[string]string{
 	engineModule + "/pkg/engine":              "pkg/engine",
+	engineModule + "/internal/audiosync":      "internal/audiosync",
 	engineModule + "/internal/coremodel":      "internal/coremodel",
 	engineModule + "/internal/edit":           "internal/edit",
 	engineModule + "/internal/fsdurable":      "internal/fsdurable",
@@ -34,6 +35,7 @@ var engineRuntimePackages = map[string]string{
 	engineModule + "/internal/mediaexport":    "internal/mediaexport",
 	engineModule + "/internal/mediainfo":      "internal/mediainfo",
 	engineModule + "/internal/mediapreflight": "internal/mediapreflight",
+	engineModule + "/internal/mediaqc":        "internal/mediaqc",
 	engineModule + "/internal/mediasession":   "internal/mediasession",
 	engineModule + "/internal/subtitles":      "internal/subtitles",
 	engineModule + "/internal/toolrun":        "internal/toolrun",
