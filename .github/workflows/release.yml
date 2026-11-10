@@ -236,8 +236,9 @@ jobs:
         shell: pwsh
         run: |
           $archive = Join-Path $env:RUNNER_TEMP 'ffmpeg.zip'
-          Invoke-WebRequest 'https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-10-13-04/ffmpeg-n8.1.3-17-gc389840894-win64-gpl-8.1.zip' -OutFile $archive
-          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '2a7921874ac122ba731c181c2f235542ab9de790a67c08ec58fe0b54ff763647') { throw 'FFmpeg checksum mismatch' }
+          # Versioned gyan.dev release asset: a permanent URL with a fixed checksum.
+          Invoke-WebRequest 'https://github.com/GyanD/codexffmpeg/releases/download/8.1.2/ffmpeg-8.1.2-full_build.zip' -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'b8cdefab5f50590a076c27c2b56b0294a0e6154faded28ba1ba05ebc4f801f57') { throw 'FFmpeg checksum mismatch' }
           $media = Join-Path $env:RUNNER_TEMP 'cutmy-media'
           Expand-Archive $archive -DestinationPath $media
           (Get-ChildItem $media -Recurse -Filter ffmpeg.exe | Select-Object -First 1).DirectoryName >> $env:GITHUB_PATH
