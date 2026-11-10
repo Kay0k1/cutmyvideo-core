@@ -64,8 +64,9 @@ jobs:
         shell: pwsh
         run: |
           $archive = Join-Path $env:RUNNER_TEMP 'sdk-ffmpeg.zip'
-          Invoke-WebRequest 'https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-10-13-04/ffmpeg-n8.1.3-17-gc389840894-win64-gpl-8.1.zip' -OutFile $archive
-          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '2a7921874ac122ba731c181c2f235542ab9de790a67c08ec58fe0b54ff763647') { throw 'FFmpeg checksum mismatch' }
+          # Versioned gyan.dev release asset: a permanent URL with a fixed checksum.
+          Invoke-WebRequest 'https://github.com/GyanD/codexffmpeg/releases/download/8.1.2/ffmpeg-8.1.2-full_build.zip' -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'b8cdefab5f50590a076c27c2b56b0294a0e6154faded28ba1ba05ebc4f801f57') { throw 'FFmpeg checksum mismatch' }
           $media = Join-Path $env:RUNNER_TEMP 'cutmy-sdk-media'
           Expand-Archive $archive -DestinationPath $media
           (Get-ChildItem $media -Recurse -Filter ffmpeg.exe | Select-Object -First 1).DirectoryName >> $env:GITHUB_PATH
@@ -203,8 +204,9 @@ jobs:
         shell: pwsh
         run: |
           $archive = Join-Path $env:RUNNER_TEMP 'ffmpeg.zip'
-          Invoke-WebRequest 'https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-10-13-04/ffmpeg-n8.1.3-17-gc389840894-win64-gpl-8.1.zip' -OutFile $archive
-          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '2a7921874ac122ba731c181c2f235542ab9de790a67c08ec58fe0b54ff763647') { throw 'FFmpeg checksum mismatch' }
+          # Versioned gyan.dev release asset: a permanent URL with a fixed checksum.
+          Invoke-WebRequest 'https://github.com/GyanD/codexffmpeg/releases/download/8.1.2/ffmpeg-8.1.2-full_build.zip' -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'b8cdefab5f50590a076c27c2b56b0294a0e6154faded28ba1ba05ebc4f801f57') { throw 'FFmpeg checksum mismatch' }
           $media = Join-Path $env:RUNNER_TEMP 'cutmy-media'
           Expand-Archive $archive -DestinationPath $media
           (Get-ChildItem $media -Recurse -Filter ffmpeg.exe | Select-Object -First 1).DirectoryName >> $env:GITHUB_PATH
@@ -425,7 +427,8 @@ jobs:
           previous_binary="$RUNNER_TEMP/cutmy-schema007"
           mkdir -m 700 "$previous_source"
           git archive e4a0477b727ccfbbf21f86027fdd07f6ffe78419 | tar -x -C "$previous_source"
-          go build -C "$previous_source" -trimpath -buildvcs=false -ldflags '-X main.version=v1.3.0 -X main.commit=e4a0477b727ccfbbf21f86027fdd07f6ffe78419' -o "$previous_binary" ./cmd/cutmy
+          # Each published predecessor pins go1.27.2 in its go.mod; build it with that exact toolchain.
+          GOTOOLCHAIN=go1.27.2 go build -C "$previous_source" -trimpath -buildvcs=false -ldflags '-X main.version=v1.3.0 -X main.commit=e4a0477b727ccfbbf21f86027fdd07f6ffe78419' -o "$previous_binary" ./cmd/cutmy
           export CUTMY_TEST_PREVIOUS_SCHEMA007_BINARY="$previous_binary"
           export CUTMY_TEST_PREVIOUS_SCHEMA007_SHA256="$(sha256sum "$previous_binary" | cut -d ' ' -f 1)"
           "$previous_binary" version
@@ -450,7 +453,8 @@ jobs:
           previous_binary="$RUNNER_TEMP/cutmy-schema008"
           mkdir -m 700 "$previous_source"
           git archive 106d0d2d7887540768cc21e3bd4e2c71629af6c4 | tar -x -C "$previous_source"
-          go build -C "$previous_source" -trimpath -buildvcs=false -ldflags '-X main.version=v1.4.2 -X main.commit=106d0d2d7887540768cc21e3bd4e2c71629af6c4' -o "$previous_binary" ./cmd/cutmy
+          # Each published predecessor pins go1.27.2 in its go.mod; build it with that exact toolchain.
+          GOTOOLCHAIN=go1.27.2 go build -C "$previous_source" -trimpath -buildvcs=false -ldflags '-X main.version=v1.4.2 -X main.commit=106d0d2d7887540768cc21e3bd4e2c71629af6c4' -o "$previous_binary" ./cmd/cutmy
           export CUTMY_TEST_PREVIOUS_SCHEMA008_BINARY="$previous_binary"
           export CUTMY_TEST_PREVIOUS_SCHEMA008_SHA256="$(sha256sum "$previous_binary" | cut -d ' ' -f 1)"
           "$previous_binary" version
@@ -475,7 +479,8 @@ jobs:
           previous_binary="$RUNNER_TEMP/cutmy-schema009"
           mkdir -m 700 "$previous_source"
           git archive ca334380ef6f8a8aa9e336b2817eb183501528b6 | tar -x -C "$previous_source"
-          go build -C "$previous_source" -trimpath -buildvcs=false -ldflags '-X main.version=v1.5.0 -X main.commit=ca334380ef6f8a8aa9e336b2817eb183501528b6' -o "$previous_binary" ./cmd/cutmy
+          # Each published predecessor pins go1.27.2 in its go.mod; build it with that exact toolchain.
+          GOTOOLCHAIN=go1.27.2 go build -C "$previous_source" -trimpath -buildvcs=false -ldflags '-X main.version=v1.5.0 -X main.commit=ca334380ef6f8a8aa9e336b2817eb183501528b6' -o "$previous_binary" ./cmd/cutmy
           export CUTMY_TEST_PREVIOUS_SCHEMA009_BINARY="$previous_binary"
           export CUTMY_TEST_PREVIOUS_SCHEMA009_SHA256="$(sha256sum "$previous_binary" | cut -d ' ' -f 1)"
           "$previous_binary" version
