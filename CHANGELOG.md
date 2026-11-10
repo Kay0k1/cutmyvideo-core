@@ -8,6 +8,7 @@ Notable changes follow semantic versioning. The documented 1.x Go library, CLI a
 - Track inspection now waits for an active poster decoder instead of exceeding the shared decoder pool.
 - The engine releases a collection clip's audio-replacement binding on every error path.
 - The Caddy example sends HSTS, `nosniff` and referrer-policy headers.
+- `cutmy qc` measures a finished file without writing media: frame count and timing from packet timestamps (cfr/vfr, gaps with missing frames, duplicate timestamps), black and frozen intervals, loudness, true peak, clipped float samples, edge silence, audio/video start and duration offsets and MP4 fast start. `--expect fps=30,size=1080x1920,cfr,no-drops,…` checks requirements; a failure prints the report and exits 1 with code `expectation_failed`. Go: `QC`, error code `expectation_failed`.
 
 ## 1.6.0 - 2026-10-18
 
