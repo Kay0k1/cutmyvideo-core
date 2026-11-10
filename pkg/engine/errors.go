@@ -70,7 +70,10 @@ const (
 	CodePublicationUncertain     ErrorCode = "publication_uncertain"
 	CodeSchemaIncompatible       ErrorCode = "schema_incompatible"
 	CodeStorageInitializing      ErrorCode = "storage_initializing"
-	CodeProcessingFailed         ErrorCode = "processing_failed"
+	// CodeNoMatch means audio alignment found no single trustworthy placement.
+	// The accompanying result lists what was found for each input.
+	CodeNoMatch          ErrorCode = "no_match"
+	CodeProcessingFailed ErrorCode = "processing_failed"
 )
 
 // Error describes an operation failure without losing its underlying cause.
