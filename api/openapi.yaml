@@ -144,7 +144,7 @@ paths:
   /api/v1/sources/{id}:
     parameters: [{$ref: '#/components/parameters/ID'}]
     delete:
-      description: Deletes the owner source, its terminal jobs and all outputs. Active queued/running/waiting_storage exports return 409 source_in_use. Physical deletion is retryable and remains charged until successful; clients must confirm destructive intent.
+      description: Deletes the owner source, its terminal jobs and all outputs. Active queued/running/waiting_storage exports and in-flight media reads return 409 source_in_use. Physical deletion is retryable and remains charged until successful; clients must confirm destructive intent.
       responses:
         '503': {$ref: '#/components/responses/DatabaseUnavailable'}
         '204': {description: Source and associated terminal resources removed}

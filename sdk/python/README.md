@@ -5,12 +5,12 @@ applications. Python 3.10 or later; no runtime dependencies. Requests and result
 use JSON-compatible typed dictionaries, so the same plans can be saved, reviewed,
 or passed between tools without a framework or an agent-specific protocol.
 
-Published release [1.6.0](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.6.0)
+Published release [1.7.0](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.7.0)
 includes a wheel and source archive as signed GitHub release assets. This
 distribution channel is separate from PyPI registry publication. Install the wheel:
 
 ```sh
-python -m pip install https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.6.0/cutmyvideo-1.6.0-py3-none-any.whl
+python -m pip install https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.7.0/cutmyvideo-1.7.0-py3-none-any.whl
 ```
 
 The preflight methods require a core build with the preflight API/CLI. Local

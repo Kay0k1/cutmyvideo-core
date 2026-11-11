@@ -70,5 +70,6 @@ Choose an interface in the README, then follow the relevant guide. The project o
 | [Dependency notices](../THIRD_PARTY_NOTICES.md) | Third-party licenses and module identities |
 
 - [Controlled export: audio formats, speed, byte targets and output posters](controlled-export.md)
+- [Core 1.7.0 scope and verification: sync, repeats, sheets, qc and fixes](release-1.7.0.md)
 - [Core1.6.0 scope and verification](release-1.6.0.md)
 - [Poster/schema9→10 upgrade and rollback](poster-upgrade.md)

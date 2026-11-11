@@ -95,3 +95,42 @@ func TestExpiredSourceMediaReadersPruneInBoundedUnlockedBatches(t *testing.T) {
 		t.Fatal("crashed reader history did not converge", stale, active)
 	}
 }
+
+func TestUncertainSourceMediaReaderReleaseWaitsForItsAdmission(t *testing.T) {
+	s, _, source := sourceCleanupFixture(t)
+	ctx := context.Background()
+	// The admission transaction still holds the storage fence and has not yet
+	// committed its lease when the caller gives up on the COMMIT.
+	admission, err := s.storageTx(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rollbackStorage(admission)
+	if _, err = admission.Exec(ctx, `INSERT INTO source_media_readers(id,source_id,expires_at) VALUES('uncertain',$1,clock_timestamp()+interval '60 seconds')`, source.ID); err != nil {
+		t.Fatal(err)
+	}
+	released := make(chan error, 1)
+	go func() {
+		deadline, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		released <- s.releaseUncertainSourceMediaReader(deadline, source.ID, "uncertain")
+	}()
+	select {
+	case err := <-released:
+		t.Fatal("release did not wait for the admission transaction", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+	if err = admission.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err = <-released; err != nil {
+		t.Fatal(err)
+	}
+	var leaked bool
+	if err = s.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM source_media_readers WHERE id='uncertain')`).Scan(&leaked); err != nil || leaked {
+		t.Fatal("uncertain admission left its reader lease", leaked, err)
+	}
+	if _, err = s.DeleteSource(ctx, source.ID, source.Owner); err != nil {
+		t.Fatal("released lease still blocks source deletion", err)
+	}
+}

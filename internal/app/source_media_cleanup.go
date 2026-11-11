@@ -202,7 +202,9 @@ func (s *Server) pinSourceMediaReader(parent context.Context, source Source) (co
 	}
 	if err != nil {
 		if errors.Is(err, errPreviewAdmissionUncertain) {
-			releaseRow()
+			ctx, cancel := context.WithTimeout(context.Background(), workerDatabaseTimeout)
+			defer cancel()
+			_ = s.Store.releaseUncertainSourceMediaReader(ctx, source.ID, id)
 		}
 		return nil, nil, err
 	}
@@ -245,6 +247,22 @@ func (s *Server) pinSourceMediaReader(parent context.Context, source Source) (co
 		}
 	}()
 	return ctx, func() { cancel(); <-done; releaseRow() }, nil
+}
+
+// The acquiring transaction may still be committing after its caller lost the
+// COMMIT acknowledgement (for example when the client aborted the request).
+// Taking the storage fence first waits for that transaction, so the delete sees
+// its lease instead of leaving it to block source deletion until it expires.
+func (s *Store) releaseUncertainSourceMediaReader(ctx context.Context, sourceID, id string) error {
+	tx, err := s.storageTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer rollbackStorage(tx)
+	if _, err = tx.Exec(ctx, `DELETE FROM source_media_readers WHERE id=$1 AND source_id=$2`, id, sourceID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 type contextReadSeeker struct {
