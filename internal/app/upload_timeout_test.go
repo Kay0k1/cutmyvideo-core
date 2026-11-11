@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -52,8 +53,9 @@ func TestUploadTimeoutCoversReadingTheFile(t *testing.T) {
 	if response.StatusCode != http.StatusGatewayTimeout || body.Error.Code != "source_timeout" {
 		t.Fatalf("got %d %+v, expected source_timeout", response.StatusCode, body.Error)
 	}
+	// Under load the timeout can fire before staging creates the directory.
 	entries, err := os.ReadDir(filepath.Join(c.DataDir, "sources"))
-	if err != nil || len(entries) != 0 {
+	if err != nil && !errors.Is(err, os.ErrNotExist) || len(entries) != 0 {
 		t.Fatalf("timed-out upload left staged media: %v %v", entries, err)
 	}
 }
