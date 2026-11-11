@@ -1,7 +1,26 @@
 name: Public self-hosting acceptance
 
 on:
+  # PRs run this acceptance only when the public profile, image, schema or acceptance
+  # inputs change; every merged commit on main still runs it.
   pull_request:
+    paths:
+      - 'deploy/**'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/app/migrations/**'
+      - 'internal/app/migrations.go'
+      - 'internal/app/migration_catalog.go'
+      - 'scripts/self-hosting-acceptance.py'
+      - 'scripts/self_hosting_acceptance_test.py'
+      - 'scripts/*-transition.py'
+      - 'scripts/*_transition_test.py'
+      - 'scripts/current-installation-acceptance.py'
+      - 'scripts/current_installation_acceptance_test.py'
+      - 'scripts/requirements-contract.txt'
+      - '.github/workflows/self-hosting.yml'
   push:
     branches: [main]
   workflow_dispatch:

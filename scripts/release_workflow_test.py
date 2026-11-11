@@ -10,6 +10,11 @@ ROOT = Path(__file__).resolve().parents[1]
 COMMIT = '${{ needs.resolve.outputs.commit }}'
 ATTEMPT = '${{ github.run_attempt }}'
 RUN = '${{ github.run_id }}'
+ARCHIVES = "needs.resolve.outputs.archives == 'true'"
+# Full matrices on tags, nightly and manual runs; PRs skip Linux ARM and Intel macOS; main pushes run Linux only.
+PLATFORM_EXCLUDE = ('${{ fromJSON(inputs.scope == \'pr\' && \'[{"runner":"ubuntu-24.04-arm"},{"runner":"macos-15-intel"}]\' '
+                    '|| (github.event_name == \'push\' && !inputs.scope) && \'[{"runner":"ubuntu-24.04-arm"},'
+                    '{"runner":"macos-15"},{"runner":"macos-15-intel"},{"runner":"windows-2025"}]\' || \'[]\') }}')
 
 
 def require(condition, message):
@@ -25,14 +30,38 @@ def audit(release, source_ci):
     require('pull_request' not in source_events and 'workflow_call' in source_events
             and 'pull_request' in release_events, 'PR source checks must run exactly once through the archive workflow')
     require(jobs['checks']['uses'] == './.github/workflows/ci.yml', 'Archive admission requires the complete source workflow')
-    require({'sdk', 'sdk-http', 'artifact-policy', 'native', 'bookworm-media', 'test'} <= set(source_ci['jobs']),
-            'All source, SDK, production-media and artifact checks remain required')
+    require('schedule' in release_events, 'The complete matrices and archive pipeline run nightly')
+    require({'sdk', 'sdk-http', 'artifact-policy', 'native', 'bookworm-media', 'test', 'race', 'vulnerabilities'}
+            <= set(source_ci['jobs']), 'All source, SDK, production-media, race, vulnerability and artifact checks remain required')
+    inputs = source_events['workflow_call']['inputs']
+    require(inputs['scope']['default'] == 'full' and inputs['vulnerabilities']['default'] == 'blocking',
+            'Callers that do not choose a scope get the complete matrices and blocking advisories')
     targets = {'ubuntu-24.04', 'ubuntu-24.04-arm', 'macos-15', 'macos-15-intel', 'windows-2025'}
     for name in ('sdk', 'native'):
         strategy = source_ci['jobs'][name]['strategy']
         require(set(strategy['matrix']['runner']) == targets and len(strategy['matrix']['runner']) == len(targets)
+                and strategy['matrix'].get('exclude') == PLATFORM_EXCLUDE
                 and strategy['fail-fast'] is False and 'if' not in source_ci['jobs'][name],
-                'Both five-platform matrices must run completely')
+                'Both five-platform matrices must run completely outside PRs and main pushes')
+    race = source_ci['jobs']['race']
+    require(race['strategy']['fail-fast'] is False and 'if' not in race
+            and 'scripts/race-shard.py' in '\n'.join(step.get('run', '') for step in race['steps']),
+            'Every race shard must run')
+    require(source_ci['jobs']['vulnerabilities']['continue-on-error']
+            == "${{ inputs.vulnerabilities == 'report' || (github.event_name == 'push' && !inputs.scope) }}"
+            and 'if' not in source_ci['jobs']['vulnerabilities'],
+            'Vulnerabilities may only be reported without blocking on scoped PRs and main pushes')
+    scope = next(step for step in jobs['resolve']['steps'] if step.get('id') == 'scope')['run']
+    require('python3 scripts/release-scope.py' in scope and '= pull_request ]' in scope
+            and 'checks=full archives=true vulnerabilities=blocking' in scope,
+            'Only pull requests may be scoped; every other event keeps the complete checks')
+    require(jobs['checks'].get('if') == "needs.resolve.outputs.checks != 'docs'"
+            and jobs['checks']['with'].get('scope') == '${{ needs.resolve.outputs.checks }}'
+            and jobs['checks']['with'].get('vulnerabilities') == '${{ needs.resolve.outputs.vulnerabilities }}'
+            and jobs['docs'].get('if') == "needs.resolve.outputs.checks == 'docs'",
+            'Source checks follow the resolved scope; documentation-only PRs check documentation')
+    for name in ('packages', 'sdk-packages', 'native', 'archive-recovery'):
+        require(jobs[name].get('if') == ARCHIVES, 'Archive jobs may skip only when release inputs did not change')
     require(release['concurrency']['cancel-in-progress'] == "${{ github.event_name == 'pull_request' }}",
             'Superseded PRs must cancel without interrupting tag/manual verification')
     require(source_ci['concurrency']['cancel-in-progress'] == "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}"
@@ -42,12 +71,12 @@ def audit(release, source_ci):
     require(release['permissions'] == {'contents': 'read', 'actions': 'read'}, 'Builders require read-only permissions')
     require(jobs['checks']['with']['ref'] == COMMIT and jobs['checks']['needs'] == 'resolve',
             'Source CI must use the single immutable resolver output')
-    for name in ('packages', 'sdk-packages', 'native', 'archive-recovery', 'native-gate', 'trust', 'attest', 'draft'):
+    for name in ('docs', 'packages', 'sdk-packages', 'native', 'archive-recovery', 'native-gate', 'trust', 'attest', 'draft'):
         checkouts = [step for step in jobs[name]['steps'] if step.get('uses', '').startswith('actions/checkout@')]
         require(len(checkouts) == 1 and checkouts[0]['with']['ref'] == COMMIT,
                 'Every consumer must check out the immutable source')
     gate = jobs['native-gate']
-    require(gate['if'] == 'always()' and set(gate['needs']) == {'resolve', 'checks', 'packages', 'native', 'archive-recovery'},
+    require(gate['if'] == 'always() && ' + ARCHIVES and set(gate['needs']) == {'resolve', 'checks', 'packages', 'native', 'archive-recovery'},
             'The required gate must observe every prerequisite even after failure')
     require(set(jobs['draft']['needs']) == {'resolve', 'packages', 'native-gate', 'trust', 'attest', 'sdk-packages'}
             and jobs['draft']['if'] == "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')",
@@ -82,7 +111,7 @@ def audit(release, source_ci):
     require('fetch-attested' in draft_runs and 'verify-attested' in draft_runs and '/release-bundle/*' not in draft_runs
             and 'bundle+sidecars+sdk' in draft_runs, 'Publisher must reverify signatures and upload an exact asset list')
     sdk_runs = '\n'.join(s.get('run', '') for s in jobs['sdk-packages']['steps'])
-    require(jobs['sdk-packages']['needs'] == 'resolve' and 'if' not in jobs['sdk-packages']
+    require(jobs['sdk-packages']['needs'] == 'resolve' and jobs['sdk-packages'].get('if') == ARCHIVES
             and 'scripts/release-sdk.py build' in sdk_runs
             and '--source "$RUNNER_TEMP/resolved-source/SOURCE.json"' in sdk_runs
             and '--expected-source-sha256 "$SOURCE_SHA256"' in sdk_runs,
@@ -148,13 +177,35 @@ class WorkflowControls(unittest.TestCase):
             with self.assertRaises(ValueError): audit(release, source)
 
     def test_reduced_source_coverage_is_rejected(self):
-        for mutation in ('missing_sdk_http', 'missing_platform', 'fail_fast', 'skipped_matrix'):
+        for mutation in ('missing_sdk_http', 'missing_platform', 'fail_fast', 'skipped_matrix', 'reduced_full_matrix',
+                         'missing_race', 'skipped_race', 'unblocked_vulnerabilities', 'reduced_default_scope'):
             source = deepcopy(self.source_ci)
             if mutation == 'missing_sdk_http': source['jobs'].pop('sdk-http')
             elif mutation == 'missing_platform': source['jobs']['native']['strategy']['matrix']['runner'].pop()
             elif mutation == 'fail_fast': source['jobs']['sdk']['strategy']['fail-fast'] = True
+            elif mutation == 'reduced_full_matrix':
+                source['jobs']['sdk']['strategy']['matrix']['exclude'] = '[{"runner":"macos-15-intel"}]'
+            elif mutation == 'missing_race': source['jobs'].pop('race')
+            elif mutation == 'skipped_race': source['jobs']['race']['if'] = 'false'
+            elif mutation == 'unblocked_vulnerabilities': source['jobs']['vulnerabilities']['continue-on-error'] = True
+            elif mutation == 'reduced_default_scope':
+                source.get('on', source.get(True))['workflow_call']['inputs']['scope']['default'] = 'pr'
             else: source['jobs']['native']['if'] = 'false'
-            with self.assertRaises(ValueError): audit(self.release, source)
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError): audit(self.release, source)
+
+    def test_scoped_release_events_or_archives_are_rejected(self):
+        for mutation in ('scoped_tags', 'no_nightly', 'skipped_checks', 'unscoped_caller', 'unconditional_gate',
+                         'skipped_archive_on_release'):
+            with self.subTest(mutation=mutation):
+                release = deepcopy(self.release); jobs = release['jobs']
+                scope = next(step for step in jobs['resolve']['steps'] if step.get('id') == 'scope')
+                if mutation == 'scoped_tags': scope['run'] = 'python3 scripts/release-scope.py'
+                elif mutation == 'no_nightly': release.get('on', release.get(True)).pop('schedule')
+                elif mutation == 'skipped_checks': jobs['checks']['if'] = 'false'
+                elif mutation == 'unscoped_caller': jobs['checks']['with']['scope'] = 'pr'
+                elif mutation == 'unconditional_gate': jobs['native-gate']['if'] = ARCHIVES
+                else: jobs['native']['if'] = "github.event_name == 'pull_request'"
+                with self.assertRaises(ValueError): audit(release, self.source_ci)
 
     def test_tag_or_manual_cancellation_and_shared_caller_group_are_rejected(self):
         for mutation in ('tag', 'callee_group'):

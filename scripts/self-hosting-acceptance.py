@@ -320,8 +320,10 @@ def validate_report(report, evidence_directory=None):
             and isinstance(binding.get('head_parents'), list) and binding['head_parents']
             and all(SHA.fullmatch(p) for p in binding['head_parents']), 'immutable checkout/head binding incomplete')
     if provider['GITHUB_EVENT_NAME'] == 'pull_request':
-        require(len(binding['parents']) == 2 and binding['head_commit'] in binding['parents']
-                and binding['head_tree'] == binding['tree'], 'actual PR merge/head tree binding mismatch')
+        # The provider merge commit is the tree that merging produces; a PR behind main is
+        # verified as merged. Main pushes then verify the merged commit itself.
+        require(len(binding['parents']) == 2 and binding['head_commit'] in binding['parents'],
+                'actual PR merge/head binding mismatch')
     else:
         require(binding['head_commit'] == binding['commit'] and binding['head_tree'] == binding['tree'],
                 'non-PR checkout identity mismatch')

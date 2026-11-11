@@ -6,7 +6,7 @@ STORAGE_SIZES ?= 10000,100000
 STORAGE_SAMPLES ?= 20
 SDK_REPORT_DIR ?=
 
-.PHONY: help build fmt fmt-check vet test test-full docs-check api-check native-results-check sdk-controls-check sdk-check performance-protocol-check release-check hosting-controls-check contract-check recovery-controls-check recovery-check storage-capacity-check notices-check workflows-check vuln check-static check-controls check check-full release
+.PHONY: help build fmt fmt-check vet test test-full docs-check api-check native-results-check sdk-controls-check sdk-check performance-protocol-check release-check hosting-controls-check contract-check recovery-controls-check recovery-check storage-capacity-check notices-check workflows-check vuln race-shard-check check-static check-controls check check-ci check-full release
 
 help:
 	@printf '%s\n' \
@@ -15,6 +15,7 @@ help:
 		'make check-full      Full source acceptance: media/extractor/PostgreSQL tools, race tests, workflows and vulnerability scan' \
 		'make check-static    Format, vet, documentation and API/schema checks' \
 		'make check-controls  Native/SDK/performance/release runner controls; no full acceptance' \
+		'make check-ci        check-full without race tests and vulnerability scan (CI runs those as separate jobs)' \
 		'make recovery-controls-check  Recovery harness controls; no actual upgrade or restore' \
 		'make release VERSION=vX.Y.Z  Package CLI binaries from a clean tagged checkout'
 
@@ -53,6 +54,9 @@ sdk-controls-check:
 sdk-check: sdk-controls-check
 	@test -n "$(SDK_REPORT_DIR)" || { printf '%s\n' 'Set SDK_REPORT_DIR to a new directory outside this checkout.' >&2; exit 1; }
 	$(PYTHON) scripts/check-sdks.py --output "$(SDK_REPORT_DIR)" --http
+
+race-shard-check:
+	$(PYTHON) -m unittest discover -s scripts -p race_shard_test.py
 
 performance-protocol-check:
 	$(PYTHON) -m unittest discover -s scripts -p core_performance_test.py
@@ -96,9 +100,11 @@ vuln:
 
 check-static: fmt-check vet docs-check api-check
 
-check-controls: native-results-check sdk-controls-check performance-protocol-check release-check
+check-controls: native-results-check sdk-controls-check performance-protocol-check release-check race-shard-check
 
 check: check-static check-controls test build
+
+check-ci: check-static check-controls hosting-controls-check notices-check workflows-check build
 
 check-full: check-static check-controls hosting-controls-check notices-check workflows-check test-full vuln build
 

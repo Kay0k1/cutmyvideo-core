@@ -120,8 +120,9 @@ checked separately through the tag-only attestations described below.
 
 | Trigger | Required verification | Release effect |
 | --- | --- | --- |
-| Pull request | Immutable candidate source, both five-platform source/SDK matrices, packaged CLI consumers, archive recovery, package sealing, trust sidecars and disposable public hosting | Unsigned, nonpublishable candidate evidence. |
-| Push to `main` | Core source/native/SDK checks and disposable public-hosting acceptance on the merged commit | Verification only. |
+| Pull request | Immutable candidate source; source/SDK checks on Linux x86-64, Apple silicon macOS and Windows; production-family media; race tests in parallel shards; packaged CLI consumers, archive recovery, package sealing and trust sidecars when release inputs change; disposable public hosting when hosting, image, schema or acceptance inputs change | Unsigned, nonpublishable candidate evidence. |
+| Push to `main` | Linux source/native/SDK checks, race tests and disposable public-hosting acceptance on the merged commit | Verification only. |
+| Nightly on `main` | The complete archive workflow: both five-platform source/SDK matrices, blocking vulnerability scan, packaged CLI consumers on five targets, archive recovery and trust preparation | Verification only; signing and draft publication are skipped. |
 | Push of a new `v*` tag | The complete archive workflow, followed by tag/source rechecks, signing and signature verification | Creates a signed draft from the verified bytes. |
 | Manual archive workflow for an existing tag | The complete archive workflow through unsigned trust preparation | Verifies the tag; signing and draft publication are skipped. |
 | Manual signed-consumer workflow at the reviewed tag | Downloads the exact draft release ID; independently supplied commit/source/manifest identities; signature verification and native version smoke on five targets; offline SDK install/subtitle smoke for 1.4.0+ | Retains consumer evidence without publishing or changing assets. |
@@ -130,11 +131,32 @@ Publishing the verified draft remains an operator action after signed-consumer
 acceptance. None of these workflows deploys the production website. Historical
 upgrade and public-hosting acceptance use disposable environments.
 
-Pull requests run the complete source CI once, as the reusable `checks` job in
-the archive workflow. The separate Core checks workflow retains main pushes and
-manual runs; it has no direct PR trigger. Both five-platform source/SDK matrices,
-production-family media, full race checks and archive recovery remain required.
-The archive gate still refuses any failed, cancelled or skipped prerequisite.
+Pull requests run the source CI once, as the reusable `checks` job in the
+archive workflow. The separate Core checks workflow retains main pushes and
+manual runs; it has no direct PR trigger. `scripts/release-scope.py` selects the
+PR scope from the files the provider merge commit changes:
+
+- Linux ARM and Intel macOS source/SDK jobs run on tags, nightly and manual runs.
+  Pull requests run the other three platforms; main pushes run Linux only.
+- The archive pipeline (packaging, sealed SDK packages, archived CLI on five
+  targets, archive recovery, gate and trust) runs on a PR only when it changes
+  `go.mod`, `go.sum`, `Makefile`, `cmd/cutmy`, `sdk/`, release scripts, notices,
+  shipped license/changelog files or workflows. Tags and nightly runs always run it.
+- A PR that changes only Markdown documentation runs the documentation link check.
+- New Go vulnerability advisories block tags, nightly runs and PRs that change
+  `go.mod` or `go.sum`. On other PRs and main pushes the vulnerability job reports
+  them without failing unrelated work; the nightly run turns red until they are fixed.
+- `make test-full` runs as four race shards: every package except `internal/app`,
+  and `internal/app` split by test name. Together they run the same tests.
+
+Unknown events and PRs without a provider merge commit keep every check. A tag
+cannot be signed or published without the complete matrices and archive gate.
+The archive gate still refuses any failed, cancelled or skipped prerequisite
+whenever the archive pipeline runs.
+
+Public hosting acceptance verifies the provider merge commit of a PR, so a PR
+behind `main` is verified as merged; the push to `main` then verifies the merged
+commit itself.
 
 New commits cancel superseded PR archive and hosting runs. Main source/hosting
 checks also cancel older pushes. Tag signing, publication and manual verification
