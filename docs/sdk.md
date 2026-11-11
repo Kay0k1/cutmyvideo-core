@@ -5,6 +5,11 @@ self-hosted HTTP API. They have no runtime dependencies. The API client owns
 one private session; the local client runs the same version 1 cutting plans as
 the CLI. Exports execute the caller's reviewed plans and preserve explicit encoding quality.
 
+Version 1.7.0 packages expose the same methods and durable formats as 1.6.0.
+Audio alignment, repeat analysis, contact sheets and finished-file checks are
+CLI and Go library operations; the SDKs do not wrap them. See the
+[release scope](release-1.7.0.md).
+
 Version 1.5.0 adds pause-based edit suggestions, scene/black-frame analysis,
 loudness measurement and normalization, solid-color canvases, replacement audio,
 and CSV/FFmetadata edit interchange. Both SDKs expose local and HTTP analysis
@@ -34,16 +39,16 @@ APIs and durable formats. See the [maintenance release scope](release-1.4.2.md).
 Python 3.10 or newer:
 
 ```sh
-python -m pip install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.6.0/cutmyvideo-1.6.0-py3-none-any.whl'
+python -m pip install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.7.0/cutmyvideo-1.7.0-py3-none-any.whl'
 ```
 
 Node.js 20.19 or newer, with an ESM project:
 
 ```sh
-npm install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.6.0/cutmyvideo-sdk-1.6.0.tgz'
+npm install 'https://github.com/Kay0k1/cutmyvideo-core/releases/download/v1.7.0/cutmyvideo-sdk-1.7.0.tgz'
 ```
 
-These commands select the versioned assets of [release 1.6.0](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.6.0).
+These commands select the versioned assets of [release 1.7.0](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.7.0).
 They do not use the PyPI/npm registries. No source
 checkout or SDK build is needed. The release also contains the Python source
 distribution, `SDK-MANIFEST.json` and `sdk-provenance.sigstore.json`. They bind the

@@ -25,6 +25,8 @@ Local cutting works without a database, accounts or an HTTP server. SQL belongs 
 
 ## Versions
 
+**1.7.0** adds local operations for working without playing video: `sync` places a track inside a clip, take or remix, `analyze repeats` finds material that returns within one recording, `sheet` builds contact sheets with a JSON time index, and `qc` checks a finished file (frames and timing, black and frozen picture, loudness, clipping, audio/video offsets). The CLI and Go expose these operations; HTTP, the SDKs and the database schema are unchanged. [Audio alignment](docs/sync.md) · [Contact sheets](docs/sheet.md) · [Finished-file checks](docs/qc.md) · [Release scope](docs/release-1.7.0.md).
+
 **1.6.0** adds WAV/FLAC and compatible AAC-to-M4A copying, constant playback speed with preserved pitch, MP4 exports under an explicit byte ceiling, and posters from finished outputs. Go, CLI, HTTP and both SDKs expose these operations; plans and collections preserve inheritance and explicit resets. [Usage and limits](docs/controlled-export.md) · [Release scope](docs/release-1.6.0.md) · [Schema 9→10 upgrade](docs/poster-upgrade.md).
 
 **1.5.0** adds silence analysis with editable plans, loudness reports and normalization, output canvases, CSV/FFmetadata chapter exchange, scene/black detection and external audio with explicit synchronization. Go, CLI, HTTP and both SDKs expose these operations. [Examples and limits](docs/media-analysis-and-rendering.md) · [Release scope and database upgrade](docs/release-1.5.0.md).
