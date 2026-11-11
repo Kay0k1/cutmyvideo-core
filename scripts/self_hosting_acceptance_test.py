@@ -114,7 +114,7 @@ class ReceiptControls(unittest.TestCase):
                      lambda r: r['provider'].update(GITHUB_SHA='9' * 40),
                      lambda r: r['checkout'].update(clean=False),
                      lambda r: r['checkout'].update(approved_A_is_ancestor=False),
-                     lambda r: r['checkout'].update(head_tree='8' * 40),
+                     lambda r: r['checkout'].update(head_tree='not-a-tree'),
                      lambda r: r['checkout'].update(parents=['4' * 40, '8' * 40]),
                      lambda r: r['checkout'].update(head_parents=[]),
                      lambda r: r['images']['current'].update(tree='8' * 40)]
@@ -164,6 +164,12 @@ class ReceiptControls(unittest.TestCase):
                 Path(directory, 'go.mod').write_text(content)
                 with patch.object(a, 'REPO', Path(directory)), self.assertRaisesRegex(RuntimeError, 'exactly one Go toolchain'):
                     a.pinned_toolchain()
+
+    def test_pull_request_behind_main_is_verified_as_its_provider_merge(self):
+        report = successful_report(); report['checkout'].update(head_tree='8' * 40)
+        a.validate_report(report)
+        report['checkout'].update(parents=['4' * 40, '9' * 40])
+        with self.assertRaisesRegex(RuntimeError, 'merge/head binding'): a.validate_report(report)
 
     def test_push_must_use_checkout_as_head(self):
         report = successful_report(); report['provider']['GITHUB_EVENT_NAME'] = 'push'

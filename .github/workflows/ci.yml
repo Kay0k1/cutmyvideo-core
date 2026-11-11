@@ -11,6 +11,16 @@ on:
         required: false
         default: ''
         type: string
+      scope:
+        description: full (tags, nightly, manual) or pr (Linux, Apple silicon and Windows)
+        required: false
+        default: full
+        type: string
+      vulnerabilities:
+        description: blocking, or report to show new advisories without failing unrelated changes
+        required: false
+        default: blocking
+        type: string
   workflow_dispatch:
 
 permissions:
@@ -30,6 +40,8 @@ jobs:
       fail-fast: false
       matrix:
         runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]
+        # Full on tags, nightly and manual runs; PRs skip Linux ARM and Intel macOS; main pushes run Linux only.
+        exclude: ${{ fromJSON(inputs.scope == 'pr' && '[{"runner":"ubuntu-24.04-arm"},{"runner":"macos-15-intel"}]' || (github.event_name == 'push' && !inputs.scope) && '[{"runner":"ubuntu-24.04-arm"},{"runner":"macos-15"},{"runner":"macos-15-intel"},{"runner":"windows-2025"}]' || '[]') }}
     env:
       GOTOOLCHAIN: local
       CUTMY_REQUIRE_DURABLE_FS: '1'
@@ -152,6 +164,8 @@ jobs:
       fail-fast: false
       matrix:
         runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]
+        # Full on tags, nightly and manual runs; PRs skip Linux ARM and Intel macOS; main pushes run Linux only.
+        exclude: ${{ fromJSON(inputs.scope == 'pr' && '[{"runner":"ubuntu-24.04-arm"},{"runner":"macos-15-intel"}]' || (github.event_name == 'push' && !inputs.scope) && '[{"runner":"ubuntu-24.04-arm"},{"runner":"macos-15"},{"runner":"macos-15-intel"},{"runner":"windows-2025"}]' || '[]') }}
     env:
       GOTOOLCHAIN: local
       CUTMY_REQUIRE_DURABLE_FS: '1'
@@ -391,10 +405,11 @@ jobs:
           curl --fail --show-error --location --proto '=https' --tlsv1.2 https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp -o /tmp/cutmy-yt-dlp
           echo '1fa6733c37ea6fb51c99ad8fe785e7b7e5f3246c9b980230329d4fb72ed8d4d6  /tmp/cutmy-yt-dlp' | sha256sum --check
           chmod 755 /tmp/cutmy-yt-dlp
-      - name: Full checks (media, PostgreSQL, docs, workflows, race and vulnerabilities)
+      # Race tests and the vulnerability scan of check-full run as the parallel race and vulnerabilities jobs.
+      - name: Static checks, controls, hosting controls, notices, workflows and build
         env:
           CUTMY_TEST_PGTOOLS_CONTAINER: ${{ job.services.postgres.id }}
-        run: make check-full
+        run: make check-ci
       - name: Required preflight and collection public-handler contract samples
         shell: bash
         run: |
@@ -523,3 +538,70 @@ jobs:
           path: recovery-contract-tests.jsonl
           if-no-files-found: warn
           retention-days: 3
+  race:
+    name: Race tests (shard ${{ matrix.shard }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # Shard 0 runs every package except internal/app; shards 1-3 split internal/app's tests.
+        shard: [0, 1, 2, 3]
+    services:
+      postgres:
+        image: postgres:17.11-bookworm
+        env:
+          POSTGRES_USER: cutmy
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: cutmy_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cutmy -d cutmy_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      TEST_DATABASE_URL: postgres://cutmy:test-only-password@localhost:5432/cutmy_test?sslmode=disable
+      CUTMY_TEST_YTDLP: /tmp/cutmy-yt-dlp
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.4'
+          cache: true
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg python3 python3-venv
+      - name: Install pinned OpenAPI contract tooling in an isolated environment
+        run: |
+          python3 -m venv /tmp/cutmy-contract-venv
+          /tmp/cutmy-contract-venv/bin/python -m pip install --disable-pip-version-check --no-cache-dir -r scripts/requirements-contract.txt
+          echo '/tmp/cutmy-contract-venv/bin' >> "$GITHUB_PATH"
+      - name: Install pinned extractor for offline metadata regressions
+        run: |
+          curl --fail --show-error --location --proto '=https' --tlsv1.2 https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp -o /tmp/cutmy-yt-dlp
+          echo '1fa6733c37ea6fb51c99ad8fe785e7b7e5f3246c9b980230329d4fb72ed8d4d6  /tmp/cutmy-yt-dlp' | sha256sum --check
+          chmod 755 /tmp/cutmy-yt-dlp
+      - name: Race tests with media, extractor, contract tooling and PostgreSQL
+        env:
+          CUTMY_TEST_PGTOOLS_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          ./scripts/check-tools.sh
+          python3 scripts/race-shard.py --shard ${{ matrix.shard }} --app-shards 3
+  vulnerabilities:
+    name: Go vulnerabilities
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Tags, nightly runs and dependency or toolchain changes block on new advisories.
+    # Other PRs and main pushes report them here without failing unrelated work.
+    continue-on-error: ${{ inputs.vulnerabilities == 'report' || (github.event_name == 'push' && !inputs.scope) }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.4'
+          cache: true
+      - run: make vuln

@@ -4,6 +4,9 @@ on:
   pull_request:
   push:
     tags: ['v*']
+  # Nightly complete matrices and archive pipeline on main (04:17 Moscow time).
+  schedule:
+    - cron: '17 1 * * *'
   workflow_dispatch:
     inputs:
       version:
@@ -29,6 +32,9 @@ jobs:
       version: ${{ steps.source.outputs.version }}
       source-sha256: ${{ steps.source.outputs.source-sha256 }}
       artifact-id: ${{ steps.save.outputs.artifact-id }}
+      checks: ${{ steps.scope.outputs.checks }}
+      archives: ${{ steps.scope.outputs.archives }}
+      vulnerabilities: ${{ steps.scope.outputs.vulnerabilities }}
     env:
       RELEASE_TAG: ${{ github.event_name == 'pull_request' && '' || (github.event_name == 'push' && github.ref_name || inputs.version) }}
       PR_HEAD: ${{ github.event.pull_request.head.sha }}
@@ -38,6 +44,16 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.sha }}
           fetch-depth: 0
+      - name: Select checks for this event and change
+        id: scope
+        shell: bash
+        run: |
+          # Tags, nightly and manual runs keep everything; only PRs are scoped by their changed files.
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            python3 scripts/release-scope.py
+          else
+            printf '%s\n' checks=full archives=true vulnerabilities=blocking >> "$GITHUB_OUTPUT"
+          fi
       - name: Resolve immutable source once
         id: source
         shell: bash
@@ -72,11 +88,26 @@ jobs:
           retention-days: 14
   checks:
     needs: resolve
+    if: needs.resolve.outputs.checks != 'docs'
     uses: ./.github/workflows/ci.yml
     with:
       ref: ${{ needs.resolve.outputs.commit }}
+      scope: ${{ needs.resolve.outputs.checks }}
+      vulnerabilities: ${{ needs.resolve.outputs.vulnerabilities }}
+  docs:
+    name: Documentation links
+    needs: resolve
+    if: needs.resolve.outputs.checks == 'docs'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+      - run: python3 scripts/check-docs.py
   packages:
     needs: resolve
+    if: needs.resolve.outputs.archives == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     outputs:
@@ -119,6 +150,7 @@ jobs:
   sdk-packages:
     name: Sealed installable SDK packages
     needs: resolve
+    if: needs.resolve.outputs.archives == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
@@ -196,6 +228,7 @@ jobs:
   native:
     name: Archived CLI (${{ matrix.os }}/${{ matrix.arch }})
     needs: [resolve, packages]
+    if: needs.resolve.outputs.archives == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
@@ -309,6 +342,7 @@ jobs:
   archive-recovery:
     name: Archived Linux upgrade and restore
     needs: [resolve, packages]
+    if: needs.resolve.outputs.archives == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
@@ -387,7 +421,8 @@ jobs:
           retention-days: 14
   native-gate:
     name: Verified archive gate
-    if: always()
+    # Observe failed prerequisites; PRs that cannot affect release inputs skip the archive pipeline.
+    if: always() && needs.resolve.outputs.archives == 'true'
     needs: [resolve, checks, packages, native, archive-recovery]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
