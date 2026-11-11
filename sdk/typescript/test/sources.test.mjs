@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
-import { mkdtemp, readFile, writeFile, rm, unlink, stat, link } from 'node:fs/promises';
+import { readFile, writeFile, rm, unlink, stat, link } from 'node:fs/promises';
+import { createServer as createTCPServer } from 'node:net';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
+import { listenLoopback, lockPort, lockSafeTempDirectory } from './lock-ports.mjs';
 
 const mainEntry = process.env.CUTMY_SDK_JS_ENTRY ? pathToFileURL(process.env.CUTMY_SDK_JS_ENTRY).href : new URL('../dist/index.js', import.meta.url).href;
 const sourceEntry = process.env.CUTMY_SDK_SOURCE_JS_ENTRY ? pathToFileURL(process.env.CUTMY_SDK_SOURCE_JS_ENTRY).href : new URL('../dist/sources.js', import.meta.url).href;
@@ -17,7 +18,7 @@ const limits = { max_source_bytes: 10000000, max_output_bytes: 10000000, max_fet
 function json(response, value, status = 200) { response.writeHead(status, { 'content-type': 'application/json' }); response.end(JSON.stringify(value)); }
 async function fixture(t) {
   const receipts = new Map(), posts = [], calls = [], config = {};
-  const root = await mkdtemp(join(tmpdir(), 'cutmy-source-sdk-')); let server;
+  const root = await lockSafeTempDirectory('sources', 'cutmy-source-sdk-', 'project'); let server;
   t.after(async () => {
     // Cancelled file-backed uploads can finish releasing Windows handles after
     // their promise settles. Always close the owned server before removing files.
@@ -184,7 +185,15 @@ test('cancelling a real stalled upload returns promptly and retains its uncertai
   const controller = new AbortController(); let stopped;
   f.config.blockUpload = true;
   f.config.uploadStarted = () => setTimeout(() => { stopped = performance.now(); controller.abort(); }, 150);
-  await assert.rejects(prepareSource(f.client, { kind: 'upload', path: f.path }, f.project, { signal: controller.signal, timeoutMs: 5000 }), error => error.code === 'source_preparation_cancelled');
+  await assert.rejects(prepareSource(f.client, { kind: 'upload', path: f.path }, f.project, { signal: controller.signal, timeoutMs: 5000 }), { name: 'SourcePreparationError', code: 'source_preparation_cancelled' });
   assert.equal(typeof stopped, 'number'); assert(performance.now() - stopped < 1000);
   assert.equal(JSON.parse(await readFile(join(f.project, 'state.json'))).uncertain, true);
+});
+
+test('a listener already on the hashed writer lock port makes a fresh preparation busy before hashing or networking', async t => {
+  const f = await fixture(t), listener = createTCPServer(socket => socket.destroy());
+  await listenLoopback(listener, await lockPort(f.project)); t.after(() => new Promise(resolve => listener.close(resolve)));
+  await assert.rejects(prepareSource(f.client, { kind: 'upload', path: f.path }, f.project, { timeoutMs: 5000 }),
+    error => error instanceof SourcePreparationError && error.code === 'project_busy' && error.report.phase === 'initializing');
+  assert.equal(f.calls.length, 0); await assert.rejects(stat(join(f.project, 'state.json')), { code: 'ENOENT' });
 });

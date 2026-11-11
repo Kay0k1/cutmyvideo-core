@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { stat, mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { resolve, join } from 'node:path';
+import { stat, rm } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
+import { lockSafeTempDirectory } from './lock-ports.mjs';
 const { CutmyClient, ApiError, exportPortableProject, importPortableProject }=await import(process.env.CUTMY_SDK_JS_ENTRY?pathToFileURL(process.env.CUTMY_SDK_JS_ENTRY).href:'../dist/index.js');
 const { LocalCutmy, LocalError }=await import(process.env.CUTMY_SDK_LOCAL_JS_ENTRY?pathToFileURL(process.env.CUTMY_SDK_LOCAL_JS_ENTRY).href:'../dist/local.js');
 const fixture=fileURLToPath(new URL('./media-cli.mjs',import.meta.url));
@@ -82,7 +82,7 @@ test('nonfinite render numbers cannot turn into null defaults during request or 
   assert.throws(()=>exportPortableProject(request,source),/finite/);
   const document={kind:'cutmy.collection.project',version:1,source:{duration_ms:1000},plan:request.plan};
   assert.throws(()=>importPortableProject(document,source),/finite/);
-  const directory=await mkdtemp(join(tmpdir(),'cutmy-nonfinite-render-'));
+  const directory=await lockSafeTempDirectory('media','cutmy-nonfinite-render-');
   try{await assert.rejects(runCollection(client,request,directory,{timeoutMs:1000}),error=>error.code==='invalid_request');}
   finally{await rm(directory,{recursive:true,force:true});}
  }
