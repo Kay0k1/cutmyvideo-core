@@ -108,7 +108,7 @@ func (s *Server) deleteSource(w http.ResponseWriter, r *http.Request, owner stri
 		return s.Store.DeleteSource(ctx, r.PathValue("id"), owner)
 	})
 	if errors.Is(err, ErrSourceInUse) {
-		writeError(w, 409, "source_in_use", "Cancel or finish active exports before deleting this source")
+		writeError(w, 409, "source_in_use", "This source is being exported or read; cancel its active exports or try again in a minute")
 		return
 	}
 	if err != nil {

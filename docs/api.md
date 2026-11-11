@@ -34,7 +34,7 @@ for ordinary database failures. Readiness retains `503 not_ready`.
 | POST | `/uploads` | Source; multipart field `file` |
 | GET | `/sources/{id}` | Source |
 | GET | `/sources/{id}/tracks` | Verified local `{tracks:[Track...]}` with absolute indices and language/title metadata; requires owner, returns `tracks_unavailable` for unstaged platform media |
-| DELETE | `/sources/{id}` | HTTP 204; source, terminal jobs and outputs removed; active exports return 409 `source_in_use` |
+| DELETE | `/sources/{id}` | HTTP 204; source, terminal jobs and outputs removed; active exports and in-flight media reads return 409 `source_in_use` |
 | GET | `/sources/{id}/media` | Authorized source bytes; Range supported |
 | GET | `/sources/{id}/preview?start_ms=…` | Aligned 30-second H.264/AAC MP4 window, no-store; source time in X-Preview-Start-MS / X-Preview-End-MS; X-Preview-Cache is hit/miss; optional priority=background yields rendering capacity to foreground seeks |
 | GET | `/sources/{id}/storyboard?start_ms=…` | Private 960×90 JPEG search strip for the aligned 30-second window; six 160×90 cells sampled every 5 seconds; X-Storyboard-Frames gives used cells and X-Storyboard-Step-MS is 5000; same interval/cache headers, source cleanup and shared cache bounds as previews; always background admission |
@@ -354,7 +354,9 @@ clip. The API exposes fixed diagnostics rather than a promise of estimated capac
 
 `DELETE /sources/{id}` requires an explicit user confirmation in clients. It
 returns 404 for absent/foreign IDs and 409 `source_in_use` while any related job is
-queued, running or waiting for storage. Terminal metadata is deleted atomically;
+queued, running or waiting for storage, or while a media read of the source holds
+its reader lease (a lease is released when the read ends and expires within 60
+seconds otherwise). Terminal metadata is deleted atomically;
 file tombstones keep actual bytes charged until physical deletion and parent
 directory synchronization are confirmed. Failures use persisted exponential
 retry delays from 30 seconds to one hour; healthy due files can proceed while
