@@ -3,11 +3,11 @@ import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { gzipSync } from 'node:zlib';
-import { mkdtemp, readFile, writeFile, readdir, rm, stat, unlink, symlink, appendFile, link } from 'node:fs/promises';
+import { readFile, writeFile, readdir, rm, stat, unlink, symlink, appendFile, link } from 'node:fs/promises';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
+import { lockSafeTempDirectory } from './lock-ports.mjs';
 
 const mainEntry = process.env.CUTMY_SDK_JS_ENTRY ? pathToFileURL(process.env.CUTMY_SDK_JS_ENTRY).href : new URL('../dist/index.js', import.meta.url).href;
 const collectionsEntry = process.env.CUTMY_SDK_COLLECTION_JS_ENTRY ? pathToFileURL(process.env.CUTMY_SDK_COLLECTION_JS_ENTRY).href : new URL('../dist/collections.js', import.meta.url).href;
@@ -23,7 +23,7 @@ const effective = (req, clip) => ({ source_id: req.source_id, ranges: clip.range
 const hash = data => createHash('sha256').update(data).digest('hex');
 function json(res, data, status = 200) { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(data)); }
 async function readBody(req) { const chunks = []; for await (const part of req) chunks.push(part); return JSON.parse(Buffer.concat(chunks).toString()); }
-async function directory(t) { const root = await mkdtemp(join(tmpdir(), 'cutmy-collections-')); t.after(() => rm(root, { recursive: true, force: true })); return root; }
+async function directory(t) { const root = await lockSafeTempDirectory('collections', 'cutmy-collections-', 'project'); t.after(() => rm(root, { recursive: true, force: true })); return root; }
 async function fixture(t, config = {}) {
   const calls = [], jobs = new Map(), identities = new Map(), bytes = new Map(), polls = new Map(); let lost = false, interrupted = false, capacity = false;
   const server = createServer(async (req, res) => {
