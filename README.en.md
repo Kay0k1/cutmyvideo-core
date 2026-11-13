@@ -10,6 +10,33 @@
 
 Choose intervals from a recording and receive separate clips, one joined file or a collection of independent assembled clips. The engine is written in Go and uses FFmpeg to process media. Embed it in a Go application, invoke the CLI or connect over HTTP. [cutmyvideo-web](https://github.com/Kay0k1/cutmyvideo-web) is the separate browser editor built on this core.
 
+## Toolkit for agents and scripts
+
+For AI agents, scripts and people who edit video without playing it. Three local commands need only FFmpeg and ffprobe, no database or server, and answer in JSON:
+
+- `cutmy sheet` lays frames of a recording out on a labelled grid and prints a cell-to-time index: [contact sheets](docs/sheet.md).
+- `cutmy sync` finds where a track is heard in a clip: [audio alignment](docs/sync.md).
+- `cutmy qc` checks a finished file: lost frames, black and frozen picture, loudness, clipping, audio/video offsets: [finished-file checks](docs/qc.md).
+
+Installation is covered in the [quick start](#local-trimming). Example: where a track is heard in a clip.
+
+```sh
+cutmy sync --ref track.wav --input clip.mp4
+```
+
+```json
+{"version":1,
+ "reference":{"path":"/work/track.wav","audio_track":0,"start_ms":0,"end_ms":20000,"analyzed_end_ms":20000},
+ "inputs":[{"path":"/work/clip.mp4","audio_track":1,"start_ms":0,"end_ms":23400,"analyzed_end_ms":23380,
+   "status":"match",
+   "placements":[{"offset_ms":3380,"speed":1,"confidence":1,"similarity":0.939,
+     "band":"vocal","method":"waveform",
+     "ref_start_ms":0,"ref_end_ms":20000,"input_start_ms":3380,"input_end_ms":23380,
+     "chunks":6,"agreeing":6}]}]}
+```
+
+The moment heard at 10 000 ms of the track is at 13 380 ms of the clip: `input_ms = ref_ms + offset_ms`. An unclear or missing match is reported as `ambiguous` or `no_match`, and the exit code is 1.
+
 <a id="architecture"></a>
 
 ## Choose an interface
@@ -23,29 +50,11 @@ Choose intervals from a recording and receive separate clips, one joined file or
 
 Local cutting works without a database, accounts or an HTTP server. SQL belongs to server job persistence; TypeScript belongs to the client SDK. See [architecture](docs/architecture.md) for component boundaries and dependencies.
 
-## Versions
-
-**1.7.0** adds local operations for working without playing video: `sync` places a track inside a clip, take or remix, `analyze repeats` finds material that returns within one recording, `sheet` builds contact sheets with a JSON time index, and `qc` checks a finished file (frames and timing, black and frozen picture, loudness, clipping, audio/video offsets). The CLI and Go expose these operations; HTTP, the SDKs and the database schema are unchanged. [Audio alignment](docs/sync.md) · [Contact sheets](docs/sheet.md) · [Finished-file checks](docs/qc.md) · [Release scope](docs/release-1.7.0.md).
-
-**1.6.0** adds WAV/FLAC and compatible AAC-to-M4A copying, constant playback speed with preserved pitch, MP4 exports under an explicit byte ceiling, and posters from finished outputs. Go, CLI, HTTP and both SDKs expose these operations; plans and collections preserve inheritance and explicit resets. [Usage and limits](docs/controlled-export.md) · [Release scope](docs/release-1.6.0.md) · [Schema 9→10 upgrade](docs/poster-upgrade.md).
-
-**1.5.0** adds silence analysis with editable plans, loudness reports and normalization, output canvases, CSV/FFmetadata chapter exchange, scene/black detection and external audio with explicit synchronization. Go, CLI, HTTP and both SDKs expose these operations. [Examples and limits](docs/media-analysis-and-rendering.md) · [Release scope and database upgrade](docs/release-1.5.0.md).
-
-Install CLI archives from the [latest published release](https://github.com/Kay0k1/cutmyvideo-core/releases/latest). Archives support Linux and macOS (amd64/arm64), and Windows (amd64); install FFmpeg separately. Follow [signed-release verification](docs/releases.md#consumer-verification-of-a-new-signed-release) before installation.
-
-**1.4.2** completes the core audit: it fixes queue and SDK recovery edge cases, original-audio selection and descendant-process cleanup. The media engine is separate from the server package; existing Go, CLI, HTTP and SDK contracts are preserved. [Maintenance scope](docs/release-1.4.2.md).
-
-**1.4.1** shares fresh inspection of a ready local source and bounded FFmpeg capability checks within each HTTP collection request. Each new clip retains its own checks before jobs are admitted. Joined exports bound additional decoder memory, and released database connections close after idle time. Final-video encoding settings are preserved. [Change scope](docs/release-1.4.1.md).
-
-By matched-pair medians in the [15-clip ready-interview comparison](benchmarks/2026-10-16-first-draft/README.md), the first downloaded and verified draft arrived 72–74% faster, the complete cycle finished 19–20% faster, and aggregate peak memory fell 6–7%. All 180 paired final files were byte-identical. Source upload and transcription are outside this measurement.
-
-**1.4.0** connects durable source preparation, resumable collections, explicit failed-clip repair and scoped agent-to-browser project review. Verified clips survive interruptions, edits submit needed work, and supplied SRT/VTT follows actual output maps. Python and Node install from ready GitHub release packages; PyPI/npm publication remains separate.
-
-Collections, drafts and preflight were introduced in **1.3.0**; the new preparation/project operations require API 1.4.0. [SDK installation](docs/sdk.md) · [Agent workflow](docs/sdk-collections.md) · [1.4.0 scope](docs/release-1.4.0.md) · [Changelog](CHANGELOG.md).
-
 <a id="local-trimming"></a>
 
 ## Quick start: a local file
+
+Install CLI archives from the [latest published release](https://github.com/Kay0k1/cutmyvideo-core/releases/latest). Archives support Linux and macOS (amd64/arm64), and Windows (amd64); install FFmpeg separately. Follow [signed-release verification](docs/releases.md#consumer-verification-of-a-new-signed-release) before installation.
 
 Install FFmpeg/ffprobe with libx264, AAC and libmp3lame. Use a verified release binary or build current sources with Go 1.26.9+ (CI and releases use 1.27.4):
 
@@ -124,6 +133,24 @@ Accurate exports retain the requested quality settings, but re-encoding does not
 Recognizing a platform does not guarantee access to every recording. Direct HTTPS files download in full; supported progressive and completed HLS recordings can read selected portions. Live streams, DRM and private recordings are rejected. See [providers and limitations](docs/providers.md).
 
 Measured improvements apply to specific reproducible workloads: [methods and results](docs/performance.md). See [platform support](docs/platforms.md) for tested operating systems and required release checks.
+
+## Versions
+
+**1.7.0** adds local operations for working without playing video: `sync` places a track inside a clip, take or remix, `analyze repeats` finds material that returns within one recording, `sheet` builds contact sheets with a JSON time index, and `qc` checks a finished file (frames and timing, black and frozen picture, loudness, clipping, audio/video offsets). The CLI and Go expose these operations; HTTP, the SDKs and the database schema are unchanged. [Audio alignment](docs/sync.md) · [Contact sheets](docs/sheet.md) · [Finished-file checks](docs/qc.md) · [Release scope](docs/release-1.7.0.md).
+
+**1.6.0** adds WAV/FLAC and compatible AAC-to-M4A copying, constant playback speed with preserved pitch, MP4 exports under an explicit byte ceiling, and posters from finished outputs. Go, CLI, HTTP and both SDKs expose these operations; plans and collections preserve inheritance and explicit resets. [Usage and limits](docs/controlled-export.md) · [Release scope](docs/release-1.6.0.md) · [Schema 9→10 upgrade](docs/poster-upgrade.md).
+
+**1.5.0** adds silence analysis with editable plans, loudness reports and normalization, output canvases, CSV/FFmetadata chapter exchange, scene/black detection and external audio with explicit synchronization. Go, CLI, HTTP and both SDKs expose these operations. [Examples and limits](docs/media-analysis-and-rendering.md) · [Release scope and database upgrade](docs/release-1.5.0.md).
+
+**1.4.2** completes the core audit: it fixes queue and SDK recovery edge cases, original-audio selection and descendant-process cleanup. The media engine is separate from the server package; existing Go, CLI, HTTP and SDK contracts are preserved. [Maintenance scope](docs/release-1.4.2.md).
+
+**1.4.1** shares fresh inspection of a ready local source and bounded FFmpeg capability checks within each HTTP collection request. Each new clip retains its own checks before jobs are admitted. Joined exports bound additional decoder memory, and released database connections close after idle time. Final-video encoding settings are preserved. [Change scope](docs/release-1.4.1.md).
+
+By matched-pair medians in the [15-clip ready-interview comparison](benchmarks/2026-10-16-first-draft/README.md), the first downloaded and verified draft arrived 72–74% faster, the complete cycle finished 19–20% faster, and aggregate peak memory fell 6–7%. All 180 paired final files were byte-identical. Source upload and transcription are outside this measurement.
+
+**1.4.0** connects durable source preparation, resumable collections, explicit failed-clip repair and scoped agent-to-browser project review. Verified clips survive interruptions, edits submit needed work, and supplied SRT/VTT follows actual output maps. Python and Node install from ready GitHub release packages; PyPI/npm publication remains separate.
+
+Collections, drafts and preflight were introduced in **1.3.0**; the new preparation/project operations require API 1.4.0. [SDK installation](docs/sdk.md) · [Agent workflow](docs/sdk-collections.md) · [1.4.0 scope](docs/release-1.4.0.md) · [Changelog](CHANGELOG.md).
 
 <a id="development"></a>
 <a id="license"></a>
